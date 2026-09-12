@@ -95,6 +95,6 @@ export const STATUS_INK: Record<string, string> = {
   pending: "var(--redline)",
   dispatched: "var(--redline)",
   done: "var(--line)",
-  failed: "#ff7d6b",
+  failed: "var(--alert)",
   unknown: "var(--ink-dim)",
 };

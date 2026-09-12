@@ -11,6 +11,8 @@ import { Chart } from "@/components/views/chart";
 import { ChartTerminal } from "@/components/views/chart-terminal";
 import { ChartMetro } from "@/components/views/chart-metro";
 import { ChartAtlas } from "@/components/views/chart-atlas";
+import { ChartPaper } from "@/components/views/chart-paper";
+import { PaperScenery } from "@/components/paper/scenery";
 import { Reactions } from "@/components/views/reactions";
 import { Observatory } from "@/components/views/observatory";
 
@@ -35,6 +37,7 @@ export default function Page() {
   return (
     <>
       <main className="relative min-h-0">
+        {edition === "paper" && <PaperScenery />}
         <AnimatePresence mode="wait">
           <motion.div
             key={`${sheet}-${edition}`}
@@ -48,6 +51,7 @@ export default function Page() {
               edition === "terminal" ? <ChartTerminal taxonomy={taxonomy} onSelect={setSelected} />
               : edition === "metro" ? <ChartMetro taxonomy={taxonomy} onSelect={setSelected} />
               : edition === "atlas" ? <ChartAtlas taxonomy={taxonomy} onSelect={setSelected} />
+              : edition === "paper" ? <ChartPaper taxonomy={taxonomy} onSelect={setSelected} />
               : <Chart taxonomy={taxonomy} onSelect={setSelected} />
             )}
             {sheet === "reactions" && (

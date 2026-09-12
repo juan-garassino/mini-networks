@@ -3,9 +3,9 @@
 // The blueprint's title block — every real drawing has one. Doubles as the
 // sheet navigation: CHART / REACTIONS / OBSERVATORY plus the live status cell.
 export type SheetId = "chart" | "reactions" | "observatory";
-export type EditionId = "blueprint" | "wallchart" | "terminal" | "metro" | "atlas";
+export type EditionId = "blueprint" | "wallchart" | "terminal" | "metro" | "atlas" | "paper";
 
-const EDITIONS: EditionId[] = ["blueprint", "wallchart", "terminal", "metro", "atlas"];
+const EDITIONS: EditionId[] = ["blueprint", "wallchart", "terminal", "metro", "atlas", "paper"];
 
 const SHEETS: { id: SheetId; no: string; label: string }[] = [
   { id: "chart", no: "01", label: "Chart" },
@@ -61,7 +61,7 @@ export function TitleBlock({
         <span className="flex items-center gap-1.5">
           <span
             className={`inline-block h-2 w-2 rounded-full ${ok ? "" : "bp-live"}`}
-            style={{ background: ok ? "var(--line)" : "#ff7d6b" }}
+            style={{ background: ok ? "var(--line)" : "var(--alert)" }}
           />
           {ok ? "api linked" : "api offline"}
         </span>

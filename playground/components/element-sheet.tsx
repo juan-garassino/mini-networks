@@ -47,14 +47,14 @@ export function ElementSheet({
       {name && (model || composition) && (
         <>
           <motion.div
-            className="absolute inset-0 z-20 bg-paper-deep/70"
+            className="pp-overlay absolute inset-0 z-20 bg-paper-deep/70"
             initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
             onClick={onClose}
           />
           <motion.aside
             initial={{ x: "100%" }} animate={{ x: 0 }} exit={{ x: "100%" }}
             transition={{ type: "tween", duration: 0.28, ease: "easeOut" }}
-            className="absolute inset-y-0 right-0 z-30 w-full max-w-lg overflow-y-auto border-l-[1.5px] border-line bg-paper px-6 py-6"
+            className="pp-drawer absolute inset-y-0 right-0 z-30 w-full max-w-lg overflow-y-auto border-l-[1.5px] border-line bg-paper px-6 py-6"
           >
             <div className="flex items-start justify-between">
               <div>

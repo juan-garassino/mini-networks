@@ -22,6 +22,10 @@
   --line: #9fdcf5;         /* pen line-work */
   --line-faint: #1d4468;   /* construction lines / grid */
   --redline: #ffb454;      /* amber markup: live, hover, CTA */
+  --pen-3: #8be9c3;        /* observatory pen 3 */
+  --pen-4: #e0a8ff;        /* observatory pen 4 */
+  --pen-5: #ff7d6b;        /* observatory pen 5 */
+  --alert: #ff7d6b;        /* offline dot / failed status */
 }
 
 html, body { height: 100%; }
@@ -137,6 +141,100 @@ body::after {
 }
 [data-edition="atlas"] { --font-display: var(--font-cormorant); }
 [data-edition="atlas"] .bp-title { letter-spacing: 0.05em; text-transform: none; }
+
+/* 5 · paper playhouse: cut-paper storybook */
+[data-edition="paper"] {
+  --paper: #fbf3dd;        /* cream construction paper */
+  --paper-deep: #f3e6c4;   /* shaded fold */
+  --ink: #4a2e1e;          /* warm brown marker */
+  --ink-dim: #9c7a5b;      /* faded pencil */
+  --line: #6b4a2f;         /* crayon outline */
+  --line-faint: #e6d5b0;   /* light guide lines */
+  --redline: #ef6351;      /* coral sticker accent */
+  --pen-3: #4c9a56;        /* crayon green */
+  --pen-4: #8a6fc7;        /* crayon grape */
+  --pen-5: #f2a541;        /* crayon marigold */
+  --alert: #ef6351;
+  /* scenery-only tokens */
+  --pp-sky-hi: #aee3f5;
+  --pp-sky-lo: #e9f7fb;
+  --pp-grass-1: #8fd06a;
+  --pp-grass-2: #6db54b;
+  --pp-grass-3: #519a3d;
+  --pp-sun: #ffd23f;
+  --pp-shadow: rgba(74, 46, 30, 0.18);
+}
+[data-edition="paper"] { --font-display: var(--font-luckiest); --font-draft: var(--font-patrick); }
+[data-edition="paper"] body, body[data-edition="paper"] {
+  background-color: var(--pp-sky-lo);
+  background-image: linear-gradient(180deg, var(--pp-sky-hi) 0%, var(--pp-sky-lo) 55%, #f4f9e6 100%);
+  background-size: 100% 100%;
+}
+[data-edition="paper"] body::after { opacity: 0.04; } /* grain kept: paper tooth */
+
+/* hand-drawn game-window frame */
+[data-edition="paper"] .bp-frame {
+  border: 3px solid var(--line);
+  border-radius: 18px 24px 20px 26px / 24px 18px 26px 20px;
+  box-shadow: 0 6px 0 var(--pp-shadow), 0 0 0 6px rgba(255, 255, 255, 0.5);
+  background: var(--paper);
+}
+[data-edition="paper"] .bp-title { text-transform: none; letter-spacing: 0.02em; }
+[data-edition="paper"] .bp-stamp {
+  border-radius: 999px;
+  border-width: 2.5px;
+  background: #fffdf5;
+  box-shadow: 0 2px 0 var(--pp-shadow);
+  transform: rotate(-3deg);
+}
+
+/* ————— paper primitives ————— */
+[data-edition="paper"] .pp-cutout {
+  position: relative;
+  background: var(--paper);
+  border: 2.5px solid var(--line);
+  border-radius: 14px 19px 15px 21px / 19px 14px 21px 15px;
+  box-shadow: 0 5px 0 var(--pp-shadow);
+}
+[data-edition="paper"] .pp-tape {
+  position: absolute;
+  width: 46px;
+  height: 15px;
+  background: rgba(255, 243, 196, 0.7);
+  border: 1px solid rgba(74, 46, 30, 0.12);
+  border-radius: 2px;
+  box-shadow: 0 1px 2px rgba(74, 46, 30, 0.15);
+}
+[data-edition="paper"] .pp-bubble {
+  position: relative;
+  background: #fffdf5;
+  border: 2.5px solid var(--line);
+  border-radius: 16px 20px 16px 20px / 20px 16px 20px 16px;
+  box-shadow: 0 4px 0 var(--pp-shadow);
+  padding: 6px 12px;
+  font-family: var(--font-patrick), cursive;
+  color: var(--ink);
+}
+[data-edition="paper"] .pp-bubble::after {
+  content: "";
+  position: absolute;
+  left: 18px;
+  bottom: -9px;
+  width: 13px;
+  height: 13px;
+  background: #fffdf5;
+  border-right: 2.5px solid var(--line);
+  border-bottom: 2.5px solid var(--line);
+  transform: rotate(45deg);
+}
+
+/* spec-sheet drawer as a torn page (hook classes are inert elsewhere) */
+[data-edition="paper"] .pp-drawer {
+  border-left: 3px solid var(--line);
+  border-radius: 24px 0 0 24px / 28px 0 0 28px;
+  box-shadow: -6px 0 0 var(--pp-shadow);
+}
+[data-edition="paper"] .pp-overlay { background: rgba(107, 74, 47, 0.28); }
 
 /* ————— network anatomy flow ————— */
 @keyframes flowdash { to { stroke-dashoffset: -20; } }

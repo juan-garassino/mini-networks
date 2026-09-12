@@ -8,7 +8,7 @@ import { getMetrics } from "@/lib/api";
 import type { MetricSeries, RunSummary } from "@/lib/types";
 import { STATUS_INK, symbolFor } from "@/lib/blueprint";
 
-const PENS = ["var(--line)", "var(--redline)", "#8be9c3", "#e0a8ff", "#ff7d6b"];
+const PENS = ["var(--line)", "var(--redline)", "var(--pen-3)", "var(--pen-4)", "var(--pen-5)"];
 
 export function Observatory({
   runs, onSelectModel,

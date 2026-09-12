@@ -1,5 +1,16 @@
 This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
 
+## Editions
+
+The UI ships six visual editions, cycled with the `ed.` stamp in the title
+block (persisted in `localStorage`): **blueprint** (cyanotype drafting, the
+default), **wallchart** (vintage parchment), **terminal** (phosphor CRT),
+**metro** (transit signage), **atlas** (botanical plates), and **paper**
+(cut-paper storybook with an animated scenery backdrop and original critters).
+Each edition is a `[data-edition="…"]` token block in `app/globals.css`;
+terminal/metro/atlas/paper additionally have bespoke Chart views in
+`components/views/chart-*.tsx`.
+
 ## Getting Started
 
 First, run the development server:

@@ -1,0 +1,42 @@
+# Paper edition — cut-paper storybook theme for the playground
+
+**Date:** 2026-09-12 · **Status:** approved, implemented on `feat/paper-edition`
+
+## What
+
+A sixth playground edition, `paper`: a Paper Mario-inspired cut-paper storybook
+treatment (inspired by Kevin Ngo's Paper Mario IDE tweet). Full-app coverage —
+every sheet, the spec-sheet drawer and the title block restyle; the Chart sheet
+gets a bespoke view like terminal/metro/atlas.
+
+## Decisions (user-selected)
+
+1. **Depth:** full-app treatment (not a CSS-only reskin).
+2. **Mascots:** original critters only — Nintendo IP (Mario/Goomba/etc.) is
+   off-limits. Cast: a one-eyed perceptron blob (with speech-bubble quips), a
+   walking 3×3 convolution kernel, a gradient-descent snail whose shell is a
+   converging loss-curve spiral.
+3. **Architecture:** CSS-first. One `[data-edition="paper"]` token block in
+   `globals.css` themes all sheets; `<PaperScenery>` (inline-SVG hills/sun/
+   clouds/critters) mounts app-wide behind the sheets; only `chart-paper.tsx`
+   is a bespoke view. No per-sheet component forks.
+
+## Key elements
+
+- **Tokens:** cream paper / warm brown ink / coral `--redline`; sky-gradient
+  body; fonts Luckiest Guy (display) + Patrick Hand (draft) via next/font.
+- **Primitives:** `.pp-cutout` (wobbly border + cut-paper shadow), `.pp-tape`,
+  `.pp-bubble` (speech bubble with tail); scoped `bp-frame/bp-title/bp-stamp`
+  overrides (hand-drawn game-window frame).
+- **Targeted improvement:** Observatory pens + offline dot + `STATUS_INK.failed`
+  tokenized as `--pen-3/4/5`/`--alert` (`:root` defaults equal the old hexes —
+  the five existing editions are pixel-unchanged; paper overrides with a
+  crayon palette).
+- **Constraints:** zero binary assets (all art is inline SVG in TSX — repo
+  no-binaries rule); deterministic render (no `Math.random`, index arithmetic
+  only); scenery outside the sheet `AnimatePresence` so the walking critter
+  never resets; `pointer-events-none` + `aria-hidden` on scenery.
+
+Implementation plan (files, CSS draft, verification):
+`~/.claude/plans/lets-see-it-done-playful-map.md` (session artifact); the
+durable record is the diff of PR `feat/paper-edition`.
