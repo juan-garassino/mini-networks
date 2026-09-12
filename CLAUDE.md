@@ -1,5 +1,7 @@
 # CLAUDE.md — mini_networks
 
+> **021-bootcamp dependency**: `mini-networks` is used as an editable uv dependency in `005-products/021-bootcamp/` (phases 3, 6). Weeks 6, 7, and 13 import directly from `mini_networks.ch0X` for lab exercises. Do not break the public API of existing chapter modules.
+
 Educational ML lab: 44 models and 22 cross-model compositions sharing one
 runtime contract, one data registry, one logging format, and one quality gate.
 Owner-facing reference lab with a graphical **playground** (Observatory).
@@ -19,6 +21,10 @@ and `…/2026-06-24-playground-and-gcp-training-design.md`.
 ```
 core/
   config.py          BaseConfig (pydantic v2) + tier system (see below)
+  tiers.py           the single visible tier-budget table (S/M/L caps) + per-item
+                     M overrides via budget() — every override carries a why-comment
+  blocks/            shared building blocks (norm/RMSNorm, ema, attention, cnn,
+                     mlp) graduated from per-model copies (PR #16)
   runtime.py         BaseTrainer ABC: train/evaluate/infer/load_checkpoint
                      + SupervisedTrainer / ContrastiveTrainer / reconstruction bases
   evalspec.py        EvalSpec + EVAL_SPECS — quality-gate thresholds, 1 entry per item
@@ -51,11 +57,16 @@ playground/ (repo root)  Next.js 16 + React 19 + TS + Tailwind v4 + Recharts +
                      Motion. "Periodic Table of Neural Networks" cyanotype-
                      blueprint UI (sheets: Chart/Reactions/Observatory +
                      element spec-sheet drawer; taxonomy-driven via
-                     /web/taxonomy). Static-exported
-                     (output:'export' → playground/out) and served by FastAPI
-                     StaticFiles at /. Pure client of /web,/train,/infer. Source
-                     committed; out/ + node_modules gitignored (build with
-                     `make playground`). Replaced the old no-build vanilla SPA.
+                     /web/taxonomy). 66 per-species glyphs, six edition themes
+                     behind a toggle (blueprint/wall chart/terminal/metro/atlas/
+                     paper — cut-paper storybook w/ SVG scenery + critters),
+                     animated per-species forward-pass anatomy (PRs #18–#22).
+                     Static-exported (output:'export' → playground/out) and
+                     served by FastAPI StaticFiles at /. Pure client of
+                     /web,/train,/infer. Source committed; out/ + node_modules
+                     gitignored (build with `make playground`). Read
+                     playground/AGENTS.md before UI work — this Next.js version
+                     differs from training data.
 infra/gcp/           Dockerfile.train (ARG TORCH_INDEX: cpu|cu121) + entrypoint.sh
                      (MODE=train|sweep-task) + terraform/ (train job, L4 sweep
                      job, topic, trigger, IAM) + function/ (see its README)
@@ -146,11 +157,15 @@ Writes `runs/sweep/<ts>/report.{md,json}`; non-zero exit on any non-pass.
 - `MN_SWEEP_BUCKET` / `MN_SWEEP_PREFIX` / `SWEEP_ID` / `ITEMS` / `CLOUD_RUN_TASK_INDEX` — sweep-task sharding + shard upload (bucket unset = local-only dry-run).
 - Cloud/MLflow deps live in the `cloud` extra (`uv sync --extra cloud`); all imports are lazy so the base install + `smoke-import` stay light.
 
-## CI (.github/workflows/ci.yml)
+## CI (.github/workflows/)
 
-Jobs: `smoke-import` (imports every module), `test` (`make test-ci`), `sweep-s`
-(full S-tier check sweep, report uploaded as artifact). All blocking and green
-as of 2026-07-10 (PR #1).
+- `ci.yml` — `smoke-import` (imports every module), `test` (`make test-ci`),
+  `sweep-s` (full S-tier check sweep, report uploaded as artifact). All blocking.
+- `build-train-image.yml` — on push to main touching train-image paths: builds
+  BOTH train images (cpu + cu121) and pushes to AR as `:latest` only (no SHA
+  tags — storage cost). Wait for the CI build of your sha before
+  `make -C infra/gcp refresh-jobs`, or the jobs pick up a stale image.
+- `infra.yml` — terraform-validate on `infra/gcp/**` changes.
 
 ## Conventions
 
@@ -168,18 +183,20 @@ as of 2026-07-10 (PR #1).
 
 ## Working state
 
-- Phase 0 (foundation) + Phase 1 (quality gate) + Phase 3 (docs) done.
-- **Phase 2 M-tier: 51/51 green (2026-07-10)** via 6 rounds of the parallel
-  cloud sweep (`make -C infra/gcp sweep TIER=M` → `sweep-report` → triage;
-  rerun failures with `ITEMS=…`). Thresholds carry evidence comments from
-  those rounds. All 32 models have Production `mini-<model>` registry
-  champions; `pull-champions` + the `/infer` fallback serve them locally.
-- Playground + GCP training landed: MLflow sink → global `garassino-mlflow`
-  tracker (Cloud SQL; Neon plan superseded), champion/challenger Model
-  Registry (`mini-<model>`), `/web` read-layer, Observatory SPA,
-  Pub/Sub→Cloud Run Job single-train, ONE parallel L4 sweep job
-  (`mini-networks-sweep`, task-sharded gate). Plan B (Sandbox, Lab-compare,
-  Lessons, showcase deploy) is future work.
-- Known instability fixes applied 2026-07-10: text_seq2seq causal mask +
-  shifted teacher forcing + honest eval divisor; pixelcnn Bernoulli BCE +
-  true raster-scan sampling; optional `BaseConfig.max_grad_norm` clipping.
+- Phases 0–3 done. **Capstone M-tier sweep m-full-4: 53/53 pass (2026-07-11)**
+  on the 35-model era; thresholds carry evidence comments from the triage
+  rounds; all era champions registered as `mini-<model>` Production and served
+  locally via `pull-champions` + the `/infer` fallback.
+- Zoo since grown to **44 models + 22 compositions**: models 36–44 (kimi,
+  deepseek, grokking, text_diffusion, rpp_classifier, gnn, sam, nerf,
+  alphazero) and compositions 20–22 (mode_connect, double_descent, vlm) landed
+  with S-tier gates only — their evalspec bars are marked PROVISIONAL until a
+  cloud M sweep validates them.
+- **Cloud pause (since 2026-07-31): no Cloud Run dispatch — train or sweep —
+  without an explicit ask.** Validate changes via local S-tier micro runs.
+- Taxonomy DAG shipped (16 atoms / 28 derived / 21 composed, `core/taxonomy.py`,
+  PR #15); shared blocks graduated to `core/blocks/` (PR #16).
+- Public showcase app: https://mini-networks-app-mjz4n7eeia-ew.a.run.app —
+  Cloud Run `mini-networks-app` (min-0, `MN_DISABLE_TRAIN=1` guards /train +
+  /compose, champions pulled at container start).
+- Plan B (Sandbox, Lab-compare, Lessons) is future work.
