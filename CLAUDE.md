@@ -59,7 +59,7 @@ playground/ (repo root)  Next.js 16 + React 19 + TS + Tailwind v4 + Recharts +
                      element spec-sheet drawer; taxonomy-driven via
                      /web/taxonomy). 66 per-species glyphs, six edition themes
                      behind a toggle (blueprint/wall chart/terminal/metro/atlas/
-                     paper — cut-paper storybook w/ SVG scenery + critters),
+                     paper — manila city-map: districts, lots, routes, compass),
                      animated per-species forward-pass anatomy (PRs #18–#22).
                      Static-exported (output:'export' → playground/out) and
                      served by FastAPI StaticFiles at /. Pure client of

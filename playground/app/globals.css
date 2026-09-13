@@ -142,99 +142,74 @@ body::after {
 [data-edition="atlas"] { --font-display: var(--font-cormorant); }
 [data-edition="atlas"] .bp-title { letter-spacing: 0.05em; text-transform: none; }
 
-/* 5 · paper playhouse: cut-paper storybook */
+/* 5 · paper survey: a manila city-map for grown-ups */
 [data-edition="paper"] {
-  --paper: #fbf3dd;        /* cream construction paper */
-  --paper-deep: #f3e6c4;   /* shaded fold */
-  --ink: #4a2e1e;          /* warm brown marker */
-  --ink-dim: #9c7a5b;      /* faded pencil */
-  --line: #6b4a2f;         /* crayon outline */
-  --line-faint: #e6d5b0;   /* light guide lines */
-  --redline: #ef6351;      /* coral sticker accent */
-  --pen-3: #4c9a56;        /* crayon green */
-  --pen-4: #8a6fc7;        /* crayon grape */
-  --pen-5: #f2a541;        /* crayon marigold */
-  --alert: #ef6351;
-  /* scenery-only tokens */
-  --pp-sky-hi: #aee3f5;
-  --pp-sky-lo: #e9f7fb;
-  --pp-grass-1: #8fd06a;
-  --pp-grass-2: #6db54b;
-  --pp-grass-3: #519a3d;
-  --pp-sun: #ffd23f;
-  --pp-shadow: rgba(74, 46, 30, 0.18);
+  --paper: #f0e7d3;        /* map paper */
+  --paper-deep: #e5d9bd;   /* shaded fold */
+  --ink: #3a2d20;          /* printed ink */
+  --ink-dim: #8a7a63;      /* pencil annotation */
+  --line: #4d3d2c;         /* rule / border */
+  --line-faint: #d8cbaa;   /* hairline / graticule */
+  --redline: #bf4a2a;      /* muted vermilion accent */
+  --pen-3: #5d8a5e;        /* survey green */
+  --pen-4: #6c6a9e;        /* survey plum */
+  --pen-5: #c98a3d;        /* survey ochre */
+  --alert: #bf4a2a;
+  --pp-board: #e3d7ba;     /* kraft board behind the panels */
+  --pp-shadow: rgba(58, 45, 32, 0.16);
 }
-[data-edition="paper"] { --font-display: var(--font-luckiest); --font-draft: var(--font-patrick); }
+[data-edition="paper"] { --font-draft: var(--font-patrick); }
 [data-edition="paper"] body, body[data-edition="paper"] {
-  background-color: var(--pp-sky-lo);
-  background-image: linear-gradient(180deg, var(--pp-sky-hi) 0%, var(--pp-sky-lo) 55%, #f4f9e6 100%);
-  background-size: 100% 100%;
+  background-color: var(--pp-board);
+  /* faint graticule: a surveyor's grid */
+  background-image:
+    repeating-linear-gradient(0deg, transparent 0 23px, rgba(77, 61, 44, 0.05) 23px 24px),
+    repeating-linear-gradient(90deg, transparent 0 23px, rgba(77, 61, 44, 0.05) 23px 24px);
+  background-size: 24px 24px;
 }
-[data-edition="paper"] body::after { opacity: 0.04; } /* grain kept: paper tooth */
+[data-edition="paper"] body::after { opacity: 0.05; } /* grain: paper tooth */
 
-/* hand-drawn game-window frame */
+/* the app is a flat manila board */
 [data-edition="paper"] .bp-frame {
-  border: 3px solid var(--line);
-  border-radius: 18px 24px 20px 26px / 24px 18px 26px 20px;
-  box-shadow: 0 6px 0 var(--pp-shadow), 0 0 0 6px rgba(255, 255, 255, 0.5);
-  background: var(--paper);
-}
-[data-edition="paper"] .bp-title { text-transform: none; letter-spacing: 0.02em; }
-[data-edition="paper"] .bp-stamp {
-  border-radius: 999px;
-  border-width: 2.5px;
-  background: #fffdf5;
-  box-shadow: 0 2px 0 var(--pp-shadow);
-  transform: rotate(-3deg);
-}
-
-/* ————— paper primitives ————— */
-[data-edition="paper"] .pp-cutout {
-  position: relative;
-  background: var(--paper);
-  border: 2.5px solid var(--line);
-  border-radius: 14px 19px 15px 21px / 19px 14px 21px 15px;
-  box-shadow: 0 5px 0 var(--pp-shadow);
-}
-[data-edition="paper"] .pp-tape {
-  position: absolute;
-  width: 46px;
-  height: 15px;
-  background: rgba(255, 243, 196, 0.7);
-  border: 1px solid rgba(74, 46, 30, 0.12);
-  border-radius: 2px;
-  box-shadow: 0 1px 2px rgba(74, 46, 30, 0.15);
-}
-[data-edition="paper"] .pp-bubble {
-  position: relative;
-  background: #fffdf5;
-  border: 2.5px solid var(--line);
-  border-radius: 16px 20px 16px 20px / 20px 16px 20px 16px;
+  border: 1.5px solid var(--line-faint);
+  border-radius: 10px;
   box-shadow: 0 4px 0 var(--pp-shadow);
-  padding: 6px 12px;
-  font-family: var(--font-patrick), cursive;
-  color: var(--ink);
+  background: var(--pp-board);
 }
-[data-edition="paper"] .pp-bubble::after {
-  content: "";
-  position: absolute;
-  left: 18px;
-  bottom: -9px;
-  width: 13px;
-  height: 13px;
-  background: #fffdf5;
-  border-right: 2.5px solid var(--line);
-  border-bottom: 2.5px solid var(--line);
-  transform: rotate(45deg);
+[data-edition="paper"] .bp-title { letter-spacing: 0.08em; }
+[data-edition="paper"] .bp-stamp {
+  border-radius: 4px;
+  border-width: 1.5px;
+  transform: none;
 }
 
-/* spec-sheet drawer as a torn page (hook classes are inert elsewhere) */
-[data-edition="paper"] .pp-drawer {
-  border-left: 3px solid var(--line);
-  border-radius: 24px 0 0 24px / 28px 0 0 28px;
-  box-shadow: -6px 0 0 var(--pp-shadow);
+/* map panels: flat cream cards with a printed edge */
+[data-edition="paper"] .pp-panel {
+  background: #f7f1e2;
+  border: 1.5px solid var(--line);
+  border-radius: 6px;
+  box-shadow: 0 3px 0 var(--pp-shadow);
 }
-[data-edition="paper"] .pp-overlay { background: rgba(107, 74, 47, 0.28); }
+
+/* footer strip + sheet tabs as printed tickets */
+[data-edition="paper"] footer {
+  background: var(--paper);
+  border-top: 1.5px solid var(--line-faint);
+}
+[data-edition="paper"] footer nav button {
+  border: 1.5px solid var(--line);
+  border-radius: 4px;
+  margin: 6px 3px;
+  box-shadow: 0 2px 0 var(--pp-shadow);
+}
+
+/* spec-sheet drawer: a calm inset panel (hook classes inert elsewhere) */
+[data-edition="paper"] .pp-drawer {
+  border-left: 1.5px solid var(--line);
+  border-radius: 12px 0 0 12px;
+  box-shadow: -4px 0 0 var(--pp-shadow);
+}
+[data-edition="paper"] .pp-overlay { background: rgba(58, 45, 32, 0.24); }
 
 /* ————— network anatomy flow ————— */
 @keyframes flowdash { to { stroke-dashoffset: -20; } }

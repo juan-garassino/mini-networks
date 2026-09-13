@@ -40,3 +40,25 @@ gets a bespoke view like terminal/metro/atlas.
 Implementation plan (files, CSS draft, verification):
 `~/.claude/plans/lets-see-it-done-playful-map.md` (session artifact); the
 durable record is the diff of PR `feat/paper-edition`.
+
+## Revision 2026-09-13 — storybook → adult "paper city map"
+
+Seen live, v1 read as childish (sky/hills diorama, big critter stickers,
+Luckiest Guy logo) and wasted the space in one giant ruled sheet. User
+redirect: "just a paper", "more panels not one big one", "a playground for
+adults, like a city map". v2 keeps the edition machinery and the token
+approach but changes the aesthetic:
+
+- **Aesthetic:** a flat manila survey map. Families are **districts**, models
+  are **lots**, compositions are **routes**. Muted survey palette (kraft board
+  + graticule, cream panels, vermilion accent), Big Shoulders signage + Patrick
+  Hand annotations. Removed Luckiest Guy.
+- **Layout:** multi-panel — cartouche + legend + compass header, six district
+  panels of lots, a routes panel, a scale-bar/surveyor's-mark margin. Generous
+  negative space; no wobble/tape/stickers.
+- **Critters:** reduced to one tiny `CritterCameo` (~34px, gentle bob, no
+  bubble). `scenery.tsx` deleted.
+- **Robustness fix:** `page.tsx` now retries the taxonomy fetch every 3s until
+  the API answers (a tab opened before `serve` was up used to stay empty).
+- The tokenization/regression guarantees from v1 still hold: all CSS scoped
+  under `[data-edition="paper"]`; the other five editions are unchanged.

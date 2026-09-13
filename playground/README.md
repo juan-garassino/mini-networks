@@ -6,7 +6,8 @@ The UI ships six visual editions, cycled with the `ed.` stamp in the title
 block (persisted in `localStorage`): **blueprint** (cyanotype drafting, the
 default), **wallchart** (vintage parchment), **terminal** (phosphor CRT),
 **metro** (transit signage), **atlas** (botanical plates), and **paper**
-(cut-paper storybook with an animated scenery backdrop and original critters).
+(a manila survey map: families as districts, models as lots, compositions as
+routes, with legend and compass).
 Each edition is a `[data-edition="…"]` token block in `app/globals.css`;
 terminal/metro/atlas/paper additionally have bespoke Chart views in
 `components/views/chart-*.tsx`.

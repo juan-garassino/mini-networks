@@ -12,7 +12,6 @@ import { ChartTerminal } from "@/components/views/chart-terminal";
 import { ChartMetro } from "@/components/views/chart-metro";
 import { ChartAtlas } from "@/components/views/chart-atlas";
 import { ChartPaper } from "@/components/views/chart-paper";
-import { PaperScenery } from "@/components/paper/scenery";
 import { Reactions } from "@/components/views/reactions";
 import { Observatory } from "@/components/views/observatory";
 
@@ -24,9 +23,19 @@ export default function Page() {
   const { runs, ok } = useRuns();
 
   useEffect(() => {
-    getTaxonomy().then(setTaxonomy).catch(() => setTaxonomy(null));
+    // retry until the API answers — a tab opened before `serve` is up otherwise
+    // shows an empty sheet forever
+    let alive = true;
+    let timer: ReturnType<typeof setTimeout>;
+    const load = () => {
+      getTaxonomy()
+        .then((t) => { if (alive) setTaxonomy(t); })
+        .catch(() => { if (alive) timer = setTimeout(load, 3000); });
+    };
+    load();
     const saved = localStorage.getItem("mn-edition") as EditionId | null;
     if (saved) setEdition(saved);
+    return () => { alive = false; clearTimeout(timer); };
   }, []);
 
   useEffect(() => {
@@ -37,7 +46,6 @@ export default function Page() {
   return (
     <>
       <main className="relative min-h-0">
-        {edition === "paper" && <PaperScenery />}
         <AnimatePresence mode="wait">
           <motion.div
             key={`${sheet}-${edition}`}

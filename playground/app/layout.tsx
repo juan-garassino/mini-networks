@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import {
-  Big_Shoulders, Cormorant_Garamond, Instrument_Serif, Jost, Luckiest_Guy,
+  Big_Shoulders, Cormorant_Garamond, Instrument_Serif, Jost,
   Martian_Mono, Patrick_Hand, VT323,
 } from "next/font/google";
 import "./globals.css";
@@ -19,7 +19,6 @@ const instrument = Instrument_Serif({ variable: "--font-instrument", subsets: ["
 const vt = VT323({ variable: "--font-vt", subsets: ["latin"], weight: "400" });
 const jost = Jost({ variable: "--font-jost", subsets: ["latin"], weight: ["400", "600", "700"] });
 const cormorant = Cormorant_Garamond({ variable: "--font-cormorant", subsets: ["latin"], weight: ["400", "600", "700"] });
-const luckiest = Luckiest_Guy({ variable: "--font-luckiest", subsets: ["latin"], weight: "400" });
 const patrick = Patrick_Hand({ variable: "--font-patrick", subsets: ["latin"], weight: "400" });
 
 export const metadata: Metadata = {
@@ -29,7 +28,7 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   return (
-    <html lang="en" className={`${display.variable} ${draft.variable} ${instrument.variable} ${vt.variable} ${jost.variable} ${cormorant.variable} ${luckiest.variable} ${patrick.variable} h-full antialiased`}>
+    <html lang="en" className={`${display.variable} ${draft.variable} ${instrument.variable} ${vt.variable} ${jost.variable} ${cormorant.variable} ${patrick.variable} h-full antialiased`}>
       <body className="h-full overflow-hidden">
         <div className="relative z-10 h-full p-3 sm:p-5">
           <div className="bp-frame relative grid h-full grid-rows-[1fr_auto] overflow-hidden">
