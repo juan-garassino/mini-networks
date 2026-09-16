@@ -163,6 +163,23 @@ EVAL_SPECS: dict[str, EvalSpec] = {
     # gan's M until the first M sweep sets an honest band — WGAN should match or
     # beat vanilla gan on mode coverage, which is the whole point of the mini.
     "wgan":                  _judge(0.15, 0.40, loss_keys=("g_loss", "c_loss"), s_mode="finite"),
+    # CycleGAN's headline metric is cycle-consistency error ‖F(G(a))-a‖+‖G(F(b))-b‖
+    # (eval_loss), not sample judge score — the point of the mini is that the two
+    # generators are near-inverses. Adversarial g/d losses oscillate at
+    # equilibrium, so the S trend check is gated on the cycle_loss series and
+    # s_mode=finite. PROVISIONAL: bar is a conservative L1 guess on [-1,1] toy
+    # MNIST<->FashionMNIST; finalize from the first M sweep.
+    "cyclegan":              _loss(0.6, 0.35, loss_keys=("cycle_loss", "g_loss", "d_loss"), s_mode="finite"),
+    # Swin classifies MNIST like vit; same accuracy band as vit — windowed
+    # attention should match global attention at this tiny scale. PROVISIONAL
+    # until the first M sweep.
+    "swin":                  _acc(0.75, 0.90),
+    # ConvLSTM/DCRNN are next-frame / forecast MSE regressors (lower is better).
+    # PROVISIONAL bars: conservative MSE guesses on the synthetic toy data
+    # (Moving-MNIST frames in [0,1]; graph diffusion signal ~unit variance);
+    # finalize both from the first M sweep.
+    "convlstm":              _loss(0.05, 0.02),
+    "dcrnn":                 _loss(0.5, 0.2),
     # Raised 0.10 -> 0.5 (2026-07-11 audit): honest band 0.71-0.77 across 3
     # post-fix runs — the old bar was a stale pre-data guess 7x below it.
     # Caveat in the audit: judges are overconfident on binary noise, so this

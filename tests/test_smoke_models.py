@@ -92,6 +92,109 @@ def test_vqvae_forward_and_ste_smoke():
     assert enc_grad is not None and torch.isfinite(enc_grad).all()
 
 
+def test_cyclegan_forward_and_cycle_smoke():
+    """CycleGAN's two generators round-trip a->B->a; PatchGAN emits a logit map; pool queries."""
+    import torch
+
+    from mini_networks.models.cyclegan.model import (
+        PatchDiscriminator, ResnetGenerator, lsgan_d_loss, lsgan_g_loss,
+    )
+    from mini_networks.models.cyclegan.trainer import ImagePool
+
+    G = ResnetGenerator(in_channels=1, ngf=16, n_blocks=2)
+    Fnet = ResnetGenerator(in_channels=1, ngf=16, n_blocks=2)
+    D = PatchDiscriminator(in_channels=1, ndf=16)
+    a = torch.rand(4, 1, 28, 28) * 2 - 1
+    fake_b = G(a)
+    rec_a = Fnet(fake_b)
+    assert fake_b.shape == a.shape and rec_a.shape == a.shape
+    logits = D(a)
+    assert logits.shape == (4, 1, 7, 7)  # PatchGAN outputs a MAP, not a scalar
+    g_loss = lsgan_g_loss(D, fake_b)
+    d_loss = lsgan_d_loss(D, a, fake_b)
+    (g_loss + d_loss).backward()
+    assert g_loss.dim() == 0 and d_loss.dim() == 0
+    # Image pool returns a batch of the same shape and eventually recycles fakes.
+    pool = ImagePool(pool_size=4)
+    out = pool.query(fake_b.detach())
+    assert out.shape == fake_b.shape
+
+
+def test_swin_forward_and_shift_mask_smoke():
+    """Swin classifies 28x28; window partition/reverse round-trips; a shifted block builds a mask."""
+    import torch
+
+    from mini_networks.models.swin.config import SwinConfig
+    from mini_networks.models.swin.model import (
+        MiniSwin, SwinBlock, window_partition, window_reverse,
+    )
+
+    cfg = SwinConfig(device="cpu")
+    model = MiniSwin(
+        patch_size=cfg.patch_size, window_size=cfg.window_size, embed_dim=cfg.embed_dim,
+        depths=tuple(cfg.depths), num_heads=cfg.num_heads, num_classes=cfg.num_classes,
+    )
+    x = torch.rand(4, 1, 28, 28)
+    logits = model(x)
+    assert logits.shape == (4, 10)
+    logits.sum().backward()
+    # window_partition/reverse must be exact inverses.
+    feat = torch.rand(2, 7, 7, cfg.embed_dim)
+    win = window_partition(feat, 7)
+    assert torch.allclose(window_reverse(win, 7, 7, 7), feat, atol=1e-5)
+    # A shifted block precomputes a non-trivial attention mask (the -100 fills).
+    # Use resolution 8 with window 4 so the 9-region mask partitions cleanly.
+    shifted = SwinBlock(cfg.embed_dim, 8, cfg.num_heads, window_size=4, shift_size=2, mlp_ratio=2.0)
+    assert shifted.attn_mask is not None and (shifted.attn_mask == -100.0).any()
+    tokens = torch.rand(2, 8 * 8, cfg.embed_dim)
+    assert shifted(tokens).shape == tokens.shape
+
+
+def test_convlstm_forward_and_rollout_smoke():
+    """ConvLSTM cell carries a spatial state; the net rolls out future frames."""
+    import torch
+
+    from mini_networks.models.convlstm.model import ConvLSTMCell, ConvLSTMNet
+
+    cell = ConvLSTMCell(in_channels=1, hidden_dim=8, kernel_size=3)
+    h, c = cell.init_state(4, (32, 32), device="cpu")
+    h2, c2 = cell(torch.rand(4, 1, 32, 32), (h, c))
+    assert h2.shape == (4, 8, 32, 32) and c2.shape == (4, 8, 32, 32)
+
+    net = ConvLSTMNet(in_channels=1, hidden_dim=8, n_layers=1)
+    context = torch.rand(4, 5, 1, 32, 32)
+    future = torch.rand(4, 5, 1, 32, 32)
+    mask = (torch.rand(5, 4) < 0.5).float()
+    preds = net(context, n_predict=5, future_frames=future, sampling_mask=mask)
+    assert preds.shape == future.shape
+    ((preds - future) ** 2).mean().backward()
+    # Open-loop rollout (no teacher forcing) also produces the right shape.
+    assert net(context, n_predict=5).shape == future.shape
+
+
+def test_dcrnn_forward_and_diffusion_smoke():
+    """DCGRU diffuses over graph supports; the DCRNN forecasts a horizon of steps."""
+    import torch
+
+    from mini_networks.models.dcrnn.model import DCRNN, DiffusionConv
+    from mini_networks.models.dcrnn.trainer import _build_graph
+
+    n_nodes = 20
+    supports, adj = _build_graph(n_nodes, seed=11)
+    assert len(supports) == 2 and adj.shape == (n_nodes, n_nodes)
+    # A K-step diffusion conv maps node features to a new node feature dim.
+    conv = DiffusionConv(in_dim=1, out_dim=8, n_supports=2, max_diffusion_step=2)
+    out = conv(torch.rand(4, n_nodes, 1), supports)
+    assert out.shape == (4, n_nodes, 8)
+
+    model = DCRNN(node_dim=1, hidden_dim=16, n_supports=2, max_diffusion_step=2)
+    past = torch.rand(4, 12, n_nodes, 1)
+    future = torch.rand(4, 6, n_nodes, 1)
+    preds = model(past, supports, horizon=6, targets=future, teacher_prob=0.5)
+    assert preds.shape == (4, 6, n_nodes, 1)
+    ((preds - future) ** 2).mean().backward()
+
+
 def test_registry_train_eval_smoke():
     registry = get_model_registry()
     skipped = []

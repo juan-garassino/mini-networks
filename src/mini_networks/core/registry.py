@@ -55,6 +55,10 @@ MODEL_NAMES: list[str] = [
     "tabular_diffusion",
     "wgan",
     "vqvae",
+    "cyclegan",
+    "swin",
+    "convlstm",
+    "dcrnn",
 ]
 
 
@@ -167,6 +171,14 @@ def get_model_registry() -> dict:
     from mini_networks.models.wgan.trainer import WGANTrainer, make_wgan_dataloader
     from mini_networks.models.vqvae.config import VQVAEConfig
     from mini_networks.models.vqvae.trainer import VQVAETrainer, make_vqvae_dataloader
+    from mini_networks.models.cyclegan.config import CycleGANConfig
+    from mini_networks.models.cyclegan.trainer import CycleGANTrainer, make_cyclegan_dataloader
+    from mini_networks.models.swin.config import SwinConfig
+    from mini_networks.models.swin.trainer import SwinTrainer, make_swin_dataloader
+    from mini_networks.models.convlstm.config import ConvLSTMConfig
+    from mini_networks.models.convlstm.trainer import ConvLSTMTrainer, make_convlstm_dataloader
+    from mini_networks.models.dcrnn.config import DCRNNConfig
+    from mini_networks.models.dcrnn.trainer import DCRNNTrainer, make_dcrnn_dataloader
 
     return {
         "clip": (CLIPConfig, CLIPTrainer, make_clip_dataloader),
@@ -215,4 +227,8 @@ def get_model_registry() -> dict:
         "tabular_diffusion": (TabularDiffusionConfig, TabularDiffusionTrainer, make_tabular_diffusion_dataloader),
         "wgan": (WGANConfig, WGANTrainer, make_wgan_dataloader),
         "vqvae": (VQVAEConfig, VQVAETrainer, make_vqvae_dataloader),
+        "cyclegan": (CycleGANConfig, CycleGANTrainer, make_cyclegan_dataloader),
+        "swin": (SwinConfig, SwinTrainer, make_swin_dataloader),
+        "convlstm": (ConvLSTMConfig, ConvLSTMTrainer, make_convlstm_dataloader),
+        "dcrnn": (DCRNNConfig, DCRNNTrainer, make_dcrnn_dataloader),
     }

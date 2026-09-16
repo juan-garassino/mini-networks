@@ -79,6 +79,10 @@ DESCRIPTIONS = {
     "pixelcnn":                      "PixelCNN-lite autoregressive model",
     "wgan":                          "WGAN: Wasserstein critic + weight clipping fixes GAN mode collapse",
     "vqvae":                         "VQ-VAE: discrete codebook latent + straight-through estimator on MNIST",
+    "cyclegan":                      "CycleGAN: unpaired MNIST↔Fashion translation via cycle-consistency + PatchGAN + image pool",
+    "swin":                          "Swin Transformer: windowed + shifted-window attention hierarchy on MNIST",
+    "convlstm":                      "ConvLSTM: spatio-temporal next-frame prediction on Moving-MNIST",
+    "dcrnn":                         "DCRNN: graph diffusion convolution + GRU for sensor-graph time-series forecasting",
     "clip_guided_diffusion":         "CLIP + Diffusion — text-guided image generation",
     "transformer_clip_diffusion":    "Transformer + CLIP + Diffusion — LM steers generation",
     "gan_diffusion_comparison":      "GAN vs Diffusion — side-by-side educational comparison",
@@ -124,6 +128,10 @@ CATEGORY["sam"] = "Vision / Multimodal"
 CATEGORY["nerf"] = "Vision / Multimodal"
 CATEGORY["wgan"] = "Vision / Multimodal"
 CATEGORY["vqvae"] = "Vision / Multimodal"
+CATEGORY["cyclegan"] = "Vision / Multimodal"
+CATEGORY["swin"] = "Vision / Multimodal"
+CATEGORY["convlstm"] = "Vision / Multimodal"
+CATEGORY["dcrnn"] = "Graphs"
 CATEGORY["alphazero"] = "RL / Alignment"
 CATEGORY["vision_embed"] = "Vision / Multimodal"
 CATEGORY["text_seq2seq"] = "Language"
