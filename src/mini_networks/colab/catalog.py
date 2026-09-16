@@ -77,6 +77,8 @@ DESCRIPTIONS = {
     "text_seq2seq":                  "Transformer encoder-decoder (seq2seq)",
     "text_token_classifier":         "Token classifier (vowel vs other)",
     "pixelcnn":                      "PixelCNN-lite autoregressive model",
+    "wgan":                          "WGAN: Wasserstein critic + weight clipping fixes GAN mode collapse",
+    "vqvae":                         "VQ-VAE: discrete codebook latent + straight-through estimator on MNIST",
     "clip_guided_diffusion":         "CLIP + Diffusion — text-guided image generation",
     "transformer_clip_diffusion":    "Transformer + CLIP + Diffusion — LM steers generation",
     "gan_diffusion_comparison":      "GAN vs Diffusion — side-by-side educational comparison",
@@ -120,6 +122,8 @@ CATEGORY["rpp_classifier"] = "Vision / Multimodal"
 CATEGORY["gnn"] = "Graphs"
 CATEGORY["sam"] = "Vision / Multimodal"
 CATEGORY["nerf"] = "Vision / Multimodal"
+CATEGORY["wgan"] = "Vision / Multimodal"
+CATEGORY["vqvae"] = "Vision / Multimodal"
 CATEGORY["alphazero"] = "RL / Alignment"
 CATEGORY["vision_embed"] = "Vision / Multimodal"
 CATEGORY["text_seq2seq"] = "Language"

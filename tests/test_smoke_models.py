@@ -45,6 +45,53 @@ def _build_config(config_cls):
     return config
 
 
+def test_wgan_forward_and_clipping_smoke():
+    """WGAN critic emits a raw score; weight clipping keeps params in [-c, c]."""
+    import torch
+
+    from mini_networks.models.wgan.config import WGANConfig
+    from mini_networks.models.wgan.model import Critic, Generator, wgan_critic_loss, wgan_gen_loss
+
+    cfg = WGANConfig(device="cpu", clip_value=0.01)
+    G = Generator(latent_dim=cfg.latent_dim)
+    C = Critic()
+    z = torch.randn(4, cfg.latent_dim)
+    fake = G(z)
+    assert fake.shape == (4, 1, 28, 28)
+    real = torch.rand(4, 1, 28, 28) * 2 - 1
+    c_loss = wgan_critic_loss(C, real, fake)
+    g_loss = wgan_gen_loss(C, fake)
+    c_loss.backward()
+    assert c_loss.dim() == 0 and g_loss.dim() == 0
+    # Apply the clip and assert every critic weight is bounded.
+    with torch.no_grad():
+        for p in C.parameters():
+            p.clamp_(-cfg.clip_value, cfg.clip_value)
+        assert all(p.abs().max().item() <= cfg.clip_value + 1e-6 for p in C.parameters())
+
+
+def test_vqvae_forward_and_ste_smoke():
+    """VQ-VAE reconstructs and routes gradient through the codebook via STE."""
+    import torch
+
+    from mini_networks.models.vqvae.config import VQVAEConfig
+    from mini_networks.models.vqvae.model import VQVAE, vqvae_loss
+
+    cfg = VQVAEConfig(device="cpu", num_embeddings=16, embedding_dim=8)
+    model = VQVAE(num_embeddings=cfg.num_embeddings, embedding_dim=cfg.embedding_dim)
+    x = torch.rand(4, 1, 28, 28)
+    recon, vq_loss, indices, perplexity = model(x)
+    assert recon.shape == x.shape
+    assert indices.shape == (4, 7, 7)
+    assert 0 < indices.max().item() < cfg.num_embeddings or indices.max().item() == 0
+    assert 1.0 <= perplexity.item() <= cfg.num_embeddings + 1e-3
+    loss, _ = vqvae_loss(recon, x, vq_loss)
+    loss.backward()
+    # Straight-through estimator must deliver gradient to the encoder.
+    enc_grad = next(model.encoder.parameters()).grad
+    assert enc_grad is not None and torch.isfinite(enc_grad).all()
+
+
 def test_registry_train_eval_smoke():
     registry = get_model_registry()
     skipped = []
