@@ -1,6 +1,6 @@
 # CLAUDE.md — mini_networks
 
-Educational ML lab: 46 models and 22 cross-model compositions sharing one
+Educational ML lab: 50 models and 22 cross-model compositions sharing one
 runtime contract, one data registry, one logging format, and one quality gate.
 Owner-facing reference lab with a graphical **playground** (Observatory).
 Nano S-tier runs locally (CPU) for the gate/dev; **M/L training runs on GCP
@@ -123,7 +123,8 @@ Writes `runs/sweep/<ts>/report.{md,json}`; non-zero exit on any non-pass.
 - `uv sync` / `uv sync --dev` — install
 - `make test` — fast suite (slow marker deselected via addopts)
 - `make validate-s` — full S-tier check sweep (what CI runs)
-- `python main.py train --model <name> --fast_demo` — one nano training
+- `python main.py train --model <name> --fast_demo` — one nano training (run via `uv run python main.py …`)
+- **Testing / verification: `docs/TESTING.md`** — how to run one mini, all smoke tests, one mini's test, the Colab notebooks, and a per-model table (all 50 models: what it demonstrates · train command · gate metric to verify)
 - `python main.py sweep --check --fast_demo --models clip,gan --skip-compositions` — targeted gate
 - `python main.py serve` — FastAPI on :8000; playground at `/` (serves `playground/out`), API docs at `/docs`
 - `MN_MLFLOW_TRACKING_URI=<tracker> python main.py pull-champions [--models a,b]` — download every Production `mini-<model>` checkpoint to `runs/champions/`; `/infer/<model>` then serves them by default (needs the `cloud` extra + GCS read access)
@@ -189,3 +190,14 @@ as of 2026-07-10 (PR #1).
   `vqvae` (builds_on vae — discrete codebook + straight-through estimator;
   ports the VQ/STE atom from nerdyrodent/VQGAN-CLIP). Both CPU-runnable via
   `python main.py train --model {wgan,vqvae}`.
+- Four more teaching minis added (derived molecules, all CPU-smoke-runnable):
+  `cyclegan` (builds_on gan — unpaired MNIST↔Fashion translation: 2 resnet
+  generators + 2 PatchGANs + cycle/identity loss + image pool; ports junyanz
+  cycle_gan_model.py + image_pool.py), `swin` (builds_on vit, transformer —
+  windowed + shifted-window attention + patch-merging hierarchy; ports
+  microsoft/Swin-Transformer), `convlstm` (builds_on rnn, classifier —
+  LSTM gates as convs for Moving-MNIST next-frame prediction + Bernoulli
+  scheduled sampling; ports NVlabs/conv-tt-lstm ConvLSTMCell), and `dcrnn`
+  (builds_on gnn, rnn — diffusion-convolution GRU + inverse-sigmoid scheduled
+  sampling for sensor-graph forecasting; ports liyaguang/DCRNN dcrnn_cell.py).
+  Registry is now 50 models. See `docs/TESTING.md`.
