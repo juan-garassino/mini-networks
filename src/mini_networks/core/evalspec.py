@@ -137,6 +137,12 @@ EVAL_SPECS: dict[str, EvalSpec] = {
     # mean-image decoder scores ~0.05-0.06, inside the band, so this bar
     # can't catch that — sample quality is judged visually in the showcase.
     "vae":                   _loss(0.12, 0.08),
+    # PROVISIONAL: MSE recon through a DISCRETE codebook bottleneck loses more
+    # than the continuous VAE's Gaussian latent, so the bar sits a touch looser
+    # than vae's 0.12. evaluate() also reports perplexity (codebook usage);
+    # collapse to a single code shows there, not in eval_loss. Finalize from the
+    # first M sweep.
+    "vqvae":                 _loss(0.15, 0.09, loss_keys=("loss", "recon")),
     "unet_ae":               _loss(0.08, 0.03),
     "tabular_diffusion":     _loss(1.0, 0.6),
     # M 0.25 was a pre-data guess. Observed honest band across 4 independent
@@ -151,6 +157,12 @@ EVAL_SPECS: dict[str, EvalSpec] = {
     # three fixed the mini-DCGAN scores 0.45 with visible digit forms
     # (m-vision-11); 0.15 now catches real regressions.
     "gan":                   _judge(0.15, 0.40, loss_keys=("g_loss", "d_loss"), s_mode="finite"),
+    # WGAN judged on sample quality like gan; s_mode=finite because the
+    # Wasserstein critic/gen losses swing by design (and the critic loss is a
+    # distance estimate, not a monotone objective). PROVISIONAL: bar mirrors
+    # gan's M until the first M sweep sets an honest band — WGAN should match or
+    # beat vanilla gan on mode coverage, which is the whole point of the mini.
+    "wgan":                  _judge(0.15, 0.40, loss_keys=("g_loss", "c_loss"), s_mode="finite"),
     # Raised 0.10 -> 0.5 (2026-07-11 audit): honest band 0.71-0.77 across 3
     # post-fix runs — the old bar was a stale pre-data guess 7x below it.
     # Caveat in the audit: judges are overconfident on binary noise, so this

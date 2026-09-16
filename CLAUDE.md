@@ -1,6 +1,6 @@
 # CLAUDE.md — mini_networks
 
-Educational ML lab: 44 models and 22 cross-model compositions sharing one
+Educational ML lab: 46 models and 22 cross-model compositions sharing one
 runtime contract, one data registry, one logging format, and one quality gate.
 Owner-facing reference lab with a graphical **playground** (Observatory).
 Nano S-tier runs locally (CPU) for the gate/dev; **M/L training runs on GCP
@@ -183,3 +183,9 @@ as of 2026-07-10 (PR #1).
 - Known instability fixes applied 2026-07-10: text_seq2seq causal mask +
   shifted teacher forcing + honest eval divisor; pixelcnn Bernoulli BCE +
   true raster-scan sampling; optional `BaseConfig.max_grad_norm` clipping.
+- Two teaching minis added (derived molecules): `wgan` (builds_on gan —
+  Wasserstein critic + weight clipping + n_critic + RMSProp, the minimal fix to
+  gan's on-purpose mode collapse; ports martinarjovsky/WassersteinGAN) and
+  `vqvae` (builds_on vae — discrete codebook + straight-through estimator;
+  ports the VQ/STE atom from nerdyrodent/VQGAN-CLIP). Both CPU-runnable via
+  `python main.py train --model {wgan,vqvae}`.
