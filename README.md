@@ -173,12 +173,11 @@ Provisioning + the env-var contract are documented in `infra/gcp/README.md`.
 
 **Docs**
 Start here:
-- `docs/README.md`
-- `docs/datasets.md`
-- `docs/multimodal_blocks.md`
-- `docs/models.md`
-- `docs/compositions.md`
-- `docs/runs_and_logging.md`
+- `docs/README.md` — the ordered curriculum index
+- `docs/01-data.md` — dataset registry, task modes, text/audio/tabular sets
+- `docs/09-clip-multimodal.md` — contrastive dual encoders + fusion blocks
+- `docs/11-compositions.md` — multi-model pipelines and the runner contract
+- `docs/TESTING.md` — how to run any mini, the smoke tests, and the per-model gate table
 
 **Tests**
 ```
