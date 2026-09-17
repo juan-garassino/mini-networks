@@ -4,6 +4,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
 from mini_networks.api.routers.inference import router as inference_router
@@ -27,6 +28,18 @@ def create_app() -> FastAPI:
         ),
         version="0.1.0",
     )
+
+    # The production SPA is served same-origin from "/" below, but the
+    # `make playground-dev` workflow runs the UI on :3000 fetching this API on
+    # :8000 — cross-origin. Allow the Next dev server's localhost origins so the
+    # playground can load /web data in dev.
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origin_regex=r"http://(localhost|127\.0\.0\.1):\d+",
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
+
     app.include_router(training_router, prefix="/train", tags=["training"])
     app.include_router(inference_router, prefix="/infer", tags=["inference"])
     app.include_router(compositions_router, prefix="/compose", tags=["composition"])

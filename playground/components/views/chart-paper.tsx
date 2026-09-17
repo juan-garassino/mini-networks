@@ -1,51 +1,46 @@
 "use client";
 
+import { motion } from "motion/react";
 import type { TaxonModel, TaxonomyResponse } from "@/lib/types";
-import { ATOMS, symbolFor } from "@/lib/blueprint";
-import { iconFor } from "@/lib/icons";
-import { CritterCameo } from "@/components/paper/critters";
+import { ATOMS, FAMILY_BLOCKS, PLACEMENT, symbolFor } from "@/lib/blueprint";
+import { AtlasDefs } from "@/components/paper/atlas/defs";
+import { beachPathOf, groundPathOf, IslandLabel, IslandTerrain, RegionBorder, type IsleSpec } from "@/components/paper/atlas/island";
+import { Landmark } from "@/components/paper/atlas/landmarks";
+import { BorderFrame, CompassRose, Galleon, ScaleBar, ScrollBanner, SeaSerpent } from "@/components/paper/atlas/furniture";
 
-// Edition 5: a manila survey map. Families are districts, models are lots,
-// compositions are routes. Muted survey palette, printed signage + pencil
-// annotations, generous negative space — a playground for grown-ups.
-const DISTRICTS: { family: string; name: string; role: string; color: string }[] = [
-  { family: "perception", name: "Perception", role: "sees", color: "var(--pen-3)" },
-  { family: "sequence", name: "Sequence", role: "remembers", color: "#5b7d99" },
-  { family: "generative", name: "Generative", role: "imagines", color: "var(--redline)" },
-  { family: "representation", name: "Representation", role: "compares", color: "var(--pen-4)" },
-  { family: "structure", name: "Structure", role: "connects", color: "var(--pen-5)" },
-  { family: "decision", name: "Decision", role: "chooses", color: "#4e8a86" },
+// Edition 5: "The mini_networks Overworld" — ONE continent, not an archipelago.
+// The six families are territories WITHIN a single landmass (soft dashed
+// borders, not sea between them); the continent has one coastline. Species are
+// hex waypoints on grid roads that fill each territory; compositions are land
+// trails. Membership from the authored PLACEMENT/FAMILY_BLOCKS. Deterministic.
+const VB_W = 1500;
+const VB_H = 1080;
+const INK = "#3a2d20";
+
+// Territory centres/sizes tuned so their enlarged (LAND_SCALE) blobs overlap
+// into one connected continent, with Structure as the central land-bridge.
+const ISLES: IsleSpec[] = [
+  { fam: "perception", name: "Perception Meadows", color: "#3f6f3f", biome: "meadow", landmark: "observatory", cx: 400, cy: 400, rx: 300, ry: 235, seed: 1 },
+  { fam: "sequence", name: "Sequence Wetlands", color: "#356470", biome: "wetland", landmark: "clock", cx: 1085, cy: 385, rx: 285, ry: 226, seed: 2 },
+  { fam: "structure", name: "Woven Marches", color: "#9c6b28", biome: "forest", landmark: "lattice", cx: 748, cy: 548, rx: 122, ry: 108, seed: 3 },
+  { fam: "generative", name: "Generative Mesa", color: "#a53c22", biome: "mesa", landmark: "kiln", cx: 1132, cy: 800, rx: 226, ry: 190, seed: 4 },
+  { fam: "decision", name: "Crossroads Pines", color: "#356e6a", biome: "pines", landmark: "signpost", cx: 792, cy: 850, rx: 236, ry: 176, seed: 5 },
+  { fam: "representation", name: "Mirror Heath", color: "#524f83", biome: "heath", landmark: "mirrors", cx: 360, cy: 828, rx: 208, ry: 176, seed: 6 },
 ];
-const ROUTE_COLORS = ["var(--pen-3)", "#5b7d99", "var(--redline)", "var(--pen-4)", "var(--pen-5)", "#4e8a86"];
 
-function CompassRose() {
-  return (
-    <svg width="72" height="72" viewBox="0 0 72 72" fill="none" className="-rotate-3">
-      <circle cx={36} cy={36} r={30} stroke="var(--line)" strokeWidth={1.5} />
-      <circle cx={36} cy={36} r={22} stroke="var(--line-faint)" strokeWidth={1} />
-      {[
-        ["N", 36, 12], ["E", 60, 40], ["S", 36, 64], ["W", 8, 40],
-      ].map(([l, x, y]) => (
-        <text key={l as string} x={x as number} y={y as number} textAnchor="middle" fontSize={9}
-          fontFamily="var(--font-display)" fill="var(--ink-dim)">{l}</text>
-      ))}
-      {/* north needle */}
-      <path d="M36 16 L41 38 L36 33 L31 38 Z" fill="var(--redline)" stroke="var(--line)" strokeWidth={0.8} />
-      <path d="M36 56 L41 34 L36 39 L31 34 Z" fill="#f7f1e2" stroke="var(--line)" strokeWidth={0.8} />
-      <circle cx={36} cy={36} r={2.5} fill="var(--line)" />
-    </svg>
-  );
-}
+const blockForCol = (col: number) =>
+  FAMILY_BLOCKS.find((b) => col >= b.cols[0] && col <= b.cols[1])?.family ?? "structure";
+const familyForName = (name: string) => {
+  const col = PLACEMENT[name]?.col;
+  if (col != null) return blockForCol(col);
+  return ATOMS[name]?.family ?? "structure";
+};
 
-function RouteGlyph({ color }: { color: string }) {
-  return (
-    <svg width="66" height="16" viewBox="0 0 66 16" fill="none" className="shrink-0">
-      <line x1={7} y1={8} x2={59} y2={8} stroke={color} strokeWidth={2.5} strokeDasharray="1 5" strokeLinecap="round" />
-      <circle cx={7} cy={8} r={4.5} fill="#f7f1e2" stroke={color} strokeWidth={2.5} />
-      <circle cx={59} cy={8} r={4.5} fill={color} stroke="var(--line)" strokeWidth={1} />
-    </svg>
-  );
-}
+const hex = (cx: number, cy: number, r: number) =>
+  [0, 1, 2, 3, 4, 5].map((k) => {
+    const a = ((60 * k - 90) * Math.PI) / 180;
+    return `${cx + r * Math.cos(a)},${cy + r * Math.sin(a)}`;
+  }).join(" ");
 
 export function ChartPaper({
   taxonomy, onSelect,
@@ -54,133 +49,151 @@ export function ChartPaper({
   onSelect: (name: string) => void;
 }) {
   if (!taxonomy) return null;
-  const familyOf = (name: string): string => {
-    if (ATOMS[name]) return ATOMS[name].family;
-    const m = taxonomy.models.find((x) => x.name === name);
-    return m?.builds_on[0] ? familyOf(m.builds_on[0]) : "structure";
-  };
-  const byFamily = (family: string): TaxonModel[] =>
-    taxonomy.models
-      .filter((m) => familyOf(m.name) === family)
-      .sort((a, b) => (ATOMS[a.name]?.z ?? 99) - (ATOMS[b.name]?.z ?? 99));
+  const rowCol = (n: string) => PLACEMENT[n] ?? { row: 9, col: 9 };
+
+  // spread each territory's members across a grid that fills its footprint
+  const pos = new Map<string, { x: number; y: number; m: TaxonModel; fam: string }>();
+  const roads: Record<string, string> = {};
+  const landmarkAt: Record<string, [number, number]> = {};
+  for (const is of ISLES) {
+    const ms = taxonomy.models
+      .filter((m) => familyForName(m.name) === is.fam)
+      .sort((a, b) => rowCol(a.name).row - rowCol(b.name).row || rowCol(a.name).col - rowCol(b.name).col);
+    const n = ms.length;
+    const usableW = is.rx * 1.5;
+    const usableH = is.ry * 1.16;
+    const cols = Math.max(1, Math.round(Math.sqrt((n * usableW) / usableH)));
+    const rows = Math.max(1, Math.ceil(n / cols));
+    const cStep = usableW / cols;
+    const rStep = usableH / rows;
+    const fieldCx = is.cx;
+    const fieldCy = is.cy + is.ry * 0.2;
+    const x0 = fieldCx - usableW / 2 + cStep / 2;
+    const y0 = fieldCy - usableH / 2 + rStep / 2;
+    landmarkAt[is.fam] = [is.cx, y0 - rStep * 0.55 - is.ry * 0.12];
+    const pts: [number, number][] = [];
+    ms.forEach((m, k) => {
+      const row = Math.floor(k / cols);
+      const inRow = row === rows - 1 ? n - row * cols : cols;
+      const cRaw = k % cols;
+      const col = row % 2 === 0 ? cRaw : inRow - 1 - cRaw;
+      const rowOffset = ((cols - inRow) * cStep) / 2;
+      const x = x0 + col * cStep + rowOffset;
+      const y = y0 + row * rStep;
+      pos.set(m.name, { x, y, m, fam: is.fam });
+      pts.push([x, y]);
+    });
+    roads[is.fam] = pts.map((p, i) => {
+      if (i === 0) return `M ${p[0]} ${p[1]}`;
+      const a = pts[i - 1];
+      return `L ${p[0]} ${a[1]} L ${p[0]} ${p[1]}`;
+    }).join(" ");
+  }
+
+  // compositions → orthogonal LAND trails between the territories they link
+  const trails = taxonomy.compositions.flatMap((c, ci) => {
+    const stops = c.composes.map((n) => pos.get(n)).filter(Boolean) as { x: number; y: number }[];
+    if (stops.length < 2) return [];
+    let d = `M ${stops[0].x} ${stops[0].y}`;
+    for (let i = 1; i < stops.length; i++) {
+      const a = stops[i - 1], b = stops[i];
+      d += (ci + i) % 2 === 0 ? ` L ${b.x} ${a.y} L ${b.x} ${b.y}` : ` L ${a.x} ${b.y} L ${b.x} ${b.y}`;
+    }
+    const color = ISLES.find((r) => r.fam === pos.get(c.composes[0])?.fam)?.color ?? "#4a6a70";
+    return [{ d, color, name: c.name, composes: c.composes }];
+  });
+
+  const beachPaths = ISLES.map(beachPathOf);
+  const groundPaths = ISLES.map(groundPathOf);
 
   return (
-    <div className="h-full overflow-y-auto px-6 py-6 sm:px-8 sm:py-8">
-      <div className="mx-auto max-w-[1400px] space-y-6">
-        {/* ——— map furniture: cartouche · legend · compass ——— */}
-        <div className="flex flex-wrap items-stretch gap-5">
-          <div className="pp-panel flex-1 basis-72 px-6 py-4">
-            <div className="text-[11px] text-ink-dim">the periodic table of</div>
-            <h1 className="bp-title text-3xl font-extrabold text-ink sm:text-4xl">mini_networks</h1>
-            <div className="mt-1 text-[12px] text-ink-dim">
-              districts &amp; routes of {taxonomy.models.length} neural species · surveyed 2026
-            </div>
-          </div>
+    <div className="h-full overflow-auto p-2 sm:p-3">
+      <svg viewBox={`0 0 ${VB_W} ${VB_H}`} className="mx-auto block h-auto w-full max-w-[1560px]"
+        style={{ fontFamily: "var(--font-draft), cursive" }}>
+        <AtlasDefs />
+        <clipPath id="a-land">
+          {groundPaths.map((d, i) => <path key={i} d={d} />)}
+        </clipPath>
 
-          <div className="pp-panel px-5 py-3">
-            <div className="mb-2 text-[10px] uppercase tracking-[0.18em] text-ink-dim">Legend</div>
-            <div className="grid grid-cols-2 gap-x-5 gap-y-1">
-              {DISTRICTS.map((d) => (
-                <div key={d.family} className="flex items-center gap-2 text-[11px] text-ink">
-                  <span className="h-3 w-3 rounded-[2px] border border-line" style={{ background: d.color }} />
-                  <span className="flex-1">{d.name}</span>
-                  <span className="text-ink-dim">{byFamily(d.family).length}</span>
-                </div>
-              ))}
-            </div>
-          </div>
+        {/* ——— sea ——— */}
+        <rect x={0} y={0} width={VB_W} height={VB_H} fill="url(#a-sea)" />
+        <rect x={0} y={0} width={VB_W} height={VB_H} fill="url(#a-waves)" />
+        <rect x={0} y={0} width={VB_W} height={VB_H} fill="url(#a-weave)" />
 
-          <div className="pp-panel hidden items-center justify-center px-4 lg:flex">
-            <CompassRose />
-          </div>
-        </div>
+        {/* ——— ONE continent: union coastline + beach, then territory grounds ——— */}
+        <g filter="url(#a-shadow)">
+          <g filter="url(#a-outline)">
+            {beachPaths.map((d, i) => <path key={i} d={d} fill="url(#a-sand)" />)}
+          </g>
+        </g>
+        {ISLES.map((is, i) => <path key={is.fam} d={groundPaths[i]} fill={`url(#a-ground-${is.biome})`} />)}
+        <rect x={0} y={0} width={VB_W} height={VB_H} fill="url(#a-weave)" clipPath="url(#a-land)" />
+        {ISLES.map((is) => <RegionBorder key={is.fam} is={is} />)}
 
-        {/* ——— districts ——— */}
-        <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">
-          {DISTRICTS.map((d, di) => {
-            const models = byFamily(d.family);
-            return (
-              <section
-                key={d.family}
-                className="pp-panel p-4"
-                style={{ transform: `rotate(${di % 2 ? 0.35 : -0.35}deg)` }}
-              >
-                <header className="mb-3 flex items-baseline justify-between">
-                  <div>
-                    <h2 className="bp-title text-base font-bold text-ink">{d.name}</h2>
-                    <div className="h-[3px] w-14 rounded-full" style={{ background: d.color }} />
-                  </div>
-                  <span className="text-[11px] text-ink-dim">
-                    {models.length} lots · <span className="italic">{d.role}</span>
-                  </span>
-                </header>
-                <div className="grid grid-cols-2 gap-2">
-                  {models.map((m) => {
-                    const Icon = iconFor(m.name);
-                    return (
-                      <button
-                        key={m.name}
-                        onClick={() => onSelect(m.name)}
-                        className="group flex items-center gap-2 rounded border border-line-faint bg-paper/40 px-2 py-1.5 text-left transition-all hover:-translate-y-px hover:border-line"
-                      >
-                        <span
-                          className="grid h-6 w-6 shrink-0 place-items-center rounded-[3px] text-[10px] font-bold text-white transition-colors"
-                          style={{ background: d.color }}
-                        >
-                          {ATOMS[m.name]?.symbol ?? symbolFor(m.name)}
-                        </span>
-                        <span className="flex-1 truncate text-[12px] text-ink">{m.name.replace(/_/g, " ")}</span>
-                        {Icon && <Icon size={15} strokeWidth={1.5} className="shrink-0 text-ink-dim" />}
-                      </button>
-                    );
-                  })}
-                </div>
-              </section>
-            );
-          })}
-        </div>
+        {/* territory terrain (kept within each territory core) */}
+        {ISLES.map((is) => <IslandTerrain key={is.fam} is={is} />)}
 
-        {/* ——— routes ——— */}
-        <section className="pp-panel p-5">
-          <div className="mb-3 flex items-baseline justify-between">
-            <h2 className="bp-title text-base font-bold text-ink">Routes</h2>
-            <span className="text-[11px] text-ink-dim">{taxonomy.compositions.length} compositions</span>
-          </div>
-          <div className="grid gap-x-10 gap-y-2.5 md:grid-cols-2">
-            {taxonomy.compositions.map((c, i) => (
-              <button
-                key={c.name}
-                onClick={() => onSelect(c.name)}
-                className="group flex items-center gap-3 border-b border-dotted border-line-faint pb-1.5 text-left"
-              >
-                <RouteGlyph color={ROUTE_COLORS[i % ROUTE_COLORS.length]} />
-                <div className="min-w-0 flex-1">
-                  <div className="truncate text-[13px] font-semibold text-ink transition-colors group-hover:text-redline">
-                    {c.name.replace(/_/g, " ")}
-                  </div>
-                  <div className="truncate text-[11px] text-ink-dim">{c.composes.join(" ⇢ ")}</div>
-                </div>
-              </button>
-            ))}
-          </div>
-        </section>
+        {/* composition trails across the land */}
+        {trails.map((t, i) => (
+          <path key={i} className="map-route" d={t.d} fill="none" stroke={t.color}
+            strokeWidth={1.8} strokeDasharray="2 8" strokeLinecap="round" opacity={0.5}
+            onClick={() => onSelect(t.name)}>
+            <title>{t.name.replace(/_/g, " ")} — {t.composes.join(" + ")}</title>
+          </path>
+        ))}
 
-        {/* ——— map margin: scale bar + surveyor's mark ——— */}
-        <div className="flex items-end justify-between px-1 pb-4 pt-2">
-          <svg width="150" height="26" viewBox="0 0 150 26" fill="none">
-            <line x1={2} y1={16} x2={122} y2={16} stroke="var(--ink-dim)" strokeWidth={1.5} />
-            {[2, 32, 62, 92, 122].map((x) => (
-              <line key={x} x1={x} y1={11} x2={x} y2={16} stroke="var(--ink-dim)" strokeWidth={1.5} />
-            ))}
-            <text x={2} y={8} fontSize={8} fill="var(--ink-dim)" fontFamily="var(--font-draft)">0</text>
-            <text x={112} y={8} fontSize={8} fill="var(--ink-dim)" fontFamily="var(--font-draft)">1 epoch</text>
-          </svg>
-          <div className="flex items-center gap-2">
-            <span className="text-[10px] text-ink-dim">drawn from life</span>
-            <CritterCameo size={34} />
-          </div>
-        </div>
-      </div>
+        {/* landmarks + lineage roads + labels */}
+        {ISLES.map((is) => (
+          <g key={is.fam}>
+            <Landmark kind={is.landmark} x={landmarkAt[is.fam][0]} y={landmarkAt[is.fam][1]} />
+            <path d={roads[is.fam]} fill="none" stroke="#a8763095" strokeWidth={16} strokeLinejoin="round" strokeLinecap="round" filter="url(#a-shadow-sm)" />
+            <path d={roads[is.fam]} fill="none" stroke="#c99a4e" strokeWidth={11} strokeLinejoin="round" strokeLinecap="round" />
+            <path d={roads[is.fam]} fill="none" stroke="#eac986" strokeWidth={5} strokeLinejoin="round" strokeLinecap="round" />
+            <IslandLabel is={is} />
+          </g>
+        ))}
+
+        {/* ——— towns ——— */}
+        {[...pos.values()].map(({ x, y, m, fam }) => {
+          const color = ISLES.find((r) => r.fam === fam)!.color;
+          const elem = m.level === "elementary";
+          const label = m.name.replace(/_/g, " ");
+          return (
+            <g key={m.name} className="map-town" onClick={() => onSelect(m.name)}>
+              <title>{label}</title>
+              <polygon points={hex(x, y, 22)} fill={INK} opacity={0.18} transform="translate(0 4)" />
+              <polygon className="map-town-dot" points={hex(x, y, 22)} fill={elem ? color : "#f3ecd8"} stroke={INK} strokeWidth={2.4} />
+              <polygon points={hex(x, y - 1, 17)} fill="none" stroke={elem ? "rgba(255,255,255,0.45)" : color} strokeWidth={elem ? 1.6 : 2.6} />
+              <text x={x} y={y + 5.5} textAnchor="middle" fontFamily="var(--font-display)" fontSize={15} fontWeight={800} fill={elem ? "#fff" : color}>
+                {ATOMS[m.name]?.symbol ?? symbolFor(m.name)}
+              </text>
+              <text x={x} y={y + 39} textAnchor="middle" fontSize={12.5} fill={INK}
+                style={{ paintOrder: "stroke" }} stroke="#f4efe0" strokeWidth={3.4} strokeLinejoin="round">
+                {label.length > 17 ? label.slice(0, 16) + "…" : label}
+              </text>
+            </g>
+          );
+        })}
+
+        {/* drifting clouds in the surrounding sea */}
+        {[[760, 84, 1.1, 30, 42], [130, 96, 0.85, 24, 46], [1400, 250, 0.95, -24, 50], [90, 560, 0.8, 20, 48], [1420, 980, 0.9, -22, 52]].map(([cx, cy, s, dr, du], i) => (
+          <motion.g key={i} animate={{ x: [0, dr as number, 0] }} transition={{ duration: du as number, repeat: Infinity, ease: "easeInOut" }} opacity={0.9}>
+            <g transform={`translate(${cx} ${cy}) scale(${s})`} filter="url(#a-shadow-sm)">
+              <path d="M0 14 Q-5 0 12 0 Q16 -14 34 -7 Q50 -16 60 0 Q76 0 70 14 Z" fill="#f4f0e6" stroke="#d8cdb4" strokeWidth={2} strokeLinejoin="round" />
+            </g>
+          </motion.g>
+        ))}
+
+        {/* ——— map furniture (on the surrounding sea) ——— */}
+        <SeaSerpent x={1120} y={92} />
+        <ScrollBanner x={44} y={30} models={taxonomy.models.length} comps={taxonomy.compositions.length} />
+        <CompassRose x={92} y={VB_H - 96} r={58} />
+        <Galleon x={840} y={96} />
+        <ScaleBar x={VB_W - 172} y={VB_H - 44} />
+
+        <BorderFrame w={VB_W} h={VB_H} />
+        <rect x={0} y={0} width={VB_W} height={VB_H} filter="url(#a-grain)" opacity={0.05} pointerEvents="none" />
+      </svg>
     </div>
   );
 }

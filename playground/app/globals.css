@@ -191,6 +191,18 @@ body::after {
   box-shadow: 0 3px 0 var(--pp-shadow);
 }
 
+/* overworld map: clickable town markers */
+[data-edition="paper"] .map-town {
+  cursor: pointer;
+  transform-box: fill-box;
+  transform-origin: center;
+  transition: transform 0.15s ease;
+}
+[data-edition="paper"] .map-town:hover { transform: scale(1.22); }
+[data-edition="paper"] .map-town:hover .map-town-dot { fill: var(--redline); }
+[data-edition="paper"] .map-route { transition: opacity 0.15s ease, stroke-width 0.15s ease; }
+[data-edition="paper"] .map-route:hover { opacity: 1 !important; stroke-width: 2.4px; cursor: pointer; }
+
 /* footer strip + sheet tabs as printed tickets */
 [data-edition="paper"] footer {
   background: var(--paper);
