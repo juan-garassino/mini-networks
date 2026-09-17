@@ -230,6 +230,11 @@ EVAL_SPECS: dict[str, EvalSpec] = {
     "vlm":                          _composition(metric="answer_accuracy",
                                                  thresholds={"M": 0.6, "L": 0.9},
                                                  loss_keys=("loss",)),
+    # adversarial losses → finite-only S-check (same rationale as "gan"). The
+    # deliverable is the adaptive p schedule (logged as ada_p), not a loss
+    # trend; a numeric bar (e.g. judge_score vs a plain-GAN baseline on a
+    # data-starved run) lands with the first M sweep. metric=None by design.
+    "gan_ada":                      _composition(loss_keys=("g_loss", "d_loss", "loss"), s_mode="finite"),
 }
 
 

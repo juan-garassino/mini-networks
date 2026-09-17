@@ -573,6 +573,29 @@ def _run_classifier_guided_gan(fast_demo, training_tier, data_root, device, chec
     }
 
 
+def _run_gan_ada(fast_demo, training_tier, data_root, device, checkpoint_root) -> dict:
+    from mini_networks.compositions.gan_ada import GANADA, GANADAConfig
+
+    cfg = GANADAConfig(
+        fast_demo=fast_demo,
+        training_tier=training_tier,
+        data_root=data_root,
+        device=device,
+    )
+    logger = _make_composition_logger("gan_ada", checkpoint_root)
+    pipeline = GANADA()
+    pipeline.train(cfg, logger)
+    images = pipeline.sample(cfg, n=1)
+    console.print(f"  final ada_p [cyan]{pipeline.augment.p:.3f}[/cyan]")
+    return {
+        "images": images.cpu(),
+        "ada_p": pipeline.augment.p,
+        "p_history": pipeline.p_history,
+        "config": cfg,
+        "run_dir": str(logger.run_dir),
+    }
+
+
 def _run_rag_conditioned_diffusion(fast_demo, training_tier, data_root, device, checkpoint_root) -> dict:
     from mini_networks.compositions.rag_conditioned_diffusion import (
         RAGConditionedDiffusion,
@@ -789,4 +812,5 @@ COMPOSITION_RUNNERS = {
     "mode_connect": _run_mode_connect,
     "double_descent": _run_double_descent,
     "vlm": _run_vlm,
+    "gan_ada": _run_gan_ada,
 }

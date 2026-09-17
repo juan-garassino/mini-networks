@@ -194,3 +194,15 @@ def test_latent_diffusion_smoke():
     with tempfile.TemporaryDirectory() as tmpdir:
         logger = Logger(tmpdir, "test")
         comp.train(cfg, logger)
+
+
+def test_gan_ada_smoke():
+    from mini_networks.compositions.gan_ada import GANADA, GANADAConfig
+    cfg = GANADAConfig(fast_demo=True, data_root=DATA_ROOT)
+    comp = GANADA()
+    with tempfile.TemporaryDirectory() as tmpdir:
+        logger = Logger(tmpdir, "test")
+        comp.train(cfg, logger)
+        assert 0.0 <= comp.augment.p <= 1.0
+        out = comp.sample(cfg, n=2)
+        assert out.shape == (2, 1, 28, 28)
