@@ -30,6 +30,7 @@ COMPOSITIONS = [
     "mode_connect",
     "double_descent",
     "vlm",
+    "gan_ada",
 ]
 
 DESCRIPTIONS = {
@@ -105,6 +106,7 @@ DESCRIPTIONS = {
     "mode_connect":                  "Loss-surface simplex between two classifiers + cheap simplex ensemble",
     "double_descent":                "Width sweep on label-noised MNIST: test error falls, rises, falls again",
     "vlm":                           "Mini VLM: vision patch prefix + causal LM — templated MNIST QA in words",
+    "gan_ada":                        "GAN + Adaptive Discriminator Augmentation: non-leaking aug at an adaptively tuned p (StyleGAN2-ADA)",
 }
 
 CATEGORY = {name: "Vision / Multimodal" for name in [
@@ -156,3 +158,4 @@ CATEGORY["rag_conditioned_diffusion"] = "Composition"
 CATEGORY["image_captioning"] = "Composition"
 CATEGORY["multimodal_fusion_baseline"] = "Composition"
 CATEGORY["latent_diffusion"] = "Composition"
+CATEGORY["gan_ada"] = "Composition"

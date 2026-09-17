@@ -11,7 +11,7 @@ runs on GCP (see `CLAUDE.md`); this doc is about local verification.
 ## Quick reference
 
 ```bash
-# List all 50 models + 22 compositions with their taxonomy (family / mechanism):
+# List all 50 models + 23 compositions with their taxonomy (family / mechanism):
 uv run python main.py list
 
 # Train ONE mini for a single nano step on tiny random/cached data:
@@ -130,9 +130,12 @@ come from `core/taxonomy.py`.
 | **convlstm** | ConvLSTM: spatio-temporal next-frame prediction on Moving-MNIST | `convlstm` | eval_loss (MSE) |
 | **dcrnn** | DCRNN: graph diffusion convolution + GRU for sensor-graph forecasting | `dcrnn` | eval_loss (MSE) |
 
-Plus **22 compositions** (multi-model pipelines) — list them with
+Plus **23 compositions** (multi-model pipelines) — list them with
 `uv run python main.py list` and gate them with
-`uv run python main.py sweep --check --models <name>`.
+`uv run python main.py sweep --check --models <name>`. The newest is
+**gan_ada** (Adaptive Discriminator Augmentation on the `gan` mini: a
+non-leaking augmentation pipeline applied to reals + fakes at an adaptively
+tuned probability p, steered by the E[sign(D_real)] controller — StyleGAN2-ADA).
 
 ## Dedicated smoke tests
 
@@ -148,6 +151,7 @@ tensor shapes and a finite backward pass:
 | `test_swin_forward_and_shift_mask_smoke` | classifies 28×28; window partition/reverse are exact inverses; shifted block builds a −100 mask |
 | `test_convlstm_forward_and_rollout_smoke` | ConvLSTM cell carries a spatial state; net rolls out future frames (teacher-forced + open-loop) |
 | `test_dcrnn_forward_and_diffusion_smoke` | diffusion conv over dual random-walk supports; encoder-decoder forecasts a horizon |
+| `tests/test_gan_ada.py` (`TestADAController` · `TestAdaptiveAugment` · `TestGANADAIntegration`) | ADA controller raises p on high r_t / lowers on low, clamps [0,1]; augmentation fires at ≈rate p and is shape-preserving; one CPU train step updates p with no NaN |
 
 Run any one with:
 

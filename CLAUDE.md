@@ -1,6 +1,6 @@
 # CLAUDE.md — mini_networks
 
-Educational ML lab: 50 models and 22 cross-model compositions sharing one
+Educational ML lab: 50 models and 23 cross-model compositions sharing one
 runtime contract, one data registry, one logging format, and one quality gate.
 Owner-facing reference lab with a graphical **playground** (Observatory).
 Nano S-tier runs locally (CPU) for the gate/dev; **M/L training runs on GCP
@@ -201,3 +201,13 @@ as of 2026-07-10 (PR #1).
   (builds_on gnn, rnn — diffusion-convolution GRU + inverse-sigmoid scheduled
   sampling for sensor-graph forecasting; ports liyaguang/DCRNN dcrnn_cell.py).
   Registry is now 50 models. See `docs/TESTING.md`.
+- Composition added (composes `gan`): `gan_ada` — Adaptive Discriminator
+  Augmentation (StyleGAN2-ADA, NeurIPS 2020; ports NVlabs/stylegan2-ada-pytorch).
+  A non-leaking augmentation pipeline (`AdaptiveAugment`: x-flip + integer
+  translation + 90° rotation + brightness, a minimal subset of the paper's 18
+  transforms) applied to reals AND fakes at probability p, plus the
+  E[sign(D_real)] heuristic controller (`ada_update_p`) that steers p toward a
+  target (~0.6) — the load-bearing "ADA" idea. p is tracked (`p_history`,
+  logged as `ada_p`) for tests/logging. S-tier gate only (finite-loss check);
+  EvalSpec bar is metric=None until a data-starved M sweep sets one.
+  CPU-runnable; compositions total is now 23. See `docs/TESTING.md`.
