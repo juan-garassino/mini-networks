@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // Lab bake-off screenshot harness — headless Chrome, Node built-ins only.
 //
-//   node scripts/shoot.mjs --skin <name> --round <N|F> [--base http://localhost:3000]
+//   node scripts/shoot.mjs --skin <name> --round <N|F|critic> [--base http://localhost:3000]
 //        [--states overview,region,node,dense] [--vp desktop,mobile]
 //        [--check-only] [--typecheck]
 //
@@ -68,7 +68,8 @@ function parseArgs(argv) {
     else die(`unknown argument ${a}`);
   }
   if (!opts.skin || !/^[a-z0-9][a-z0-9-]*$/.test(opts.skin)) die("--skin <name> is required (lowercase, a-z0-9-)");
-  if (!opts.round || !/^(\d+|F)$/.test(opts.round)) die("--round <N|F> is required");
+  // N / F are builder rounds (on the board); "critic" is a reviewer's scratch set.
+  if (!opts.round || !/^(\d+|F|critic)$/.test(opts.round)) die("--round <N|F|critic> is required");
   for (const s of opts.states) if (!STATES[s]) die(`unknown state ${s} (have: ${Object.keys(STATES).join(",")})`);
   for (const v of opts.vp) if (!VIEWPORTS[v]) die(`unknown viewport ${v} (have: ${Object.keys(VIEWPORTS).join(",")})`);
   return opts;
