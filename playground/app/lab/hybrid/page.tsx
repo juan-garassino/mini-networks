@@ -9,12 +9,12 @@ import { useWorld } from "@/hooks/use-world";
 import { useLabView } from "@/components/lab/shared/url-state";
 import { LabMotion } from "@/components/lab/shared/still";
 import { useCamera, type CamBox } from "@/components/lab/shared/camera";
-import { cardModel, displayName, evidenceState, type EvidenceState } from "@/components/lab/shared/card-model";
+import { cardModel, evidenceState, type EvidenceState } from "@/components/lab/shared/card-model";
+import { critterStop } from "@/components/lab/hybrid/hybrid-map";
 import {
-  Dialog, HybridMap, PixelSprite, RegionMenu, StatusWindow, TitlePlate, Typewriter, familyLabel, frameInto,
+  HybridMap, PixelSprite, RegionMenu, StatusWindow, TitlePlate, familyLabel, frameInto,
   handCssUrl, landBox, nodeBox, HAND, type Insets, type MenuRow, type PartyMember,
 } from "@/components/lab/hybrid";
-import { spell } from "@/components/lab/hybrid/pixel-num";
 import s from "@/components/lab/hybrid/hybrid.module.css";
 
 const LEFT_W = 288;       // left chrome column (title plate + menu), px
@@ -107,18 +107,31 @@ export default function HybridPage() {
   useEffect(() => { setPartyCursor(0); }, [card?.name]);
 
   // ── camera: framed into the part of the screen the chrome leaves free ────
+  // Phone overview: the land fills the full width right under the title
+  // plate, and the family menu sits directly under the map (no dead sea band).
+  const PLATE_H = 92;
+  const land = world ? landBox(world) : null;
+  const phoneMapH = land ? Math.round(vp.w * (land.h / land.w)) : 300;
   const insets: Insets = mobile
-    ? { l: 8, r: 8, t: 72, b: zoom === "node" ? Math.round(vp.h * 0.52) + 12 : zoom === "overview" ? 330 : 136 }
+    ? zoom === "overview"
+      ? { l: 0, r: 0, t: PLATE_H, b: Math.max(12, vp.h - PLATE_H - phoneMapH) }
+      : { l: 8, r: 8, t: PLATE_H, b: zoom === "node" ? Math.round(vp.h * 0.52) + 12 : 12 }
     : { l: GAP + LEFT_W + GAP, r: zoom === "node" ? GAP + CARD_W + GAP : GAP, t: GAP, b: GAP };
 
   const target: CamBox = useMemo(() => {
     if (!world) return { x: 0, y: 0, w: 1, h: 1 };
-    const box = zoom === "node" && focusNode ? nodeBox(world, focusNode.name, walk)
+    let box = zoom === "node" && focusNode ? nodeBox(world, focusNode.name, walk)
       : zoom === "region" && family ? world.camera.regions[family]
       : landBox(world);
+    if (mobile && zoom === "node" && focusNode) {
+      // phone: never below 1:1, so the focused model's tags print at ≥13px
+      const iw = vp.w - insets.l - insets.r, ih = vp.h - insets.t - insets.b;
+      const w = Math.min(box.w, iw), h = Math.min(box.h, ih);
+      box = { x: focusNode.center.x - w / 2, y: focusNode.center.y - h / 2, w, h };
+    }
     return frameInto(box, vp.w, vp.h, insets);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [world, zoom, focusNode, family, walk, vp.w, vp.h, insets.l, insets.r, insets.t, insets.b]);
+  }, [world, zoom, focusNode, family, walk, mobile, vp.w, vp.h, insets.l, insets.r, insets.t, insets.b]);
 
   const cam = useCamera({ world: world?.camera.world ?? target, target, still });
 
@@ -176,47 +189,58 @@ export default function HybridPage() {
   }, [zoom, card, party, partyCursor, menuRows, cursor, pick, open, update, menuOpen]);
 
   // ── the pixel hand: points at what Enter would open ─────────────────────
-  // It approaches from the side AWAY from the target's name tag, so it never
-  // covers the name it is pointing at.
+  // It stands OUTSIDE the target's halo, on the first side (left, right,
+  // below, above) not taken by the name tag, the parked critter or the flag.
   const labelAnchor = useMemo(() => new Map((world?.labels ?? []).map((l) => [l.node, l.anchor])), [world]);
   const hand = useMemo(() => {
     if (!world) return null;
-    let p: Pt | null = null, reach = 0, fromRight = false;
-    const at = (n: { name: string; center: Pt; atom: boolean }) => {
-      p = n.center; reach = n.atom ? 32 : 16;
-      fromRight = (labelAnchor.get(n.name) ?? "S").includes("W");
-    };
-    if (zoom === "node" && focusNode) at(focusNode);
+    let n: { name: string; center: Pt; atom: boolean } | undefined;
+    if (zoom === "node" && focusNode) n = focusNode;
     else if (zoom === "region") {
       const r = menuRows[cursor];
-      const n = r?.kind === "model" ? byName.get(r.key) : undefined;
-      if (n) at(n);
+      n = r?.kind === "model" ? byName.get(r.key) : undefined;
     } else {
       const r = menuRows[cursor];
-      // what Enter opens: the family's entry atom (same rule as pick())
-      const root = r?.kind === "family" ? entryAtom(r.family) : undefined;
-      if (root) at(root);
+      n = r?.kind === "family" ? entryAtom(r.family) : undefined;   // same rule as pick()
     }
-    if (!p) return null;
-    const q = p as Pt;
-    const sx = (q.x - cam.box.x) * cam.scale + (fromRight ? 1 : -1) * reach * cam.scale;
-    const sy = (q.y - cam.box.y) * cam.scale;
-    return { x: sx, y: sy, fromRight };
+    if (!n) return null;
+    const taken = new Set<string>();
+    const a = labelAnchor.get(n.name) ?? "S";
+    if (a.includes("W")) taken.add("left");
+    if (a.includes("E")) taken.add("right");
+    if (a.includes("N")) taken.add("up");
+    if (a.includes("S")) taken.add("down");
+    taken.add("up");                                         // the flag / star seal sits on top
+    if (zoom === "node" && focusNode && n === focusNode) {
+      const c = critterStop(world, focusNode, walk).park;
+      const dx = c.x - n.center.x, dy = c.y - n.center.y;
+      if (Math.abs(dx) >= Math.abs(dy) * 0.5) taken.add(dx < 0 ? "left" : "right");
+      if (Math.abs(dy) >= Math.abs(dx) * 0.5) taken.add(dy < 0 ? "up" : "down");
+    }
+    const side = (["left", "right", "down", "up"] as const).find((d) => !taken.has(d)) ?? "left";
+    const halo = (n.atom ? 29 : 14.5) + 12;                  // paper spot radius + focus halo
+    const cx = (n.center.x - cam.box.x) * cam.scale, cy = (n.center.y - cam.box.y) * cam.scale;
+    const off = halo * cam.scale + 4;
+    const pos = side === "left" ? { x: cx - off, y: cy } : side === "right" ? { x: cx + off, y: cy }
+      : side === "down" ? { x: cx, y: cy + off } : { x: cx, y: cy - off };
+    return { ...pos, side };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [world, zoom, focusNode, menuRows, cursor, byName, labelAnchor, entryAtom, cam.box.x, cam.box.y, cam.scale]);
+  }, [world, zoom, focusNode, walk, menuRows, cursor, byName, labelAnchor, entryAtom, cam.box.x, cam.box.y, cam.scale]);
 
-  // ── narrator line (overview / region only; the status window has its own) ─
-  const narration = useMemo(() => {
-    const r = menuRows[cursor];
-    if (!r || !world || !taxonomy) return "";
-    if (r.kind === "family") {
-      const atoms = world.nodes.filter((n) => n.family === r.family && n.atom).map((n) => displayName(n.name));
-      return `${r.label} has ${spell(counts[r.family])} models grown from ${atoms.length === 1 ? "the atom" : `${spell(atoms.length)} atoms:`} ${atoms.join(", ")}.`;
+  // ── chrome rectangles (screen px) → world boxes the map keeps tags out of ─
+  const occluders = useMemo(() => {
+    const rects: { x: number; y: number; w: number; h: number }[] = [];
+    if (mobile) {
+      rects.push({ x: 0, y: 0, w: vp.w, h: PLATE_H });
+      if (zoom === "node") rects.push({ x: 0, y: vp.h * 0.48 - 12, w: vp.w, h: vp.h });
+      if (zoom === "overview" || menuOpen) rects.push({ x: 0, y: PLATE_H + phoneMapH, w: vp.w, h: vp.h });
+    } else {
+      rects.push({ x: 0, y: 0, w: GAP + LEFT_W + 8, h: vp.h });
+      if (zoom === "node") rects.push({ x: vp.w - (GAP + CARD_W + 8), y: 0, w: GAP + CARD_W + 8, h: vp.h });
     }
-    if (r.kind === "back") return "Back to the whole map.";
-    const m = taxonomy.models.find((x) => x.name === r.key);
-    return `${displayName(r.key)}: ${m?.description ?? ""}`;
-  }, [menuRows, cursor, world, taxonomy, counts]);
+    return rects.map((r) => ({ x: cam.box.x + r.x / cam.scale, y: cam.box.y + r.y / cam.scale, w: r.w / cam.scale, h: r.h / cam.scale }));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mobile, zoom, menuOpen, vp.w, vp.h, phoneMapH, cam.box.x, cam.box.y, cam.scale]);
 
   const handUrl = useMemo(() => handCssUrl(), []);
   const HW = 14 * 3, HH = 11 * 3;
@@ -246,7 +270,8 @@ export default function HybridPage() {
               style={{ fontFamily: "var(--font-hybrid-round), system-ui, sans-serif" }}>
               <HybridMap world={world} states={states} focus={focusNode && zoom !== "overview" ? focusNode : null} zoom={zoom}
                 walk={walk} walkNodes={walkNodes} still={still} scale={cam.scale} counts={counts} signGrow={signGrow}
-                signScale={mobile ? 0 : cam.scale * (18 / 14)} onOpen={open} />
+                signScale={cam.scale * (18 / (mobile ? 13 : 14))} occluders={occluders} onOpen={open}
+                phoneSigns={mobile && zoom === "overview" ? { view: cam.box } : null} />
             </svg>
           )}
         </div>
@@ -254,15 +279,21 @@ export default function HybridPage() {
         {/* the pixel hand — chrome, so it floats above the paper */}
         {hand && drawn && !(mobile && zoom === "overview") && (
           <div className={`${s.hand} ${still ? "" : s.handBob}`}
-            style={{ left: hand.fromRight ? hand.x + 2 : hand.x - HW - 2, top: hand.y - HH / 2 }}>
-            <PixelSprite sprite={HAND} scale={3} flip={hand.fromRight} />
+            style={{
+              left: hand.side === "left" ? hand.x - HW : hand.side === "right" ? hand.x : hand.x - HW / 2,
+              top: hand.side === "down" ? hand.y : hand.side === "up" ? hand.y - HH : hand.y - HH / 2,
+            }}>
+            {/* sprite points right; turn it toward the target */}
+            <PixelSprite sprite={HAND} scale={3} style={{
+              transform: hand.side === "right" ? "scaleX(-1)" : hand.side === "down" ? "rotate(-90deg)" : hand.side === "up" ? "rotate(90deg)" : undefined,
+            }} />
           </div>
         )}
 
-        {/* left column: title plate, region menu, narrator */}
+        {/* left column: title plate + region menu (phone: plate on top, menu under the map) */}
         {world && (
           <div className={mobile
-            ? "absolute inset-x-2 top-2 z-30 flex max-h-[calc(100%-16px)] flex-col gap-3"
+            ? "absolute inset-x-2 top-2 z-30 flex flex-col"
             : "absolute left-4 top-4 bottom-4 z-10 flex flex-col gap-4"}
             style={mobile ? undefined : { width: LEFT_W }}>
             <TitlePlate models={world.nodes.length} families={families.length} compact={mobile}
@@ -270,16 +301,14 @@ export default function HybridPage() {
             {showMenu && (
               <RegionMenu title={family ? familyLabel(family) : "Jump to a family"} rows={menuRows} cursor={cursor}
                 onPick={pick} onHover={setCursor} touch={mobile}
-                className={mobile ? "fixed inset-x-2 bottom-2 z-30 flex max-h-[45%]" : "flex min-h-0 shrink"} />
-            )}
-            {zoom !== "node" && narration && !(mobile && showMenu) && (
-              <Dialog className={mobile ? "fixed inset-x-2 bottom-2" : "mt-auto"}>
-                <Typewriter text={narration} still={still} className={s.t15} />
-                <p className={`${s.t13} ${s.dim} mt-1`}>
-                  {mobile ? "Tap a stop on the map, or open Families."
-                    : zoom === "overview" ? "Arrow keys choose a family, Enter visits it." : "Arrow keys choose, Enter opens, Esc goes back."}
-                </p>
-              </Dialog>
+                footer={mobile
+                  ? zoom === "overview" ? "Big castles are atoms, where a family starts. A gold star marks a champion that passed the gate." : undefined
+                  : family ? "Arrow keys choose, Enter opens, Esc goes back." : "Arrow keys choose a family, Enter visits it."}
+                className={mobile
+                  ? zoom === "overview" ? "fixed inset-x-2 z-30 flex" : "fixed inset-x-2 bottom-2 z-30 flex max-h-[45%]"
+                  : "flex min-h-0 shrink"}
+                style={mobile && zoom === "overview"
+                  ? { top: PLATE_H + phoneMapH + 4, maxHeight: vp.h - (PLATE_H + phoneMapH + 4) - 8 } : undefined} />
             )}
           </div>
         )}

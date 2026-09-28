@@ -6,11 +6,11 @@
 // boundary swaps in this skin's own paper shim (./paper-map.tsx) so the
 // page never blanks.
 import { Component, useEffect, useMemo, useState, type ReactNode } from "react";
-import { samplePolyline, type Pt, type World, type WorldNode } from "@/lib/world";
+import { samplePolyline, type Box, type Pt, type World, type WorldNode } from "@/lib/world";
 import type { EvidenceState } from "@/components/lab/shared/card-model";
 import {
   BridgeLayer, DecorLayer, LabelLayer, LandLayer, PaperCritter, PaperDefs, RoadLayer, SeaLayer, SetPiece,
-  SignLayer, Spot, fibreTile, regionOutlines,
+  SignLayer, Spot, fibreTile, regionOutlines, familyName, inkOf, PAPER,
 } from "@/components/lab/paper";
 import {
   Bridges, Critter, Decor, Labels, Land, Nodes, Roads, Signs, WalkHome,
@@ -33,6 +33,10 @@ export interface MapProps {
   /** camera scale the paper signs are sized for (18px type at this scale); 0 hides them */
   signScale: number;
   onOpen: (name: string) => void;
+  /** phone overview: compact family signs at island centres, kept on screen */
+  phoneSigns?: { view: Box } | null;
+  /** world-px rectangles covered by chrome windows: name tags under them are hidden */
+  occluders: Box[];
   /** reports which renderer is live, for the encoding table */
   onRenderer?: (r: "paper" | "shim") => void;
 }
@@ -52,10 +56,11 @@ export function HybridMap(p: MapProps) {
   );
 }
 
-/** Where the critter stops: on the road at the spot's door; atoms (no road)
- *  wait beside the castle on the side away from the name tag. */
-function critterStop(world: World, focus: WorldNode, walk: Pt[]) {
-  const r = focus.atom ? 40 : 26;
+/** Where the critter stops: on the road one step short of the spot's halo
+ *  (so it never covers the focused spot); atoms (no road behind them) wait
+ *  beside the castle on the side away from the name tag. */
+export function critterStop(world: World, focus: WorldNode, walk: Pt[]) {
+  const r = (focus.atom ? 40 : 26) + 34;
   const s = samplePolyline(walk);
   if (s.length > r + 4) { const k = 1 - r / s.length; return { park: s.at(k) as Pt, stop: k }; }
   const tag = world.labels.find((l) => l.node === focus.name);
@@ -63,7 +68,9 @@ function critterStop(world: World, focus: WorldNode, walk: Pt[]) {
   return { park: { x: focus.center.x + side * r, y: focus.center.y + 8 }, stop: 1 };
 }
 
-function PaperMap({ world, states, focus, zoom, walk, walkNodes, still, scale, signScale, onRenderer }: MapProps) {
+const hits = (a: Box, b: Box) => a.x < b.x + b.w && a.x + a.w > b.x && a.y < b.y + b.h && a.y + a.h > b.y;
+
+function PaperMap({ world, states, focus, zoom, walk, walkNodes, still, scale, signScale, occluders, phoneSigns, onRenderer }: MapProps) {
   const [fibre, setFibre] = useState<string | null>(null);
   useEffect(() => { setFibre(fibreTile()); onRenderer?.("paper"); }, [onRenderer]);
   const outlines = useMemo(() => regionOutlines(world), [world]);
@@ -91,10 +98,20 @@ function PaperMap({ world, states, focus, zoom, walk, walkNodes, still, scale, s
   const family = zoom === "region" && focus ? focus.family : null;
   const familyNames = useMemo(
     () => (family ? world.nodes.filter((n) => n.family === family).map((n) => n.name) : null), [world, family]);
-  const others = useMemo(() => {
-    const keep = kin?.names ?? (familyNames ? new Set(familyNames) : null);
-    return keep ? world.labels.map((l) => l.node).filter((n) => !keep.has(n)) : null;
-  }, [world, kin, familyNames]);
+  // Tags whose box falls under a chrome window are not printed (no half-tags
+  // peeking out from behind the menu or the status window).
+  const clear = useMemo(() => {
+    const ok = new Set<string>();
+    for (const l of world.labels) if (l.node === focusName || !occluders.some((o) => hits(l.box, o))) ok.add(l.node);
+    return ok;
+  }, [world, occluders, focusName]);
+  const keepTop = useMemo(() => kin?.names ?? (familyNames ? new Set(familyNames) : null), [kin, familyNames]);
+  const topTags = useMemo(
+    () => world.labels.map((l) => l.node).filter((n) => clear.has(n) && (!keepTop || keepTop.has(n))),
+    [world, clear, keepTop]);
+  const others = useMemo(
+    () => (keepTop ? world.labels.map((l) => l.node).filter((n) => clear.has(n) && !keepTop.has(n)) : null),
+    [world, clear, keepTop]);
   const W = world.camera.world;
   const sheet = <rect x={W.x - W.w} y={W.y - W.h} width={W.w * 3} height={W.h * 3} fill={VELLUM} opacity={0.5} />;
   const lifted = (n: WorldNode) => (kin ? kin.names.has(n.name) : false);
@@ -133,11 +150,42 @@ function PaperMap({ world, states, focus, zoom, walk, walkNodes, still, scale, s
       {focus && zoom === "node" && stop && (
         <PaperCritter key={focus.name} path={walk} stop={stop.stop} still={still} park={stop.park} />
       )}
-      <LabelLayer world={world} minFont={minFont} focus={focusName} only={kin ? [...kin.names] : familyNames ?? undefined} />
-      {zoom === "overview" && signScale > 0 && <SignLayer world={world} scale={signScale} minFont={minFont} />}
+      <LabelLayer world={world} minFont={minFont} focus={focusName} only={topTags} />
+      {zoom === "overview" && phoneSigns && <PhoneSigns world={world} scale={scale} view={phoneSigns.view} />}
+      {zoom === "overview" && !phoneSigns && signScale > 0 && <SignLayer world={world} scale={signScale} minFont={minFont} />}
     </>
   );
 }
+/**
+ * Phone overview signs: the paper sign style (family edge colour, die-cut
+ * rim, white letters) at 13px on screen, centred on each island's camera box
+ * and clamped inside the viewport, so all six names fit a 390px map.
+ */
+function PhoneSigns({ world, scale, view }: { world: World; scale: number; view: Box }) {
+  const px = 13 / scale;
+  const pad = 6 / scale;
+  return (
+    <g aria-hidden pointerEvents="none">
+      {world.regions.map((r) => {
+        const b = world.camera.regions[r.family];
+        if (!b) return null;
+        const text = familyName(r.family);
+        const w = text.length * px * 0.58 + px * 1.1, h = px * 1.6;
+        const x = Math.min(Math.max(b.x + b.w / 2 - w / 2, view.x + pad), view.x + view.w - w - pad);
+        const y = b.y + b.h / 2 - h / 2;
+        return (
+          <g key={r.id}>
+            <rect x={x + px * 0.1} y={y + px * 0.2} width={w} height={h} rx={px * 0.35} fill={PAPER.shadow} />
+            <rect x={x} y={y} width={w} height={h} rx={px * 0.35} fill={inkOf(r.family).edge} stroke={PAPER.die} strokeWidth={px * 0.2} />
+            <text x={x + w / 2} y={y + h / 2 + px * 0.05} textAnchor="middle" dominantBaseline="central" fontSize={px}
+              fontWeight={600} fill={PAPER.die}>{text}</text>
+          </g>
+        );
+      })}
+    </g>
+  );
+}
+
 /** Tracing-paper white laid over what is out of focus. */
 const VELLUM = "#FFFDF6";
 // Spot's Enter handler calls onSelect; the page opens nodes by delegated

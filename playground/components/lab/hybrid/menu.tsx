@@ -5,7 +5,8 @@
 // family's models, atoms first, so any model is two keypresses away.
 import type { EvidenceState } from "@/components/lab/shared/card-model";
 import { displayName } from "@/components/lab/shared/card-model";
-import { PixelWindow } from "./chrome.tsx";
+import { PixelSprite, PixelWindow } from "./chrome.tsx";
+import { STAR } from "./pixel-art.ts";
 import { NumText } from "./pixel-num.tsx";
 import { chromeSwatch } from "./palette.ts";
 import s from "./hybrid.module.css";
@@ -29,7 +30,7 @@ export function TitlePlate({ models, families, compact, onMenu, menuOpen }: {
       <div className="flex items-center gap-3 px-2 pb-0.5">
         <div className="flex-1">
           <h1 className={compact ? s.t18 : s.t24}>The model zoo</h1>
-          {!compact && <p className={`${s.t13} ${s.gold}`}><NumText text={`${models} models in ${families} families`} /></p>}
+          <p className={`${s.t13} ${s.gold}`}><NumText text={`${models} models in ${families} families`} /></p>
         </div>
         {onMenu && (
           <button type="button" className={s.btn} onClick={onMenu} aria-expanded={menuOpen}>
@@ -41,7 +42,7 @@ export function TitlePlate({ models, families, compact, onMenu, menuOpen }: {
   );
 }
 
-export function RegionMenu({ title, rows, cursor, onPick, onHover, className, touch }: {
+export function RegionMenu({ title, rows, cursor, onPick, onHover, className, touch, footer, style }: {
   title: string;
   rows: MenuRow[];
   cursor: number;
@@ -50,10 +51,13 @@ export function RegionMenu({ title, rows, cursor, onPick, onHover, className, to
   className?: string;
   /** phone: 40px rows */
   touch?: boolean;
+  /** one or two lines of help under the list (keyboard on desktop, map key on phone) */
+  footer?: string;
+  style?: React.CSSProperties;
 }) {
   const hasAtoms = rows.some((r) => r.atom);
   return (
-    <PixelWindow as="nav" label="Jump to" title={title} className={className} bodyClassName={`${s.scroll} min-h-0 flex-1`}>
+    <PixelWindow as="nav" label="Jump to" title={title} className={className} style={style} bodyClassName={`${s.scroll} min-h-0 flex-1`}>
       <ul className="py-1" role="menu">
         {rows.map((r, i) => {
           return (
@@ -62,34 +66,23 @@ export function RegionMenu({ title, rows, cursor, onPick, onHover, className, to
                 className={`${s.row} ${touch ? s.rowTouch : ""} ${i === cursor ? s.rowHot : ""} ${r.kind === "family" ? s.t18 : s.t15}`}
                 onClick={() => onPick(r)} onMouseEnter={() => onHover(i)} onFocus={() => onHover(i)}>
                 {r.kind !== "back" && <span className={s.swatch} style={{ background: chromeSwatch(r.family) }} />}
-                <span className={`flex-1 truncate ${r.atom ? s.gold : ""} ${r.kind === "back" ? s.dim : ""}`}>
+                <span className={`flex-1 min-w-0 break-words ${r.atom ? s.gold : ""} ${r.kind === "back" ? s.dim : ""}`}>
                   {r.kind === "model" ? displayName(r.label) : r.label}
                 </span>
-                {r.state === "champion" && <ChampionPip />}
+                {r.state === "champion" && <PixelSprite sprite={STAR} scale={2} className="flex-none" />}
                 <span className={`${s.t13} ${s.dim} whitespace-nowrap`}><NumText text={r.meta} /></span>
               </button>
             </li>
           );
         })}
       </ul>
+      {footer && <p className={`${s.t13} ${s.dim} px-2`}>{footer}</p>}
       {hasAtoms && (
         <p className={`${s.t13} ${s.dim} px-2 pb-1`}>
           <span className={s.gold}>Gold</span> names are atoms (<NumText text="LV 1" />), where the family starts.
         </p>
       )}
     </PixelWindow>
-  );
-}
-
-/** Tiny pixel flag = has a champion checkpoint (same meaning as the map's red flag). */
-function ChampionPip() {
-  return (
-    <svg aria-label="champion" width={10} height={12} viewBox="0 0 5 6" shapeRendering="crispEdges">
-      <rect x={0} y={0} width={1} height={6} fill="#f4f4f4" />
-      <rect x={1} y={0} width={4} height={1} fill="#e43b44" />
-      <rect x={1} y={1} width={3} height={1} fill="#e43b44" />
-      <rect x={1} y={2} width={2} height={1} fill="#e43b44" />
-    </svg>
   );
 }
 

@@ -6,7 +6,8 @@
 // skills = mechanisms it introduces, and the party = parents / children.
 import type { CardModel } from "@/components/lab/shared/card-model";
 import { displayName, EVIDENCE_COPY } from "@/components/lab/shared/card-model";
-import { PixelWindow, Typewriter } from "./chrome.tsx";
+import { PixelSprite, PixelWindow, Typewriter } from "./chrome.tsx";
+import { CHECK } from "./pixel-art.ts";
 import { PixelNum, spell } from "./pixel-num.tsx";
 import { chromeSwatch, familyLabel, SW } from "./palette.ts";
 import s from "./hybrid.module.css";
@@ -21,35 +22,45 @@ function fmt(v: number): string {
 
 const metricWords = (m: string) => m.replace(/_/g, " ");
 
-function GateMeter({ card }: { card: CardModel }) {
+// The bar sits at a fixed 75% of the track; fill = progress TOWARD the bar
+// (score/bar when higher is better, bar/score when lower is better), so more
+// fill always means closer to passing, whatever the metric's direction.
+const BAR_AT = 75;
+
+function GateMeter({ card, version }: { card: CardModel; version: string | null }) {
   const e = card.evidence;
   if (!e || e.gate_metric == null || e.threshold_m == null) {
     return <p className={`${s.t13} ${s.dim}`}>No quality gate for this model yet.</p>;
   }
-  const thr = e.threshold_m, best = e.best_metric;
-  // Axis: 0 … a max that keeps the bar near the middle for losses and the
-  // natural 0–1 range for scores.
-  const max = e.higher_is_better
-    ? Math.max(thr <= 1 ? 1 : thr * 1.5, best ?? 0)
-    : Math.max(thr * 2, (best ?? 0) * 1.1);
-  const pct = (v: number) => `calc(${Math.min(100, (v / max) * 100)}% - 4px)`;
-  const pass = card.passesBar;
-  const fill = pass ? SW.green : SW.orange;
+  const thr = e.threshold_m;
+  const champ = card.state === "champion";
+  // best_metric = best M/L-tier score (S smoke runs are not graded).
+  const best = e.best_metric != null && !(champ && card.passesBar === false) ? e.best_metric : null;
+  const progress = best == null ? null
+    : e.higher_is_better ? best / thr : best > 0 ? thr / best : 4 / 3;
+  const pass = progress != null && progress >= 1;
+  const fillPct = progress == null ? 0 : Math.min(progress, 4 / 3) * BAR_AT;
   return (
     <div>
-      <div className={`${s.t13} flex justify-between gap-2`}>
-        <span>{metricWords(e.gate_metric)} {e.higher_is_better ? "at least" : "at most"} <span className={s.gold}><PixelNum value={fmt(thr)} /></span></span>
-        <span className={s.dim}>{e.higher_is_better ? "higher is better" : "lower is better"}</span>
-      </div>
+      <p className={s.t13}>
+        {metricWords(e.gate_metric)} {e.higher_is_better ? "at least" : "at most"}{" "}
+        <span className={s.gold}><PixelNum value={fmt(thr)} /></span>
+      </p>
       <div className={`${s.meter} mt-2`} role="img"
-        aria-label={best == null ? `Bar ${fmt(thr)}; no local score` : `Best local run ${fmt(best)} against bar ${fmt(thr)}`}>
-        {best != null && <div className={s.meterFill} style={{ width: pct(best), background: fill }} />}
-        <div className={s.meterTick} style={{ left: `${Math.min(100, (thr / max) * 100)}%` }} />
+        aria-label={champ ? `Passed the M-tier bar ${fmt(thr)}`
+          : best == null ? `Bar ${fmt(thr)}; no M-tier score locally` : `M-tier score ${fmt(best)} against bar ${fmt(thr)}`}>
+        {fillPct > 0 && (
+          <div className={s.meterFill} style={{ width: `calc(${fillPct}% - 4px)`, background: pass ? SW.green : SW.mist }} />
+        )}
+        <div className={`${s.meterTick} ${champ ? s.meterTickGold : ""}`} style={{ left: `${BAR_AT}%` }} />
+        {champ && <PixelSprite sprite={CHECK} scale={2} className={s.meterCheck} style={{ left: `calc(${BAR_AT}% + 6px)` }} />}
       </div>
       <p className={`${s.t13} mt-1.5`}>
-        {best == null
-          ? <span className={s.dim}>No local score yet — train it to fill this bar.</span>
-          : <>Best local run <span className={pass ? s.lime : s.red}><PixelNum value={fmt(best)} /></span>{pass ? ", clears the bar" : ", short of the bar"}</>}
+        {champ
+          ? <span className={s.lime}>Passed the M-tier gate in the cloud sweep ({version ?? "champion"})</span>
+          : best == null
+            ? <span className={s.dim}>No M-tier score locally.</span>
+            : <>M-tier score <span className={pass ? s.lime : ""}><PixelNum value={fmt(best)} /></span>{pass ? ", clears the bar" : ", short of the bar"}</>}
       </p>
     </div>
   );
@@ -111,14 +122,14 @@ export function StatusWindow({
           <dd className="flex items-center gap-2"><span className={s.swatch} style={{ background: chromeSwatch(card.family) }} />{familyLabel(card.family)}</dd>
           <dt className={s.dim}>Equipped</dt>
           <dd>{card.state === "champion"
-            ? <>Champion checkpoint <span className={s.gold}>v{version ? <PixelNum value={version.slice(1)} /> : "?"}</span></>
+            ? <>Champion checkpoint <span className={s.gold}>v{version ? <PixelNum value={version.slice(1)} style={{ marginLeft: 0 }} /> : "?"}</span></>
             : <span className={s.dim}>No champion yet</span>}</dd>
         </dl>
 
         <div className={s.rule} aria-hidden />
         <section>
           <h3 className={`${s.t15} ${s.gold}`}>Quality gate</h3>
-          <div className="mt-1"><GateMeter card={card} /></div>
+          <div className="mt-1"><GateMeter card={card} version={version} /></div>
         </section>
 
         <section>

@@ -101,3 +101,30 @@ export function spriteRects(s: Sprite): { w: number; h: number; rects: { x: numb
   });
   return { w: Math.max(...s.rows.map((r) => r.length)), h: s.rows.length, rects };
 }
+
+/** Cleared tick beside the bar: the champion passed the M-tier gate. */
+export const CHECK: Sprite = {
+  rows: [
+    ".....kk",
+    "....kgk",
+    "k..kgk.",
+    "kgkgk..",
+    ".kgk...",
+    "..k....",
+  ],
+  ink: { k: SW.night, g: SW.butter },
+};
+
+/** Champion seal in the menu: the map's star, as a pixel sprite. */
+export const STAR: Sprite = {
+  rows: [
+    "...k...",
+    "..kgk..",
+    "kkkgkkk",
+    "kgggggk",
+    ".kgggk.",
+    "kgk.kgk",
+    "kk...kk",
+  ],
+  ink: { k: SW.night, g: SW.butter },
+};

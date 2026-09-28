@@ -6,6 +6,8 @@ export interface Encoding { mark: string; encodes: string; source: string }
 
 // Map marks this skin adds on top of the paper layers.
 export const MAP_EXTRAS: Encoding[] = [
+  { mark: "family sign at each island's centre (phone overview only)", encodes: "family name, kept on screen at 13px", source: "world.regions[].family + camera.regions" },
+  { mark: "name tags hidden under chrome windows", encodes: "nothing is drawn where a window covers the map (no half-tags)", source: "window rectangles → world boxes" },
   { mark: "vellum over the other islands (region view)", encodes: "families other than the one you are visiting", source: "view.focus → world.nodes[].family" },
 ];
 
@@ -15,17 +17,18 @@ export const CHROME_ENCODING: Encoding[] = [
   { mark: "pixel title plate", encodes: "zoo size: model and family counts", source: "world.nodes, world.regions" },
   { mark: "pixel hand", encodes: "what Enter opens: the current family's entry atom, the current model row, or the focused model", source: "menu cursor, view.focus" },
   { mark: "highlighted blue menu row", encodes: "the keyboard cursor", source: "menu cursor" },
-  { mark: "pixel swatch", encodes: "family (nearest Sweetie-16 colour to the map's island colour)", source: "world.nodes[].family → paper FAMILY_INK → snapSwatches()" },
+  { mark: "pixel-bordered swatch", encodes: "family, printed in the island's own paper colour", source: "world.nodes[].family → paper FAMILY_INK.face" },
   { mark: "gold menu text", encodes: "atom (elementary model)", source: "world.nodes[].atom" },
-  { mark: "pixel red flag pip", encodes: "champion (same meaning as the map's red flag)", source: "evidenceState()" },
-  { mark: "5×7 bitmap digits", encodes: "every number printed in the chrome (counts, LV, the bar, versions) — drawn, not typed, so 2/5 never read as 8/S", source: "the field each number prints" },
+  { mark: "pixel gold star", encodes: "champion (same meaning as the map's star seal)", source: "evidenceState() == champion" },
+  { mark: "3×5 bitmap digits (cap height)", encodes: "every number printed in the chrome (counts, LV, the bar, versions) — drawn, not typed, so 2/5 never read as 8/S", source: "the field each number prints" },
   { mark: "LV number", encodes: "generation = depth + 1", source: "world.nodes[].depth" },
   { mark: "Class", encodes: "family", source: "world.nodes[].family" },
   { mark: "Equipped vN", encodes: "champion checkpoint version", source: "evidence.champion_version" },
-  { mark: "gate meter fill / white tick", encodes: "best local metric / the M-tier bar (green clears, orange short)", source: "evidence.best_metric, threshold_m, higher_is_better" },
+  { mark: "gate meter fill", encodes: "progress toward the M-tier bar (score/bar, or bar/score for losses); green = clears, grey = short", source: "evidence.best_metric (M/L runs), threshold_m, higher_is_better" },
+  { mark: "gold tick + pixel check at the bar", encodes: "champion: passed the M-tier gate in the cloud sweep", source: "evidenceState() == champion, champion_version" },
   { mark: "Skills list", encodes: "mechanisms the model introduces", source: "taxonomy.models[].introduces + mechanisms" },
   { mark: "Builds on / Leads to rows", encodes: "parents / children, travel targets", source: "cardModel().parents / children" },
-  { mark: "typewriter line", encodes: "model description, or a family's size and atoms", source: "taxonomy description; world.nodes" },
+  { mark: "typewriter line", encodes: "the focused model's description", source: "taxonomy.models[].description" },
 ];
 
 // Live table: the paper skin's map marks (its folded-note card is replaced

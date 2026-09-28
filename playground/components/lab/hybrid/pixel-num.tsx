@@ -1,26 +1,29 @@
 "use client";
 
-// Numbers in the chrome are drawn from a 5×7 bitmap digit set, not typed:
+// Numbers in the chrome are drawn from a 3×5 bitmap digit set, not typed:
 // at chrome sizes Pixelify Sans' 2 reads as 8 and its 5 as S (verified in a
 // type specimen), and a misread "LV 2" or "2.5" bar is a data error.
 import type { CSSProperties } from "react";
 
+// 3×5 glyphs: at scale 2 they are 10px tall = the cap height of the 14–15px
+// Pixelify text around them, so numbers sit in the line instead of shouting.
 const GLYPHS: Record<string, string[]> = {
-  "0": [".###.", "#...#", "#..##", "#.#.#", "##..#", "#...#", ".###."],
-  "1": ["..#..", ".##..", "..#..", "..#..", "..#..", "..#..", ".###."],
-  "2": [".###.", "#...#", "....#", "...#.", "..#..", ".#...", "#####"],
-  "3": ["#####", "...#.", "..#..", "...#.", "....#", "#...#", ".###."],
-  "4": ["...#.", "..##.", ".#.#.", "#..#.", "#####", "...#.", "...#."],
-  "5": ["#####", "#....", "####.", "....#", "....#", "#...#", ".###."],
-  "6": ["..##.", ".#...", "#....", "####.", "#...#", "#...#", ".###."],
-  "7": ["#####", "....#", "...#.", "..#..", ".#...", ".#...", ".#..."],
-  "8": [".###.", "#...#", "#...#", ".###.", "#...#", "#...#", ".###."],
-  "9": [".###.", "#...#", "#...#", ".####", "....#", "...#.", ".##.."],
-  ".": ["..", "..", "..", "..", "..", "##", "##"],
-  "-": ["....", "....", "....", "####", "....", "....", "...."],
+  "0": ["###", "#.#", "#.#", "#.#", "###"],
+  "1": [".#.", "##.", ".#.", ".#.", "###"],
+  "2": ["##.", "..#", ".#.", "#..", "###"],
+  "3": ["##.", "..#", ".#.", "..#", "##."],
+  "4": ["#.#", "#.#", "###", "..#", "..#"],
+  "5": ["###", "#..", "##.", "..#", "##."],
+  "6": [".##", "#..", "###", "#.#", "###"],
+  "7": ["###", "..#", ".#.", ".#.", ".#."],
+  "8": ["###", "#.#", "###", "#.#", "###"],
+  "9": ["###", "#.#", "###", "..#", "##."],
+  ".": [".", ".", ".", ".", "#"],
+  "-": ["...", "...", "###", "...", "..."],
 };
+const ROWS = 5;
 
-/** Digits (and . -) as crisp pixel art; `scale` 2 = 14px tall. */
+/** Digits (and . -) as crisp pixel art; `scale` 2 = 10px tall (text cap height). */
 export function PixelNum({ value, scale = 2, className, style }: {
   value: string | number; scale?: number; className?: string; style?: CSSProperties;
 }) {
@@ -44,9 +47,9 @@ export function PixelNum({ value, scale = 2, className, style }: {
   }
   const w = Math.max(1, x - 1);
   return (
-    <svg role="img" aria-label={text} width={w * scale} height={7 * scale} viewBox={`0 0 ${w} 7`}
+    <svg role="img" aria-label={text} width={w * scale} height={ROWS * scale} viewBox={`0 0 ${w} ${ROWS}`}
       shapeRendering="crispEdges" className={className}
-      style={{ display: "inline-block", verticalAlign: "-1px", margin: "0 2px", ...style }}>
+      style={{ display: "inline-block", verticalAlign: "0px", margin: "0 1px", ...style }}>
       {rects.map((r, i) => <rect key={i} x={r.x} y={r.y} width={r.w} height={1} fill="currentColor" />)}
     </svg>
   );

@@ -103,8 +103,12 @@ export function snapSwatches(faces: Record<string, string>): Record<string, stri
   return out;
 }
 
-const SNAPPED = snapSwatches(Object.fromEntries(Object.entries(PAPER_FAMILY).map(([f, ink]) => [f, ink.face])));
-/** Chrome swatch for a family: matches the paper map's island colour. */
-export const chromeSwatch = (f: string): string => SNAPPED[f] ?? familyInk(f).swatch;
+/**
+ * Chrome swatch for a family = the island's own paper colour (the paper
+ * skin's FAMILY_INK face), printed inside a pixel border. The swatch is data;
+ * snapping it into Sweetie-16 turned violet into sea-blue and pink into
+ * champion-red, so the legend lied. (snapSwatches is kept for reference.)
+ */
+export const chromeSwatch = (f: string): string => PAPER_FAMILY[f]?.face ?? familyInk(f).swatch;
 /** Learner-facing family name (shared with the paper map's signs). */
 export const familyLabel = (f: string): string => familyName(f);
