@@ -302,3 +302,46 @@ flow: tensor "trains" in pipes and ferries between lanes).
 Easter eggs approved by the owner: grokking clicks late · hidden ? island · critter
 trains after 7 clicks (real loss curve) · Konami forward pass (+ double_descent's
 route dips twice).
+
+## Round 3 direction (owner, 2026-09-28 late) — illustration quality
+Owner: "getting there, but the drawings are too simple — look at the quality Paper Mario
+has. And for the pixel, don't go 16-bit — contemporary pixel art." Illustration is now a
+separate discipline with its own agents and a specimen-sheet review loop.
+
+### Paper — Sticker Star fidelity through a material + light system
+- **One key light** (top-left) for everything: each cutout gets a soft cast shadow
+  down-right + a contact shadow where it meets the ground; highlight edge on the lit side.
+- **Materials as reusable components**: paper (matte, visible fibre grain), cardboard
+  (thick pieces show a corrugated side face), felt/knit (fuzzy edge), glossy sticker
+  (level spots: specular highlight + white die-cut rim), printed patterns on every surface
+  (grass stripes, sand dunes, tiled walls, windows, 2–3-tone scalloped waves, stitched
+  road edges with a darker border).
+- **Diorama, not flat map**: the ground plane is gently tilted (2.5D — vertical squash /
+  perspective on the ground layer) and props STAND UP as billboard cutouts with visible
+  thickness and a base shadow; foreground props (big trees, clouds) overlap edges for depth.
+- **Scale contrast + detail density**: large landmark set-pieces, mid props, small
+  detail clusters; biome dressing is allowed as decoration (it encodes the family/biome).
+- Ambient motion allowed if slow and peripheral (waves, drifting cloud shadows);
+  frozen under still=1; nothing twitches near the focus.
+
+### Pixel — contemporary pixel art (not 16-bit)
+- References: Eastward, Sea of Stars, Hyper Light Drifter, Octopath-style lighting.
+- **Hue-shifted ramps** (5–7 steps per material; shadows cool, highlights warm), no
+  16-colour cap — a curated palette of ~48–64 colours built from ramps.
+- **Light**: a height/normal field from the terrain (distance to coast / relief) shaded by
+  one light direction, quantised to ramp steps with ordered dithering only at band edges.
+- **Selective outlines** (darker hue of the object, shadow side only — never flat black),
+  hand-placed clusters, readable silhouettes.
+- **Water with depth**: shallow→deep ramp, foam line, reflections of coastal props,
+  palette-cycled shimmer/caustics.
+- **Hero sprites at 32×32+** (castles per mechanism, capitals, critter walk cycle, boats,
+  trains, houses, trees per biome) as TS pixel arrays with ramp palettes; procedural
+  foliage/terrain shaded by the same light.
+- Atmospheric grade (subtle warm/cool gradient, soft vignette), crisp integer scaling.
+
+### Process
+- Illustrator agents own `components/lab/<skin>/art/**` + a specimen page
+  `app/lab/<skin>/specimens/` (every asset on a neutral ground at 1×/2×/4×); vision
+  review per asset against the reference descriptions; builders integrate art exports.
+- Hybrid inherits paper's art; its chrome moves to contemporary pixel style. Flow's
+  creatures get the same material/light treatment (sticker gloss, shading, soft shadow).
