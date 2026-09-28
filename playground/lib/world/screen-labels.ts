@@ -17,6 +17,11 @@ export interface ScreenLabelOptions {
   edgeMargin?: number;
   /** screen px between a label and its footprint (default 4). */
   gap?: number;
+  /** world px → screen px, replacing the aspect-fit camera (tilted/perspective
+   * cameras); footprints project as the bbox of their four corners. */
+  project?: (p: { x: number; y: number }) => { x: number; y: number };
+  /** extra screen-px boxes labels must avoid (HUD, windows, signs, cards). */
+  obstacles?: Box[];
 }
 
 const PAD = 2; // px kept between two labels
@@ -46,10 +51,18 @@ export function placeScreenLabels(
   const inner = { x: edge, y: edge, w: viewport.w - 2 * edge, h: viewport.h - 2 * edge };
   const inside = (b: Box) => b.x >= inner.x && b.y >= inner.y && b.x + b.w <= inner.x + inner.w && b.y + b.h <= inner.y + inner.h;
 
+  const project = opts.project ?? ((p: { x: number; y: number }) => ({ x: p.x * s + ox, y: p.y * s + oy }));
+  const projectBox = (x: number, y: number, w: number, h: number): Box => {
+    const c = [project({ x, y }), project({ x: x + w, y }), project({ x, y: y + h }), project({ x: x + w, y: y + h })];
+    const xs = c.map((q) => q.x), ys = c.map((q) => q.y);
+    const x0 = Math.min(...xs), y0 = Math.min(...ys);
+    return { x: x0, y: y0, w: Math.max(...xs) - x0, h: Math.max(...ys) - y0 };
+  };
+
   // projected footprints of everything on screen (obstacles for every label)
   const feet = new Map<string, Box>();
   for (const n of world.nodes) {
-    const b = { x: n.foot.x * T * s + ox, y: n.foot.y * T * s + oy, w: n.foot.w * T * s, h: n.foot.h * T * s };
+    const b = projectBox(n.foot.x * T, n.foot.y * T, n.foot.w * T, n.foot.h * T);
     if (b.x + b.w < 0 || b.y + b.h < 0 || b.x > viewport.w || b.y > viewport.h) continue;
     feet.set(n.name, b);
   }
@@ -57,7 +70,7 @@ export function placeScreenLabels(
   const order = world.labels.filter((l) => feet.has(l.node))
     .sort((a, b) => Number(b.node === opts.focus) - Number(a.node === opts.focus) || b.priority - a.priority ||
       (a.node < b.node ? -1 : 1));
-  const obstacles = [...feet.values()];
+  const obstacles = [...feet.values(), ...(opts.obstacles ?? [])];
   const placed: ScreenLabel[] = [];
   for (const l of order) {
     const f = feet.get(l.node)!;

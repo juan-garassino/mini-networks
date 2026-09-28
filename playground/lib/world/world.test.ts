@@ -621,3 +621,20 @@ test("degenerate and future inputs never throw; problems land in warnings", () =
   assert.deepEqual(big.warnings, []);
   assert.equal(big.nodes.length, 56);
 });
+
+test("placeScreenLabels honours extra obstacles and a custom projection", () => {
+  const world = buildWorld(tax, fam);
+  const cam = world.camera.world;
+  const vp = { w: 1440, h: 900 };
+  const base = placeScreenLabels(world, cam, vp);
+  assert.ok(base.length > 0);
+  // a HUD box over the whole left half removes every label that sat there
+  const hud = { x: 0, y: 0, w: 720, h: 900 };
+  const withHud = placeScreenLabels(world, cam, vp, { obstacles: [hud] });
+  assert.ok(withHud.every((l) => l.x >= 720 || l.x + l.w <= 0));
+  // an identity-like projection equal to the default fit gives the same result
+  const s = Math.min(vp.w / cam.w, vp.h / cam.h);
+  const ox = (vp.w - cam.w * s) / 2 - cam.x * s, oy = (vp.h - cam.h * s) / 2 - cam.y * s;
+  const same = placeScreenLabels(world, cam, vp, { project: (p) => ({ x: p.x * s + ox, y: p.y * s + oy }) });
+  assert.deepEqual(same, base);
+});
