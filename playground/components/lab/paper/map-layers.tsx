@@ -2,7 +2,6 @@
 // camera tween (which only changes the viewBox) does not re-render them.
 import { memo, type KeyboardEvent } from "react";
 import { roundedD, type World, type WorldNode } from "@/lib/world";
-import { symbolFor } from "@/lib/blueprint";
 import { displayName, type EvidenceState } from "@/components/lab/shared/card-model";
 import { familyName, inkOf, PAPER } from "./encoding";
 import { bridgeDeck, extruded, octagon, pts } from "./geometry";
@@ -61,13 +60,21 @@ export const RoadLayer = memo(function RoadLayer({ world, lineage, only }: { wor
   const keep = only ? new Set(only) : null;
   const ds = world.roads.filter((r) => !keep || keep.has(r.id)).map((r) => ({ id: r.id, d: roundedD(r.points, 10), primary: r.primary }));
   const trail = new Set(lineage);
+  const main = ds.filter((r) => r.primary);
+  const paths = ds.filter((r) => !r.primary);
   return (
     <g aria-hidden fill="none" strokeLinecap="round" strokeLinejoin="round">
-      {ds.map((r) => <path key={`s${r.id}`} d={r.d} stroke={PAPER.shadow} strokeWidth={r.primary ? 15 : 10} transform="translate(2 4)" />)}
-      {ds.map((r) => <path key={`e${r.id}`} d={r.d} stroke={PAPER.goldEdge} strokeWidth={r.primary ? 14 : 9} />)}
-      {ds.map((r) => <path key={`g${r.id}`} d={r.d} stroke={PAPER.gold} strokeWidth={r.primary ? 9 : 5} />)}
+      {/* secondary parents: a thin dashed footpath, so the primary trunks read */}
+      {paths.map((r) => <path key={`p${r.id}`} d={r.d} stroke={PAPER.goldEdge} strokeWidth={3.2} strokeDasharray="5 6" opacity={0.6} />)}
+      {main.map((r) => <path key={`s${r.id}`} d={r.d} stroke={PAPER.shadow} strokeWidth={15} transform="translate(2 4)" />)}
+      {main.map((r) => <path key={`e${r.id}`} d={r.d} stroke={PAPER.goldEdge} strokeWidth={14} />)}
+      {main.map((r) => <path key={`g${r.id}`} d={r.d} stroke={PAPER.gold} strokeWidth={9} />)}
+      {/* lineage stitches: ink dashes on a white under-stroke (red is champion only) */}
       {ds.filter((r) => trail.has(r.id)).map((r) => (
-        <path key={`t${r.id}`} d={r.d} stroke={PAPER.flag} strokeWidth={3.2} strokeDasharray="7 6" />
+        <g key={`t${r.id}`}>
+          <path d={r.d} stroke={PAPER.die} strokeWidth={5} />
+          <path d={r.d} stroke={PAPER.ink} strokeWidth={2.6} strokeDasharray="6 5" />
+        </g>
       ))}
     </g>
   );
@@ -144,8 +151,21 @@ function Tier({ cx, cy, r, t, st, faceK }: { cx: number; cy: number; r: number; 
   );
 }
 
-export const Spot = memo(function Spot({ node, state, focused, onSelect }: {
-  node: WorldNode; state: EvidenceState; focused: boolean; onSelect: (name: string) => void;
+/** Champion seal: a gold star with an ink edge on the spot's face. */
+function Seal({ cx, cy, r }: { cx: number; cy: number; r: number }) {
+  return (
+    <>
+      <polygon points={STAR(cx, cy, r + 1.8)} fill={PAPER.die} stroke={PAPER.die} strokeWidth={1.6} strokeLinejoin="round" />
+      <polygon points={STAR(cx, cy, r)} fill={PAPER.gold} stroke={PAPER.goldEdge} strokeWidth={1} strokeLinejoin="round" />
+    </>
+  );
+}
+
+export const Spot = memo(function Spot({ node, state, focused, onSelect, onHover, ghost = false }: {
+  node: WorldNode; state: EvidenceState; focused: boolean;
+  onSelect: (name: string) => void; onHover?: (name: string | null) => void;
+  /** a non-interactive copy drawn above the vellum */
+  ghost?: boolean;
 }) {
   const { x: cx, y: cy } = node.center;
   const st = spotStyle(state);
@@ -156,25 +176,28 @@ export const Spot = memo(function Spot({ node, state, focused, onSelect }: {
     if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onSelect(node.name); }
   };
   const label = `${displayName(node.name)}${node.atom ? ", atom" : ""}, ${state === "untrained" ? "not trained yet" : state}`;
+  const faceY = node.atom ? cy + lift - 7 : cy + lift;
+  const faceR = node.atom ? 19 * 0.7 : R * 0.64;
   return (
-    <g role="button" tabIndex={0} aria-label={label} data-node={node.name} className={styles.spot} onKeyDown={onKey}>
+    <g role={ghost ? undefined : "button"} tabIndex={ghost ? undefined : 0} aria-label={ghost ? undefined : label} aria-hidden={ghost || undefined}
+      data-node={ghost ? undefined : node.name} className={ghost ? undefined : styles.spot} onKeyDown={ghost ? undefined : onKey}
+      onPointerEnter={onHover ? () => onHover(node.name) : undefined} onPointerLeave={onHover ? () => onHover(null) : undefined}
+      onFocus={onHover ? () => onHover(node.name) : undefined} onBlur={onHover ? () => onHover(null) : undefined}>
       {/* cast shadow + die-cut rim of the whole thick spot */}
       <polygon points={pts(extruded(cx + 3, cy + 5, R, T))} fill={PAPER.shadow} />
       {focused && <polygon points={pts(extruded(cx, cy + lift, R + 9, T))} fill={PAPER.die} stroke={PAPER.ink} strokeWidth={3.5} strokeLinejoin="round" />}
-      <polygon className={styles.ring} points={pts(octagon(cx, cy + lift, R + 8))} fill="none" stroke={PAPER.flag} strokeWidth={3.5} />
+      {!ghost && <polygon className={styles.ring} points={pts(octagon(cx, cy + lift, R + 8))} fill="none" stroke={PAPER.ink} strokeWidth={3.5} strokeDasharray="6 4" />}
       <g className={styles.lift}>
         <polygon points={pts(extruded(cx, cy + lift, R, T))} fill={PAPER.die} stroke={PAPER.die} strokeWidth={5.5} strokeLinejoin="round" />
         <Tier cx={cx} cy={cy + lift} r={R} t={T} st={st} faceK={node.atom ? 0.86 : 0.64} />
-        {node.atom && (
-          <>
-            <Tier cx={cx} cy={cy + lift - 7} r={19} t={6} st={st} faceK={0.7} />
-            <text x={cx} y={cy + lift - 6.5} textAnchor="middle" dominantBaseline="central" fontSize={13}
-              className={styles.display} fill={st.face === PAPER.face ? PAPER.die : st.sketch ? PAPER.pencil : PAPER.face}>
-              {symbolFor(node.name)}
-            </text>
-          </>
+        {node.atom && <Tier cx={cx} cy={cy + lift - 7} r={19} t={6} st={st} faceK={0.7} />}
+        {state === "champion" && <Seal cx={cx} cy={faceY} r={faceR * 0.78} />}
+        {state === "champion" && (
+          // the flag is raised only for the spot you are looking at
+          <g className={focused ? undefined : styles.hoverFlag}>
+            <Flag x={cx + R * 0.62} y={cy + lift - (node.atom ? 8 : 3)} h={node.atom ? 34 : 24} />
+          </g>
         )}
-        {state === "champion" && <Flag x={cx + R * 0.62} y={cy + lift - (node.atom ? 8 : 3)} h={node.atom ? 34 : 24} />}
       </g>
     </g>
   );
@@ -206,13 +229,18 @@ export const LabelLayer = memo(function LabelLayer({ world, minFont, focus, only
   );
 });
 
-/** Region signs staked at each set-piece; sized in screen px. The sign takes
- *  the first spot (below the piece, at its foot, on its face, above it) that
- *  covers no visible name tag or level spot. */
+/** Region signs staked beside each set-piece; sized in screen px. The sign
+ *  takes the first place (right, left, below, above the piece) that covers no
+ *  set-piece, visible name tag or level spot. */
 export function SignLayer({ world, scale, minFont }: { world: World; scale: number; minFont: number }) {
   const px = 18 / Math.max(scale, 0.05);
   const blocks = [
     ...world.labels.filter((l) => l.font >= minFont).map((l) => l.box),
+    ...world.regions.filter((r) => r.setPiece).map((r) => {
+      const p = pieceAnchor(world, r);
+      const t = (PIECE_TOP[r.family] ?? 100) * p.s;
+      return { x: p.x - 50 * p.sx, y: p.y - t, w: 100 * p.sx, h: t };
+    }),
     ...world.nodes.map((n) => ({ x: n.foot.x * world.tile - 4, y: n.foot.y * world.tile - 10, w: n.foot.w * world.tile + 8, h: n.foot.h * world.tile + 14 })),
   ];
   const overlap = (a: { x: number; y: number; w: number; h: number }) =>
@@ -229,19 +257,28 @@ export function SignLayer({ world, scale, minFont }: { world: World; scale: numb
         const w = text.length * px * 0.56 + px * 1.3;
         const h = px * 1.55;
         const tall = (PIECE_TOP[r.family] ?? 100) * a.s;
-        const ys = [a.y + 6, a.y - h * 0.35, a.y - tall / 2 - h / 2, a.y - tall - h - 4];
-        let y = ys[0], best = Infinity;
-        for (const cand of ys) {
-          const o = overlap({ x: a.x - w / 2, y: cand, w, h });
-          if (o < best - 1) { best = o; y = cand; }
+        const half = 50 * a.sx;
+        const midY = a.y - tall / 2 - h / 2;
+        // beside the piece (right, left), then below, then above — never on it
+        const spots = [
+          { x: a.x + half + 8 + w / 2, y: midY },
+          { x: a.x - half - 8 - w / 2, y: midY },
+          { x: a.x, y: a.y + 8 },
+          { x: a.x, y: a.y - tall - h - 6 },
+        ];
+        let pick = spots[0], best = Infinity;
+        for (const c of spots) {
+          const o = overlap({ x: c.x - w / 2, y: c.y, w, h });
+          if (o < best - 1) { best = o; pick = c; }
           if (o === 0) break;
         }
+        const x = pick.x, y = pick.y;
         return (
           <g key={r.id}>
-            <rect x={a.x - w / 2 + px * 0.12} y={y + px * 0.22} width={w} height={h} rx={px * 0.35} fill={PAPER.shadow} />
-            <rect x={a.x - w / 2} y={y} width={w} height={h} rx={px * 0.35} fill={inkOf(r.family).edge}
+            <rect x={x - w / 2 + px * 0.12} y={y + px * 0.22} width={w} height={h} rx={px * 0.35} fill={PAPER.shadow} />
+            <rect x={x - w / 2} y={y} width={w} height={h} rx={px * 0.35} fill={inkOf(r.family).edge}
               stroke={PAPER.die} strokeWidth={px * 0.22} />
-            <text x={a.x} y={y + h / 2 + px * 0.05} textAnchor="middle" dominantBaseline="central" fontSize={px}
+            <text x={x} y={y + h / 2 + px * 0.05} textAnchor="middle" dominantBaseline="central" fontSize={px}
               className={styles.display} fill={PAPER.die}>{text}</text>
           </g>
         );

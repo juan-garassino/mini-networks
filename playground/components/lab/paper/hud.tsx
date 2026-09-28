@@ -7,7 +7,8 @@ import { displayName } from "@/components/lab/shared/card-model";
 import { FAMILY_COPY, familyName, inkOf, PAPER } from "./encoding";
 import styles from "./paper.module.css";
 
-export function PaperHud({ zoom, family, focus, models, families, onWorld, onRegion, onFamily, onFind }: {
+export function PaperHud({ hudRef, zoom, family, focus, models, families, onWorld, onRegion, onFamily, onFind }: {
+  hudRef?: React.Ref<HTMLDivElement>;
   zoom: "overview" | "region" | "node";
   family: string | null;
   focus: string | null;
@@ -24,55 +25,48 @@ export function PaperHud({ zoom, family, focus, models, families, onWorld, onReg
     const hit = models.find((m) => m === v || displayName(m) === v.trim().toLowerCase());
     if (hit) { onFind(hit); setQ(""); }
   };
+  const link = "rounded px-0.5 font-semibold text-[#1F55AE] underline decoration-2 underline-offset-2 focus-visible:outline-2";
+  const title = zoom === "overview" || !family ? "The model zoo" : zoom === "node" && focus ? displayName(focus) : familyName(family);
+  const line = zoom === "overview" || !family
+    ? "Islands are families; castles are their first models."
+    : zoom === "region" ? FAMILY_COPY[family]?.line : null;
   return (
-    <div className="pointer-events-none absolute left-3 top-3 z-10 flex max-w-[calc(100%-24px)] flex-col items-start gap-2 sm:left-5 sm:top-5 sm:max-w-[360px]">
-      <nav aria-label="Map level" className={`${styles.card} pointer-events-auto rounded-xl px-4 py-3`}>
-        {zoom === "overview" || !family ? (
-          <>
-            <h1 className={`${styles.display} text-[26px] leading-none text-[#2B2118]`}>The model zoo</h1>
-            <p className="mt-1 hidden text-[14px] leading-snug text-[#5A4B3C] sm:block">
-              Each island is a family. Castles are the first models; roads show what builds on what. Tap an island to go closer.
-            </p>
-          </>
-        ) : (
-          <>
-            <div className="flex flex-wrap items-center gap-1 text-[14px]">
-              <button type="button" onClick={onWorld} className="rounded px-1 font-semibold text-[#1F55AE] underline decoration-2 underline-offset-2 focus-visible:outline-2">
-                Whole map
-              </button>
+    <div ref={hudRef} className="pointer-events-none absolute left-3 top-3 z-10 flex max-w-[calc(100%-24px)] flex-col items-start gap-2 sm:left-5 sm:top-4 sm:max-w-[420px]">
+      <nav aria-label="Map level" className={`${styles.card} pointer-events-auto w-full rounded-xl px-3.5 py-2.5`}>
+        <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
+          {zoom !== "overview" && family && (
+            <span className="flex items-center gap-1 text-[14px]">
+              <button type="button" onClick={onWorld} className={link}>Map</button>
+              <span aria-hidden className="text-[#5A4B3C]">/</span>
               {zoom === "node" && (
                 <>
+                  <button type="button" onClick={onRegion} className={link}>{familyName(family)}</button>
                   <span aria-hidden className="text-[#5A4B3C]">/</span>
-                  <button type="button" onClick={onRegion} className="rounded px-1 font-semibold text-[#1F55AE] underline decoration-2 underline-offset-2 focus-visible:outline-2">
-                    {familyName(family)}
-                  </button>
                 </>
               )}
-            </div>
-            <h1 className={`${styles.display} mt-1 flex items-center gap-2 text-[26px] leading-none`} style={{ color: ink!.edge }}>
-              <span aria-hidden className={`${styles.sticker} inline-block h-4 w-4 rounded-full`} style={{ background: ink!.face }} />
-              {zoom === "node" && focus ? displayName(focus) : familyName(family)}
-            </h1>
-            {zoom === "region" && (
-              <p className="mt-1 hidden text-[14px] leading-snug text-[#5A4B3C] sm:block">{FAMILY_COPY[family]?.line}</p>
-            )}
-          </>
-        )}
+            </span>
+          )}
+          <h1 className={`${styles.display} flex items-center gap-1.5 text-[23px] leading-none`} style={{ color: ink ? ink.edge : PAPER.ink }}>
+            {ink && <span aria-hidden className={`${styles.sticker} inline-block h-3.5 w-3.5 rounded-full`} style={{ background: ink.face }} />}
+            {title}
+          </h1>
+        </div>
+        {line && <p className="mt-1 hidden truncate text-[14px] leading-snug text-[#5A4B3C] sm:block">{line}</p>}
+        <form role="search" className="mt-2" onSubmit={(e) => { e.preventDefault(); tryFind(q); }}>
+          <label className="flex items-center gap-2 rounded-lg border-2 border-[#E3D6B8] bg-white/60 px-2.5 py-1">
+            <svg width="15" height="15" viewBox="0 0 20 20" aria-hidden><circle cx="8.5" cy="8.5" r="6" fill="none" stroke={PAPER.ink} strokeWidth="2.6" /><path d="M13 13l5 5" stroke={PAPER.ink} strokeWidth="2.6" strokeLinecap="round" /></svg>
+            <span className="sr-only">Find a model</span>
+            <input
+              list="paper-models" value={q} placeholder="Find a model"
+              onChange={(e) => { setQ(e.target.value); tryFind(e.target.value); }}
+              className="w-full min-w-0 bg-transparent text-[15px] text-[#2B2118] placeholder:text-[#8A7B6A] focus:outline-none"
+            />
+            <datalist id="paper-models">
+              {models.map((m) => <option key={m} value={displayName(m)} />)}
+            </datalist>
+          </label>
+        </form>
       </nav>
-      <form className="pointer-events-auto" role="search" onSubmit={(e) => { e.preventDefault(); tryFind(q); }}>
-        <label className={`${styles.card} flex items-center gap-2 rounded-xl px-3 py-1.5`}>
-          <svg width="16" height="16" viewBox="0 0 20 20" aria-hidden><circle cx="8.5" cy="8.5" r="6" fill="none" stroke={PAPER.ink} strokeWidth="2.6" /><path d="M13 13l5 5" stroke={PAPER.ink} strokeWidth="2.6" strokeLinecap="round" /></svg>
-          <span className="sr-only">Find a model</span>
-          <input
-            list="paper-models" value={q} placeholder="Find a model"
-            onChange={(e) => { setQ(e.target.value); tryFind(e.target.value); }}
-            className="w-40 bg-transparent text-[15px] text-[#2B2118] placeholder:text-[#8A7B6A] focus:outline-none sm:w-52"
-          />
-          <datalist id="paper-models">
-            {models.map((m) => <option key={m} value={displayName(m)} />)}
-          </datalist>
-        </label>
-      </form>
       {zoom === "overview" && (
         <ul aria-label="Families" className="pointer-events-auto flex flex-wrap gap-2 sm:hidden">
           {families.map((f) => (
@@ -112,30 +106,33 @@ const KEY: { icon: React.ReactNode; text: string }[] = [
   { icon: <Oct fill={PAPER.die} />, text: "Hollow: not trained yet" },
   { icon: <Oct fill={PAPER.die} rim={PAPER.die} dashed />, text: "Pencil: quality bar not final" },
   {
-    icon: <svg width="24" height="24" viewBox="0 0 24 24" aria-hidden><path d="M7 22V3" stroke={PAPER.ink} strokeWidth="2.2" strokeLinecap="round" /><path d="M7 3l13 5-13 5z" fill={PAPER.flag} /></svg>,
-    text: "Red flag: champion",
+    icon: <svg width="24" height="24" viewBox="0 0 24 24" aria-hidden><polygon points="12,2 14.9,8.6 22,9.2 16.6,13.8 18.2,21 12,17.2 5.8,21 7.4,13.8 2,9.2 9.1,8.6" fill={PAPER.gold} stroke={PAPER.goldEdge} strokeWidth="1.4" strokeLinejoin="round" /></svg>,
+    text: "Gold star: champion (flag when selected)",
   },
   {
     icon: <svg width="24" height="24" viewBox="0 0 24 24" aria-hidden><path d="M2 16C8 16 12 8 22 8" stroke={PAPER.goldEdge} strokeWidth="8" fill="none" strokeLinecap="round" /><path d="M2 16C8 16 12 8 22 8" stroke={PAPER.gold} strokeWidth="4.5" fill="none" strokeLinecap="round" /></svg>,
-    text: "Road: builds on",
+    text: "Road: builds on its main parent",
+  },
+  {
+    icon: <svg width="24" height="24" viewBox="0 0 24 24" aria-hidden><path d="M2 16C8 16 12 8 22 8" stroke={PAPER.goldEdge} strokeWidth="2.6" strokeDasharray="4 4" fill="none" opacity="0.7" /></svg>,
+    text: "Dashed path: another parent",
   },
   {
     icon: <svg width="24" height="24" viewBox="0 0 24 24" aria-hidden><rect x="2" y="8" width="20" height="9" rx="2" fill={PAPER.plank} /><path d="M7 8v9M12 8v9M17 8v9" stroke={PAPER.plankDark} strokeWidth="1.6" /></svg>,
     text: "Bridge: crosses families",
   },
   {
-    icon: <svg width="24" height="24" viewBox="0 0 24 24" aria-hidden><path d="M2 16C8 16 12 8 22 8" stroke={PAPER.gold} strokeWidth="7" fill="none" strokeLinecap="round" /><path d="M2 16C8 16 12 8 22 8" stroke={PAPER.flag} strokeWidth="2.4" strokeDasharray="4 3" fill="none" /></svg>,
+    icon: <svg width="24" height="24" viewBox="0 0 24 24" aria-hidden><path d="M2 16C8 16 12 8 22 8" stroke={PAPER.gold} strokeWidth="7" fill="none" strokeLinecap="round" /><path d="M2 16C8 16 12 8 22 8" stroke={PAPER.die} strokeWidth="4" fill="none" /><path d="M2 16C8 16 12 8 22 8" stroke={PAPER.ink} strokeWidth="2.2" strokeDasharray="4 3" fill="none" /></svg>,
     text: "Stitches: way back to its atom",
   },
 ];
 
 export function PaperKey({ hideOnMobile, startOpen }: { hideOnMobile: boolean; startOpen: boolean }) {
-  // Open on the whole map (the phone has empty sea below the islands there),
-  // folded away once the camera is close (it would cover the region).
-  const [open, setOpen] = useState(startOpen);
+  // Desktop: open on the whole map, folded away once the camera is close.
+  const [open, setOpen] = useState(false);   // phone: always asked for (it would cover the islands)
   const [deskOpen, setDeskOpen] = useState(startOpen);
   const [was, setWas] = useState(startOpen);
-  if (was !== startOpen) { setWas(startOpen); setDeskOpen(startOpen); setOpen(startOpen); }
+  if (was !== startOpen) { setWas(startOpen); setDeskOpen(startOpen); setOpen(false); }
   return (
     <div className={`absolute bottom-3 left-3 z-10 sm:bottom-5 sm:left-5 ${hideOnMobile ? "hidden sm:block" : ""}`}>
       <button type="button" onClick={() => setOpen((o) => !o)} aria-expanded={open}

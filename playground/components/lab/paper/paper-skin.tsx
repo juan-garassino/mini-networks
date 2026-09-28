@@ -20,7 +20,7 @@ import { PAPER } from "./encoding";
 import styles from "./paper.module.css";
 
 const CARD_W = 372 + 20 + 20;        // desktop note width + margins (screen px)
-const SHEET = 0.5;                    // mobile bottom sheet height fraction
+const SHEET = 0.45;                   // mobile bottom sheet height fraction
 const MAX_NODE_SCALE = 1.8;           // screen px per world px in the node view
 
 const union = (boxes: Box[]): Box => {
@@ -37,29 +37,33 @@ function regionAtom(world: World, family: string): string | null {
   return atoms.sort((a, b) => deg(b) - deg(a) || a.name.localeCompare(b.name))[0].name;
 }
 
-/** Camera box for a node: its lineage neighbourhood, framed in the part of
- *  the screen the card does not cover. */
-function nodeTarget(world: World, node: WorldNode, vw: number, vh: number): CamBox {
+interface Insets { top: number; right: number; bottom: number }
+
+/** Fit `t` into the part of the screen not covered by chrome (HUD on top,
+ *  card on the right, sheet at the bottom), then grow it to the full viewport
+ *  so the camera box covers the whole screen. */
+function frame(t: CamBox, vw: number, vh: number, inset: Insets, maxScale = Infinity): CamBox {
+  const avail = { w: Math.max(200, vw - inset.right), h: Math.max(160, vh - inset.top - inset.bottom) };
+  let f = fitBox(t, avail.w, avail.h);
+  if (avail.w / f.w > maxScale) {
+    const k = (avail.w / f.w) / maxScale;
+    f = { x: f.x + f.w / 2 - (f.w * k) / 2, y: f.y + f.h / 2 - (f.h * k) / 2, w: f.w * k, h: f.h * k };
+  }
+  const scale = avail.w / f.w;
+  return { x: f.x, y: f.y - inset.top / scale, w: vw / scale, h: vh / scale };
+}
+
+/** Camera box for a node: its lineage neighbourhood (desktop) or the spot
+ *  itself (phone, so its tags stay ≥13px; the card lists the lineage). */
+function nodeBox(world: World, node: WorldNode, desktop: boolean): CamBox {
   const tight = world.camera.nodes[node.name].box;
-  const desktop = vw >= 640;
-  // desktop frames the lineage neighbourhood; the phone frames the spot so
-  // its name tags stay ≥13px (the card lists the lineage)
   const kin = desktop ? world.nodes.filter((n) => node.parents.includes(n.name) || n.parents.includes(node.name)) : [];
   const pad = 70;
   const around = union([tight, ...kin.map((n) => ({ x: n.center.x - pad, y: n.center.y - pad, w: pad * 2, h: pad * 2 }))]);
   const minW = tight.w * (desktop ? 2.5 : 1.5), minH = tight.h * (desktop ? 2.5 : 1.5);
   const cx = around.x + around.w / 2, cy = around.y + around.h / 2;
   const w = Math.max(around.w, minW), h = Math.max(around.h, minH);
-  let t = { x: cx - w / 2, y: cy - h / 2, w, h };
-  const avail = desktop ? { w: Math.max(200, vw - CARD_W), h: vh } : { w: vw, h: vh * (1 - SHEET) };
-  t = fitBox(t, avail.w, avail.h);
-  // never closer than MAX_NODE_SCALE: the learner should still see the roads around
-  if (avail.w / t.w > MAX_NODE_SCALE) {
-    const k = (avail.w / t.w) / MAX_NODE_SCALE;
-    t = { x: t.x + t.w / 2 - (t.w * k) / 2, y: t.y + t.h / 2 - (t.h * k) / 2, w: t.w * k, h: t.h * k };
-  }
-  const scale = avail.w / t.w;
-  return { x: t.x, y: t.y, w: vw / scale, h: vh / scale };
+  return { x: cx - w / 2, y: cy - h / 2, w, h };
 }
 
 export function PaperSkin() {
@@ -90,37 +94,66 @@ export function PaperSkin() {
   const active = zoom !== "overview" && focusNode ? focusNode.family : null;
   const focus = zoom !== "overview" && focusNode ? focusNode.name : null;
 
+  // The HUD's measured height is a top inset for every camera target, so no
+  // tag or spot is framed under it.
+  const [hudH, setHudH] = useState(0);
+  const hudRef = useRef<HTMLDivElement | null>(null);
+  useEffect(() => {
+    const el = hudRef.current;
+    if (!el) return;
+    const ro = new ResizeObserver(() => setHudH(Math.round(el.getBoundingClientRect().bottom)));
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+
   const overviewBox = useMemo(() => (world ? union(Object.values(world.camera.regions)) : null), [world]);
   const target: CamBox = useMemo(() => {
     if (!world || !overviewBox) return { x: 0, y: 0, w: 1, h: 1 };
-    if (zoom === "node" && focusNode) return nodeTarget(world, focusNode, vp.w, vp.h);
-    if (zoom === "region" && focusNode) return world.camera.regions[focusNode.family];
+    const desktop = vp.w >= 640;
+    const top = hudH + 8;
+    if (zoom === "node" && focusNode) {
+      return frame(nodeBox(world, focusNode, desktop), vp.w, vp.h,
+        { top, right: desktop ? CARD_W : 0, bottom: desktop ? 0 : vp.h * SHEET }, MAX_NODE_SCALE);
+    }
+    if (zoom === "region" && focusNode) return frame(world.camera.regions[focusNode.family], vp.w, vp.h, { top, right: 0, bottom: 0 });
     const p = 24;
-    return { x: overviewBox.x - p, y: overviewBox.y - p, w: overviewBox.w + p * 2, h: overviewBox.h + p * 2 };
-  }, [world, overviewBox, zoom, focusNode, vp.w, vp.h]);
+    // whole map: the HUD sits over open sea in the corner, and the full
+    // height keeps atom tags ≥13px — no inset on desktop
+    return frame({ x: overviewBox.x - p, y: overviewBox.y - p, w: overviewBox.w + p * 2, h: overviewBox.h + p * 2 }, vp.w, vp.h,
+      { top: desktop ? 0 : top, right: 0, bottom: 0 });
+  }, [world, overviewBox, zoom, focusNode, vp.w, vp.h, hudH]);
 
   const cam = useCamera({ world: world?.camera.world ?? target, target, still, minWidth: 200 });
 
-  // Lineage: roads on the focused model's walk back to its root atom.
+  // Hovering / keyboard-focusing a spot in the region view lifts its family
+  // tree the same way the node view does.
+  const [hovered, setHovered] = useState<string | null>(null);
+  const hoverNode = zoom === "region" && hovered && world ? world.nodes.find((n) => n.name === hovered) : undefined;
+  const treeNode = zoom === "node" ? focusNode : hoverNode;
+
+  // Lineage: roads on the walk back to the root atom (of the tree's model,
+  // else of the focus).
   const walk = useMemo(() => (world && focus ? pathToAtom(world, focus) : null), [world, focus]);
+  const treeName = treeNode?.name ?? focus;
+  const treeWalk = useMemo(() => (world && treeName ? pathToAtom(world, treeName) : null), [world, treeName]);
   const lineage = useMemo(() => {
-    if (!walk) return [];
+    if (!treeWalk) return [];
     const ids: string[] = [];
-    for (let i = 0; i + 1 < walk.nodes.length; i++) ids.push(`${walk.nodes[i + 1]}->${walk.nodes[i]}`);
+    for (let i = 0; i + 1 < treeWalk.nodes.length; i++) ids.push(`${treeWalk.nodes[i + 1]}->${treeWalk.nodes[i]}`);
     return ids;
-  }, [walk]);
-  // Node view: the focused model's family tree (parents, children, the walk
-  // back to its atom) is lifted above a sheet of vellum laid over the map.
+  }, [treeWalk]);
+  // The family tree (parents, children, the walk back to its atom) is lifted
+  // above a sheet of vellum laid over the map.
   const kin = useMemo(() => {
-    if (!world || !focusNode || zoom !== "node") return null;
-    const names = new Set<string>([focusNode.name, ...focusNode.parents, ...(walk?.nodes ?? [])]);
-    for (const n of world.nodes) if (n.parents.includes(focusNode.name)) names.add(n.name);
+    if (!world || !treeNode) return null;
+    const names = new Set<string>([treeNode.name, ...treeNode.parents, ...(treeWalk?.nodes ?? [])]);
+    for (const n of world.nodes) if (n.parents.includes(treeNode.name)) names.add(n.name);
     const roads = world.roads
-      .filter((r) => r.to === focusNode.name || r.from === focusNode.name || lineage.includes(r.id))
+      .filter((r) => r.to === treeNode.name || r.from === treeNode.name || lineage.includes(r.id))
       .map((r) => r.id);
     const others = world.labels.map((l) => l.node).filter((n) => !names.has(n));
     return { names: [...names], roads, others };
-  }, [world, focusNode, zoom, walk, lineage]);
+  }, [world, treeNode, treeWalk, lineage]);
   const critterPath = useMemo(() => (walk ? [...walk.points].reverse() : []), [walk]);
 
   // The pop-up moment: each time the camera enters a region, its set-piece
@@ -222,25 +255,30 @@ export function PaperSkin() {
               {world.regions.map((r) => (
                 <SetPiece key={r.id} world={world} region={r} pop={pops[r.family] ?? 0} still={still} />
               ))}
+              {/* every spot stays mounted in one place (keyboard focus survives the
+                  vellum); the lifted family tree is redrawn above it as ghosts */}
               <g>
-                {orderedNodes.filter((n) => n.name !== focus && !kin?.names.includes(n.name)).map((n) => (
-                  <Spot key={n.name} node={n} state={states[n.name]} focused={false} onSelect={select} />
+                {orderedNodes.filter((n) => n.name !== focus).map((n) => (
+                  <Spot key={n.name} node={n} state={states[n.name]} focused={false} onSelect={select}
+                    onHover={zoom === "region" ? setHovered : undefined} />
                 ))}
+                {focusNode && focus && <Spot key={focus} node={focusNode} state={states[focus]} focused onSelect={select}
+                  onHover={zoom === "region" ? setHovered : undefined} />}
               </g>
               {kin && (
                 <>
                   <LabelLayer world={world} minFont={minFont} focus={null} only={kin.others} />
-                  <rect x={cam.box.x - 10} y={cam.box.y - 10} width={cam.box.w + 20} height={cam.box.h + 20} fill={PAPER.die} opacity={0.5} />
-                  <RoadLayer world={world} lineage={lineage} only={kin.roads} />
-                  <BridgeLayer world={world} only={kin.roads} />
+                  <rect x={cam.box.x - 10} y={cam.box.y - 10} width={cam.box.w + 20} height={cam.box.h + 20} fill={PAPER.die} opacity={0.5} pointerEvents="none" />
+                  <g pointerEvents="none">
+                    <RoadLayer world={world} lineage={lineage} only={kin.roads} />
+                    <BridgeLayer world={world} only={kin.roads} />
+                    {orderedNodes.filter((n) => kin.names.includes(n.name)).map((n) => (
+                      <Spot key={n.name} node={n} state={states[n.name]} focused={n.name === focus || n.name === treeNode?.name}
+                        onSelect={select} ghost />
+                    ))}
+                  </g>
                 </>
               )}
-              <g>
-                {orderedNodes.filter((n) => n.name !== focus && kin?.names.includes(n.name)).map((n) => (
-                  <Spot key={n.name} node={n} state={states[n.name]} focused={false} onSelect={select} />
-                ))}
-                {focusNode && focus && <Spot key={`f-${focus}`} node={focusNode} state={states[focus]} focused onSelect={select} />}
-              </g>
               {focusNode && focus && <PaperCritter key={focus} path={critterPath} stop={stop} still={still} park={park} />}
               <LabelLayer world={world} minFont={minFont} focus={focus} only={kin?.names} />
               {zoom === "overview" && cam.scale >= 0.5 && <SignLayer world={world} scale={cam.scale} minFont={minFont} />}
@@ -248,7 +286,7 @@ export function PaperSkin() {
           )}
         </div>
 
-        <PaperHud zoom={zoom} family={active} focus={focus} models={models}
+        <PaperHud hudRef={hudRef} zoom={zoom} family={active} focus={focus} models={models}
           families={world ? world.regions.map((r) => r.family) : []}
           onWorld={toWorld} onRegion={toRegion} onFamily={toFamily} onFind={select} />
         {zoom !== "node" && <PaperKey hideOnMobile={false} startOpen={zoom === "overview"} />}

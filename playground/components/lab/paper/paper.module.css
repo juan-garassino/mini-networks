@@ -34,6 +34,8 @@
 .spot { cursor: pointer; outline: none; }
 .spot .ring { opacity: 0; }
 .spot:focus-visible .ring { opacity: 1; }
+.hoverFlag { opacity: 0; }
+.spot:hover .hoverFlag, .spot:focus-visible .hoverFlag { opacity: 1; }
 .spot:hover .lift { transform: translateY(-2px); }
 .lift { transition: transform 120ms ease-out; }
 

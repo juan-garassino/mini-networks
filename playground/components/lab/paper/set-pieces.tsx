@@ -85,43 +85,56 @@ export const PIECE_TOP: Record<string, number> = {
   perception: 116, sequence: 104, generative: 108, representation: 74, structure: 84, decision: 98,
 };
 
-/**
- * Free tile rows directly above a set-piece box (land only, no footprint,
- * road, river or label) — a tall piece may rise into them without covering
- * anything. Capped at 5 rows.
- */
-function roomAbove(world: World, r: Region): number {
+/** A tile the set-piece may grow over: land, coast or open sea — never a
+ *  spot, road, bridge, river, another set-piece or a name tag. */
+function freeTile(world: World, x: number, y: number, own: Region): boolean {
+  const { cols, rows, tile, terrain } = world;
+  if (x < 0 || y < 0 || x >= cols || y >= rows) return false;
+  const t = terrain[y * cols + x];
+  if (t !== T.LAND && t !== T.COAST && t !== T.SEA && !(t === T.SETPIECE && inBox(own, x, y))) return false;
+  const rx = x * tile, ry = y * tile;
+  return !world.labels.some((l) => l.box.x < rx + tile && l.box.x + l.box.w > rx && l.box.y < ry + tile && l.box.y + l.box.h > ry);
+}
+const inBox = (r: Region, x: number, y: number) => {
   const b = r.setPiece!;
-  const { cols, tile, terrain } = world;
-  let rows = 0;
-  for (let k = 1; k <= 5; k++) {
-    const y = b.y - k;
-    if (y < 0) break;
+  return x >= b.x && x < b.x + b.w && y >= b.y && y < b.y + b.h;
+};
+
+/** Free rows above and symmetric free columns beside a set-piece box. */
+function room(world: World, r: Region) {
+  const b = r.setPiece!;
+  let up = 0;
+  for (let k = 1; k <= 4; k++) {
     let ok = true;
-    for (let x = b.x; x < b.x + b.w && ok; x++) {
-      const t = terrain[y * cols + x];
-      if (t !== T.LAND && t !== T.COAST) ok = false;
-    }
-    const rx = b.x * tile, ry = y * tile, rw = b.w * tile;
-    if (ok && world.labels.some((l) => l.box.x < rx + rw && l.box.x + l.box.w > rx && l.box.y < ry + tile && l.box.y + l.box.h > ry)) ok = false;
+    for (let x = b.x; x < b.x + b.w && ok; x++) ok = freeTile(world, x, b.y - k, r);
     if (!ok) break;
-    rows = k;
+    up = k;
   }
-  return rows;
+  let side = 0;
+  for (let k = 1; k <= 2; k++) {
+    let ok = true;
+    for (let y = b.y - up; y < b.y + b.h && ok; y++) ok = freeTile(world, b.x - k, y, r) && freeTile(world, b.x + b.w - 1 + k, y, r);
+    if (!ok) break;
+    side = k;
+  }
+  return { up, side };
 }
 
-/** Base-centre anchor and scale that keep the standing piece inside its box
- *  (plus any free rows above it). */
+/** Base-centre anchor and scale. The piece grows into free margin (rows above,
+ *  columns beside — land or sea, never onto a spot, road or tag), up to 1.6×
+ *  what its own box allows. */
 export function pieceAnchor(world: World, r: Region) {
   const b = r.setPiece!;
-  const w = b.w * world.tile;
-  const h = (b.h + roomAbove(world, r)) * world.tile - 8;
+  const tile = world.tile;
   const top = PIECE_TOP[r.family] ?? 110;
-  // Height usually binds (boxes are square, pieces are tall): let the card
-  // spread up to 1.3× wider than tall so it still fills the box width.
-  const s = Math.min(w / 100, h / top);
+  const s0 = Math.min((b.w * tile) / 100, (b.h * tile - 8) / top);
+  const { up, side } = room(world, r);
+  const w = (b.w + side * 2) * tile;
+  const h = (b.h + up) * tile - 8;
+  const s = Math.min(w / 100, h / top, s0 * 1.6);
+  // pieces are tall: let the card spread up to 1.3× wider than tall
   const sx = Math.min(w / 100, s * 1.3);
-  return { x: (b.x + b.w / 2) * world.tile, y: (b.y + b.h) * world.tile - 6, s, sx };
+  return { x: (b.x + b.w / 2) * tile, y: (b.y + b.h) * tile - 6, s, sx };
 }
 
 export const SetPiece = memo(function SetPiece({ world, region, pop, still }: {
@@ -167,20 +180,26 @@ export const SetPiece = memo(function SetPiece({ world, region, pop, still }: {
 });
 
 // ── biome props on decor cells ──────────────────────────────────────────
-// 12-unit design box, base at y = 0. Shape = family biome (ENCODING).
-const PROPS: Record<string, (ink: FamilyInk) => Facet[]> = {
-  perception: () => [{ d: circle(-2.5, -6, 5) + circle(3.5, -8, 4.2), tone: "dark" }, { d: circle(-3.5, -7.5, 2), tone: "light" }],
-  sequence: () => [{ d: "M-6 0 L0 -15 L0 0 Z", tone: "light" }, { d: "M0 0 L0 -15 L6 0 Z", tone: "dark" }],
-  generative: () => [{ d: "M-7 0 L-2 -8 L1 0 Z", tone: "light" }, { d: "M-2 -8 L6 0 L1 0 Z", tone: "dark" }],
-  representation: () => [{ d: "M-4 0 Q-6 -8 -5 -14 M0 0 L0 -16 M4 0 Q6 -8 5 -13", tone: "dark", stroke: true }],
-  structure: () => [{ d: "M0 0 L-4 -7 L0 -15 Z", tone: "light" }, { d: "M0 0 L4 -7 L0 -15 Z", tone: "dark" }],
-  decision: () => [{ d: "M-5 0 L-2.5 -7 L2.5 -7 L5 0 Z", tone: "dark" }, { d: circle(0, -10, 3.4), tone: "light" }],
+// 12-unit design box, base at y = 0. Each biome prop is a tiny echo of its
+// family's set-piece mechanism (ENCODING "small paper props").
+const PROPS: Record<string, Facet[]> = {
+  // eye-flower: perception looks
+  perception: [{ d: "M0 0 Q-1 -5 0 -9", tone: "dark", stroke: true }, { d: circle(0, -11, 4), tone: "dark" }, { d: circle(0.6, -11, 1.7), tone: "light" }],
+  // token train: sequence reads one token after another
+  sequence: [{ d: "M-9 0 h5 v-5 h-5Z M-2.5 0 h5 v-5 h-5Z M4 0 h5 v-5 h-5Z", tone: "dark" }],
+  // sample puff: generative makes new samples
+  generative: [{ d: circle(-3.5, -5, 3.6) + circle(2, -7, 4.4) + circle(5.5, -3.5, 3), tone: "light" }],
+  // mirrored reeds on a pond: representation pairs two views
+  representation: [{ d: "M-8 0 Q0 -3 8 0 Q0 3 -8 0Z", tone: "light" }, { d: "M-3 -1 Q-4 -7 -2 -13 M3 -1 Q4 -7 2 -13", tone: "dark", stroke: true }],
+  // linked shards: structure is nodes and links
+  structure: [{ d: "M-5 -3 L4 -10", tone: "dark", stroke: true }, { d: "M-5 0 L-8 -4 L-5 -8 L-2 -4Z", tone: "light" }, { d: "M4 -6 L1 -10 L4 -14 L7 -10Z", tone: "dark" }],
+  // a die: decision is choice under chance
+  decision: [{ d: "M-5 0 h10 v-10 h-10Z", tone: "dark" }, { d: circle(-2.2, -7.5, 1.1) + circle(0, -5, 1.1) + circle(2.2, -2.5, 1.1), tone: "light" }],
 };
 
 export const DecorLayer = memo(function DecorLayer({ world }: { world: World }) {
-  // Half the decor cells (even variants) — enough to set the biome without
-  // scattering props everywhere.
-  const items = world.decor.filter((d) => d.variant % 2 === 0 && PROPS[d.region]);
+  // Every world.decor cell gets its family's prop; variant is not drawn.
+  const items = world.decor.filter((d) => PROPS[d.region]);
   const rimmed = (key: string, fc: Facet, fill: string, w: number) =>
     fc.stroke
       ? <path key={key} d={fc.d} fill="none" stroke={fill} strokeWidth={w + 1.8} strokeLinecap="round" />
@@ -190,11 +209,12 @@ export const DecorLayer = memo(function DecorLayer({ world }: { world: World }) 
       {items.map((d) => {
         const c = tileCenter(world, d.tile);
         const ink = inkOf(d.region);
-        const fs = PROPS[d.region](ink);
+        const fs = PROPS[d.region];
         return (
           <g key={d.tile} transform={`translate(${c.x} ${c.y + 6}) scale(${d.scale})`}>
-            <g transform="translate(1.5 2)">{fs.map((fc, i) => rimmed(`s${i}`, fc, PAPER.shadow, 3))}</g>
-            {fs.map((fc, i) => rimmed(`r${i}`, fc, PAPER.die, 3))}
+            {/* quiet: tone-on-tone with a hairline-free thin rim, so the biome reads
+                without competing with spots */}
+            {fs.map((fc, i) => rimmed(`r${i}`, fc, "rgba(255,253,246,0.55)", 1.6))}
             {fs.map((fc, i) => rimmed(`f${i}`, fc, toneFill(fc.tone, ink), 0))}
           </g>
         );
