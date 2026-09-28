@@ -8,8 +8,11 @@ import { useEffect, useMemo, useState } from "react";
 import { getEvidence, getTaxonomy, listRuns } from "@/lib/api";
 import type { ModelEvidence, RunSummary, TaxonomyResponse } from "@/lib/types";
 import { buildFlow, buildWorld, familyMapFromBlueprint } from "@/lib/world";
+import { NEXT_ERA, RUINS } from "@/components/lab/shared/eggs";
 
 const POLL_MS = 5000;
+// Secret islands: next-era silhouettes and retired legacy/ models (eggs data).
+const WORLD_OPTS = { hidden: NEXT_ERA.map((m) => m.id), ruins: RUINS.map((r) => r.id) };
 
 export function useWorld(still: boolean | null) {
   const [taxonomy, setTaxonomy] = useState<TaxonomyResponse | null>(null);
@@ -43,7 +46,7 @@ export function useWorld(still: boolean | null) {
   }, [still]);
 
   const family = useMemo(() => (taxonomy ? familyMapFromBlueprint(taxonomy) : null), [taxonomy]);
-  const world = useMemo(() => (taxonomy && family ? buildWorld(taxonomy, family) : null), [taxonomy, family]);
+  const world = useMemo(() => (taxonomy && family ? buildWorld(taxonomy, family, WORLD_OPTS) : null), [taxonomy, family]);
   const flow = useMemo(() => (taxonomy && family ? buildFlow(taxonomy, family) : null), [taxonomy, family]);
 
   return {
