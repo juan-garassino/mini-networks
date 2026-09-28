@@ -1,0 +1,72 @@
+/* Skin D · Kawaii flow — module-scoped only (no globals, no :root). */
+
+.stage {
+  font-family: var(--flow-body), system-ui, sans-serif;
+  color: #3b2e5a;
+  background: #f3f0ff;
+}
+
+.display {
+  font-family: var(--flow-display), var(--flow-body), system-ui, sans-serif;
+}
+
+/* the rare blink: eyes squash for ~0.18s once every 14s, phase per model */
+.blink {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: blink 14s infinite;
+}
+@keyframes blink {
+  0%, 97.5%, 100% { transform: scaleY(1); }
+  98.7% { transform: scaleY(0.1); }
+}
+
+/* the single happy bounce of the selected creature when the parade lands */
+.bounce {
+  transform-box: fill-box;
+  transform-origin: 50% 100%;
+  animation: bounce 620ms cubic-bezier(0.3, 0.7, 0.4, 1) 1;
+}
+@keyframes bounce {
+  0% { transform: translateY(0) scale(1, 1); }
+  18% { transform: translateY(0) scale(1.1, 0.88); }
+  45% { transform: translateY(-22%) scale(0.94, 1.08); }
+  72% { transform: translateY(0) scale(1.06, 0.93); }
+  100% { transform: translateY(0) scale(1, 1); }
+}
+
+.node {
+  cursor: pointer;
+  outline: none;
+}
+.ring {
+  opacity: 0;
+}
+.node:focus-visible .ring {
+  opacity: 1;
+}
+
+.card {
+  font-family: var(--flow-body), system-ui, sans-serif;
+}
+
+.chip {
+  transition: transform 120ms ease, box-shadow 120ms ease;
+}
+.chip:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 2px 0 #3b2e5a;
+}
+.chip:focus-visible,
+.btn:focus-visible,
+.search:focus-visible {
+  outline: 3px solid #3b2e5a;
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .blink,
+  .bounce {
+    animation: none;
+  }
+}
