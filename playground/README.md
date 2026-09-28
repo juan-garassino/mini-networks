@@ -8,9 +8,27 @@ default), **wallchart** (vintage parchment), **terminal** (phosphor CRT),
 **metro** (transit signage), **atlas** (botanical plates), and **paper**
 (a manila survey map: families as districts, models as lots, compositions as
 routes, with legend and compass).
-Each edition is a `[data-edition="…"]` token block in `app/globals.css`;
+Each edition is a `[data-edition="…"]` token block in `app/(classic)/blueprint.css`;
 terminal/metro/atlas/paper additionally have bespoke Chart views in
 `components/views/chart-*.tsx`.
+
+## Lab: the design bake-off (`/lab`)
+
+Four skins of the same world compete to replace the editions
+(spec: `docs/superpowers/specs/2026-09-28-playground-bakeoff-design.md`):
+`/lab/paper` (papercraft overworld), `/lab/pixel` (16-bit tile map),
+`/lab/hybrid` (paper map + pixel chrome), `/lab/flow` (kawaii dataflow).
+`/lab/stub` is the minimal reference wiring.
+
+- Positions come only from `lib/world/` (`buildWorld`, `buildFlow`, `pathToAtom`,
+  `ferryRoute`); `npm test` checks its invariants.
+- Data: `hooks/use-world.ts` (taxonomy + runs + `/web/evidence`); shared camera,
+  URL state, still mode and card model live in `components/lab/shared/`.
+- URL params: `zoom=overview|region|node`, `focus=<model>`, `still=1` (freezes
+  motion and polling for deterministic screenshots).
+- Screenshots: `node scripts/shoot.mjs --skin <skin> --round <n> [--base URL]
+  [--typecheck] [--check-only]` → `.lab-shots/<skin>/r<n>/*.jpg` (gitignored);
+  `node scripts/board.mjs` builds the comparison board.
 
 ## Getting Started
 

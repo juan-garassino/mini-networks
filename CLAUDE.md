@@ -47,6 +47,8 @@ models/<name>/       config.py + model.py + trainer.py per model
 compositions/        multi-model pipelines (each exposes train/sample or compare)
 web/                 read-layer: metrics.py (pivot) + sources.py (Local/MLflow/
                      Composite RunSource) + model_catalog.py — reader of the contract
+                     evidence.py: /web/evidence — per model champion (+version),
+                     EvalSpec gate metric + M bar, provisional flag, run count
 cloud/               publisher.py: JobSpec + Pub/Sub publisher (cloud train dispatch)
                      sweep_shard.py: task-index→item sharding for the parallel
                      sweep job + GCS shard upload + report merge
@@ -67,6 +69,16 @@ playground/ (repo root)  Next.js 16 + React 19 + TS + Tailwind v4 + Recharts +
                      gitignored (build with `make playground`). Read
                      playground/AGENTS.md before UI work — this Next.js version
                      differs from training data.
+                     Route groups: app/(classic)/ = the edition UI at / and
+                     /atlas (blueprint.css scoped there); app/lab/ = the
+                     design bake-off stage (spec 2026-09-28-playground-bakeoff):
+                     /lab/{paper,pixel,hybrid,flow} skins + /lab/stub reference,
+                     all painting lib/world/ — the pure deterministic layout
+                     contract (geographic world: regions/roads/bridges/labels/
+                     camera; flow: depth x family lanes). Views are URL-driven
+                     (?zoom=overview|region|node&focus=<model>&still=1); skins
+                     set data-lab-ready when drawn; every mark is declared in
+                     components/lab/<skin>/encoding.ts.
 infra/gcp/           Dockerfile.train (ARG TORCH_INDEX: cpu|cu121) + entrypoint.sh
                      (MODE=train|sweep-task) + terraform/ (train job, L4 sweep
                      job, topic, trigger, IAM) + function/ (see its README)
@@ -140,6 +152,9 @@ Writes `runs/sweep/<ts>/report.{md,json}`; non-zero exit on any non-pass.
 - `MN_MLFLOW_TRACKING_URI=<tracker> python main.py pull-champions [--models a,b]` — download every Production `mini-<model>` checkpoint to `runs/champions/`; `/infer/<model>` then serves them by default (needs the `cloud` extra + GCS read access)
 - `make playground` — build the Next.js UI to `playground/out` (rebuild after UI changes; CI builds it for deploy)
 - `make playground-dev` — Next dev server on :3000 with hot reload (proxies API to :8000 via `NEXT_PUBLIC_API_BASE`)
+- `cd playground && npm test` — lib/world layout invariants (node --test + strip-types, no deps)
+- `make lab-shoot SKIN=<skin> ROUND=<n>` — headless screenshots of a /lab skin (4 states × desktop/mobile → gitignored `playground/.lab-shots/<skin>/r<n>/`; ≤2 Chrome at once; `--typecheck`/`--check-only` via `node scripts/shoot.mjs`)
+- `make lab-board` — build `playground/.lab-shots/board.html`, the round-by-round bake-off comparison page
 - `make -C infra/gcp validate` — terraform fmt-check + validate (static, no cloud)
 - `make -C infra/gcp build-train[-gpu]` / `dry-run[-sweep]` — build the CPU/cu121 images / run MODE=train or one MODE=sweep-task shard against a local sqlite MLflow
 - `make -C infra/gcp sweep TIER=M [ITEMS=a,b,c]` — execute the parallel L4 gate sweep (one Cloud Run task per item); `make -C infra/gcp sweep-report SWEEP=<id>` merges the shards into report.{md,json}
