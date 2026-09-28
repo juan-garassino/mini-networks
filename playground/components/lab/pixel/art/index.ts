@@ -6,7 +6,7 @@ export {
 export { artBlank, artBlit, artFlipX, artToCanvas, remapWhere, type ArtImage } from "./raster";
 export { bayer4, ditherStep, fbm3, ridged } from "./noise";
 export {
-  ART_PER_TILE, BANDS, CLOUD_SHADOW_OFFSET, LIGHT, bakeCloudShadow, chamfer, cloudSpots, renderTerrain,
+  ART_PER_TILE, BANDS, CLOUD_SHADOW_OFFSET, LIGHT, bakeCloudShadow, chamfer, cloudSpots, isletBlobs, renderTerrain,
   renderTerrainPreview, shadeLand, shadeWater, slopeLight, stampCanopy, toArt,
   type LandSample, type TerrainArt, type TerrainOptions, type WaterSample,
 } from "./terrain-shade";

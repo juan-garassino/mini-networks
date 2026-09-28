@@ -51,6 +51,14 @@ Secret islands: `?` island = crystal, ruins islet = dunes.
   clumps) · rock ≥ 0.64 · snow ≥ 0.85. One top-left light; Bayer seams only
   at band edges (±0.014 h); flat ground broken into organic clusters by a
   low-frequency warp (no wide dither fields).
+- Family borders: broad meander warp + ordered-dither mixing across ~6 art px; rivers are
+  natural borders (warp never crosses one) and meander ±0.45 tile around their tile chain.
+- Biome dressing only in FREE cells (away from roads, footprints AND label boxes): sandstone
+  outcrops, scrub, wadis (dunes); acacia clumps, grass tufts, dry riverbeds (savanna); copses +
+  tufts (meadow); crystal shards; boulders. Rolling hills with slope light everywhere.
+- Ponds: 1–2 in the largest free interiors (shaded bank, sand rim, sparkle diamond).
+- Secret islands: `isletBlobs(island)` → compact lumpy islets (≤ 3 slots each; the ruins
+  box becomes a short archipelago), cliff lips like the main coast; the `?` island wears fog wisps.
 - Water: foam dot line at the shore, second broken foam row, bright inner halo,
   warped-contour swirl lines, stepped blue rim dithered into the deep, sparse
   darker current spirals. South/east coasts: a 4 px maroon cliff face (lit lip

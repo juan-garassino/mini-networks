@@ -107,21 +107,28 @@ export default function PixelSpecimens() {
     const crops = cropRef.current;
     if (crops && world) {
       crops.innerHTML = "";
-      // zoomed crops at 3×: two inland nodes, a south coast (cliff lip + halo) and the "?" island
+      // zoomed crops at 3× (art-px centres printed in each title for before/after cuts)
       const a = terrain.art;
-      const at = (p: { x: number; y: number }) => ({ x: (p.x - a.origin.x) / a.px, y: (p.y - a.origin.y) / a.px });
-      const southCoast = (() => {
-        const x = Math.round(a.img.w * 0.2);
-        for (let y = a.img.h - 1; y > 0; y--) if (a.land[y * a.img.w + x] && a.region[y * a.img.w + x] >= 0) return { x, y };
-        return { x, y: a.img.h / 2 };
+      const at = (p: { x: number; y: number }) => ({ x: Math.round((p.x - a.origin.x) / a.px), y: Math.round((p.y - a.origin.y) / a.px) });
+      const reg = (f: string) => world.regions.find((r) => r.family === f)!;
+      const centre = (f: string) => { const b = reg(f).bbox; return at({ x: (b.x + b.w / 2) * 16, y: (b.y + b.h / 2) * 16 }); };
+      const seam = (() => {
+        const c = centre("sequence"), p = reg("perception").id, q = reg("sequence").id;
+        for (let x = 1; x < a.img.w; x++) { const i = c.y * a.img.w + x; if (a.region[i - 1] === p && a.region[i] === q) return { x, y: c.y }; }
+        return c;
       })();
-      const hid = world.hiddenIsland.box;
+      const rb = world.ruinsIsland.slots;
       const spots: [string, { x: number; y: number }][] = [
-        ["transformer", at(world.nodes.find((n) => n.name === "transformer")!.center)],
-        ["diffusion", at(world.nodes.find((n) => n.name === "diffusion")!.center)],
-        ["south coast", southCoast],
-        ["? island", at({ x: hid.x + hid.w / 2, y: hid.y + hid.h / 2 })],
+        ["sequence interior", centre("sequence")],
+        ["decision interior", centre("decision")],
+        ["meadow–sand seam", seam],
+        ["ruins islets", at({ x: rb[Math.min(4, rb.length - 1)].x, y: rb[0].y })],
+        ["? island", at({ x: world.hiddenIsland.box.x + world.hiddenIsland.box.w / 2, y: world.hiddenIsland.box.y + world.hiddenIsland.box.h / 2 })],
       ];
+      const label = document.createElement("p");
+      label.style.cssText = "width:100%;font-size:13px;margin:0";
+      label.textContent = `origin ${a.origin.x},${a.origin.y} · ` + spots.map(([n, p]) => `${n} @ ${p.x},${p.y}`).join(" · ");
+      crops.appendChild(label);
       for (const [name, { x: cx, y: cy }] of spots) {
         const w = 180, h = 120, s = 3;
         const c = document.createElement("canvas");
@@ -202,7 +209,7 @@ export default function PixelSpecimens() {
         </Section>
       )}
       {show("crops") && (
-        <Section title="Terrain crops at 3× (transformer · diffusion · a south coast · the ? island)">
+        <Section title="Terrain crops at 3× (interiors · a family seam · the secret islets)">
           <div ref={cropRef} style={{ display: "flex", flexWrap: "wrap", gap: 12 }} />
         </Section>
       )}

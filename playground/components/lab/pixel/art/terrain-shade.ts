@@ -19,6 +19,7 @@ import { T, type Box, type Pt, type SecretIsland, type World } from "@/lib/world
 import { biomeOf, CLEAR, RAMPS, SHADOW, type Biome, type RampName } from "./palette";
 import { bayer4, ditherStep, fbm3f as fbm3, hash2, mulberry32, noise as valueNoise, ridgedf as ridged } from "./noise";
 import { artBlank, artBlit, artToCanvas, type ArtImage } from "./raster";
+import { questionStone, ruins } from "./sprites/props";
 
 export const ART_PER_TILE = 8;
 const TILE = 16;
@@ -103,7 +104,8 @@ export function shadeLand(p: LandSample): number {
     const top = r.length - 1;
     // ground drifts one step darker with altitude (cool shade up the hills)
     const alt = (h - BANDS.beach) / (BANDS.rock - BANDS.beach);
-    let v = midBase(biome) - alt * 0.9 + lit * 1.1 + warp;
+    const roll = Math.max(-1.2, Math.min(1.2, slopeLight(p.gx, p.gy, 90))) * (quiet ? 0.5 : 1);
+    let v = midBase(biome) - alt * 0.9 + lit * 0.6 + roll * 0.6 + warp;
     // biome texture
     switch (biome.key) {
       case "dunes": {
@@ -293,10 +295,40 @@ const RUINS_BIOME: Biome = { key: "dunes", name: "ruins islet", low: "sand", mid
 /** Convert a world-px point to art-px in a TerrainArt frame. */
 export const toArt = (t: Pick<TerrainArt, "origin" | "px">, p: Pt): Pt => ({ x: (p.x - t.origin.x) / t.px, y: (p.y - t.origin.y) / t.px });
 
-function superellipse(island: SecretIsland, wx: number, wy: number): number {
-  const b = island.box;
-  const cx = b.x + b.w / 2, cy = b.y + b.h / 2, rx = b.w / 2, ry = b.h / 2;
-  return (Math.abs((wx - cx) / rx) ** 2.6 + Math.abs((wy - cy) / ry) ** 2.6) ** (1 / 2.6);
+/**
+ * Secret islands as compact organic islets (never a bar): slots are grouped
+ * (≤ 3 per islet) and each group gets a lumpy round blob; a long box becomes
+ * a short archipelago. World px ellipses {cx, cy, rx, ry}.
+ */
+export function isletBlobs(island: SecretIsland): { cx: number; cy: number; rx: number; ry: number }[] {
+  const slots = island.slots.length ? island.slots : [{ x: island.box.x + island.box.w / 2, y: island.box.y + island.box.h / 2 }];
+  // ≤ 3 slots per islet, split evenly (16 → 3,2,3,3,2,3 — no sliver islet at the end)
+  const groups = slots.length <= 4 ? 1 : Math.ceil(slots.length / 3);
+  const out: { cx: number; cy: number; rx: number; ry: number }[] = [];
+  for (let gi = 0; gi < groups; gi++) {
+    const g = slots.slice(Math.round((gi * slots.length) / groups), Math.round(((gi + 1) * slots.length) / groups));
+    const x0 = Math.min(...g.map((p) => p.x)), x1 = Math.max(...g.map((p) => p.x));
+    const cy = g.reduce((a, p) => a + p.y, 0) / g.length;
+    const j = out.length;
+    const wob = ((j * 7) % 3 - 1) * TILE * 1.4;                     // alternate islets up/down: an archipelago, not a bar
+    const rx = (x1 - x0) / 2 + TILE * 1.9;
+    out.push({ cx: (x0 + x1) / 2, cy: cy + wob, rx, ry: Math.max(TILE * 3.2, rx * 0.72) });
+  }
+  return out;
+}
+
+/** < 1 inside any blob (noise-perturbed radius → irregular coast). */
+function isletField(blobs: { cx: number; cy: number; rx: number; ry: number }[], wx: number, wy: number, seed: number): number {
+  let best = 9;
+  for (const b of blobs) {
+    const dx = (wx - b.cx) / b.rx, dy = (wy - b.cy) / b.ry;
+    const d = Math.hypot(dx, dy);
+    if (d > 1.6) continue;
+    const ang = Math.atan2(dy, dx);
+    const lump = valueNoise(Math.cos(ang) * 2.2 + b.cx / 97, Math.sin(ang) * 2.2 + b.cy / 89, seed, 0.9) - 0.5;
+    best = Math.min(best, d - lump * 0.45);
+  }
+  return best;
 }
 
 /** Full-world terrain in palette indices. Deterministic for a given world + seed. */
@@ -351,6 +383,7 @@ export function renderTerrain(world: World, opts: TerrainOptions = {}): TerrainA
   for (let x = 0; x < W; x++) TX[x] = (frame.x + (x + 0.5) * px) / TILE;
   for (let y = 0; y < H; y++) TY[y] = (frame.y + (y + 0.5) * px) / TILE;
 
+  const islets = [[isletBlobs(world.hiddenIsland), -2], [isletBlobs(world.ruinsIsland), -3]] as const;
   let t = performance.now();
   for (let y = 0; y < H; y++) {
     const ty = TY[y];
@@ -363,14 +396,28 @@ export function renderTerrain(world: World, opts: TerrainOptions = {}): TerrainA
         const L = bilerp(fLand, tx - 0.5, ty - 0.5) + n * 0.34;
         if (L > 0.5) {
           land[i] = 1;
-          const R = bilerp(fRiver, tx - 0.5, ty - 0.5) + n * 0.2;
+          // rivers meander ±0.45 tile around their (straight) tile chain so a
+          // river border reads as a natural watercourse, not a ruled line
+          const mx = (valueNoise(tx, ty, seed ^ 0x5e1, 3.2) - 0.5) * 0.9, my = (valueNoise(tx, ty, seed ^ 0x5e2, 3.2) - 0.5) * 0.9;
+          const R = bilerp(fRiver, tx - 0.5 + mx, ty - 0.5 + my) + n * 0.2;
           if (R > 0.42) { river[i] = 1; }
           civic[i] = bilerp(fCivic, tx - 0.5, ty - 0.5);
-          // region lookup, domain-warped so family borders are organic
-          const wx = tx + (valueNoise(tx, ty, seed ^ 0x11, 1.6) - 0.5) * 1.1;
-          const wy = ty + (valueNoise(tx, ty, seed ^ 0x22, 1.6) - 0.5) * 1.1;
+          // region lookup: a broad meander warp (±1.6 tiles) + detail warp so
+          // family borders never run ruler-straight, then an ORDERED-DITHER
+          // offset (±3 art px) that mixes the two biomes across a ~6 px band.
+          // Rivers stay natural borders: if the warp would cross one, don't warp.
+          let wx = tx + (valueNoise(tx, ty, seed ^ 0x13, 4.5) - 0.5) * 3.2 + (valueNoise(tx, ty, seed ^ 0x11, 1.6) - 0.5) * 1.0;
+          let wy = ty + (valueNoise(tx, ty, seed ^ 0x24, 4.5) - 0.5) * 3.2 + (valueNoise(tx, ty, seed ^ 0x22, 1.6) - 0.5) * 1.0;
+          wx += (bayer4(x, y) - 0.5) * (6 / apt);
+          wy += (bayer4(y + 1, x + 2) - 0.5) * (6 / apt);
+          let crosses = false;
+          for (let k = 1; k <= 4 && !crosses; k++) {
+            const u = k / 4;
+            if (bilerp(fRiver, tx + (wx - tx) * u - 0.5, ty + (wy - ty) * u - 0.5) > 0.3) crosses = true;
+          }
+          if (crosses) { wx = tx; wy = ty; }
           let r = inGrid(Math.floor(wx), Math.floor(wy)) ? regionOf[Math.floor(wy) * cols + Math.floor(wx)] : -1;
-          if (r < 0) r = regionOf[tiy * cols + tix];
+          if (r < 0 || !fLand[(Math.floor(wy) + 1) * PC + Math.floor(wx) + 1]) r = regionOf[tiy * cols + tix];
           if (r < 0) {
             for (let k = 0; k < 8 && r < 0; k++) {
               const ax = tix + [1, -1, 0, 0, 1, 1, -1, -1][k], ay = tiy + [0, 0, 1, -1, 1, -1, 1, -1][k];
@@ -381,8 +428,8 @@ export function renderTerrain(world: World, opts: TerrainOptions = {}): TerrainA
         }
       } else {
         const wx = frame.x + (x + 0.5) * px, wy = frame.y + (y + 0.5) * px;
-        for (const [isl, id] of [[world.hiddenIsland, -2], [world.ruinsIsland, -3]] as const) {
-          if (superellipse(isl, wx, wy) + n * 0.12 < 1) { land[i] = 1; region[i] = id; }
+        for (const [blobs, id] of islets) {
+          if (isletField(blobs, wx, wy, seed ^ (id === -2 ? 0x1d : 0x2d)) + n * 0.1 < 1) { land[i] = 1; region[i] = id; }
         }
       }
     }
@@ -411,6 +458,12 @@ export function renderTerrain(world: World, opts: TerrainOptions = {}): TerrainA
   const dRidge = chamfer(ridgeSrc, W, H);
   const civSrc = new Uint8Array(N);
   for (let i = 0; i < N; i++) civSrc[i] = civic[i] > 0.2 ? 1 : 0;
+  // name-plate boxes stay calm too (world labels, px boxes)
+  for (const l of world.labels) {
+    const a = toArt({ origin: frame, px }, l.box);
+    for (let yy = Math.max(0, Math.floor(a.y)); yy < Math.min(H, Math.ceil(a.y + l.box.h / px)); yy++)
+      for (let xx = Math.max(0, Math.floor(a.x)); xx < Math.min(W, Math.ceil(a.x + l.box.w / px)); xx++) civSrc[yy * W + xx] = 1;
+  }
   const dCiv = chamfer(civSrc, W, H);
   void water;
   t = lap("distance", t);
@@ -430,7 +483,9 @@ export function renderTerrain(world: World, opts: TerrainOptions = {}): TerrainA
       const hills = fbm3(tx, ty, seed ^ 0x4111, 7) - 0.5;
       const b = biomeAt(i);
       const lift = b.key === "ice" ? 0.1 : b.key === "crystal" ? 0.05 : 0;
-      let h = 0.09 + 0.38 * base + 0.42 * hills * base + lift * base;
+      // low rolling hills everywhere (roads included — only their slope light is muted)
+      const roll = fbm3(tx, ty, seed ^ 0x4242, 3.4) - 0.5;
+      let h = 0.09 + 0.38 * base + 0.42 * hills * base + lift * base + 0.3 * roll * base;
       // mountain ranges along family borders: a sharp ridged crest
       const dr = dRidge[i] / apt;
       if (dr < 3.2) {
@@ -568,12 +623,14 @@ export function renderTerrain(world: World, opts: TerrainOptions = {}): TerrainA
       const y = Math.floor(gy + hash2(gx, gy, seed ^ 0x7e2) * step);
       if (x >= W || y >= H) continue;
       const i = y * W + x;
-      if (!land[i] || river[i] || civic[i] > 0.02 || dCoast[i] < 4) continue;
+      if (!land[i] || river[i] || dCiv[i] < 6 || dCoast[i] < 4) continue;
       const h = height[i];
-      if (h < BANDS.forest || h > BANDS.forestTop) continue;
       const b = biomeAt(i);
+      if (h > BANDS.forestTop || h < (b.key === "meadow" ? 0.2 : BANDS.forest)) continue;
       const dens = valueNoise(TX[x], TY[y], seed ^ 0xf0e5, 5);
-      if (dens < 1 - b.canopy) continue;
+      // open meadow gets sparse copses from a second, finer patch field
+      const copse = b.key === "meadow" && valueNoise(TX[x], TY[y], seed ^ 0xc095, 2.2) > 0.78;
+      if (dens < 1 - b.canopy && !copse) continue;
       // clear of other civic pixels in the canopy's radius
       const r = hash2(x, y, seed ^ 0x3) < 0.7 ? 3 : 2;
       let clear = true;
@@ -581,7 +638,7 @@ export function renderTerrain(world: World, opts: TerrainOptions = {}): TerrainA
         const xx = x + dx, yy = y + dy;
         if (xx < 0 || yy < 0 || xx >= W || yy >= H) { clear = false; break; }
         const j = yy * W + xx;
-        if (!land[j] || river[j] || civic[j] > 0.02) { clear = false; break; }
+        if (!land[j] || river[j] || dCiv[j] < 3) { clear = false; break; }
       }
       if (clear) cand.push({ x, y, r, b });
     }
@@ -590,10 +647,165 @@ export function renderTerrain(world: World, opts: TerrainOptions = {}): TerrainA
   }
   lap("canopy", t);
 
+  // ——— biome dressing in FREE cells (away from roads / footprints / labels)
+  t = performance.now();
+  const put = (x: number, y: number, v: number) => { if (x >= 0 && y >= 0 && x < W && y < H && land[y * W + x] && !river[y * W + x]) out[y * W + x] = v; };
+  const free = (x: number, y: number, r: number) => {
+    if (x < r || y < r || x >= W - r || y >= H - r) return false;
+    const i = y * W + x;
+    return land[i] === 1 && !river[i] && dCiv[i] >= r + 3 && dCoast[i] >= r + 3;
+  };
+  // (a) dry riverbeds on savanna / dunes: a meandering noise contour, 1–2 px
+  for (let y = 1; y < H - 1; y++) for (let x = 1; x < W - 1; x++) {
+    const i = y * W + x;
+    if (!land[i] || river[i] || dCiv[i] < 5 || dCoast[i] < 6) continue;
+    const b = biomeAt(i);
+    if (b.key !== "savanna" && b.key !== "dunes") continue;
+    const c = valueNoise(TX[x], TY[y], seed ^ 0xd41, 6.5);
+    if (Math.abs(c - 0.5) < 0.011 && valueNoise(TX[x], TY[y], seed ^ 0xd42, 5) > 0.45) {
+      out[i] = b.key === "savanna" ? RAMPS.sand[4] : RAMPS.sand[2];       // pale gravel bed / darker wadi
+      put(x, y - 1, b.key === "savanna" ? RAMPS.savanna[1] : RAMPS.sand[1]); // shaded north bank
+    }
+  }
+  // (b) scattered features on a jittered grid
+  const stepD = Math.max(5, Math.round(apt * 0.8));
+  const stamps: { x: number; y: number; kind: string; b: Biome }[] = [];
+  for (let gy = 0; gy < H; gy += stepD) for (let gx = 0; gx < W; gx += stepD) {
+    const x = Math.floor(gx + hash2(gx, gy, seed ^ 0xde1) * stepD), y = Math.floor(gy + hash2(gx, gy, seed ^ 0xde2) * stepD);
+    if (!free(x, y, 2)) continue;
+    const i = y * W + x;
+    if (height[i] > BANDS.rock) continue;
+    const b = biomeAt(i);
+    const r = hash2(x, y, seed ^ 0xde3);
+    const patch = valueNoise(TX[x], TY[y], seed ^ 0xde4, 3);
+    let kind = "";
+    switch (b.key) {
+      case "dunes": kind = patch > 0.66 ? (r < 0.22 ? "outcrop" : r < 0.45 ? "scrub" : "") : r < 0.035 ? "scrub" : r < 0.05 ? "outcrop" : ""; break;
+      case "savanna": kind = patch > 0.6 ? (r < 0.45 ? "acacia" : "tuft") : r < 0.28 ? "tuft" : r < 0.33 ? "acacia" : ""; break;
+      case "meadow": kind = r < 0.22 ? "tuft" : ""; break;
+      case "volcanic": kind = r < 0.12 ? "outcrop" : ""; break;
+      case "crystal": kind = patch > 0.6 && r < 0.18 ? "shard" : r < 0.06 ? "outcrop" : ""; break;
+      case "ice": kind = r < 0.1 ? "outcrop" : ""; break;
+    }
+    if (kind) stamps.push({ x, y, kind, b });
+  }
+  stamps.sort((a, b) => a.y - b.y || a.x - b.x);
+  for (const st of stamps) {
+    if (st.kind === "acacia") {
+      // a clump of 2–3 flat acacias
+      const n = 2 + (hash2(st.x, st.y, seed ^ 0xac) < 0.5 ? 1 : 0);
+      for (let k = 0; k < n; k++) stampCanopy(img, st.x + (k === 1 ? 5 : k === 2 ? 2 : 0), st.y + (k === 2 ? 3 : k === 1 ? 1 : 0), 2, st.b);
+    } else dressStamp(put, (x, y) => out[y * W + x], st.x, st.y, st.kind, st.b, seed);
+  }
+  // (c) ponds: 1–2 small lakes in the largest free interiors, with a sparkle
+  const ponds: { x: number; y: number }[] = [];
+  for (let k = 0; k < 2; k++) {
+    let best = -1, bi = -1;
+    for (let i = 0; i < N; i += 3) {
+      if (!land[i] || river[i] || region[i] < 0 || height[i] > BANDS.rock) continue;
+      const x = i % W, y = (i - x) / W;
+      if (ponds.some((p) => Math.hypot(p.x - x, p.y - y) < apt * 30)) continue;
+      const sc = Math.min(dCiv[i], dCoast[i] * 0.8);
+      if (sc > best) { best = sc; bi = i; }
+    }
+    if (bi < 0 || best < apt * 1.6) break;
+    const x = bi % W, y = (bi - x) / W;
+    ponds.push({ x, y });
+    stampPond(put, x, y, Math.min(9, Math.round(best * 0.55)), seed);
+  }
+  // (d) the "?" island sits in drifting fog: ordered-dither mist over it and its halo
+  if (opts.extent === "all") {
+    const hb = isletBlobs(world.hiddenIsland);
+    for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+      const wx = frame.x + (x + 0.5) * px, wy = frame.y + (y + 0.5) * px;
+      const f = isletField(hb, wx, wy, seed ^ 0x1d);
+      if (f > 1.45) continue;
+      // horizontal mist wisps (stretched noise), sparse ordered dither, denser over the land
+      const wisp = valueNoise(TX[x] * 0.35, TY[y] * 1.6, seed ^ 0xf06, 1.1);
+      const amt = Math.min(1, 1.45 - f) * Math.max(0, wisp - 0.5) * 1.0;
+      if (bayer4(x, y) < amt) out[y * W + x] = amt > 0.45 ? RAMPS.foam[1] : land[y * W + x] ? RAMPS.snow[4] : RAMPS.shallow[5];
+    }
+  }
+  lap("dress", t);
+
   if (opts.clouds) for (const c of opts.clouds) bakeCloudShadow(img, c.img, c.x, c.y);
 
   timings.total = Math.round(performance.now() - t0);
   return { img, origin: { x: frame.x, y: frame.y }, px, artPerTile: apt, height, land, region, timings };
+}
+
+type Put = (x: number, y: number, v: number) => void;
+
+/** Small biome features, lit top-left, shadow-side outline. */
+function dressStamp(put: Put, get: (x: number, y: number) => number, x: number, y: number, kind: string, b: Biome, seed: number) {
+  const R = RAMPS;
+  if (kind === "tuft") {
+    // grass tuft: a 3-px "v" in the ground's darker step with a lit blade
+    const base = get(x, y);
+    const dark = SHADOW[base];
+    put(x - 1, y - 1, dark); put(x, y, dark); put(x + 1, y - 1, dark); put(x, y - 1, base === dark ? base : lighterOf(base));
+    if (hash2(x, y, seed ^ 0x7f) < 0.5) { put(x + 2, y, dark); put(x + 3, y - 1, dark); }
+    return;
+  }
+  if (kind === "scrub") {
+    // desert scrub: 2–4 olive dots with dark undersides
+    const n = 2 + Math.floor(hash2(x, y, seed ^ 0x5c) * 3);
+    for (let k = 0; k < n; k++) {
+      const dx = Math.round((hash2(x + k, y, seed ^ 0x5d) - 0.5) * 6), dy = Math.round((hash2(x, y + k, seed ^ 0x5e) - 0.5) * 4);
+      put(x + dx, y + dy, R.olive[3]); put(x + dx + 1, y + dy, R.olive[1]); put(x + dx, y + dy + 1, R.olive[1]);
+      put(x + dx - 1, y + dy - 1, R.olive[5]);
+    }
+    return;
+  }
+  if (kind === "outcrop" || kind === "shard") {
+    // dunes/ruins: warm sandstone; volcanic: basalt-rust; ice: snowy boulders; else grey-violet stone
+    const ramp = kind === "shard" ? R.magic : b.key === "volcanic" || b.key === "dunes" || b.key === "savanna" ? R.rock : b.key === "ice" ? R.snow : R.stone;
+    const r = kind === "shard" ? 1 : 1 + Math.floor(hash2(x, y, seed ^ 0x0c) * 2);
+    // ground shadow down-right, then a lit lump
+    for (let dy = -r; dy <= r + 1; dy++) for (let dx = -r; dx <= r + 1; dx++) if ((dx - 1) ** 2 + (dy - 1) ** 2 <= r * r + 1) put(x + dx, y + dy, SHADOW[get(x + dx, y + dy)]);
+    if (kind === "shard") {
+      put(x, y - 3, ramp[2]); put(x, y - 2, ramp[2]); put(x + 1, y - 2, ramp[1]); put(x, y - 1, ramp[1]); put(x + 1, y - 1, ramp[0]); put(x - 1, y - 1, ramp[2]); put(x, y, ramp[0]);
+      return;
+    }
+    const top = ramp.length - 1;
+    for (let dy = -r; dy <= r; dy++) for (let dx = -r - 1; dx <= r + 1; dx++) {
+      const d = (dx * dx) / ((r + 1.2) ** 2) + (dy * dy) / ((r + 0.4) ** 2);
+      if (d > 1) continue;
+      const l = -(dx + dy) / (r + 1);
+      const mid = ramp === R.rock && b.key !== "volcanic" ? top * 0.7 : top * 0.5;
+      put(x + dx, y + dy, ramp[Math.max(1, Math.min(top, Math.round(mid + l * 1.6)))]);
+    }
+    put(x + r + 1, y + r, ramp[0]); put(x + r, y + r + 1, ramp[0]);
+    return;
+  }
+}
+const lighterOf = (v: number) => {
+  for (const r of Object.values(RAMPS)) { const k = r.indexOf(v); if (k >= 0 && k < r.length - 1) return r[k + 1]; }
+  return v;
+};
+
+/** Pond: shallow water with a shaded north bank, sand rim, a sparkle diamond. */
+function stampPond(put: Put, cx: number, cy: number, r: number, seed: number) {
+  const s = RAMPS.shallow, f = RAMPS.foam;
+  const rx = r, ry = Math.max(3, Math.round(r * 0.62));
+  const inside = (dx: number, dy: number) => {
+    const a = Math.atan2(dy, dx);
+    const k = 1 + (valueNoise(Math.cos(a) * 3 + cx, Math.sin(a) * 3 + cy, seed ^ 0x90d, 1) - 0.5) * 0.35;
+    return (dx / rx) ** 2 + (dy / ry) ** 2 <= k * k;
+  };
+  for (let dy = -ry - 2; dy <= ry + 2; dy++) for (let dx = -rx - 2; dx <= rx + 2; dx++) {
+    if (inside(dx, dy)) {
+      const bank = !inside(dx, dy - 1) || !inside(dx - 1, dy);
+      const lip = !inside(dx, dy + 1);
+      put(cx + dx, cy + dy, bank ? s[1] : lip ? s[4] : dy < -ry / 3 ? s[2] : s[3]);
+    } else if (inside(dx, dy - 1) || inside(dx - 1, dy) || inside(dx + 1, dy) || inside(dx, dy + 1)) {
+      put(cx + dx, cy + dy, RAMPS.sand[4]);                        // pale shore rim
+    }
+  }
+  // sparkle diamond
+  const sx = cx - Math.round(rx * 0.3), sy = cy - Math.round(ry * 0.1);
+  put(sx, sy, f[1]); put(sx - 1, sy, s[5]); put(sx + 1, sy, s[5]); put(sx, sy - 1, s[5]); put(sx, sy + 1, s[5]);
+  put(sx + Math.round(rx * 0.5), sy + 2, s[5]);
 }
 
 /** One round canopy (or pine / acacia by biome) shaded by the top-left light. */
@@ -671,6 +883,20 @@ export function renderTerrainPreview(
   opts: TerrainOptions = {},
 ): { canvas: HTMLCanvasElement; art: TerrainArt } {
   const pre = renderTerrain(world, { extent: "all", ...opts });
+  // lore props on the secret islets (preview only; the builder places its own)
+  for (const [isl, make] of [[world.ruinsIsland, ruins], [world.hiddenIsland, questionStone]] as const) {
+    const sp = make();
+    for (const s of isl.slots) {
+      const a = toArt(pre, s);
+      const sx = Math.round(a.x - sp.anchor.x), sy = Math.round(a.y - sp.anchor.y + 4);
+      if (sp.shadow) for (let y = 0; y < sp.img.h; y++) for (let x = 0; x < sp.img.w; x++) {
+        if (sp.shadow.data[y * sp.img.w + x] === CLEAR) continue;
+        const i = (sy + y) * pre.img.w + sx + x;
+        if (i >= 0 && i < pre.img.data.length) pre.img.data[i] = SHADOW[pre.img.data[i]];
+      }
+      artBlit(pre.img, sp.img, sx, sy);
+    }
+  }
   if (cloud && cloud.imgs.length) {
     const spots = cloudSpots(world, pre, cloud.imgs);
     for (const s of spots) bakeCloudShadow(pre.img, s.img, s.x, s.y);
