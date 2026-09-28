@@ -614,6 +614,13 @@ async function main() {
     // A Fast Refresh rebuild right after an edit can miss the ready flag once.
     if (!c.ok && c.why.includes("data-lab-ready")) c = await checkState(opts, state, url);
     for (const l of (c.logs ?? []).slice(0, 10)) console.log(`  console: ${l.slice(0, 200)}`);
+    // Under extreme load (load avg 250+) --dump-dom can time out on a healthy
+    // page; the CDP screenshot step waits for data-lab-ready itself, so let it
+    // be the authority when the dump merely timed out.
+    if (!c.ok && c.why === "dump-dom timed out" && !opts.checkOnly) {
+      console.log("  warn: dump-dom timed out — deferring to the screenshot step's ready check");
+      c = { ...c, ok: true };
+    }
     if (!c.ok) {
       exit = 2;
       rows.push([state, "—", 0, `FAIL ${c.why}`]);
