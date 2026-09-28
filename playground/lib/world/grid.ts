@@ -1,8 +1,9 @@
 // Tile-grid primitives: index helpers, a typed binary min-heap, BFS distance
 // transforms and the octilinear A* over (tile, direction) used by roads.
 import {
-  COST_BRIDGE_REUSE, COST_COAST, COST_DIAG, COST_NEAR_FOREIGN_FOOT, COST_ORTHO, COST_RIVER, COST_TURN,
-  HEURISTIC_W, MAX_BRIDGE_SPAN, ROAD_REUSE,
+  COST_BRIDGE_REUSE, COST_COAST, COST_DIAG, COST_LABEL_ZONE, COST_LANE_FULL, COST_NEAR_FOREIGN_FOOT,
+  COST_NEAR_FOREIGN_RING2, COST_ORTHO, COST_RIVER, COST_SHARE_FOREIGN, COST_TURN, HEURISTIC_W,
+  MAX_BRIDGE_SPAN, MAX_LANES, MAX_TURN_STEPS, ROAD_REUSE,
 } from "./constants.ts";
 
 /** 8 directions, clockwise from east (y grows downward). Even = orthogonal. */
@@ -77,6 +78,7 @@ export function bfs(
   opts: { diag?: boolean; passable?: (i: number) => boolean } = {},
 ): Int16Array {
   const diag = opts.diag ?? true;
+  if (!opts.passable) return chamfer(cols, rows, sources, diag);
   const dist = new Int16Array(cols * rows).fill(FAR);
   const q = new Int32Array(cols * rows);
   let head = 0;
@@ -107,6 +109,51 @@ export function bfs(
 }
 
 /**
+ * Unobstructed distance transform in two raster passes (exact for unit
+ * weights: Chebyshev with diagonals, Manhattan without). Same output as the
+ * BFS, ~3× cheaper — layout v2's grid is ~2.4× larger.
+ */
+function chamfer(cols: number, rows: number, sources: Iterable<number>, diag: boolean): Int16Array {
+  const d = new Int16Array(cols * rows).fill(FAR);
+  for (const s of sources) d[s] = 0;
+  for (let y = 0; y < rows; y++) {
+    const r = y * cols;
+    for (let x = 0; x < cols; x++) {
+      const i = r + x;
+      let v = d[i];
+      if (v === 0) continue;
+      if (x > 0 && d[i - 1] + 1 < v) v = d[i - 1] + 1;
+      if (y > 0) {
+        if (d[i - cols] + 1 < v) v = d[i - cols] + 1;
+        if (diag) {
+          if (x > 0 && d[i - cols - 1] + 1 < v) v = d[i - cols - 1] + 1;
+          if (x + 1 < cols && d[i - cols + 1] + 1 < v) v = d[i - cols + 1] + 1;
+        }
+      }
+      d[i] = v;
+    }
+  }
+  for (let y = rows - 1; y >= 0; y--) {
+    const r = y * cols;
+    for (let x = cols - 1; x >= 0; x--) {
+      const i = r + x;
+      let v = d[i];
+      if (v === 0) continue;
+      if (x + 1 < cols && d[i + 1] + 1 < v) v = d[i + 1] + 1;
+      if (y + 1 < rows) {
+        if (d[i + cols] + 1 < v) v = d[i + cols] + 1;
+        if (diag) {
+          if (x + 1 < cols && d[i + cols + 1] + 1 < v) v = d[i + cols + 1] + 1;
+          if (x > 0 && d[i + cols - 1] + 1 < v) v = d[i + cols - 1] + 1;
+        }
+      }
+      d[i] = v;
+    }
+  }
+  return d;
+}
+
+/**
  * Edge distance: for each `inside` tile, Chebyshev steps to the nearest tile
  * that is not inside (or off-grid). A tile touching the outside has 1;
  * outside tiles have 0.
@@ -134,12 +181,19 @@ export interface RoadSearch {
   walk: Uint8Array;
   /** 1 = river tile, 2 = river tile already bridged. */
   river: Uint8Array;
-  road: Uint8Array;
+  /** roads already on the tile (lane occupancy). */
+  occ: Uint8Array;
+  /** parent node index shared by every road on the tile, -2 when mixed (only meaningful if occ > 0). */
+  sib: Int16Array;
+  /** 1 = inside some node's reserved label band. */
+  zone: Uint8Array;
   regionOf: Int8Array;
   /** 1 = coast tile (entering costs COST_COAST). */
   coast: Uint8Array;
   /** footprint-adjacency owner per tile: node index, -1 none, -2 several. */
   owner: Int16Array;
+  /** same, for the second ring around each footprint. */
+  owner2: Int16Array;
   /** node indices of the road's endpoints (their adjacency is free). */
   fromId: number;
   toId: number;
@@ -159,11 +213,12 @@ let stampNow = 0;
 
 /** Returns tile indices from a start tile to a goal tile, or null. */
 export function astarRoad(s: RoadSearch): number[] | null {
-  const { cols, rows, walk, river, road, regionOf, coast, owner, fromId, toId, allowRegion, goal } = s;
-  const extra = (i: number) => {
-    const o = owner[i];
-    return (coast[i] ? COST_COAST : 0) + (o === -2 || (o >= 0 && o !== fromId && o !== toId) ? COST_NEAR_FOREIGN_FOOT : 0);
-  };
+  const { cols, rows, walk, river, occ, sib, zone, regionOf, coast, owner, owner2, fromId, toId, allowRegion, goal } = s;
+  const foreign = (o: number) => o === -2 || (o >= 0 && o !== fromId && o !== toId);
+  const extra = (i: number) =>
+    (coast[i] ? COST_COAST : 0) + (foreign(owner[i]) ? COST_NEAR_FOREIGN_FOOT : 0) +
+    (foreign(owner2[i]) ? COST_NEAR_FOREIGN_RING2 : 0) + (zone[i] ? COST_LABEL_ZONE : 0) +
+    (occ[i] === 0 ? 0 : (sib[i] === fromId ? 0 : COST_SHARE_FOREIGN) + (occ[i] >= MAX_LANES ? COST_LANE_FULL : 0));
   const nStates = cols * rows * 9;
   if (G.length < nStates) {
     G = new Float64Array(nStates);
@@ -227,12 +282,14 @@ export function astarRoad(s: RoadSearch): number[] | null {
       const ny = y + DY[nd];
       if (nx < 0 || ny < 0 || nx >= cols || ny >= rows) continue;
       const u = ny * cols + nx;
-      const turn = turnSteps(d, nd) * COST_TURN;
+      const ts = turnSteps(d, nd);
+      if (ts > MAX_TURN_STEPS) continue; // v2: no hairpins (135°/180°); also prunes 3 of 8 successors
+      const turn = ts * COST_TURN;
       if (ok(u)) {
         const diag = isDiag(nd);
         if (diag && (!ok(y * cols + nx) || !ok(ny * cols + x))) continue; // no corner cutting
         const base = diag ? COST_DIAG : COST_ORTHO;
-        const g2 = g + base * (road[u] ? ROAD_REUSE : 1) + turn + extra(u);
+        const g2 = g + base * (occ[u] && sib[u] === fromId && occ[u] < MAX_LANES ? ROAD_REUSE : 1) + turn + extra(u);
         relax(u * 9 + nd, g2, st, nx, ny);
       } else if (river[u] && !isDiag(nd)) {
         // straight-through river crossing onto another region's land

@@ -75,6 +75,22 @@ export interface Road {
   points: Pt[];
   /** px length of `points`. */
   length: number;
+  /**
+   * v2: parallel-lane index. Roads sharing tiles get distinct lanes; lane k is
+   * drawn k·LANE_GAP px to the LEFT of the direction of travel (parent → child).
+   */
+  lane: number;
+  /** v2: `points` offset by the lane (px, mitred). Draw this; `points` stays the centreline. */
+  lanePoints: Pt[];
+  /** v2: direction cues along `lanePoints`, parent → child; angle in radians (atan2, y down). */
+  chevrons: Chevron[];
+}
+
+/** px position + heading (radians, atan2 with y growing downward). */
+export interface Chevron {
+  x: number;
+  y: number;
+  angle: number;
 }
 
 export interface Bridge {
@@ -96,6 +112,26 @@ export interface Label {
   /** px box. */
   box: Box;
   anchor: Anchor;
+  /**
+   * v2 static rank for screen-space labels (higher = placed first): atoms,
+   * then hubs by descendant count, then the rest by depth, then name. Unique.
+   */
+  priority: number;
+  /** v2: px point on the footprint edge this label attaches to (nearest edge point to the box). */
+  anchorPt: Pt;
+  /** v2: all 8 sides, best first (`anchor` first, then by roads/footprints on that side at world scale). */
+  preferred: Anchor[];
+}
+
+/** placeScreenLabels output: a label box in SCREEN px (top-left x, y). */
+export interface ScreenLabel {
+  node: string;
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+  font: number;
+  anchor: Anchor;
 }
 
 export interface Decor {
@@ -107,8 +143,53 @@ export interface Decor {
 
 export interface CameraAnchors {
   world: Box;
+  /** v2: world ∪ the two secret islands (which lie OUTSIDE `world`), padded. */
+  all: Box;
   regions: Record<string, Box>;
   nodes: Record<string, { focus: Pt; box: Box }>;
+}
+
+/** R2-E: a harbour on a region's coast; `boats` = compositions touching the family. */
+export interface Harbour {
+  family: string;
+  /** coast tile index. */
+  tile: number;
+  /** px: centre of the dock (the open-sea side of the coast tile). */
+  pt: Pt;
+  /** boats docked here (a family's boats are split across its harbours; sum = compositions touching it). */
+  boats: number;
+}
+
+/** R2-E: an atom's city — px block footprints on free land around it. */
+export interface City {
+  node: string;
+  /** direct children of the atom (drives the block count). */
+  children: number;
+  capital: boolean;
+  /** px boxes (each inside one free land tile). */
+  blocks: Box[];
+}
+
+/** R2-E: an island outside camera.world; slots[i] is the px spot for names[i]. */
+export interface SecretIsland {
+  /** px box (entirely outside camera.world). */
+  box: Box;
+  names: string[];
+  slots: Pt[];
+  /** px: open sea just beyond the island ("here be dragons"). */
+  dragons: Pt;
+}
+
+/** v2: everything on a model's lineage. */
+export interface Lineage {
+  /** roads INTO the model (one per builds_on parent), primary first. */
+  parents: Road[];
+  /** roads OUT of the model. */
+  children: Road[];
+  /** every ancestor, nearest generation first, then by name. */
+  ancestors: string[];
+  /** every descendant, nearest generation first, then by name. */
+  descendants: string[];
 }
 
 export interface World {
@@ -128,6 +209,13 @@ export interface World {
   /** px boxes: the 3 largest empty sea squares (for furniture). */
   seaSlots: Box[];
   camera: CameraAnchors;
+  /** R2-E flavour (all data-derived, deterministic). */
+  harbours: Harbour[];
+  cities: City[];
+  /** px polylines along inter-family borders where no road/bridge crosses. */
+  mountains: Pt[][];
+  hiddenIsland: SecretIsland;
+  ruinsIsland: SecretIsland;
   warnings: string[];
 }
 
@@ -136,6 +224,10 @@ export interface WorldOptions {
   measure?: (text: string, font: 13 | 15) => { w: number; h: number };
   /** debug hook: called after every layout attempt with its hard failures (empty = accepted). */
   onAttempt?: (attempt: number, failures: string[]) => void;
+  /** names for the hidden "?" island's silhouettes (default: vq_vae, flow_matching, gated_pixelcnn). */
+  hidden?: string[];
+  /** names for the ruins islet (retired legacy models; default none). */
+  ruins?: string[];
 }
 
 export interface PathResult {
@@ -175,6 +267,8 @@ export interface FlowPipe {
   points: Pt[];
   length: number;
   crossLane: boolean;
+  /** v2: direction cues along `points`, parent → child. */
+  chevrons: Chevron[];
 }
 
 export interface FlowLayout {

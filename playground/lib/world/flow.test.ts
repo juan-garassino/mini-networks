@@ -90,3 +90,19 @@ test("deterministic under input permutation", () => {
   assert.deepEqual(buildFlow(shuffled, fam), flow);
   assert.deepEqual(buildFlow(tax, fam), flow);
 });
+
+test("v2 pipes carry parent → child chevrons on their polyline", () => {
+  for (const p of flow.pipes) {
+    assert.ok(p.chevrons.length >= 1, `${p.from}->${p.to}`);
+    for (const c of p.chevrons) {
+      const on = p.points.slice(1).some((q, i) => {
+        const a = p.points[i];
+        const inX = c.x >= Math.min(a.x, q.x) - 0.01 && c.x <= Math.max(a.x, q.x) + 0.01;
+        const inY = c.y >= Math.min(a.y, q.y) - 0.01 && c.y <= Math.max(a.y, q.y) + 0.01;
+        const ang = Math.atan2(q.y - a.y, q.x - a.x);
+        return inX && inY && Math.abs(ang - c.angle) < 1e-3;
+      });
+      assert.ok(on, `${p.from}->${p.to} chevron off its pipe or pointing backwards`);
+    }
+  }
+});

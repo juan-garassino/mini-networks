@@ -56,15 +56,21 @@ export function placeAll(g: Graph, rg: RegionGrid): Placement {
    * parent (border tiles within BORDER_NEAR_SLACK of the closest one), so the
    * child waits at the crossing its parent can actually reach.
    */
+  const nearCache = new Map<string, Int16Array>();
   const nearBorderField = (r: number, s: number, pb: Box | undefined): Int16Array => {
     const full = borderField(r, s);
     if (!pb) return full;
+    const key = `${r}:${s}:${pb.x}:${pb.y}`;
+    const hit = nearCache.get(key);
+    if (hit) return hit;
     const pc = centerOf(pb);
     const border: number[] = [];
     for (let i = 0; i < n; i++) if (full[i] === 0) border.push(i);
     const d = border.map((i) => { const x = i % cols; return Math.hypot(x + 0.5 - pc.x, (i - x) / cols + 0.5 - pc.y); });
     const mn = Math.min(...d);
-    return bfs(cols, rows, border.filter((_, k) => d[k] <= mn + BORDER_NEAR_SLACK));
+    const f = bfs(cols, rows, border.filter((_, k) => d[k] <= mn + BORDER_NEAR_SLACK));
+    nearCache.set(key, f);
+    return f;
   };
   /** min edge-distance over the box, or -1 if any tile is illegal. */
   const fitEdge = (x: number, y: number, w: number, h: number, r: number, edgeMin: number, block: Uint8Array) => {
@@ -121,23 +127,41 @@ export function placeAll(g: Graph, rg: RegionGrid): Placement {
     return true;
   };
   /** Lowest-score candidate that keeps the rest of the region packable (lazy lookahead). */
-  const pickFeasible = (cands: { box: Box; score: number }[], r: number, atoms: number, derivedN: number): Box | null => {
-    if (!cands.length) return null;
-    const order = cands.map((c, i) => i).sort((a, b) => cands[a].score - cands[b].score || a - b);
-    for (let k = 0; k < Math.min(order.length, LOOKAHEAD_MAX); k++) {
-      const b = cands[order[k]].box;
+  // candidates as flat arrays (x, y, score) — v2's grid is ~2.4× larger and
+  // per-candidate objects dominated placement time
+  interface Cands { x: number[]; y: number[]; score: number[]; size: number; length: number }
+  const newCands = (size: number): Cands => ({ x: [], y: [], score: [], size, length: 0 });
+  const pushCand = (c: Cands, x: number, y: number, score: number) => { c.x.push(x); c.y.push(y); c.score.push(score); c.length++; };
+  const pickFeasible = (c: Cands, r: number, atoms: number, derivedN: number): Box | null => {
+    if (!c.length) return null;
+    const sc = c.score;
+    const boxOf = (i: number): Box => ({ x: c.x[i], y: c.y[i], w: c.size, h: c.size });
+    // the best candidate is almost always feasible: find it in O(n) and only
+    // sort the rest when the lookahead rejects it
+    let first = 0;
+    for (let i = 1; i < c.length; i++) if (sc[i] < sc[first]) first = i;
+    let order = [first];
+    let sorted = false;
+    for (let k = 0; k < Math.min(c.length, LOOKAHEAD_MAX); k++) {
+      if (k === 1 && !sorted) {
+        order = sc.map((_, i) => i).sort((a, b) => sc[a] - sc[b] || a - b);
+        sorted = true;
+      }
+      const b = boxOf(order[k]);
       if (!atoms) {
         // cheap sufficient test: each later 2×2 kills at most (2·(gap+2)−1)² candidate spots
         const reach = gap + DERIVED_SIZE;
         let left = 0;
-        for (const c of cands) {
-          if (c.box.x <= b.x - reach || c.box.x >= b.x + b.w + gap || c.box.y <= b.y - reach || c.box.y >= b.y + b.h + gap) left++;
+        for (let i = 0; i < c.length; i++) {
+          const cx = c.x[i];
+          const cy = c.y[i];
+          if (cx <= b.x - reach || cx >= b.x + b.w + gap || cy <= b.y - reach || cy >= b.y + b.h + gap) left++;
         }
         if (left >= derivedN * (2 * reach - 1) ** 2) return b;
       }
       if (canPack(r, b, atoms, derivedN)) return b;
     }
-    return cands[order[0]].box;
+    return boxOf(order[0]);
   };
   const tileAt = (p: Pt) => Math.min(n - 1, Math.max(0, Math.floor(p.y) * cols + Math.floor(p.x)));
 
@@ -169,7 +193,7 @@ export function placeAll(g: Graph, rg: RegionGrid): Placement {
         }
       }
       const fields = [...need].sort((x, y) => x - y).map((s) => borderField(r, s));
-      const cands: { box: Box; score: number }[] = [];
+      const cands = newCands(ATOM_SIZE);
       for (const i of regionTiles[r]) {
         const x = i % cols;
         const y = (i - x) / cols;
@@ -188,7 +212,7 @@ export function placeAll(g: Graph, rg: RegionGrid): Placement {
           for (const f of fields) border += f[ti];
           border /= fields.length;
         }
-        cands.push({ box: { x, y, w: ATOM_SIZE, h: ATOM_SIZE }, score: -(ATOM_EDGE_W * Math.min(e, ATOM_EDGE_CAP) + spread - ATOM_BORDER_W * border) });
+        pushCand(cands, x, y, -(ATOM_EDGE_W * Math.min(e, ATOM_EDGE_CAP) + spread - ATOM_BORDER_W * border));
       }
       atomsLeft--;
       const best = pickFeasible(cands, r, atomsLeft, derivedLeft[r]);
@@ -216,6 +240,23 @@ export function placeAll(g: Graph, rg: RegionGrid): Placement {
     kids(g.primary.get(b)!) - kids(g.primary.get(a)!) ||
     crossTies(b) - crossTies(a) ||
     (a < b ? -1 : 1));
+  // v2: a node waits for its cross-family parents (famDepth order could place
+  // audio_transformer before audio_spectrogram, so it aimed at the wrong
+  // stretch of the border and its bridge road crossed all of perception).
+  for (let pass = 0; pass < derived.length; pass++) {
+    let moved = false;
+    for (let i = 0; i < derived.length; i++) {
+      const m = derived[i];
+      const late = g.parents.get(m)!.filter((p) => g.family.get(p) !== g.family.get(m))
+        .map((p) => derived.indexOf(p)).filter((j) => j > i);
+      if (!late.length) continue;
+      derived.splice(i, 1);
+      derived.splice(Math.max(...late), 0, m);
+      moved = true;
+      break;
+    }
+    if (!moved) break;
+  }
   const cone = (SIBLING_CONE_DEG * Math.PI) / 180;
   for (const m of derived) {
     const fam = g.family.get(m)!;
@@ -237,34 +278,32 @@ export function placeAll(g: Graph, rg: RegionGrid): Placement {
           .map((s) => { const c = centerOf(foot.get(s)!); return Math.atan2(c.y - pc.y, c.x - pc.x); })
       : [];
     const nseed = fnv1a(m);
-    const cands: { box: Box; score: number }[] = [];
+    const cands = newCands(DERIVED_SIZE);
     for (const i of regionTiles[r]) {
       const x = i % cols;
       const y = (i - x) / cols;
-      if (fitEdge(x, y, DERIVED_SIZE, DERIVED_SIZE, r, DERIVED_EDGE_MIN, blocked) < 0) continue;
-      const c = { x: x + DERIVED_SIZE / 2, y: y + DERIVED_SIZE / 2 };
+      if (blocked[i] || fitEdge(x, y, DERIVED_SIZE, DERIVED_SIZE, r, DERIVED_EDGE_MIN, blocked) < 0) continue;
+      const cx = x + DERIVED_SIZE / 2;
+      const cy = y + DERIVED_SIZE / 2;
       let cost = 0;
       if (pc) {
-        const d = Math.hypot(c.x - pc.x, c.y - pc.y);
+        const d = Math.hypot(cx - pc.x, cy - pc.y);
         cost += (d - GEN_STEP * k) ** 2 / GEN_STEP;
-        const bearing = Math.atan2(c.y - pc.y, c.x - pc.x);
+        const bearing = sibBearings.length ? Math.atan2(cy - pc.y, cx - pc.x) : 0;
         for (const b of sibBearings) {
           let diff = Math.abs(bearing - b);
           if (diff > Math.PI) diff = 2 * Math.PI - diff;
           if (diff < cone) { cost += W_SIBLING; break; }
         }
       }
-      for (const s of secs) cost += (W_SECONDARY * Math.hypot(c.x - s.x, c.y - s.y)) / GEN_STEP;
-      if (crossFields.length) {
-        const ti = tileAt(c);
+      for (const s of secs) cost += (W_SECONDARY * Math.hypot(cx - s.x, cy - s.y)) / GEN_STEP;
+      if (crossFields.length || descFields.length) {
+        const ti = Math.min(n - 1, Math.max(0, Math.floor(cy) * cols + Math.floor(cx)));
         for (const f of crossFields) cost += (W_CROSS_BORDER * f[ti]) / GEN_STEP;
-      }
-      if (descFields.length) {
-        const ti = tileAt(c);
         for (const f of descFields) cost += (W_DESC_BORDER * f[ti]) / GEN_STEP;
       }
       cost += W_NOISE * hash2(x, y, nseed);
-      cands.push({ box: { x, y, w: DERIVED_SIZE, h: DERIVED_SIZE }, score: cost });
+      pushCand(cands, x, y, cost);
     }
     derivedLeft[r]--;
     const best = pickFeasible(cands, r, 0, derivedLeft[r]);
@@ -292,8 +331,7 @@ export function placeAll(g: Graph, rg: RegionGrid): Placement {
     for (const [w, h] of sizes) {
       let best: Box | null = null;
       let bestE = -1;
-      for (let i = 0; i < n; i++) {
-        if (regionOf[i] !== reg.id) continue;
+      for (const i of regionTiles[reg.id]) {
         const x = i % cols;
         const y = (i - x) / cols;
         const e = fitEdge(x, y, w, h, reg.id, 1, spBlock);

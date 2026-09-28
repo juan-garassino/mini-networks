@@ -4,11 +4,11 @@ import { PLACEMENT } from "../blueprint.ts";
 import type { TaxonomyResponse } from "../types.ts";
 import type { Box, FamilyMap, FlowLayout, FlowNode, FlowPipe, Pt } from "./types.ts";
 import {
-  FLOW_CHANNEL_CLEAR, FLOW_COL_W, FLOW_LANE_GAP, FLOW_NODE_H, FLOW_NODE_W, FLOW_PAD,
+  CHEVRON_END_CLEAR, CHEVRON_SPACING, FLOW_CHANNEL_CLEAR, FLOW_COL_W, FLOW_LANE_GAP, FLOW_NODE_H, FLOW_NODE_W, FLOW_PAD,
   FLOW_ROW_PITCH, FLOW_SWEEPS, FLOW_TRACK,
 } from "./constants.ts";
 import { buildGraph } from "./graph.ts";
-import { polylineLength } from "./path.ts";
+import { chevronsAlong, polylineLength } from "./path.ts";
 
 /** Lexicographic permutations of [0..n). */
 function* permutations(n: number): Generator<number[]> {
@@ -207,6 +207,7 @@ export function buildFlow(tax: TaxonomyResponse, fam: FamilyMap): FlowLayout {
     return {
       from: e.from, to: e.to, points: pts, length: polylineLength(pts),
       crossLane: laneOf.get(g.family.get(e.from)!) !== laneOf.get(g.family.get(e.to)!),
+      chevrons: chevronsAlong(pts, CHEVRON_SPACING, CHEVRON_END_CLEAR),
     };
   });
 

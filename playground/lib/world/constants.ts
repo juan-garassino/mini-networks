@@ -7,11 +7,12 @@ export const TILE = 16 as const;
 // ── regions ──────────────────────────────────────────────────────────────
 /**
  * target tiles = AREA_PER_MODEL·max(n, AREA_MIN_MODELS) + AREA_BASE.
- * Spec 42; tuned to 54: at 42 the 3-tile footprint gaps + label boxes did not
- * fit on the first attempt (every build needed 2–3 area retries ≈ 3× the time)
- * and labels crowded into neighbours. 54 builds first time with 0 ambiguous labels.
+ * Spec 42; v1 tuned to 54. Layout v2 (R2-A "more spacing"): the footprint gap
+ * doubled (3→6) and the generation step went 7→12, so each model needs roughly
+ * (gap+size)² ≈ 2× the land it had — 120 builds first time with labels in
+ * clean space (no label on a road tile) and room for cities around atoms.
  */
-export const AREA_PER_MODEL = 54;
+export const AREA_PER_MODEL = 140;
 export const AREA_MIN_MODELS = 4;
 export const AREA_BASE = 20;
 /**
@@ -74,37 +75,46 @@ export const DERIVED_SIZE = 2;
  */
 export const ATOM_EDGE_MIN = 2;
 export const DERIVED_EDGE_MIN = 1;
-/** empty tiles required between a derived footprint and any other footprint (Chebyshev box gap). */
-export const FOOT_GAP = 3;
 /**
- * The spec sets no atom–atom gap; 2 tiles (32px) still clears a 15px label
- * (24px tall) and lets 4 atoms pack into generative's ~230 tiles.
+ * empty tiles required between a derived footprint and any other footprint
+ * (Chebyshev box gap). v1 3 → v2 6: the owner's "more spacing"; a 6-tile gap
+ * fits a label band on each side plus a road between neighbours.
  */
-export const ATOM_GAP = 2;
+export const FOOT_GAP = 6;
+/**
+ * The spec sets no atom–atom gap; v1 2 → v2 5 (atoms grow cities around them,
+ * see CITY_*). 5 still lets generative's 4 atoms pack into its region.
+ */
+export const ATOM_GAP = 5;
+/** invariant (tests): no two node centres closer than this (tiles). */
+export const MIN_CENTRE_DIST = 7;
 /** atom score: EDGE_W·min(edgeDist, EDGE_CAP) + dist-to-placed-atoms − BORDER_W·mean border dist. */
 export const ATOM_EDGE_W = 2;
 export const ATOM_EDGE_CAP = 5;
 /** Not in the spec: the distance-to-placed-atoms term is capped (tiles) so atoms don't flee to the rim. */
-export const ATOM_SPREAD_CAP = 12;
-export const ATOM_BORDER_W = 0.3;
+export const ATOM_SPREAD_CAP = 20;
+/** v2 0.3 → 0.8: the spread cap grew with the world, so the border pull must too. */
+export const ATOM_BORDER_W = 0.8;
 /**
  * derived: ideal distance per generation from the primary parent, tiles
- * (spec 6; 7 matches AREA_PER_MODEL 54). Deviation: generations are counted
- * inside the family (famDepth), not global depth — audio_transformer is depth 3
- * only via perception's audio chain, and k=3 flung it to the far rim of sequence.
+ * (spec 6; v1 7; v2 12 — "~2× spacing", matches FOOT_GAP 6 + AREA_PER_MODEL 120).
+ * Deviation: generations are counted inside the family (famDepth), not global
+ * depth — audio_transformer is depth 3 only via perception's audio chain, and
+ * k=3 flung it to the far rim of sequence.
  */
-export const GEN_STEP = 7;
+export const GEN_STEP = 12;
 export const W_SECONDARY = 0.5;
-export const W_CROSS_BORDER = 1.5;
+/** v2 1.5 → 4: every term is /GEN_STEP, which grew 7→12; keeps cross-family children at their bridge. */
+export const W_CROSS_BORDER = 4;
 /** Not in the spec: derived nodes with cross-family children lean toward that border (atoms get the same pull via ATOM_BORDER_W). */
-export const W_DESC_BORDER = 0.75;
+export const W_DESC_BORDER = 2;
 export const W_SIBLING = 2;
 /**
  * Spec says "distance to the border with each cross-family parent region";
  * measured to the part of that border within this many tiles of the point
  * nearest the parent, else a child hugs a far stretch and its bridge road detours.
  */
-export const BORDER_NEAR_SLACK = 6;
+export const BORDER_NEAR_SLACK = 9;
 export const SIBLING_CONE_DEG = 35;
 export const W_NOISE = 0.2;
 /**
@@ -128,12 +138,38 @@ export const SETPIECE_LINE_BUFFER = 1;
 export const COST_ORTHO = 1;
 export const COST_DIAG = 1.45;
 export const COST_TURN = 0.6; // per 45°
-export const ROAD_REUSE = 0.4; // multiplier on the base step onto an existing ROAD tile (trunks)
+/** v2: a road turns at most this many 45° steps per tile (2 = 90°); no hairpins. */
+export const MAX_TURN_STEPS = 2;
+/**
+ * v2: trunk sharing is only for SIBLINGS — a road rides an existing road of
+ * the same parent at this multiplier (the hub's bundle branches at distinct
+ * junctions). v1 discounted every road (0.4), which braided unrelated lineages.
+ */
+export const ROAD_REUSE = 0.5;
+/** v2: per tile on a road of another parent (crossing = 1 tile; running along = braid). */
+export const COST_SHARE_FOREIGN = 2.5;
+/** v2: at most this many roads share a tile; more costs COST_LANE_FULL per tile. */
+export const MAX_LANES = 3;
+export const COST_LANE_FULL = 12;
+/**
+ * v2: per tile entered inside another node's reserved label band (the side
+ * the label will prefer, chosen before routing). Keeps label space clean.
+ */
+export const COST_LABEL_ZONE = 3;
+/** v2: per tile within 1 tile of a foreign footprint's ring (keeps label bands free). */
+export const COST_NEAR_FOREIGN_RING2 = 0.6;
+/** px between parallel lanes of roads sharing tiles (lane k is offset k·LANE_GAP to the left of travel). */
+export const LANE_GAP = 5;
+/** px between direction chevrons along a road; none closer than CHEVRON_END_CLEAR to either end. */
+export const CHEVRON_SPACING = 48;
+export const CHEVRON_END_CLEAR = 14;
+/** invariant: two roads' lane polylines may coincide for at most this many px (a shared stub). */
+export const LANE_OVERLAP_MAX = TILE;
 export const COST_NEAR_FOREIGN_FOOT = 2;
 export const COST_COAST = 1;
 export const COST_RIVER = 8; // per RIVER tile crossed straight-through
 export const COST_BRIDGE_REUSE = 1; // per tile when the river tile is already a bridge
-export const HEURISTIC_W = 0.4; // × octile distance (≤ ROAD_REUSE → admissible)
+export const HEURISTIC_W = 1.0;
 /** a straight river crossing may span at most this many consecutive river tiles. */
 export const MAX_BRIDGE_SPAN = 3;
 
@@ -150,9 +186,21 @@ export const ANCHOR_COST: Record<string, number> = {
   S: 0, N: 0.3, E: 0.5, W: 0.5, SE: 0.8, NE: 0.8, SW: 0.8, NW: 0.8,
 };
 export const LABEL_RING_COST = 1;
-/** rings 0–1 are the spec; 2–3 are a last resort before a warning. */
-export const LABEL_RINGS = 4;
-export const LABEL_COST_ROAD = 4; // per road tile under the label
+/**
+ * rings 0–1 are the spec; v2 adds half-tile steps (LABEL_RING_STEP) out to
+ * 8 rings plus sideways slides, because road tiles are now HARD for labels.
+ */
+export const LABEL_RINGS = 8;
+export const LABEL_RING_STEP = 8; // px per ring
+/** last-resort rings (only searched while no ring < LABEL_RINGS fits). */
+export const LABEL_RINGS_MAX = 20;
+/** v2 hard: a label keeps this many px from every other node's footprint. */
+export const LABEL_FOOT_CLEAR = 6;
+/** v2 hard: labels keep this many px from each other. */
+export const LABEL_LABEL_CLEAR = 2;
+/** cost per px a S/N label slides sideways / an E/W label slides vertically. */
+export const LABEL_SLIDE_COST = 0.01;
+export const LABEL_COST_ROAD = 4; // v1 soft cost per road tile under the label (v2: roads are hard)
 export const LABEL_COST_WATER = 1; // per sea/river tile under the label
 export const LABEL_COST_FOREIGN = 2; // per foreign-region tile under the label
 /** Not in the spec: a label within this many px of another node's footprint costs extra (ambiguity). */
@@ -160,6 +208,32 @@ export const LABEL_NEAR_FOREIGN = 14;
 export const LABEL_COST_NEAR_FOREIGN = 2;
 /** …and a label not clearly nearer its own node than any other (margin LABEL_NEAR_FOREIGN) costs this. */
 export const LABEL_COST_AMBIGUOUS = 8;
+
+// ── world flavour (R2-E) ────────────────────────────────────────────────
+/** a city block is placed on free tiles within this Chebyshev ring of the atom footprint. */
+export const CITY_RING = 3;
+/** blocks = CITY_BASE + CITY_PER_CHILD·children, capped at CITY_MAX. */
+export const CITY_BASE = 2;
+export const CITY_PER_CHILD = 1;
+export const CITY_MAX = 14;
+/** atoms with at least this many direct children are "capitals". */
+export const CAPITAL_MIN_CHILDREN = 6;
+/** block px inset inside its tile (so blocks never touch neighbouring tiles). */
+export const CITY_INSET = 2;
+/** harbour: coast tile with ≥ this many sea tiles within HARBOUR_RADIUS (open water). */
+export const HARBOUR_RADIUS = 3;
+/** a region gets a second harbour when more than this many boats dock there. */
+export const HARBOUR_SPLIT_BOATS = 6;
+/** mountains: land tiles beside a border river, ≥ MOUNTAIN_ROAD_CLEAR tiles from any road/bridge. */
+export const MOUNTAIN_ROAD_CLEAR = 3;
+/** mountain ranges shorter than this many tiles are dropped. */
+export const MOUNTAIN_MIN = 4;
+/** secret islands: sea gap (tiles) outside camera.world, slot pitch (tiles), min size (tiles). */
+export const SECRET_GAP = 10;
+export const SECRET_PITCH = 6;
+export const SECRET_MIN_W = 8;
+export const SECRET_H = 8;
+export const HIDDEN_DEFAULT = ["vq_vae", "flow_matching", "gated_pixelcnn"];
 
 // ── decor ────────────────────────────────────────────────────────────────
 export const DECOR_KEEP_P = 0.45;
@@ -182,13 +256,15 @@ export const FERRY_LAND = 2;
 export const FERRY_FOOT = 6;
 
 // ── flow layout ──────────────────────────────────────────────────────────
-export const FLOW_COL_W = 220;
+// v2 (R2-A "more spacing"): column 220→280, row pitch 64→84, lane gap 24→48.
+export const FLOW_COL_W = 280;
 export const FLOW_NODE_W = 150;
 export const FLOW_NODE_H = 44;
-export const FLOW_ROW_PITCH = 64;
-export const FLOW_LANE_GAP = 24;
+export const FLOW_ROW_PITCH = 84;
+export const FLOW_LANE_GAP = 48;
 export const FLOW_PAD = 24;
-export const FLOW_TRACK = 6;
+// v2 6 → 9: the gutter grew 70 → 130px; wider tracks keep parallel pipes separable.
+export const FLOW_TRACK = 9;
 export const FLOW_SWEEPS = 4;
 /** min clearance (px) between a horizontal channel and any node box. */
 export const FLOW_CHANNEL_CLEAR = 4;

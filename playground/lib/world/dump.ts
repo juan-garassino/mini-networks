@@ -6,7 +6,7 @@ import { readFileSync, writeFileSync } from "node:fs";
 import type { TaxonomyResponse } from "../types.ts";
 import type { FlowLayout, World } from "./types.ts";
 import { T } from "./types.ts";
-import { buildWorld, ferryRoute, pathToAtom } from "./world.ts";
+import { buildWorld, ferryRoute, lineage, parkingSpot, pathToAtom } from "./world.ts";
 import { buildFlow } from "./flow.ts";
 import { familyMapFromBlueprint } from "./graph.ts";
 import { roundedD } from "./path.ts";
@@ -70,6 +70,15 @@ function worldSvg(w: World): string {
     const p = pathToAtom(w, args[walkAt + 1]);
     overlay.push(`<path d="${roundedD(p.points, 6)}" fill="none" stroke="#111" stroke-width="3" stroke-dasharray="2 5" stroke-linecap="round"/>`);
   }
+  const litAt = args.indexOf("--lineage"); // --lineage <model>: highlight every parent/child road
+  if (litAt >= 0) {
+    for (const name of args[litAt + 1].split(",")) {
+      const lin = lineage(w, name);
+      for (const r of lin.parents) {
+        overlay.push(`<path d="${roundedD(r.lanePoints, 8)}" fill="none" stroke="#e0218a" stroke-width="4" opacity="0.85"/>`);
+      }
+    }
+  }
   if (ferryAt >= 0) {
     const c = tax.compositions.find((x) => x.name === args[ferryAt + 1]);
     const f = ferryRoute(w, c ? c.composes : []);
@@ -82,9 +91,22 @@ function worldSvg(w: World): string {
   const S = w.tile;
   const W = w.cols * S;
   const H = w.rows * S;
+  const A = w.camera.all;
   const out: string[] = [];
-  out.push(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${W} ${H}" width="${W}" height="${H}">`);
+  out.push(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="${A.x} ${A.y} ${A.w} ${A.h}" width="${A.w}" height="${A.h}">`);
+  out.push(`<rect x="${A.x}" y="${A.y}" width="${A.w}" height="${A.h}" fill="#24568f"/>`);
   out.push(`<rect width="${W}" height="${H}" fill="#2f6fb8"/>`);
+  // secret islands (outside camera.world)
+  for (const [isl, fill, mark] of [[w.hiddenIsland, "#d9c98f", "?"], [w.ruinsIsland, "#9a9a8a", "†"]] as const) {
+    const b = isl.box;
+    out.push(`<rect x="${b.x}" y="${b.y}" width="${b.w}" height="${b.h}" rx="${S * 2}" fill="${fill}" stroke="#fff" stroke-dasharray="6 4"/>`);
+    isl.slots.forEach((p, i) => {
+      out.push(`<circle cx="${p.x}" cy="${p.y}" r="${S}" fill="#fffdf6" stroke="#2b2118" stroke-dasharray="3 3"/>`);
+      out.push(`<text x="${p.x}" y="${p.y + 5}" font-size="14" text-anchor="middle" font-family="sans-serif">${mark}</text>`);
+      out.push(`<text x="${p.x}" y="${p.y + S * 2 + 4}" font-size="11" text-anchor="middle" font-family="sans-serif" fill="#2b2118">${esc(isl.names[i])}</text>`);
+    });
+    out.push(`<text x="${isl.dragons.x}" y="${isl.dragons.y}" font-size="13" font-style="italic" text-anchor="middle" font-family="serif" fill="#fff">here be dragons</text>`);
+  }
   for (let y = 0; y < w.rows; y++) {
     let x = 0;
     while (x < w.cols) {
@@ -109,10 +131,30 @@ function worldSvg(w: World): string {
     out.push(`<rect x="${b.x * S}" y="${b.y * S}" width="${b.w * S}" height="${b.h * S}" fill="#8b5a2b" opacity="0.55" rx="4"/>`);
     out.push(`<text x="${(b.x + b.w / 2) * S}" y="${(b.y + b.h / 2) * S + 5}" font-size="13" text-anchor="middle" font-family="sans-serif" fill="#fff">${esc(r.family)}</text>`);
   }
-  const roadColor = { primary: "#f2b632", secondary: "#c9a86a", bridge: "#e23d3d" } as const;
+  // mountains: little inked peaks along the range polyline
+  for (const m of w.mountains) {
+    out.push(`<polyline points="${m.map((p) => `${p.x},${p.y}`).join(" ")}" fill="none" stroke="#5b4636" stroke-width="1" stroke-dasharray="2 4" opacity="0.6"/>`);
+    for (const p of m) out.push(`<path d="M${p.x - 6} ${p.y + 5} L${p.x} ${p.y - 6} L${p.x + 6} ${p.y + 5}" fill="#8c7a66" stroke="#3b2e22" stroke-width="1.2"/>`);
+  }
+  for (const c of w.cities) {
+    for (const b of c.blocks) out.push(`<rect x="${b.x}" y="${b.y}" width="${b.w}" height="${b.h}" fill="${c.capital ? "#7a3b2e" : "#6b5a4a"}" opacity="0.85"/>`);
+  }
+  for (const h of w.harbours) {
+    const tx = (h.tile % w.cols + 0.5) * S;
+    const ty = (Math.floor(h.tile / w.cols) + 0.5) * S;
+    out.push(`<line x1="${tx}" y1="${ty}" x2="${h.pt.x}" y2="${h.pt.y}" stroke="#4a3120" stroke-width="4"/>`);
+    out.push(`<circle cx="${h.pt.x}" cy="${h.pt.y}" r="7" fill="#fff" stroke="#4a3120" stroke-width="2"/>`);
+    out.push(`<text x="${h.pt.x}" y="${h.pt.y + 4}" font-size="10" text-anchor="middle" font-family="sans-serif" font-weight="700">${h.boats}</text>`);
+  }
+  const roadColor = { primary: "#f2b632", secondary: "#8a6d2f", bridge: "#e23d3d" } as const;
   for (const r of w.roads) {
-    if (!r.points.length) continue;
-    out.push(`<path d="${roundedD(r.points, 8)}" fill="none" stroke="${roadColor[r.kind]}" stroke-width="${r.kind === "secondary" ? 3 : 5}" stroke-linejoin="round" stroke-linecap="round" opacity="0.9"/>`);
+    if (!r.lanePoints.length) continue;
+    out.push(`<path d="${roundedD(r.lanePoints, 8)}" fill="none" stroke="${roadColor[r.kind]}" stroke-width="${r.kind === "secondary" ? 2 : 3}" stroke-linejoin="round" stroke-linecap="round" opacity="0.95"/>`);
+  }
+  for (const r of w.roads) {
+    for (const c of r.chevrons) {
+      out.push(`<path d="M-3 -3.5 L2.5 0 L-3 3.5" transform="translate(${c.x} ${c.y}) rotate(${(c.angle * 180) / Math.PI})" fill="none" stroke="#2b2118" stroke-width="1.4" stroke-linejoin="round"/>`);
+    }
   }
   for (const b of w.bridges) {
     for (const t of b.tiles) out.push(`<rect x="${(t % w.cols) * S + 2}" y="${Math.floor(t / w.cols) * S + 2}" width="${S - 4}" height="${S - 4}" fill="#6b3d1f"/>`);
@@ -125,6 +167,11 @@ function worldSvg(w: World): string {
     out.push(`<rect x="${l.box.x}" y="${l.box.y}" width="${l.box.w}" height="${l.box.h}" fill="#fffdf6" opacity="0.8" rx="3"/>`);
     out.push(`<text x="${l.box.x + l.box.w / 2}" y="${l.box.y + l.box.h / 2 + l.font * 0.35}" font-size="${l.font}" text-anchor="middle" font-family="sans-serif" font-weight="${l.font === 15 ? 700 : 400}" fill="#2b2118">${esc(l.text)}</text>`);
   }
+  for (const n of w.nodes) {
+    const p = parkingSpot(w, n.name);
+    out.push(`<circle cx="${p.x}" cy="${p.y}" r="2.5" fill="#e0218a"/>`);
+  }
+  out.push(`<rect width="${W}" height="${H}" fill="none" stroke="#fff" stroke-width="2" stroke-dasharray="12 6" opacity="0.6"/>`);
   out.push(...overlay);
   out.push(`</svg>`);
   return out.join("\n");
@@ -140,6 +187,9 @@ function flowSvg(f: FlowLayout): string {
   }
   for (const p of f.pipes) {
     out.push(`<path d="${roundedD(p.points, 10)}" fill="none" stroke="${p.crossLane ? "#e23d3d" : "#3B2E5A"}" stroke-width="2" opacity="0.7"/>`);
+    for (const c of p.chevrons) {
+      out.push(`<path d="M-3 -3.5 L2.5 0 L-3 3.5" transform="translate(${c.x} ${c.y}) rotate(${(c.angle * 180) / Math.PI})" fill="none" stroke="#3B2E5A" stroke-width="1.4"/>`);
+    }
   }
   for (const n of f.nodes) {
     out.push(`<rect x="${n.box.x}" y="${n.box.y}" width="${n.box.w}" height="${n.box.h}" rx="12" fill="${colorOf(n.family)}" stroke="#3B2E5A" stroke-width="1.5"/>`);
@@ -155,6 +205,16 @@ const world = buildWorld(tax, fam, {
 const flow = buildFlow(tax, fam);
 console.log(ascii(world));
 console.log(`\ngrid ${world.cols}×${world.rows}  nodes ${world.nodes.length}  roads ${world.roads.length}  bridges ${world.bridges.length}  labels ${world.labels.length}  decor ${world.decor.length}`);
+console.log(`lanes ${JSON.stringify(world.roads.reduce<Record<number, number>>((m, r) => { m[r.lane] = (m[r.lane] ?? 0) + 1; return m; }, {}))}  chevrons ${world.roads.reduce((a, r) => a + r.chevrons.length, 0)}  harbours ${world.harbours.map((h) => `${h.family}:${h.boats}`).join(",")}  cities ${world.cities.map((c) => `${c.node}${c.capital ? "*" : ""}:${c.blocks.length}`).join(",")}  mountains ${world.mountains.length} (${world.mountains.reduce((a, m) => a + m.length, 0)} pts)`);
+{
+  let minD = Infinity;
+  let pair = "";
+  for (const [i, a] of world.nodes.entries()) for (const b of world.nodes.slice(i + 1)) {
+    const d = Math.hypot(a.center.x - b.center.x, a.center.y - b.center.y) / world.tile;
+    if (d < minD) { minD = d; pair = `${a.name}/${b.name}`; }
+  }
+  console.log(`min node-centre distance ${minD.toFixed(1)} tiles (${pair})`);
+}
 console.log("regions:", world.regions.map((r) => `${r.family} ${r.tiles}/${r.targetTiles}${r.islet ? " islet" : ""}${r.setPiece ? ` sp ${r.setPiece.w}×${r.setPiece.h}` : " no-sp"}`).join(", "));
 console.log(`flow ${flow.width}×${flow.height}  lanes ${flow.lanes.map((l) => l.family).join(" / ")}  crossings ${flow.crossings} (seed ${flow.seedCrossings})`);
 console.log(`median buildWorld ${time(() => buildWorld(tax, fam), 15).toFixed(1)}ms  buildFlow ${time(() => buildFlow(tax, fam), 15).toFixed(1)}ms`);
