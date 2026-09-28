@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { AnimatePresence, motion } from "motion/react";
+import { motion } from "motion/react";
 import { getTaxonomy } from "@/lib/api";
 import type { TaxonomyResponse } from "@/lib/types";
 import { useRuns } from "@/hooks/use-runs";
@@ -46,30 +46,31 @@ export default function Page() {
   return (
     <>
       <main className="relative min-h-0">
-        <AnimatePresence mode="wait">
-          <motion.div
-            key={`${sheet}-${edition}`}
-            className="absolute inset-0"
-            initial={{ opacity: 0, x: 24 }}
-            animate={{ opacity: 1, x: 0 }}
-            exit={{ opacity: 0, x: -24 }}
-            transition={{ duration: 0.22, ease: "easeOut" }}
-          >
-            {sheet === "chart" && (
-              edition === "terminal" ? <ChartTerminal taxonomy={taxonomy} onSelect={setSelected} />
-              : edition === "metro" ? <ChartMetro taxonomy={taxonomy} onSelect={setSelected} />
-              : edition === "atlas" ? <ChartAtlas taxonomy={taxonomy} onSelect={setSelected} />
-              : edition === "paper" ? <ChartPaper taxonomy={taxonomy} onSelect={setSelected} />
-              : <Chart taxonomy={taxonomy} onSelect={setSelected} />
-            )}
-            {sheet === "reactions" && (
-              <Reactions taxonomy={taxonomy} runs={runs} onSelect={setSelected} />
-            )}
-            {sheet === "observatory" && (
-              <Observatory runs={runs} onSelectModel={setSelected} />
-            )}
-          </motion.div>
-        </AnimatePresence>
+        {/* Enter-only keyed remount. AnimatePresence mode="wait" froze to a blank
+            sheet: the saved edition swaps the key right after hydration, the
+            exit of the never-entered SSR child never completed, so the next
+            sheet never mounted. */}
+        <motion.div
+          key={`${sheet}-${edition}`}
+          className="absolute inset-0"
+          initial={{ opacity: 0, x: 24 }}
+          animate={{ opacity: 1, x: 0 }}
+          transition={{ duration: 0.22, ease: "easeOut" }}
+        >
+          {sheet === "chart" && (
+            edition === "terminal" ? <ChartTerminal taxonomy={taxonomy} onSelect={setSelected} />
+            : edition === "metro" ? <ChartMetro taxonomy={taxonomy} onSelect={setSelected} />
+            : edition === "atlas" ? <ChartAtlas taxonomy={taxonomy} onSelect={setSelected} />
+            : edition === "paper" ? <ChartPaper taxonomy={taxonomy} onSelect={setSelected} />
+            : <Chart taxonomy={taxonomy} onSelect={setSelected} />
+          )}
+          {sheet === "reactions" && (
+            <Reactions taxonomy={taxonomy} runs={runs} onSelect={setSelected} />
+          )}
+          {sheet === "observatory" && (
+            <Observatory runs={runs} onSelectModel={setSelected} />
+          )}
+        </motion.div>
 
         <ElementSheet
           name={selected}
