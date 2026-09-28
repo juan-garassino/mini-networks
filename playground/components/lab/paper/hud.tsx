@@ -101,38 +101,42 @@ function Oct({ fill, rim = PAPER.gold, dashed = false, big = false }: { fill: st
 }
 
 const KEY: { icon: React.ReactNode; text: string }[] = [
-  { icon: <Oct fill={PAPER.face} big />, text: "Castle: first model of a family" },
-  { icon: <Oct fill={PAPER.face} />, text: "Spot: built from others" },
+  { icon: <Oct fill={PAPER.face} big />, text: "Castle: a first model, with its town" },
+  { icon: <Oct fill={PAPER.face} />, text: "Spot: built from others; its sign is the species" },
   { icon: <Oct fill={PAPER.die} />, text: "Hollow: not trained yet" },
   { icon: <Oct fill={PAPER.die} rim={PAPER.die} dashed />, text: "Pencil: quality bar not final" },
   {
     icon: <svg width="24" height="24" viewBox="0 0 24 24" aria-hidden><polygon points="12,2 14.9,8.6 22,9.2 16.6,13.8 18.2,21 12,17.2 5.8,21 7.4,13.8 2,9.2 9.1,8.6" fill={PAPER.gold} stroke={PAPER.goldEdge} strokeWidth="1.4" strokeLinejoin="round" /></svg>,
-    text: "Gold star: champion (flag when selected)",
+    text: "Gold star: champion",
   },
   {
-    icon: <svg width="24" height="24" viewBox="0 0 24 24" aria-hidden><path d="M2 16C8 16 12 8 22 8" stroke={PAPER.goldEdge} strokeWidth="8" fill="none" strokeLinecap="round" /><path d="M2 16C8 16 12 8 22 8" stroke={PAPER.gold} strokeWidth="4.5" fill="none" strokeLinecap="round" /></svg>,
-    text: "Road: builds on its main parent",
+    icon: <svg width="24" height="24" viewBox="0 0 24 24" aria-hidden><path d="M2 16C8 16 12 8 22 8" stroke={PAPER.road} strokeWidth="7" fill="none" strokeLinecap="round" /><path d="M2 16C8 16 12 8 22 8" stroke={PAPER.gold} strokeWidth="4" fill="none" strokeLinecap="round" /><path d="M10 10.5 l3 1.5 l-2 2.6" stroke={PAPER.road} strokeWidth="1.4" fill="none" /></svg>,
+    text: "Road: main parent, arrows point to the child",
   },
   {
-    icon: <svg width="24" height="24" viewBox="0 0 24 24" aria-hidden><path d="M2 16C8 16 12 8 22 8" stroke={PAPER.goldEdge} strokeWidth="2.6" strokeDasharray="4 4" fill="none" opacity="0.7" /></svg>,
-    text: "Dashed path: another parent",
+    icon: <svg width="24" height="24" viewBox="0 0 24 24" aria-hidden><path d="M2 16C8 16 12 8 22 8" stroke={PAPER.footpath} strokeWidth="2.4" fill="none" /></svg>,
+    text: "Footpath: another parent",
   },
   {
-    icon: <svg width="24" height="24" viewBox="0 0 24 24" aria-hidden><rect x="2" y="8" width="20" height="9" rx="2" fill={PAPER.plank} /><path d="M7 8v9M12 8v9M17 8v9" stroke={PAPER.plankDark} strokeWidth="1.6" /></svg>,
-    text: "Bridge: crosses families",
+    icon: <svg width="24" height="24" viewBox="0 0 24 24" aria-hidden><path d="M2 16C8 16 12 8 22 8" stroke={PAPER.ink} strokeWidth="3.4" strokeDasharray="0.1 5.5" strokeLinecap="round" fill="none" /></svg>,
+    text: "Dotted route: the way back to its atom",
   },
   {
-    icon: <svg width="24" height="24" viewBox="0 0 24 24" aria-hidden><path d="M2 16C8 16 12 8 22 8" stroke={PAPER.gold} strokeWidth="7" fill="none" strokeLinecap="round" /><path d="M2 16C8 16 12 8 22 8" stroke={PAPER.die} strokeWidth="4" fill="none" /><path d="M2 16C8 16 12 8 22 8" stroke={PAPER.ink} strokeWidth="2.2" strokeDasharray="4 3" fill="none" /></svg>,
-    text: "Stitches: way back to its atom",
+    icon: <svg width="24" height="24" viewBox="0 0 24 24" aria-hidden><path d="M3 15 L21 15 L18 20 L6 20 Z" fill={PAPER.plank} /><path d="M12 14 L12 4 L19 13 Z" fill={PAPER.die} stroke={PAPER.inkSoft} strokeWidth="1.2" /></svg>,
+    text: "Boat: a pipeline that uses this family",
+  },
+  {
+    icon: <span className="grid h-5 min-w-5 place-items-center rounded-sm px-1 text-[12px] font-semibold" style={{ background: PAPER.face, color: PAPER.die }}>3</span>,
+    text: "Ticket on a name: runs so far",
   },
 ];
 
 export function PaperKey({ hideOnMobile, startOpen }: { hideOnMobile: boolean; startOpen: boolean }) {
-  // Desktop: open on the whole map, folded away once the camera is close.
+  // Folded to a button everywhere (it covered the map); one tap opens it.
   const [open, setOpen] = useState(false);   // phone: always asked for (it would cover the islands)
-  const [deskOpen, setDeskOpen] = useState(startOpen);
+  const [deskOpen, setDeskOpen] = useState(false);
   const [was, setWas] = useState(startOpen);
-  if (was !== startOpen) { setWas(startOpen); setDeskOpen(startOpen); setOpen(false); }
+  if (was !== startOpen) { setWas(startOpen); setDeskOpen(false); setOpen(false); }
   return (
     <div className={`absolute bottom-3 left-3 z-10 sm:bottom-5 sm:left-5 ${hideOnMobile ? "hidden sm:block" : ""}`}>
       <button type="button" onClick={() => setOpen((o) => !o)} aria-expanded={open}

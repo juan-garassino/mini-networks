@@ -3,6 +3,7 @@
 import { memo, type KeyboardEvent } from "react";
 import { roundedD, type World, type WorldNode } from "@/lib/world";
 import { displayName, type EvidenceState } from "@/components/lab/shared/card-model";
+import { iconFor } from "@/lib/icons";
 import { familyName, inkOf, PAPER } from "./encoding";
 import { bridgeDeck, extruded, octagon, pts } from "./geometry";
 import { pieceAnchor, PIECE_TOP } from "./set-pieces";
@@ -36,10 +37,17 @@ export const SeaLayer = memo(function SeaLayer({ world }: { world: World }) {
   return (
     <g aria-hidden>
       <rect x={-w} y={-h} width={w * 3} height={h * 3} fill={PAPER.sea} />
-      <rect x={-w} y={-h} width={w * 3} height={h * 3} fill="url(#paper-waves)" />
+      {/* 3-tone scalloped waves with white crests (art/ArtDefs pa-sea) */}
+      <rect x={-w} y={-h} width={w * 3} height={h * 3} fill="url(#pa-sea)" />
     </g>
   );
 });
+
+// printed ground per family biome (art/ArtDefs patterns); others stay card stock
+const GROUND: Record<string, string> = {
+  perception: "url(#pa-grass)",        // striped meadow
+  sequence: "url(#pa-sand)",           // dunes
+};
 
 export const LandLayer = memo(function LandLayer({ world, outlines, fibre }: {
   world: World; outlines: string[]; fibre: boolean;
@@ -50,30 +58,57 @@ export const LandLayer = memo(function LandLayer({ world, outlines, fibre }: {
       {world.regions.map((r) => <path key={`s${r.id}`} d={outlines[r.id]} fill={PAPER.seaDeep} opacity={0.75} transform="translate(7 11)" />)}
       {world.regions.map((r) => <path key={`e${r.id}`} d={outlines[r.id]} fill={inkOf(r.family).edge} stroke={PAPER.die} strokeWidth={7} strokeLinejoin="round" transform="translate(0 6)" />)}
       {world.regions.map((r) => <path key={`r${r.id}`} d={outlines[r.id]} fill={PAPER.die} stroke={PAPER.die} strokeWidth={7} strokeLinejoin="round" />)}
-      {world.regions.map((r) => <path key={`f${r.id}`} d={outlines[r.id]} fill={inkOf(r.family).face} />)}
+      {world.regions.map((r) => <path key={`f${r.id}`} d={outlines[r.id]} fill={GROUND[r.family] ?? inkOf(r.family).face} />)}
       {fibre && <path d={outlines.join("")} fill="url(#paper-fibre)" />}
     </g>
   );
 });
 
-export const RoadLayer = memo(function RoadLayer({ world, lineage, only }: { world: World; lineage: string[]; only?: string[] }) {
+const CHEVRON = "M-3 -3.2 L1.4 0 L-3 3.2";
+
+/**
+ * Roads on their lanes (lanePoints), parent → child chevrons on the trunks.
+ *  - primary (the child's main parent): die-cut rim, dark edge, gold core
+ *  - secondary parents: a thin solid footpath, lower value
+ *  - cross-family ("bridge") roads: quiet footpaths until one of their ends is
+ *    in `loud` (focused / hovered family tree), then full trunks
+ *  - `lineage` ids get the dotted quest route (the critter's walk)
+ */
+export const RoadLayer = memo(function RoadLayer({ world, lineage, only, loud }: {
+  world: World; lineage: string[]; only?: string[]; loud?: string[];
+}) {
   const keep = only ? new Set(only) : null;
-  const ds = world.roads.filter((r) => !keep || keep.has(r.id)).map((r) => ({ id: r.id, d: roundedD(r.points, 10), primary: r.primary }));
+  const hot = new Set(loud ?? []);
+  const ds = world.roads.filter((r) => !keep || keep.has(r.id)).map((r) => {
+    const pts = r.lanePoints?.length ? r.lanePoints : r.points;
+    const cross = r.kind === "bridge";
+    const trunk = r.primary && (!cross || hot.has(r.from) || hot.has(r.to));
+    const raised = cross && (hot.has(r.from) || hot.has(r.to));
+    return { id: r.id, d: roundedD(pts, 10), trunk: trunk || raised, chevrons: r.chevrons ?? [] };
+  });
   const trail = new Set(lineage);
-  const main = ds.filter((r) => r.primary);
-  const paths = ds.filter((r) => !r.primary);
+  const trunks = ds.filter((r) => r.trunk);
+  const paths = ds.filter((r) => !r.trunk);
   return (
     <g aria-hidden fill="none" strokeLinecap="round" strokeLinejoin="round">
-      {/* secondary parents: a thin dashed footpath, so the primary trunks read */}
-      {paths.map((r) => <path key={`p${r.id}`} d={r.d} stroke={PAPER.goldEdge} strokeWidth={3.2} strokeDasharray="5 6" opacity={0.6} />)}
-      {main.map((r) => <path key={`s${r.id}`} d={r.d} stroke={PAPER.shadow} strokeWidth={15} transform="translate(2 4)" />)}
-      {main.map((r) => <path key={`e${r.id}`} d={r.d} stroke={PAPER.goldEdge} strokeWidth={14} />)}
-      {main.map((r) => <path key={`g${r.id}`} d={r.d} stroke={PAPER.gold} strokeWidth={9} />)}
-      {/* lineage stitches: ink dashes on a white under-stroke (red is champion only) */}
+      {paths.map((r) => <path key={`p${r.id}`} d={r.d} stroke={PAPER.footpath} strokeWidth={2.6} opacity={0.75} />)}
+      {trunks.map((r) => <path key={`s${r.id}`} d={r.d} stroke={PAPER.shadow} strokeWidth={14} transform="translate(2 3)" />)}
+      {trunks.map((r) => <path key={`r${r.id}`} d={r.d} stroke={PAPER.die} strokeWidth={14} />)}
+      {trunks.map((r) => <path key={`e${r.id}`} d={r.d} stroke={PAPER.road} strokeWidth={10} />)}
+      {trunks.map((r) => <path key={`g${r.id}`} d={r.d} stroke={PAPER.gold} strokeWidth={6} />)}
+      {trunks.map((r) => (
+        <g key={`c${r.id}`}>
+          {r.chevrons.map((c, i) => (
+            <path key={i} d={CHEVRON} transform={`translate(${c.x.toFixed(1)} ${c.y.toFixed(1)}) rotate(${(c.angle * 180 / Math.PI).toFixed(1)})`}
+              stroke={PAPER.road} strokeWidth={1.7} />
+          ))}
+        </g>
+      ))}
+      {/* the quest route: ink dots on a white under-dot, parent → child walk */}
       {ds.filter((r) => trail.has(r.id)).map((r) => (
         <g key={`t${r.id}`}>
-          <path d={r.d} stroke={PAPER.die} strokeWidth={5} />
-          <path d={r.d} stroke={PAPER.ink} strokeWidth={2.6} strokeDasharray="6 5" />
+          <path d={r.d} stroke={PAPER.die} strokeWidth={6.5} strokeDasharray="0.1 10" />
+          <path d={r.d} stroke={PAPER.ink} strokeWidth={3.6} strokeDasharray="0.1 10" />
         </g>
       ))}
     </g>
@@ -115,7 +150,7 @@ const STAR = (cx: number, cy: number, r: number) => {
   return p.join(" ");
 };
 
-function Flag({ x, y, h }: { x: number; y: number; h: number }) {
+export function Flag({ x, y, h }: { x: number; y: number; h: number }) {
   const w = h * 0.62;
   const pennant = `M${x} ${y - h} L${x + w} ${y - h + w * 0.42} L${x} ${y - h + w * 0.84} Z`;
   return (
@@ -129,11 +164,11 @@ function Flag({ x, y, h }: { x: number; y: number; h: number }) {
   );
 }
 
-interface SpotStyle { top: string; side: string; face: string; faceRing?: string; sketch: boolean }
+interface SpotStyle { top: string; side: string; face: string; faceRing?: string; sketch: boolean; glyph: string }
 function spotStyle(state: EvidenceState): SpotStyle {
-  if (state === "provisional") return { top: PAPER.die, side: "#E6DBC2", face: PAPER.die, sketch: true };
-  if (state === "untrained") return { top: PAPER.gold, side: PAPER.goldSide, face: PAPER.die, faceRing: PAPER.face, sketch: false };
-  return { top: PAPER.gold, side: PAPER.goldSide, face: PAPER.face, sketch: false };
+  if (state === "provisional") return { top: PAPER.die, side: "#E6DBC2", face: PAPER.die, sketch: true, glyph: PAPER.pencil };
+  if (state === "untrained") return { top: PAPER.gold, side: PAPER.goldSide, face: PAPER.die, faceRing: PAPER.face, sketch: false, glyph: PAPER.face };
+  return { top: PAPER.gold, side: PAPER.goldSide, face: PAPER.face, sketch: false, glyph: PAPER.die };
 }
 
 function Tier({ cx, cy, r, t, st, faceK }: { cx: number; cy: number; r: number; t: number; st: SpotStyle; faceK: number }) {
@@ -151,53 +186,79 @@ function Tier({ cx, cy, r, t, st, faceK }: { cx: number; cy: number; r: number; 
   );
 }
 
-/** Champion seal: a gold star with an ink edge on the spot's face. */
-function Seal({ cx, cy, r }: { cx: number; cy: number; r: number }) {
+/** The model's species emblem (lib/icons) as a die-cut glyph on the face. */
+export function Emblem({ name, cx, cy, size, color, rim = true }: { name: string; cx: number; cy: number; size: number; color: string; rim?: boolean }) {
+  const Icon = iconFor(name);
+  if (!Icon) return null;
+  const k = 24 / size;               // icon units per world px
   return (
     <>
-      <polygon points={STAR(cx, cy, r + 1.8)} fill={PAPER.die} stroke={PAPER.die} strokeWidth={1.6} strokeLinejoin="round" />
-      <polygon points={STAR(cx, cy, r)} fill={PAPER.gold} stroke={PAPER.goldEdge} strokeWidth={1} strokeLinejoin="round" />
+      {rim && <Icon x={cx - size / 2} y={cy - size / 2 + 0.8} width={size} height={size} color={PAPER.ink} strokeWidth={3.6 * k} opacity={0.3} aria-hidden />}
+      <Icon x={cx - size / 2} y={cy - size / 2} width={size} height={size} color={color} strokeWidth={2 * k} aria-hidden />
     </>
   );
 }
 
-export const Spot = memo(function Spot({ node, state, focused, onSelect, onHover, ghost = false }: {
+// Spot radii (world px). Round 2: the world is 2.4× roomier, so spots draw
+// larger than their footprint (labels keep an 8px screen gap from it).
+export const SPOT_R = { atom: 34, derived: 20 } as const;
+
+export const Spot = memo(function Spot({ node, state, focused, onSelect, onHover, ghost = false, k = 1, flag = true, bare = false }: {
+  /** the art is drawn elsewhere (diorama billboard): keep only the hit area, focus plinth and keyboard ring */
+  bare?: boolean;
   node: WorldNode; state: EvidenceState; focused: boolean;
+  /** false: the champion flag is drawn elsewhere (the diorama's stand-up billboard) */
+  flag?: boolean;
+  /** semantic zoom factor about the centre (atoms grow at the whole-map view, derived shrink to dots) */
+  k?: number;
   onSelect: (name: string) => void; onHover?: (name: string | null) => void;
-  /** a non-interactive copy drawn above the vellum */
+  /** a non-interactive copy drawn above the dimmed map */
   ghost?: boolean;
 }) {
   const { x: cx, y: cy } = node.center;
   const st = spotStyle(state);
-  const R = node.atom ? 29 : 14.5;
-  const T = node.atom ? 9 : 5;
-  const lift = focused ? -4 : 0;
+  const R = node.atom ? SPOT_R.atom : SPOT_R.derived;
+  const T = node.atom ? 10 : 6;
   const onKey = (e: KeyboardEvent) => {
     if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onSelect(node.name); }
   };
   const label = `${displayName(node.name)}${node.atom ? ", atom" : ""}, ${state === "untrained" ? "not trained yet" : state}`;
-  const faceY = node.atom ? cy + lift - 7 : cy + lift;
-  const faceR = node.atom ? 19 * 0.7 : R * 0.64;
+  const faceY = node.atom ? cy - 8 : cy;
+  const glyph = node.atom ? 24 : 17;
+  // the focused spot is the loudest object: 1.3× on a die-cut plinth
+  const f = (focused ? 1.3 : 1) * k;
+  const zoom = f !== 1 ? `translate(${cx} ${cy}) scale(${f}) translate(${-cx} ${-cy})` : undefined;
   return (
     <g role={ghost ? undefined : "button"} tabIndex={ghost ? undefined : 0} aria-label={ghost ? undefined : label} aria-hidden={ghost || undefined}
       data-node={ghost ? undefined : node.name} className={ghost ? undefined : styles.spot} onKeyDown={ghost ? undefined : onKey}
       onPointerEnter={onHover ? () => onHover(node.name) : undefined} onPointerLeave={onHover ? () => onHover(null) : undefined}
       onFocus={onHover ? () => onHover(node.name) : undefined} onBlur={onHover ? () => onHover(null) : undefined}>
-      {/* cast shadow + die-cut rim of the whole thick spot */}
-      <polygon points={pts(extruded(cx + 3, cy + 5, R, T))} fill={PAPER.shadow} />
-      {focused && <polygon points={pts(extruded(cx, cy + lift, R + 9, T))} fill={PAPER.die} stroke={PAPER.ink} strokeWidth={3.5} strokeLinejoin="round" />}
-      {!ghost && <polygon className={styles.ring} points={pts(octagon(cx, cy + lift, R + 8))} fill="none" stroke={PAPER.ink} strokeWidth={3.5} strokeDasharray="6 4" />}
-      <g className={styles.lift}>
-        <polygon points={pts(extruded(cx, cy + lift, R, T))} fill={PAPER.die} stroke={PAPER.die} strokeWidth={5.5} strokeLinejoin="round" />
-        <Tier cx={cx} cy={cy + lift} r={R} t={T} st={st} faceK={node.atom ? 0.86 : 0.64} />
-        {node.atom && <Tier cx={cx} cy={cy + lift - 7} r={19} t={6} st={st} faceK={0.7} />}
-        {state === "champion" && <Seal cx={cx} cy={faceY} r={faceR * 0.78} />}
-        {state === "champion" && (
-          // the flag is raised only for the spot you are looking at
-          <g className={focused ? undefined : styles.hoverFlag}>
-            <Flag x={cx + R * 0.62} y={cy + lift - (node.atom ? 8 : 3)} h={node.atom ? 34 : 24} />
-          </g>
+      <g transform={zoom}>
+        {focused && (
+          <>
+            <polygon points={pts(extruded(cx + 4, cy + 7, R + 12, T + 4))} fill={PAPER.shadow} />
+            <polygon points={pts(extruded(cx, cy, R + 12, T + 4))} fill={PAPER.die} stroke={PAPER.ink} strokeWidth={3} strokeLinejoin="round" />
+          </>
         )}
+        {!focused && !bare && <polygon points={pts(extruded(cx + 3, cy + 5, R, T))} fill={PAPER.shadow} />}
+        {!ghost && <polygon className={styles.ring} points={pts(octagon(cx, cy, R + 8))} fill="none" stroke={PAPER.ink} strokeWidth={3.5} strokeDasharray="6 4" />}
+        {bare && <polygon points={pts(octagon(cx, cy, R + 4))} fill="rgba(0,0,0,0)" />}
+        {!bare && <g className={styles.lift}>
+          <polygon points={pts(extruded(cx, cy, R, T))} fill={PAPER.die} stroke={PAPER.die} strokeWidth={5.5} strokeLinejoin="round" />
+          <Tier cx={cx} cy={cy} r={R} t={T} st={st} faceK={node.atom ? 0.86 : 0.74} />
+          {node.atom && <Tier cx={cx} cy={cy - 8} r={24} t={6} st={st} faceK={0.8} />}
+          <Emblem name={node.name} cx={cx} cy={faceY} size={glyph} color={st.glyph} rim={st.glyph === PAPER.die} />
+          {state === "champion" && (
+            // champion seal: a gold star sticker on the rim, top-right
+            <polygon points={STAR(cx + R * 0.74, cy - R * 0.66, node.atom ? 10 : 7.5)} fill={PAPER.gold}
+              stroke={PAPER.die} strokeWidth={2.4} strokeLinejoin="round" paintOrder="stroke" />
+          )}
+          {flag && state === "champion" && (
+            <g className={focused ? undefined : styles.hoverFlag}>
+              <Flag x={cx + R * 0.74} y={cy - R * 0.5} h={node.atom ? 36 : 26} />
+            </g>
+          )}
+        </g>}
       </g>
     </g>
   );

@@ -21,23 +21,30 @@ export const PAPER = {
   faceDeep: "#1F55AE",
   pencil: "#7A6E62",        // graphite for "not inked yet" sketches
   shadow: "rgba(43,33,24,0.26)",
+  road: "#6B4A1E",          // road edge (dark brown: gold reads on every ground)
+  footpath: "#7E6444",      // secondary parents: thin solid path, lower value
+  stone: "#D9C7A2",         // mountains, ruins
+  stoneDark: "#A88F66",
+  roof: "#8C4A2F",
   plank: "#9A5B2B",
   plankDark: "#6E3E1B",
 } as const;
 
-// ── family → region colour (saturated, distinct; never blue = sea, never
-// gold = road, never flag red = champion). face = land fill, edge = cardstock
-// thickness under the cutout, light = set-piece highlight facet, dark = facet
-// shade / decor. ─────────────────────────────────────────────────────────
+// ── family → region colour. Round 2 colour discipline: the ground is LOW
+// chroma (a pale card stock per family, still distinct); saturation is kept
+// for evidence (blue trained faces, gold champion seals) and the focus. Never
+// blue = sea, never gold = road, never red = champion flag.
+// face = land fill, edge = cardstock thickness under the cutout, light = set-
+// piece highlight facet, dark = facet shade / props / roofs.
 export interface FamilyInk { face: string; edge: string; light: string; dark: string }
 
 export const FAMILY_INK: Record<string, FamilyInk> = {
-  perception:     { face: "#6CC24A", edge: "#3F8A2A", light: "#9BDD7A", dark: "#3E8F2A" }, // meadow
-  sequence:       { face: "#F08A3C", edge: "#B35A1C", light: "#FFB273", dark: "#C4601E" }, // tangerine
-  generative:     { face: "#8E62D9", edge: "#5E3AA3", light: "#B99AF0", dark: "#6841B0" }, // kiln violet
-  representation: { face: "#2EBFB3", edge: "#1A8177", light: "#7FE0D6", dark: "#178C82" }, // lagoon teal
-  structure:      { face: "#EE6FAE", edge: "#B03F78", light: "#FFA6D1", dark: "#C24587" }, // crystal pink
-  decision:       { face: "#A9D23A", edge: "#6F8F1C", light: "#CFEA7C", dark: "#789A1E" }, // lime court
+  perception:     { face: "#A9D08A", edge: "#5F8F46", light: "#CFE6BB", dark: "#5E8A45" }, // sage meadow
+  sequence:       { face: "#EDBB8C", edge: "#B0713C", light: "#F7D8B8", dark: "#A96A36" }, // apricot card
+  generative:     { face: "#B7A6DE", edge: "#6E5AA6", light: "#D8CEF0", dark: "#6F5BA8" }, // lavender card
+  representation: { face: "#8FCFC6", edge: "#3F8A80", light: "#C3E8E2", dark: "#3D857C" }, // sea-glass
+  structure:      { face: "#EBB0CB", edge: "#A85B80", light: "#F6D5E4", dark: "#A6587E" }, // rose card
+  decision:       { face: "#CBDB86", edge: "#7C8F33", light: "#E3ECBC", dark: "#798C31" }, // pear card
 };
 const FALLBACK_INK: FamilyInk = { face: "#C9B28A", edge: "#8C7650", light: "#E4D3B1", dark: "#8C7650" };
 export const inkOf = (family: string): FamilyInk => FAMILY_INK[family] ?? FALLBACK_INK;
@@ -57,6 +64,25 @@ export const familyName = (f: string) => FAMILY_COPY[f]?.name ?? f.charAt(0).toU
 export interface Encoding { mark: string; encodes: string; source: string }
 
 export const ENCODING: Encoding[] = [
+  // ── round 2/3 marks ──
+  { mark: "tilted ground plane (diorama)", encodes: "nothing — a camera: the far edge recedes; positions are the world's, picking unprojects the tilt", source: "diorama.ts (project / unproject)" },
+  { mark: "printed ground (grass stripes, dunes)", encodes: "the family's biome: perception, sequence (others: their card-stock colour)", source: "world.regions[].family" },
+  { mark: "illustrated set-piece / spot / house / boat / critter art", encodes: "same data as the marks below, drawn by the art library (./art)", source: "art/catalog.tsx encodes column" },
+  { mark: "paper clouds over empty sea", encodes: "nothing — weather over world.seaSlots (decoration allowed by the round-3 brief)", source: "world.seaSlots" },
+  { mark: "stand-up cutouts (billboards)", encodes: "each prop stands at its world base point, drawn far → near", source: "billboards.tsx" },
+  { mark: "species emblem on a spot", encodes: "which model (one glyph per species)", source: "iconFor(name) (lib/icons)" },
+  { mark: "semantic zoom (castles hold ~48px at the whole-map view; derived spots shrink to dots)", encodes: "atoms read first; derived models appear as you zoom in", source: "camera scale" },
+  { mark: "parent → child chevrons on a road", encodes: "direction of builds-on", source: "world.roads[].chevrons" },
+  { mark: "road drawn on its lane", encodes: "one road per edge, never merged with a neighbour", source: "world.roads[].lanePoints" },
+  { mark: "quiet cross-family road, raised when an end is focused", encodes: "a builds-on edge between families", source: "world.roads[] (kind bridge)" },
+  { mark: "town of paper houses around a castle; a keep = capital", encodes: "the atom's direct children (houses) and hub status", source: "world.cities[]" },
+  { mark: "mountain range", encodes: "a family border no road crosses", source: "world.mountains" },
+  { mark: "pier + up to 3 paper boats (+ number badge)", encodes: "compositions that touch the family", source: "world.harbours[].boats" },
+  { mark: "sailing boat + dashed sea route", encodes: "the selected composition's route through its members", source: "ferryRoute(world, composes)" },
+  { mark: "paper train on a lineage line", encodes: "a live running training run", source: "useLiveTraining(runs)" },
+  { mark: "blue ticket on a name tag", encodes: "runs recorded for that model", source: "stationCounts(runs)" },
+  { mark: "name tag (screen space, 16/14px)", encodes: "model name; placed by priority, culled on collision and within 24px of the edge", source: "placeScreenLabels (+ local obstacle shim)" },
+  { mark: "dimmed map in the node view", encodes: "everything outside the focused model's family tree", source: "lineage + pathToAtom" },
   { mark: "blue sea with scalloped waves", encodes: "no model lives here (empty space between families)", source: "world.terrain == SEA" },
   { mark: "coloured cardstock island", encodes: "a family of models; its area grows with the family's model count", source: "world.regions[] + world.regionOf" },
   { mark: "island colour", encodes: "which family (perception meadow, sequence tangerine, generative violet, representation teal, structure pink, decision lime)", source: "world.regions[].family → FAMILY_INK" },
@@ -86,4 +112,14 @@ export const ENCODING: Encoding[] = [
   { mark: "small paper props: eye-flowers, token trains, sample puffs, mirrored reeds, linked shards, dice", encodes: "the family's biome — each echoes its set-piece mechanism; drawn on every world.decor cell (variant unused)", source: "world.decor[].region, .scale" },
   { mark: "one-eyed critter", encodes: "you, walking from the focused model's root atom to it", source: "pathToAtom(world, focus) reversed" },
   { mark: "folded paper note", encodes: "the focused model's card (description, lineage, proof)", source: "cardModel()" },
+];
+
+// ── eggs (components/lab/shared/eggs/README.md) ─────────────────────────
+export const EGGS: Encoding[] = [
+  { mark: "grokking note: 'memorising…' then the insight after 4 s", encodes: "delayed generalisation (illustrative curve, labelled)", source: "useLongFocus + GROKKING_EGG" },
+  { mark: "pencil '?' island past the sea edge + sea serpent", encodes: "next-era models not yet in the zoo; 'here be dragons'", source: "world.hiddenIsland + NEXT_ERA" },
+  { mark: "ruined columns on a far islet (click for an epitaph)", encodes: "retired legacy/ models and their living successor", source: "world.ruinsIsland + RUINS" },
+  { mark: "critter clicked 7× trains: a real loss curve draws itself", encodes: "a REAL decreasing loss from /web/runs (hidden if none)", source: "useCritterClicks + useRealLossCurve" },
+  { mark: "Konami code: gold rings pulse generation by generation", encodes: "a forward pass across the zoo in depth order", source: "useKonami + forwardPassSchedule" },
+  { mark: "double_descent boat dips twice on its course", encodes: "test error falls, rises at the interpolation threshold, falls again", source: "dipDepth(t)" },
 ];

@@ -104,14 +104,14 @@ const inBox = (r: Region, x: number, y: number) => {
 function room(world: World, r: Region) {
   const b = r.setPiece!;
   let up = 0;
-  for (let k = 1; k <= 4; k++) {
+  for (let k = 1; k <= 7; k++) {
     let ok = true;
     for (let x = b.x; x < b.x + b.w && ok; x++) ok = freeTile(world, x, b.y - k, r);
     if (!ok) break;
     up = k;
   }
   let side = 0;
-  for (let k = 1; k <= 2; k++) {
+  for (let k = 1; k <= 3; k++) {
     let ok = true;
     for (let y = b.y - up; y < b.y + b.h && ok; y++) ok = freeTile(world, b.x - k, y, r) && freeTile(world, b.x + b.w - 1 + k, y, r);
     if (!ok) break;
@@ -131,35 +131,33 @@ export function pieceAnchor(world: World, r: Region) {
   const { up, side } = room(world, r);
   const w = (b.w + side * 2) * tile;
   const h = (b.h + up) * tile - 8;
-  const s = Math.min(w / 100, h / top, s0 * 1.6);
+  const s = Math.min(w / 100, h / top, s0 * 2.2);
   // pieces are tall: let the card spread up to 1.3× wider than tall
   const sx = Math.min(w / 100, s * 1.3);
   return { x: (b.x + b.w / 2) * tile, y: (b.y + b.h) * tile - 6, s, sx };
 }
 
-export const SetPiece = memo(function SetPiece({ world, region, pop, still }: {
-  world: World; region: Region; pop: number; still: boolean;
+/** A family's set-piece drawn at the origin (base centre at 0,0), `sx`/`s`
+ *  world px per design unit. Used standing (billboard) or flat (SetPiece). */
+export const PieceArt = memo(function PieceArt({ family, s, sx, pop, animate }: {
+  family: string; s: number; sx: number; pop: number; animate: boolean;
 }) {
-  const facets = PIECES[region.family];
-  if (!region.setPiece || !facets) return null;
-  const ink = inkOf(region.family);
-  const { x, y, s, sx } = pieceAnchor(world, region);
+  const facets = PIECES[family];
+  if (!facets) return null;
+  const ink = inkOf(family);
   const rimW = 8 / s;
   const all = facets.flat();
-  const animate = !still && pop > 0;
   const shape = (fc: Facet, key: string | number, fill: string, stroke: string | undefined, sw: number) =>
     fc.stroke
       ? <path key={key} d={fc.d} fill="none" stroke={stroke ?? fill} strokeWidth={sw + 5 / s} strokeLinecap="round" strokeLinejoin="round" />
       : <path key={key} d={fc.d} fill={fill} stroke={stroke} strokeWidth={stroke ? sw : undefined} strokeLinejoin="round" />;
-
   return (
-    <g transform={`translate(${x} ${y}) scale(${sx} ${s})`} aria-hidden>
-      {/* ground shadow on the land */}
-      <ellipse cx={0} cy={1} rx={46} ry={7} fill={PAPER.shadow} />
+    <g transform={`scale(${sx} ${s})`} aria-hidden>
+      {/* contact shadow on the ground + a cast shadow falling down-right */}
+      <ellipse cx={0} cy={1} rx={48} ry={8} fill={PAPER.shadow} />
       <g transform="translate(-50 0)">
         <g key={pop} className={animate ? styles.popup : undefined}>
-          {/* cast shadow + card edge + die-cut rim, then the facets */}
-          <g transform={`translate(${5 / s} ${3 / s})`}>{all.map((fc, i) => shape(fc, i, PAPER.shadow, PAPER.shadow, rimW))}</g>
+          <g transform={`translate(${6 / s} ${2 / s})`}>{all.map((fc, i) => shape(fc, i, PAPER.shadow, PAPER.shadow, rimW))}</g>
           <g>{all.map((fc, i) => shape(fc, i, PAPER.die, PAPER.die, rimW))}</g>
           {facets.map((group, gi) => (
             <g key={gi} className={animate ? styles.flap : undefined}
@@ -167,7 +165,6 @@ export const SetPiece = memo(function SetPiece({ world, region, pop, still }: {
               {group.map((fc, i) => fc.stroke
                 ? <path key={i} d={fc.d} fill="none" stroke={toneFill(fc.tone, ink)} strokeWidth={4 / s + 2} strokeLinecap="round" strokeLinejoin="round" />
                 : <path key={i} d={fc.d} fill={toneFill(fc.tone, ink)} />)}
-              {/* felt: the family-coloured facets are knitted, the white/ink details stay card */}
               {group.filter((fc) => !fc.stroke && (fc.tone === "light" || fc.tone === "dark" || fc.tone === "face")).map((fc, i) => (
                 <path key={`k${i}`} d={fc.d} fill="url(#paper-knit)" />
               ))}
@@ -175,6 +172,20 @@ export const SetPiece = memo(function SetPiece({ world, region, pop, still }: {
           ))}
         </g>
       </g>
+    </g>
+  );
+});
+
+export const SetPiece = memo(function SetPiece({ world, region, pop, still, k = 1 }: {
+  world: World; region: Region; pop: number; still: boolean;
+  /** semantic zoom: >1 at the whole-map view so each island reads as a place */
+  k?: number;
+}) {
+  if (!region.setPiece || !PIECES[region.family]) return null;
+  const a = pieceAnchor(world, region);
+  return (
+    <g transform={`translate(${a.x} ${a.y})`}>
+      <PieceArt family={region.family} s={a.s * k} sx={a.sx * k} pop={pop} animate={!still && pop > 0} />
     </g>
   );
 });
@@ -197,9 +208,29 @@ const PROPS: Record<string, Facet[]> = {
   decision: [{ d: "M-5 0 h10 v-10 h-10Z", tone: "dark" }, { d: circle(-2.2, -7.5, 1.1) + circle(0, -5, 1.1) + circle(2.2, -2.5, 1.1), tone: "light" }],
 };
 
+/** One biome prop at the origin (base at 0,0), in world px. */
+export function PropArt({ family, scale = 1 }: { family: string; scale?: number }) {
+  const fs = PROPS[family];
+  if (!fs) return null;
+  const ink = inkOf(family);
+  return (
+    <g transform={`scale(${scale})`}>
+      <ellipse cx={0.5} cy={0.5} rx={6} ry={1.8} fill={PAPER.shadow} />
+      {fs.map((fc, i) => fc.stroke
+        ? <path key={`r${i}`} d={fc.d} fill="none" stroke={PAPER.die} strokeWidth={3.4} strokeLinecap="round" />
+        : <path key={`r${i}`} d={fc.d} fill={PAPER.die} stroke={PAPER.die} strokeWidth={1.8} strokeLinejoin="round" />)}
+      {fs.map((fc, i) => fc.stroke
+        ? <path key={`f${i}`} d={fc.d} fill="none" stroke={toneFill(fc.tone, ink)} strokeWidth={1.8} strokeLinecap="round" />
+        : <path key={`f${i}`} d={fc.d} fill={toneFill(fc.tone, ink)} />)}
+    </g>
+  );
+}
+
 export const DecorLayer = memo(function DecorLayer({ world }: { world: World }) {
-  // Every world.decor cell gets its family's prop; variant is not drawn.
-  const items = world.decor.filter((d) => PROPS[d.region]);
+  // Layout v2 has ~470 decor cells: draw the ones whose variant is 0 (the
+  // world's own deterministic thinning key, about a quarter) — enough to set
+  // the biome without scattering props everywhere.
+  const items = world.decor.filter((d) => d.variant === 0 && PROPS[d.region]);
   const rimmed = (key: string, fc: Facet, fill: string, w: number) =>
     fc.stroke
       ? <path key={key} d={fc.d} fill="none" stroke={fill} strokeWidth={w + 1.8} strokeLinecap="round" />
