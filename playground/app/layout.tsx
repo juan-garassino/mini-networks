@@ -29,13 +29,7 @@ export const metadata: Metadata = {
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   return (
     <html lang="en" className={`${display.variable} ${draft.variable} ${instrument.variable} ${vt.variable} ${jost.variable} ${cormorant.variable} ${patrick.variable} h-full antialiased`}>
-      <body className="h-full overflow-hidden">
-        <div className="relative z-10 h-full p-3 sm:p-5">
-          <div className="bp-frame relative grid h-full grid-rows-[1fr_auto] overflow-hidden">
-            {children}
-          </div>
-        </div>
-      </body>
+      <body className="h-full overflow-hidden">{children}</body>
     </html>
   );
 }

@@ -1,4 +1,4 @@
-.PHONY: help install install-dev test test-ci clean list validate-s validate-m validate-l validate-models-s validate-compositions-s playground playground-dev playground-install
+.PHONY: help install install-dev test test-ci clean list validate-s validate-m validate-l validate-models-s validate-compositions-s playground playground-dev playground-install lab-shoot lab-board
 
 UV_RUN = uv run
 PYTHON ?= $(UV_RUN) python
@@ -57,6 +57,14 @@ playground:
 
 playground-dev:
 	cd playground && NEXT_PUBLIC_API_BASE=http://localhost:8000 npm run dev  # :3000, hot reload
+
+# --- lab bake-off (headless-Chrome shots of /lab/<skin> → playground/.lab-shots) ---
+lab-shoot:
+	@if [ -z "$(SKIN)" ]; then echo "Usage: make lab-shoot SKIN=paper ROUND=1"; exit 1; fi
+	cd playground && node scripts/shoot.mjs --skin $(SKIN) --round $(ROUND)
+
+lab-board:
+	cd playground && node scripts/board.mjs   # → playground/.lab-shots/board.html
 
 validate-s:
 	$(PYTHON) main.py sweep --check --training_tier S --batch_size $(BATCH_SIZE) --epochs $(EPOCHS) --device $(DEVICE) --data_root $(DATA_ROOT) --checkpoint_root $(CHECKPOINT_ROOT)

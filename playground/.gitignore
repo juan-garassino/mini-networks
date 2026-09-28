@@ -17,6 +17,9 @@
 /.next/
 /out/
 
+# lab bake-off screenshots
+/.lab-shots/
+
 # production
 /build
 
