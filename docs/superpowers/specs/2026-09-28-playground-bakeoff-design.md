@@ -282,3 +282,23 @@ encoding.ts under an "eggs" section.
   self-scoring for iteration only.
 - Order: R2-A, R2-B/C, R2-D in parallel (shared code) → the four builders resume
   on the new foundation → critics → fix → board → owner picks.
+
+### R2-E · World flavour the owner asked for — "boats, trains, almost a city, some Lord of the Rings stuff"
+Every flavour element encodes data (no decoration-only props):
+- **Boats = compositions.** A composition's `ferryRoute` is a boat line between
+  islands; harbours on each coast dock one boat per composition touching that family;
+  selecting a composition sails it.
+- **Trains = training.** Roads are also rails; a train runs a model's lineage line
+  while that model has a live `running` run; each spot's station shows its run count.
+- **Cities = hubs.** Atoms are cities whose footprint/building count scales with the
+  number of models that build on them (transformer, classifier = capitals); derived
+  models are towns.
+- **Epic-fantasy cartography** (genre only — no Tolkien names, scripts, characters or
+  maps): inked mountain ranges along family borders, the critter's walk drawn as a
+  dotted quest route, "here be dragons" off the hidden ? island, and `legacy/`'s
+  retired models as ancient ruins on a far islet.
+Skins translate each into their medium (papercraft boats/trains, 16-bit sprites,
+flow: tensor "trains" in pipes and ferries between lanes).
+Easter eggs approved by the owner: grokking clicks late · hidden ? island · critter
+trains after 7 clicks (real loss curve) · Konami forward pass (+ double_descent's
+route dips twice).
