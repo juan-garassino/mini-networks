@@ -7,7 +7,7 @@ cloud/champions.py) and the listed runs of the active RunSource.
 from __future__ import annotations
 
 import logging
-from collections.abc import Iterable
+from collections.abc import Callable, Iterable
 from pathlib import Path
 
 from mini_networks.api.schemas.web import ModelEvidence, RunSummary
@@ -34,7 +34,16 @@ def _champion_version(model: str, champions_root: Path) -> str | None:
         return None
 
 
-def build_evidence(runs: Iterable[RunSummary], champions_root: str | Path) -> list[ModelEvidence]:
+# Only M/L runs are comparable to the M bar: S-tier nano smoke runs (1 batch)
+# would read as "fails the gate" for models whose champion passed it.
+GATE_TIERS = ("M", "L")
+
+
+def build_evidence(
+    runs: Iterable[RunSummary],
+    champions_root: str | Path,
+    tier_of: Callable[[RunSummary], str | None] = lambda run: None,
+) -> list[ModelEvidence]:
     root = Path(champions_root)
     by_model: dict[str, list[RunSummary]] = {}
     for run in runs:
@@ -47,7 +56,10 @@ def build_evidence(runs: Iterable[RunSummary], champions_root: str | Path) -> li
         champion = has_champion(name, root)
         best = None
         if spec is not None and spec.metric:
-            values = [v for r in model_runs if (v := _metric_value(r, spec.metric)) is not None]
+            values = [
+                v for r in model_runs
+                if (v := _metric_value(r, spec.metric)) is not None and tier_of(r) in GATE_TIERS
+            ]
             if values:
                 best = max(values) if spec.higher_is_better else min(values)
         rows.append(ModelEvidence(

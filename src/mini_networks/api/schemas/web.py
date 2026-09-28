@@ -68,7 +68,7 @@ class ModelEvidence(BaseModel):
     higher_is_better: bool = True
     provisional: bool = False                 # bar not yet validated by an M cloud sweep
     run_count: int = 0
-    best_metric: float | None = None          # best gate_metric across listed runs, by direction
+    best_metric: float | None = None          # best gate_metric across listed M/L runs, by direction
 
 
 class EvidenceResponse(BaseModel):

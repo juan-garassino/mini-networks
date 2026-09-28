@@ -76,7 +76,16 @@ async def evidence(source: RunSource = Depends(get_run_source)):
     # Champions live next to local runs (pull-champions writes <runs>/champions/)
     # whichever RunSource lists the runs.
     champions_root = os.environ.get("MINI_NETWORKS_RUNS", "runs")
-    return EvidenceResponse(models=build_evidence(source.list_runs(), champions_root))
+
+    def tier_of(run) -> str | None:
+        # Effective tier as BaseConfig computes it: fast_demo forces S.
+        try:
+            cfg = source.get_config(run.id).config
+        except RunNotFound:
+            return None
+        return "S" if cfg.get("fast_demo") else cfg.get("training_tier")
+
+    return EvidenceResponse(models=build_evidence(source.list_runs(), champions_root, tier_of))
 
 
 @router.get("/taxonomy")

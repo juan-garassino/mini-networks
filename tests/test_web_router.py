@@ -95,6 +95,25 @@ def test_evidence_best_metric_respects_direction():
         RunSummary(id="classifier/a", model="classifier", source="local", status="done",
                    last_metrics={"eval_accuracy": 0.9}),
     ]
-    rows = {e.name: e for e in build_evidence(runs, champions_root="/nonexistent")}
+    rows = {e.name: e for e in build_evidence(runs, champions_root="/nonexistent", tier_of=lambda r: "M")}
     assert rows["vae"].best_metric == 0.1          # lower is better for losses
     assert rows["classifier"].best_metric == 0.9   # eval_-prefixed key fallback
+
+
+def test_evidence_ignores_smoke_runs_for_the_bar():
+    from mini_networks.api.schemas.web import RunSummary
+    from mini_networks.web.evidence import build_evidence
+
+    runs = [
+        RunSummary(id="classifier/s", model="classifier", source="local", status="done",
+                   last_metrics={"accuracy": 0.125}),
+        RunSummary(id="classifier/m", model="classifier", source="local", status="done",
+                   last_metrics={"accuracy": 0.91}),
+        RunSummary(id="vae/s", model="vae", source="local", status="done",
+                   last_metrics={"eval_loss": 0.05}),
+    ]
+    tiers = {"classifier/s": "S", "classifier/m": "M", "vae/s": "S"}
+    rows = {e.name: e for e in build_evidence(runs, champions_root="/nonexistent", tier_of=lambda r: tiers[r.id])}
+    # S-tier nano runs are not comparable to the M bar — they still count as runs.
+    assert rows["classifier"].best_metric == 0.91 and rows["classifier"].run_count == 2
+    assert rows["vae"].best_metric is None and rows["vae"].run_count == 1
