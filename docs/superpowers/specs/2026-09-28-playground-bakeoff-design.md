@@ -226,3 +226,59 @@ Winner becomes `/` and its system is applied to every surface (map, model card, 
 Observatory, nav). Delete the other editions, the edition toggle, the `(classic)` shell,
 `/atlas`, `components/atlas`, `components/paper/atlas`, losing skins, `/lab/_stub`, unused
 fonts/CSS. No public redeploy without an explicit ask (cloud pause).
+
+## Round 2 (2026-09-28 evening) — from 40% to done
+
+**Why:** the owner reviewed all four live: "good, but ~40% there". Owner notes:
+*more spacing · less overlapping, better connections · more details · hidden easter
+eggs*. The orchestrator's live + code audit agreed and found: node gaps of 3 tiles,
+labels sitting on roads, hub corridors braiding, only one parent path readable (kimi
+builds on transformer + moe + mamba; mamba invisible), no direction cue, critter
+parked ON the focused spot; no skin uses metric curves, inference, compositions as
+ferry routes, or the classic app's per-species forward-pass anatomy; "proof it
+works" is a label; nothing to discover; self-scores 0.4–0.9 above critics; live
+motion never verified by an agent. **All four skins continue; paper and pixel are
+the favourites** (first claim on shared work, most rounds).
+
+### R2-A · Layout v2 (lib/world, shared — fixes spacing / overlap / connections for all)
+- Spacing ~2×: larger generation step and footprint gap; world grows; invariant:
+  min node-centre distance and label-to-node clearance thresholds.
+- Labels never on roads (hard constraint; wider anchor rings).
+- Road lanes: roads sharing tiles get parallel lane offsets — no two drawn roads
+  coincide; hubs branch at distinct junctions (no starburst, no braid).
+- Direction: each road exposes chevron points (parent → child).
+- `lineage(world, name)` → every parent road, child road, ancestors, descendants.
+- `parkingSpot(world, name)` — beside the spot on its incoming road, never on it.
+- New invariant tests for each rule; camera anchors updated.
+
+### R2-B · Lesson card content (shared data + headless hooks; each skin styles it)
+- `lib/lessons.ts`: per model a plain-language "what it is / why it exists / the
+  one idea it adds" (≤60 words, learner voice), distilled from each model.py
+  educational header + docs chapters — no jargon without an explanation.
+- Anatomy: reuse `lib/schematics.ts` (every species) via a skinnable renderer
+  (palette/stroke props) derived from `components/network-flow.tsx`.
+- `useLesson(name)`: metric curve of the best/latest run (`getMetrics`), sample
+  artifacts, champion info — graceful when empty.
+- "Try it": inference presets only where a one-click request is meaningful
+  (derived from `colab/probes.py`), against the served champion; honest loading /
+  error states (slow machine).
+- Compositions: selecting one draws `ferryRoute` (map skins) / highlights pipes
+  (flow).
+
+### R2-C · Easter eggs that teach (shared registry, rendered per skin)
+Grounded in real model behaviour, discoverable without instructions, never in the
+way: grokking "clicks" only after a long hover/focus (delayed generalization); a
+hidden "?" island of next-era models (VQ-VAE, flow matching, gated pixelcnn) past
+the edge of the sea; clicking the critter 7× makes it train — a tiny loss curve from
+a REAL run; double_descent's ferry route dips twice; the Konami code runs a forward
+pass across the whole zoo in depth order. Each egg is declared in the skin's
+encoding.ts under an "eggs" section.
+
+### R2-D · Harness + bar
+- `shoot.mjs --motion`: CDP frame capture of live (non-still) interactions into a
+  contact-sheet JPEG (fly-to, critter walk, pop-up, parade) so agents SEE motion.
+- Critic-led stop rule: a fresh critic scores each skin's final round; ≥4.5 mean
+  and nothing <4 to stop; max 2 critic cycles per skin. Builders keep
+  self-scoring for iteration only.
+- Order: R2-A, R2-B/C, R2-D in parallel (shared code) → the four builders resume
+  on the new foundation → critics → fix → board → owner picks.
