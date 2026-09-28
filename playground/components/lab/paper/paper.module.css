@@ -1,0 +1,61 @@
+/* Paper skin — scoped styles only (no globals). Keyframes live here so they
+   stay module-scoped. The ONE orchestrated animation is the set-piece pop-up;
+   everything else is a direct response to the learner (hover/focus/open). */
+
+.stage {
+  font-family: var(--paper-body), ui-rounded, system-ui, sans-serif;
+  color: #2b2118;
+  background: #1e6fd9;
+}
+.display { font-family: var(--paper-display), var(--paper-body), system-ui, sans-serif; }
+
+/* pop-up book: the set-piece folds up from its base, facets flap in after */
+.popup {
+  transform-box: fill-box;
+  transform-origin: 50% 100%;
+  animation: popup 720ms cubic-bezier(0.25, 1.4, 0.45, 1) both;
+}
+.flap {
+  transform-box: fill-box;
+  transform-origin: 50% 100%;
+  animation: flap 420ms cubic-bezier(0.3, 1.6, 0.5, 1) both;
+}
+@keyframes popup {
+  0% { transform: scaleY(0.04) skewX(-8deg); }
+  60% { transform: scaleY(1.08) skewX(2deg); }
+  100% { transform: scaleY(1) skewX(0); }
+}
+@keyframes flap {
+  0% { transform: scaleY(0); }
+  100% { transform: scaleY(1); }
+}
+
+/* level spots: focus ring appears for keyboard users */
+.spot { cursor: pointer; outline: none; }
+.spot .ring { opacity: 0; }
+.spot:focus-visible .ring { opacity: 1; }
+.spot:hover .lift { transform: translateY(-2px); }
+.lift { transition: transform 120ms ease-out; }
+
+/* the folded paper note (model card) */
+.note {
+  background: #fffdf6;
+  box-shadow: 0 5px 0 #e3d6b8, 6px 12px 0 rgba(43, 33, 24, 0.22);
+  clip-path: polygon(0 0, calc(100% - 34px) 0, 100% 34px, 100% 100%, 0 100%);
+}
+.fold {
+  position: absolute; top: 0; right: 0; width: 34px; height: 34px;
+  background: linear-gradient(225deg, transparent 50%, #e8dcc0 50%);
+  filter: drop-shadow(-2px 2px 0 rgba(43, 33, 24, 0.18));
+}
+.card {
+  background: #fffdf6;
+  box-shadow: 0 4px 0 #e3d6b8, 4px 8px 0 rgba(43, 33, 24, 0.22);
+}
+.sticker {
+  box-shadow: 0 0 0 3px #fffdf6, 0 3px 0 3px rgba(43, 33, 24, 0.22);
+}
+.chip { box-shadow: 0 3px 0 rgba(43, 33, 24, 0.25); }
+.chip:focus-visible, .btn:focus-visible { outline: 3px solid #2b2118; outline-offset: 2px; }
+.btn { box-shadow: 0 3px 0 rgba(43, 33, 24, 0.3); }
+.btn:active { transform: translateY(2px); box-shadow: 0 1px 0 rgba(43, 33, 24, 0.3); }
