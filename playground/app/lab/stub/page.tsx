@@ -45,11 +45,13 @@ export default function StubPage() {
   const cam = useCamera({ world: world?.camera.world ?? target, target, still: view?.still ?? true });
   const paths = useMemo(() => (world ? regionPaths(world) : []), [world]);
 
-  // Ready only after data AND our first painted frame.
+  // Ready only after data AND our first painted frame. rAF can stall under
+  // headless --dump-dom virtual time, so a short timeout backs it up.
   useEffect(() => {
     if (!ready || !world) return;
     const id = requestAnimationFrame(() => setDrawn(true));
-    return () => cancelAnimationFrame(id);
+    const t = setTimeout(() => setDrawn(true), 250);
+    return () => { cancelAnimationFrame(id); clearTimeout(t); };
   }, [ready, world]);
 
   const focus = view?.zoom === "node" && view.focus && world && taxonomy

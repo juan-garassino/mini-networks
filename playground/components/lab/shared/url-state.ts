@@ -31,16 +31,17 @@ export function useLabView() {
     return () => window.removeEventListener("popstate", sync);
   }, []);
 
-  // replaceState keeps the URL shareable without growing history per click.
+  // The URL is the source of truth: write it first (replaceState keeps links
+  // shareable without growing history), then set state from it. Never touch
+  // history inside a state updater — Next's router warns "Cannot update
+  // Router while rendering".
   const update = useCallback((next: Partial<Omit<LabView, "still">>) => {
-    setView((prev) => {
-      const merged = { ...(prev ?? parseLabView(window.location.search)), ...next };
-      const p = new URLSearchParams(window.location.search);
-      p.set("zoom", merged.zoom);
-      if (merged.focus) p.set("focus", merged.focus); else p.delete("focus");
-      window.history.replaceState(null, "", `${window.location.pathname}?${p}`);
-      return merged;
-    });
+    const merged = { ...parseLabView(window.location.search), ...next };
+    const p = new URLSearchParams(window.location.search);
+    p.set("zoom", merged.zoom);
+    if (merged.focus) p.set("focus", merged.focus); else p.delete("focus");
+    window.history.replaceState(null, "", `${window.location.pathname}?${p}`);
+    setView(merged);
   }, []);
 
   return { view, update };

@@ -13,6 +13,7 @@ const ease = (t: number) => (t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 
 
 // Grow the target to the viewport's aspect ratio, centred, so nothing is cropped.
 export function fitBox(target: CamBox, vw: number, vh: number): CamBox {
+  if (vw <= 1 || vh <= 1) return target;      // not measured yet
   const aspect = vw / Math.max(vh, 1);
   let { w, h } = target;
   if (w / h > aspect) h = w / aspect; else w = h * aspect;
@@ -59,16 +60,22 @@ export function useCamera({ world, target, still, minWidth = 240 }: {
     return () => cancelAnimationFrame(raf);
   }, [tx, ty, tw, th, size.w, size.h, still]);
 
-  const drag = useRef<{ x: number; y: number } | null>(null);
+  // Capture only once the press becomes a drag (>4px): capturing on press
+  // retargets pointerup to the container and swallows clicks on map children.
+  const drag = useRef<{ x: number; y: number; dragging: boolean } | null>(null);
   const onPointerDown = useCallback((e: React.PointerEvent) => {
-    drag.current = { x: e.clientX, y: e.clientY };
-    (e.currentTarget as Element).setPointerCapture(e.pointerId);
+    drag.current = { x: e.clientX, y: e.clientY, dragging: false };
   }, []);
   const onPointerMove = useCallback((e: React.PointerEvent) => {
     if (!drag.current) return;
+    if (!drag.current.dragging) {
+      if (Math.hypot(e.clientX - drag.current.x, e.clientY - drag.current.y) < 4) return;
+      drag.current.dragging = true;
+      (e.currentTarget as Element).setPointerCapture(e.pointerId);
+    }
     const k = boxRef.current.w / size.w;
     const dx = (e.clientX - drag.current.x) * k, dy = (e.clientY - drag.current.y) * k;
-    drag.current = { x: e.clientX, y: e.clientY };
+    drag.current = { x: e.clientX, y: e.clientY, dragging: true };
     setBox((b) => ({ ...b, x: b.x - dx, y: b.y - dy }));
   }, [size.w]);
   const onPointerUp = useCallback(() => { drag.current = null; }, []);
