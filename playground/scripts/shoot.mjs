@@ -4,10 +4,14 @@
 //   node scripts/shoot.mjs --skin <name> --round <N|F|critic> [--base http://localhost:3000]
 //        [--states overview,region,node,dense] [--vp desktop,mobile]
 //        [--check-only] [--typecheck]
+//        [--motion select,overview-to-region,konami,critter,idle]
 //
 // Per state: HTTP warm-up → --dump-dom health check → DevTools-protocol
 // screenshot per viewport (waits for data-lab-ready) → JPEG q70 via sips. Output: .lab-shots/<skin>/r<N>/<state>@<vp>.jpg
-// Exit: 0 ok · 2 check failed / blank / typecheck errors · 3 server unreachable.
+// --motion replaces the still states: per scenario, a live (no still=1) page at
+// 1440×900, an action via window.__lab / keys, timed frames → one contact sheet
+// .lab-shots/<skin>/r<N>/motion-<scenario>.jpg. Hook contract: scripts/README-shoot.md.
+// Exit: 0 ok · 2 check failed / blank / typecheck errors / motion failed · 3 server unreachable.
 // At most 2 Chrome (or tsc) processes machine-wide, via .lab-shots/.slots/{0,1}.
 import { spawn } from "node:child_process";
 import fs from "node:fs";
@@ -26,6 +30,29 @@ const STATES = {
 };
 const VIEWPORTS = { desktop: [1440, 900], mobile: [390, 844] };
 const MOBILE_STATES = new Set(["overview", "node"]);
+
+// Live-motion scenarios (never still=1). `hook` = window.__lab method the
+// action needs; `call` runs fire-and-forget right after the "before" frame;
+// frames then land every `every` ms until `span` ms. Contract: README-shoot.md.
+const KONAMI = [
+  ["ArrowUp", "ArrowUp", 38], ["ArrowUp", "ArrowUp", 38], ["ArrowDown", "ArrowDown", 40], ["ArrowDown", "ArrowDown", 40],
+  ["ArrowLeft", "ArrowLeft", 37], ["ArrowRight", "ArrowRight", 39], ["ArrowLeft", "ArrowLeft", 37], ["ArrowRight", "ArrowRight", 39],
+  ["b", "KeyB", 66], ["a", "KeyA", 65],
+];
+const MOTION = {
+  select: { query: `?zoom=region&focus=${FOCUS.region}`, hook: "select", call: `window.__lab.select(${JSON.stringify(FOCUS.node)})`, every: 200, span: 3000 },
+  "overview-to-region": { query: "?zoom=overview", hook: "view", call: `window.__lab.view({ zoom: "region", focus: ${JSON.stringify(FOCUS.dense)} })`, every: 200, span: 2400 },
+  konami: { query: "?zoom=overview", keys: KONAMI, every: 250, span: 4000 },
+  critter: { query: `?zoom=region&focus=${FOCUS.region}`, hook: "critterClick", call: `window.__lab.critterClick(7)`, every: 250, span: 3000 },
+  idle: { query: `?zoom=region&focus=${FOCUS.region}`, every: 500, span: 4000 },
+};
+const MOTION_VP = VIEWPORTS.desktop;
+const MOTION_SETTLE_MS = 1500; // after ready: let intro fly-ins finish so frame 0 is the resting view
+const HOOK_WAIT_MS = 3000; // skins install window.__lab in an effect just after ready
+const FRAME_W = 480; // frames are downscaled at capture (CDP clip scale) → 480×300
+const SHEET_COLS = 4;
+const SHEET_MAX_BYTES = 1.5 * 1024 * 1024;
+const MOTION_KILL_MS = 4 * 60_000;
 
 const CHROME = "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome";
 const CHROME_KILL_MS = 60_000;
@@ -53,7 +80,7 @@ function die(msg, code = 1) {
 }
 
 function parseArgs(argv) {
-  const opts = { base: "http://localhost:3000", states: Object.keys(STATES), vp: Object.keys(VIEWPORTS), checkOnly: false, typecheck: false };
+  const opts = { base: "http://localhost:3000", states: Object.keys(STATES), vp: Object.keys(VIEWPORTS), checkOnly: false, typecheck: false, motion: null };
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
     const val = () => { const v = argv[++i]; if (v === undefined) die(`${a} needs a value`); return v; };
@@ -64,7 +91,8 @@ function parseArgs(argv) {
     else if (a === "--vp") opts.vp = val().split(",").filter(Boolean);
     else if (a === "--check-only") opts.checkOnly = true;
     else if (a === "--typecheck") opts.typecheck = true;
-    else if (a === "-h" || a === "--help") { console.log(fs.readFileSync(fileURLToPath(import.meta.url), "utf8").split("\n").slice(1, 11).join("\n")); process.exit(0); }
+    else if (a === "--motion") opts.motion = val().split(",").filter(Boolean);
+    else if (a === "-h" || a === "--help") { console.log(fs.readFileSync(fileURLToPath(import.meta.url), "utf8").split("\n").slice(1, 15).join("\n")); process.exit(0); }
     else die(`unknown argument ${a}`);
   }
   if (!opts.skin || !/^[a-z0-9][a-z0-9-]*$/.test(opts.skin)) die("--skin <name> is required (lowercase, a-z0-9-)");
@@ -72,6 +100,11 @@ function parseArgs(argv) {
   if (!opts.round || !/^(\d+|F|critic)$/.test(opts.round)) die("--round <N|F|critic> is required");
   for (const s of opts.states) if (!STATES[s]) die(`unknown state ${s} (have: ${Object.keys(STATES).join(",")})`);
   for (const v of opts.vp) if (!VIEWPORTS[v]) die(`unknown viewport ${v} (have: ${Object.keys(VIEWPORTS).join(",")})`);
+  if (opts.motion) {
+    if (!opts.motion.length) die("--motion needs at least one scenario");
+    if (opts.checkOnly) die("--motion cannot be combined with --check-only");
+    for (const m of opts.motion) if (!MOTION[m]) die(`unknown motion scenario ${m} (have: ${Object.keys(MOTION).join(",")})`);
+  }
   return opts;
 }
 
@@ -171,11 +204,10 @@ async function chrome(label, args, doneWhen) {
   }
 }
 
-// Screenshots go through the DevTools protocol, not --screenshot: headless
-// Chrome clamps windows to >=500px wide, so a 390px --window-size lays out at
-// 500 and crops (verified). CDP device metrics give a true 390px viewport, and
-// the capture waits for data-lab-ready on the very page being shot.
-async function cdpScreenshot(label, url, [w, h], mobile, pngPath) {
+// One headless Chrome driven over the DevTools protocol (Node 22's built-in
+// WebSocket). Holds a slot for its lifetime; `body(cdp)` returns the result,
+// a hard timeout resolves { ok: false, why: "timeout" } and kills the group.
+async function withCdp(label, [w, h], killMs, body) {
   const slot = await acquireSlot(label);
   const profile = fs.mkdtempSync(path.join(os.tmpdir(), "lab-shoot-"));
   const child = spawn(CHROME, [
@@ -191,7 +223,7 @@ async function cdpScreenshot(label, url, [w, h], mobile, pngPath) {
   let hard;
   try {
     return await Promise.race([
-      new Promise((resolve) => { hard = setTimeout(() => resolve({ ok: false, why: "timeout" }), CHROME_KILL_MS); }),
+      new Promise((resolve) => { hard = setTimeout(() => resolve({ ok: false, why: "timeout" }), killMs); }),
       (async () => {
         let port;
         for (let i = 0; i < 100 && !port; i++) {
@@ -208,10 +240,14 @@ async function cdpScreenshot(label, url, [w, h], mobile, pngPath) {
         let nextId = 0;
         const pending = new Map();
         const waiters = [];
+        const listeners = [];
         ws.onmessage = (ev) => {
           const msg = JSON.parse(ev.data);
           if (msg.id && pending.has(msg.id)) { pending.get(msg.id)(msg); pending.delete(msg.id); }
-          else if (msg.method) for (const wt of waiters) if (wt.method === msg.method) wt.resolve();
+          else if (msg.method) {
+            for (const wt of waiters) if (wt.method === msg.method) wt.resolve();
+            for (const l of listeners) if (l.method === msg.method) l.fn(msg.params);
+          }
         };
         const send = (method, params = {}) => new Promise((res) => {
           const id = ++nextId;
@@ -219,25 +255,25 @@ async function cdpScreenshot(label, url, [w, h], mobile, pngPath) {
           ws.send(JSON.stringify({ id, method, params }));
         });
         const once = (method) => new Promise((resolve) => waiters.push({ method, resolve }));
+        const on = (method, fn) => listeners.push({ method, fn });
         const evaluate = async (expression) =>
           (await send("Runtime.evaluate", { expression, awaitPromise: true, returnByValue: true })).result?.result?.value;
-
-        await send("Emulation.setDeviceMetricsOverride", { width: w, height: h, deviceScaleFactor: 1, mobile });
-        await send("Page.enable");
-        const loaded = once("Page.loadEventFired");
-        await send("Page.navigate", { url });
-        await Promise.race([loaded, sleep(45_000)]);
-        let ready = false;
-        for (let i = 0; i < 80 && !ready; i++) {
-          ready = await evaluate(`!!document.querySelector('[data-lab-ready="1"]')`);
-          if (!ready) await sleep(250);
-        }
-        // settle: fonts, two frames, then a beat for layout-driven effects
-        await evaluate(`document.fonts.ready.then(() => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(() => setTimeout(r, 400)))))`);
-        const shot = await send("Page.captureScreenshot", { format: "png" });
-        if (!shot.result?.data) return { ok: false, why: "capture failed" };
-        fs.writeFileSync(pngPath, Buffer.from(shot.result.data, "base64"));
-        return ready ? { ok: true } : { ok: false, why: "not ready after 20s" };
+        // Navigate and poll for data-lab-ready (80 × 250ms), then settle: fonts,
+        // two frames, then a beat for layout-driven effects. Returns `ready`.
+        const load = async (url) => {
+          await send("Page.enable");
+          const loaded = once("Page.loadEventFired");
+          await send("Page.navigate", { url });
+          await Promise.race([loaded, sleep(45_000)]);
+          let ready = false;
+          for (let i = 0; i < 80 && !ready; i++) {
+            ready = await evaluate(`!!document.querySelector('[data-lab-ready="1"]')`);
+            if (!ready) await sleep(250);
+          }
+          await evaluate(`document.fonts.ready.then(() => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(() => setTimeout(r, 400)))))`);
+          return ready;
+        };
+        return await body({ send, once, on, evaluate, load });
       })(),
     ]);
   } catch (e) {
@@ -251,6 +287,21 @@ async function cdpScreenshot(label, url, [w, h], mobile, pngPath) {
     fs.rmSync(profile, { recursive: true, force: true, maxRetries: 3, retryDelay: 200 });
     releaseSlot(slot);
   }
+}
+
+// Screenshots go through the DevTools protocol, not --screenshot: headless
+// Chrome clamps windows to >=500px wide, so a 390px --window-size lays out at
+// 500 and crops (verified). CDP device metrics give a true 390px viewport, and
+// the capture waits for data-lab-ready on the very page being shot.
+async function cdpScreenshot(label, url, [w, h], mobile, pngPath) {
+  return withCdp(label, [w, h], CHROME_KILL_MS, async ({ send, load }) => {
+    await send("Emulation.setDeviceMetricsOverride", { width: w, height: h, deviceScaleFactor: 1, mobile });
+    const ready = await load(url);
+    const shot = await send("Page.captureScreenshot", { format: "png" });
+    if (!shot.result?.data) return { ok: false, why: "capture failed" };
+    fs.writeFileSync(pngPath, Buffer.from(shot.result.data, "base64"));
+    return ready ? { ok: true } : { ok: false, why: "not ready after 20s" };
+  });
 }
 
 // ————— checks —————
@@ -327,6 +378,199 @@ async function typecheck(opts) {
   }
 }
 
+// ————— motion —————
+
+const escapeHtml = (s) => String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
+const median = (xs) => { const s = [...xs].sort((a, b) => a - b); return s.length ? s[Math.floor(s.length / 2)] : 0; };
+
+// Frames are inlined as data URIs so the sheet's own script can read their
+// pixels (file:// images taint the canvas): each changed frame gets a red box
+// around the pixels that moved since the previous frame, plus the Δ% of area.
+function sheetHtml({ skin, name, url, action }, frames) {
+  const cols = Math.min(SHEET_COLS, frames.length);
+  const changed = frames.filter((f) => f.changed).length;
+  const cells = frames.map((f, i) => {
+    const t = f.t === null ? "before action" : `+${f.t}ms`;
+    const tag = i === 0 ? "" : f.changed ? `<b>changed</b>` : `<i>= prev</i>`;
+    const cls = i === 0 ? "first" : f.changed ? "moved" : "same";
+    return `<figure class="${cls}"><div class="f"><img src="data:image/jpeg;base64,${f.buf.toString("base64")}" width="${FRAME_W}"></div>` +
+      `<figcaption><span>#${i} · ${t}</span>${tag}</figcaption></figure>`;
+  }).join("\n");
+  return `<!doctype html><html><head><meta charset="utf-8"><style>
+    body { margin: 0; padding: 16px; background: #15171a; color: #e8e6e1; font: 14px/1.35 -apple-system, "Helvetica Neue", sans-serif; width: max-content; }
+    h1 { font-size: 18px; margin: 0 0 4px; }
+    p { margin: 0 0 12px; color: #b8b4ab; max-width: ${cols * (FRAME_W + 16)}px; overflow-wrap: anywhere; }
+    .grid { display: grid; grid-template-columns: repeat(${cols}, ${FRAME_W + 6}px); gap: 10px; }
+    figure { margin: 0; border: 3px solid #3a3d42; background: #000; }
+    figure.moved { border-color: #e0a526; }
+    .f { position: relative; } img { display: block; }
+    .ov { position: absolute; inset: 0; pointer-events: none; }
+    figcaption { display: flex; justify-content: space-between; gap: 8px; padding: 3px 6px; font-size: 14px; background: #202328; }
+    b { color: #e0a526; font-weight: 600; } i { color: #8a8f96; font-style: normal; }
+  </style></head><body>
+  <h1>${escapeHtml(skin)} · motion-${escapeHtml(name)}</h1>
+  <p>${escapeHtml(url)}<br>action: ${escapeHtml(action)} · ${frames.length} frames · ${changed}/${frames.length - 1} changed vs previous ·
+  median capture ${Math.round(median(frames.map((f) => f.latency)))}ms<br>amber border = pixels changed since the previous frame ·
+  pink cells = where they changed (12px grid; omitted when >30% of the view moved) · Δ = share of the frame that changed</p>
+  <div class="grid">${cells}</div>
+  <script>
+  (async () => {
+    const figs = [...document.querySelectorAll("figure")];
+    const imgs = figs.map((f) => f.querySelector("img"));
+    await Promise.all(imgs.map((i) => i.decode().catch(() => {})));
+    const W = imgs[0].naturalWidth, H = imgs[0].naturalHeight;
+    const cv = Object.assign(document.createElement("canvas"), { width: W, height: H });
+    const ctx = cv.getContext("2d", { willReadFrequently: true });
+    const px = imgs.map((i) => { ctx.drawImage(i, 0, 0); return ctx.getImageData(0, 0, W, H).data; });
+    const out = [];
+    for (let k = 1; k < px.length; k++) {
+      if (!figs[k].classList.contains("moved")) continue;
+      const a = px[k - 1], b = px[k];
+      const C = 12, gw = Math.ceil(W / C), cells = new Uint8Array(gw * Math.ceil(H / C));
+      let n = 0;
+      for (let p = 0; p < a.length; p += 4) {
+        if (Math.max(Math.abs(a[p] - b[p]), Math.abs(a[p + 1] - b[p + 1]), Math.abs(a[p + 2] - b[p + 2])) <= 16) continue;
+        n++; const q = p >> 2;
+        cells[((q / W / C) | 0) * gw + (((q % W) / C) | 0)] = 1;
+      }
+      const pct = (100 * n) / (W * H);
+      out.push(pct);
+      const whole = cells.reduce((a, v) => a + v, 0) > 0.3 * cells.length;
+      figs[k].querySelector("b").textContent = "changed · Δ " + (pct < 0.1 ? pct.toFixed(2) : pct.toFixed(1)) + "%" + (whole ? " (whole view)" : "");
+      if (whole) continue; // a fly-to / fade moves everything — an overlay would only bury the frame
+      // overlay: every 12px cell that changed, outlined — scattered motion stays scattered
+      const ov = Object.assign(document.createElement("canvas"), { width: W, height: H, className: "ov" });
+      const o = ov.getContext("2d");
+      o.fillStyle = "rgba(255,45,111,0.25)"; o.strokeStyle = "#ff2d6f"; o.lineWidth = 1.5;
+      cells.forEach((v, c) => { if (v) { const x = (c % gw) * C, y = ((c / gw) | 0) * C; o.fillRect(x, y, C, C); o.strokeRect(x + 0.75, y + 0.75, C - 1.5, C - 1.5); } });
+      figs[k].querySelector(".f").appendChild(ov);
+    }
+    window.__maxDelta = out.length ? Math.max(...out) : 0;
+    document.body.dataset.done = "1";
+  })();
+  </script></body></html>`;
+}
+
+// One Chrome session per scenario: live page → action → timed frames (downscaled
+// at capture via CDP clip scale) → contact-sheet page in the same tab → JPEG.
+async function captureMotion(opts, name, url, framesDir, jpg) {
+  const sc = MOTION[name];
+  const [w, h] = MOTION_VP;
+  return withCdp(`${opts.skin}:motion-${name}`, [w, h], MOTION_KILL_MS, async ({ send, once, on, evaluate, load }) => {
+    const errors = [];
+    on("Runtime.exceptionThrown", (p) => errors.push(String(p.exceptionDetails?.exception?.description ?? p.exceptionDetails?.text ?? "exception").split("\n")[0]));
+    await send("Runtime.enable");
+    await send("Emulation.setDeviceMetricsOverride", { width: w, height: h, deviceScaleFactor: 1, mobile: false });
+    if (!(await load(url))) return { ok: false, retry: true, why: "not ready after 20s" };
+    await sleep(MOTION_SETTLE_MS);
+
+    if (sc.hook) {
+      let has = false;
+      for (let t = 0; t <= HOOK_WAIT_MS && !has; t += 250) {
+        has = await evaluate(`typeof window.__lab?.${sc.hook} === "function"`);
+        if (!has) await sleep(250);
+      }
+      if (!has) return { ok: false, why: `skin does not expose window.__lab.${sc.hook}` };
+    }
+
+    const frames = [];
+    const grab = async (t) => {
+      const t0 = performance.now();
+      const r = await send("Page.captureScreenshot", { format: "jpeg", quality: 80, clip: { x: 0, y: 0, width: w, height: h, scale: FRAME_W / w } });
+      if (!r.result?.data) throw new Error(`frame capture failed: ${r.error?.message ?? "no data"}`);
+      const buf = Buffer.from(r.result.data, "base64");
+      const file = path.join(framesDir, `f${String(frames.length).padStart(3, "0")}.jpg`);
+      fs.writeFileSync(file, buf);
+      const prev = frames.at(-1);
+      frames.push({ file, t, buf, latency: performance.now() - t0, changed: prev ? !prev.buf.equals(buf) : false });
+    };
+
+    await grab(sc.call || sc.keys ? null : 0);
+    let action = "none (idle)";
+    if (sc.call) {
+      action = sc.call;
+      // fire-and-forget: a returned promise is NOT awaited, frames start now
+      const r = await send("Runtime.evaluate", { expression: `(() => { const v = ${sc.call}; return v === false ? "no-op" : "ok"; })()`, returnByValue: true });
+      const ex = r.result?.exceptionDetails;
+      if (ex) return { ok: false, why: `window.__lab.${sc.hook} threw: ${String(ex.exception?.description ?? ex.text).split("\n")[0].slice(0, 160)}` };
+      if (r.result?.result?.value === "no-op") return { ok: true, skipped: `window.__lab.${sc.hook} returned false — skin has nothing to animate here; skipped` };
+    } else if (sc.keys) {
+      action = `Konami via Input.dispatchKeyEvent (${sc.keys.map((k) => k[0].replace("Arrow", "")).join(" ")})`;
+      // headless tabs are unfocused: without focus emulation dispatchKeyEvent can block forever
+      await send("Page.bringToFront");
+      await send("Emulation.setFocusEmulationEnabled", { enabled: true });
+      const key = (params) => Promise.race([send("Input.dispatchKeyEvent", params), sleep(10_000).then(() => { throw new Error(`Input.dispatchKeyEvent ${params.key} timed out`); })]);
+      for (const [k, code, vk] of sc.keys) {
+        const base = { key: k, code, windowsVirtualKeyCode: vk };
+        const text = k.length === 1 ? { text: k, unmodifiedText: k } : {};
+        await key({ type: "keyDown", ...base, ...text });
+        await key({ type: "keyUp", ...base });
+      }
+    }
+    const start = performance.now();
+    for (let i = 1; i * sc.every <= sc.span; i++) {
+      const wait = i * sc.every - (performance.now() - start);
+      if (wait > 0) await sleep(wait);
+      await grab(Math.round(performance.now() - start));
+    }
+
+    // contact sheet: same tab, file:// page next to the frames
+    const html = path.join(framesDir, "sheet.html");
+    fs.writeFileSync(html, sheetHtml({ skin: opts.skin, name, url, action }, frames));
+    const loaded = once("Page.loadEventFired");
+    await send("Page.navigate", { url: `file://${html}` });
+    await Promise.race([loaded, sleep(30_000)]);
+    const [sw, sh] = await evaluate(`[Math.max(document.documentElement.scrollWidth, document.body.scrollWidth), document.documentElement.scrollHeight]`) ?? [];
+    if (!sw || !sh) return { ok: false, why: "contact sheet did not lay out" };
+    await send("Emulation.setDeviceMetricsOverride", { width: sw, height: sh, deviceScaleFactor: 1, mobile: false });
+    for (let i = 0; i < 120 && !(await evaluate(`document.body.dataset.done === "1"`)); i++) await sleep(250);
+    const maxDelta = await evaluate(`window.__maxDelta`);
+    await evaluate(`new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)))`);
+    let bytes = 0;
+    for (const quality of [72, 60, 50, 40]) {
+      const shot = await send("Page.captureScreenshot", { format: "jpeg", quality, clip: { x: 0, y: 0, width: sw, height: sh, scale: 1 } });
+      if (!shot.result?.data) return { ok: false, why: "contact sheet capture failed" };
+      const buf = Buffer.from(shot.result.data, "base64");
+      fs.writeFileSync(jpg, buf);
+      bytes = buf.length;
+      if (bytes <= SHEET_MAX_BYTES) break;
+    }
+    const lat = frames.map((f) => f.latency);
+    return {
+      ok: errors.length === 0,
+      why: errors.length ? `uncaught: ${errors[0].slice(0, 160)}` : "",
+      bytes, sheet: [sw, sh],
+      frames: frames.length, changed: frames.filter((f) => f.changed).length, maxDelta,
+      latency: Math.round(median(lat)), lastT: frames.at(-1).t,
+      slow: median(lat) > sc.every,
+    };
+  });
+}
+
+async function motion(opts, name, outDir) {
+  const url = `${opts.base}/lab/${opts.skin}/${MOTION[name].query}`;
+  const jpg = path.join(outDir, `motion-${name}.jpg`);
+  console.log(`motion ${name}: ${url}`);
+  fs.rmSync(jpg, { force: true });
+  const warm = await httpGet(url, WARMUP_MS);
+  if (warm.error || warm.status !== 200) return { status: `FAIL warm-up ${warm.error ?? `HTTP ${warm.status}`}`, jpg };
+  const once = async () => {
+    const framesDir = fs.mkdtempSync(path.join(os.tmpdir(), "lab-motion-"));
+    const t0 = Date.now();
+    try {
+      return { ...(await captureMotion(opts, name, url, framesDir, jpg)), wall: Date.now() - t0 };
+    } finally {
+      fs.rmSync(framesDir, { recursive: true, force: true, maxRetries: 3, retryDelay: 200 });
+    }
+  };
+  let r = await once();
+  // A Fast Refresh rebuild right after an edit can miss the ready flag once.
+  if (!r.ok && r.retry) r = await once();
+  if (r.skipped) return { status: `SKIP ${r.skipped}`, ...r, jpg };
+  if (r.frames && r.slow) console.log(`  note: median capture ${r.latency}ms > ${MOTION[name].every}ms interval — frames are as fast as the machine allows; captions carry true ms`);
+  return { status: r.ok ? "ok" : `FAIL ${r.why}`, ...r, jpg };
+}
+
 // ————— main —————
 
 async function main() {
@@ -342,6 +586,26 @@ async function main() {
   const rows = [];
 
   if (opts.typecheck && !(await typecheck(opts))) exit = 2;
+
+  if (opts.motion) {
+    const res = [];
+    for (const name of opts.motion) {
+      const r = await motion(opts, name, outDir);
+      if (!r.status.startsWith("ok") && !r.status.startsWith("SKIP")) exit = 2;
+      res.push([name, r]);
+    }
+    console.log(`\n${"scenario".padEnd(20)}${"frames".padStart(7)}${"changed".padStart(9)}${"max Δ%".padStart(8)}${"cap ms".padStart(8)}${"wall s".padStart(8)}${"sheet".padStart(11)}${"bytes".padStart(9)}  status`);
+    for (const [name, r] of res) {
+      const sheet = r.sheet ? `${r.sheet[0]}×${r.sheet[1]}` : "—";
+      console.log(`${name.padEnd(20)}${String(r.frames ?? "—").padStart(7)}${String(r.frames ? `${r.changed}/${r.frames - 1}` : "—").padStart(9)}` +
+        `${String(r.frames ? (r.maxDelta ?? 0).toFixed(2) : "—").padStart(8)}` +
+        `${String(r.latency ?? "—").padStart(8)}${String(r.wall ? (r.wall / 1000).toFixed(1) : "—").padStart(8)}${sheet.padStart(11)}${String(r.bytes || "—").padStart(9)}  ${r.status}`);
+    }
+    const files = res.map(([, r]) => r.jpg).filter((f) => fs.existsSync(f));
+    if (files.length) console.log(`\n${files.join("\n")}`);
+    console.log(exit === 0 ? "\nshoot: ok" : "\nshoot: FAILED");
+    process.exit(exit);
+  }
 
   for (const state of opts.states) {
     const url = `${opts.base}/lab/${opts.skin}/${STATES[state]}`;
