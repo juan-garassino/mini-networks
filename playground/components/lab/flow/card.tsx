@@ -43,23 +43,19 @@ function Evidence({ c }: { c: CardModel }) {
       {c.state === "champion" && (
         <p>Champion checkpoint {version ?? ""} cleared the bar in the cloud gate.</p>
       )}
-      {best != null ? (
-        <>
-          <p>
-            Best local run: <b>{fmt(best)}</b>, {c.passesBar ? "meets the bar" : "short of the bar"}
-            {" "}({e.run_count} run{e.run_count === 1 ? "" : "s"})
-          </p>
-          <svg viewBox="0 0 200 22" className="h-[22px] w-full max-w-[260px]" aria-hidden>
-            <rect x={1} y={6} width={198} height={10} rx={5} fill="#EDE8FF" stroke={INK} strokeWidth={1.5} />
-            <rect x={1} y={6} width={Math.max(10, (best / hi) * 198)} height={10} rx={5} fill={c.passesBar ? "#8FE3C0" : "#FFB38A"} stroke={INK} strokeWidth={1.5} />
-            <path d={`M${1 + (e.threshold_m / hi) * 198} 1 V21`} stroke={INK} strokeWidth={2.5} strokeLinecap="round" />
-          </svg>
-        </>
-      ) : (
-        <p className="text-[#5E4F80]">
-          {e.run_count > 0 ? `${e.run_count} local run${e.run_count === 1 ? "" : "s"}, none scored against the bar yet.` : "No local runs yet."}
-        </p>
-      )}
+      <p>
+        {best != null
+          ? <>Best local run: <b>{fmt(best)}</b>, {c.passesBar ? "meets the bar" : "short of the bar"} ({e.run_count} run{e.run_count === 1 ? "" : "s"})</>
+          : <>No local score yet{e.run_count > 0 ? ` (${e.run_count} local run${e.run_count === 1 ? "" : "s"} logged)` : ""}.</>}
+      </p>
+      <svg viewBox="0 0 200 22" className="h-[22px] w-full max-w-[260px]" role="img"
+        aria-label={best != null ? `best ${fmt(best)} against a bar of ${fmt(e.threshold_m)}` : `bar at ${fmt(e.threshold_m)}, no local score yet`}>
+        <rect x={1} y={6} width={198} height={10} rx={5} fill="#EDE8FF" stroke={INK} strokeWidth={1.5} strokeDasharray={best == null ? "4 3" : undefined} />
+        {best != null && (
+          <rect x={1} y={6} width={Math.max(10, Math.min(1, best / hi) * 198)} height={10} rx={5} fill={c.passesBar ? "#8FE3C0" : "#FFB38A"} stroke={INK} strokeWidth={1.5} />
+        )}
+        <path d={`M${1 + (e.threshold_m / hi) * 198} 1 V21`} stroke={INK} strokeWidth={2.5} strokeLinecap="round" />
+      </svg>
     </div>
   );
 }
@@ -84,7 +80,7 @@ export function FlowCard({ c, mobile, still, runs, phase, familyOf, onPick, onCl
     >
       <div className="flex items-start gap-3">
         <svg viewBox="-30 -32 60 58" className="h-14 w-14 shrink-0" aria-hidden>
-          <Creature family={c.family} atom={c.atom} depth={c.depth} children={c.children.length} state={c.state} runs={runs} phase={phase} still />
+          <Creature family={c.family} atom={c.atom} state={c.state} runs={runs} phase={phase} still />
         </svg>
         <div className="min-w-0 flex-1 pt-1">
           <h2 className={`${s.display} break-words text-[24px] leading-tight`}>{displayName(c.name)}</h2>

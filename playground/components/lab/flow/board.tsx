@@ -2,8 +2,11 @@
 
 // Skin D · Kawaii flow — the zoo as a dataflow board.
 // Positions come ONLY from buildFlow (columns = generation depth, lanes =
-// families, pipes = builds_on). The local camera maps them with independent
-// x/y scales; creatures, tags and text are drawn at screen size on top.
+// families, pipes = builds_on). The camera is uniform (every transition is a
+// real zoom); legibility comes from semantic zoom instead: name tags are
+// placed greedily in importance order (focus, atoms, then by child count) and
+// a tag only appears where it fits at ≥13px without covering a creature,
+// another tag or a foreign pipe.
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { roundedD, type FlowLayout, type FlowNode, type Pt } from "@/lib/world";
 import type { ModelEvidence } from "@/lib/types";
@@ -12,13 +15,18 @@ import { useLabView } from "@/components/lab/shared/url-state";
 import { LabMotion } from "@/components/lab/shared/still";
 import { cardModel, displayName, evidenceState, type EvidenceState } from "@/components/lab/shared/card-model";
 import { fitView, useFlowCamera, useStageSize, type CamBox, type View } from "./camera";
-import { Creature } from "./creature";
+import { Creature, EvidenceGlyph } from "./creature";
 import { FlowCard } from "./card";
 import { Parade, STEP, type ParadePipe } from "./parade";
 import { fam, INK, INK_SOFT, PAPER, DOT } from "./palette";
 import s from "./flow.module.css";
 
 const CARD_W = 400;
+const RAIL = 220;          // desktop: room left of the atoms for their name plates
+const TITLES = 210;        // desktop: room right of the trays for lane titles
+const MOBILE_OVERVIEW_S = 0.6;  // phone overview: ~1.4 screens tall, scroll by camera
+const MOBILE_RAIL = 148;        // phone overview: left rail for the atoms' name plates
+const TRACK = 9;           // world px between trunks sharing a gutter
 const clamp = (v: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, v));
 
 function hash01(name: string) {
@@ -33,12 +41,17 @@ interface Graph {
   node: Map<string, FlowNode>;
   parents: Map<string, string[]>;
   children: Map<string, string[]>;
-  /** world-px pipe polylines extended to both creature centres. */
+  /** world-px pipe polylines: creature centre → shared trunk → creature centre. */
   pipePts: Map<string, Pt[]>;
   laneAtom: Map<string, string>;
   laneCount: Map<string, number>;
 }
 
+// Pipes are restyled into trunks: every edge leaving a parent through a
+// gutter rides that parent's single trunk (and long edges entering a child
+// share the child's trunk), so a hub reads as one tube that branches, not a
+// dozen parallel tubes. Vertical runs stay inside buildFlow's gutters and the
+// long-span channel y comes from buildFlow; only the track x is regrouped.
 function buildGraph(flow: FlowLayout, models: { name: string; builds_on: string[] }[]): Graph {
   const node = new Map(flow.nodes.map((n) => [n.name, n]));
   const parents = new Map<string, string[]>();
@@ -52,15 +65,69 @@ function buildGraph(flow: FlowLayout, models: { name: string; builds_on: string[
       children.get(p)!.push(m.name);
     }
   }
-  const pipePts = new Map<string, Pt[]>();
-  for (const p of flow.pipes) {
-    const a = node.get(p.from)!.box;
-    const b = node.get(p.to)!.box;
-    const pts = p.points.map((q) => ({ ...q }));
-    pts[0] = { x: a.x + a.w / 2, y: pts[0].y };
-    pts[pts.length - 1] = { x: b.x + b.w / 2, y: pts[pts.length - 1].y };
-    pipePts.set(`${p.from}->${p.to}`, pts);
+  const cols = flow.columns.map((c) => c.x);
+  const nodeW = flow.nodes[0]?.box.w ?? 150;
+  const colW = cols.length > 1 ? cols[1] - cols[0] : 220;
+  const gutterMid = (d: number) => cols[d] + nodeW + (colW - nodeW) / 2;
+  const cx = (n: string) => node.get(n)!.box.x + node.get(n)!.box.w / 2;
+  const cy = (n: string) => node.get(n)!.box.y + node.get(n)!.box.h / 2;
+
+  type Plan = { id: string; from: string; to: string; dp: number; dc: number; chan: number | null };
+  const plans: Plan[] = flow.pipes.map((p) => {
+    const dp = node.get(p.from)!.depth;
+    const dc = node.get(p.to)!.depth;
+    let chan: number | null = null;
+    if (dc - dp > 1) {
+      let best = -1;
+      for (let i = 1; i < p.points.length - 2; i++) {
+        const a = p.points[i], b = p.points[i + 1];
+        if (Math.abs(a.y - b.y) < 1e-6 && Math.abs(b.x - a.x) > best) { best = Math.abs(b.x - a.x); chan = a.y; }
+      }
+      if (chan === null) chan = (cy(p.from) + cy(p.to)) / 2;
+    }
+    return { id: `${p.from}->${p.to}`, from: p.from, to: p.to, dp, dc, chan };
+  });
+
+  // trunk intervals per gutter
+  const trunks = new Map<string, { gutter: number; y0: number; y1: number }>();
+  const grow = (key: string, gutter: number, ya: number, yb: number) => {
+    const t = trunks.get(key) ?? { gutter, y0: Infinity, y1: -Infinity };
+    t.y0 = Math.min(t.y0, ya, yb);
+    t.y1 = Math.max(t.y1, ya, yb);
+    trunks.set(key, t);
+  };
+  for (const p of plans) {
+    grow(`o:${p.dp}:${p.from}`, p.dp, cy(p.from), p.chan ?? cy(p.to));
+    if (p.chan !== null) grow(`i:${p.dc - 1}:${p.to}`, p.dc - 1, p.chan, cy(p.to));
   }
+  const trackX = new Map<string, number>();
+  for (const gi of [...new Set([...trunks.values()].map((t) => t.gutter))]) {
+    const list = [...trunks.entries()].filter(([, t]) => t.gutter === gi)
+      .sort(([ka, a], [kb, b]) => (b.y1 - b.y0) - (a.y1 - a.y0) || a.y0 - b.y0 || (ka < kb ? -1 : 1));
+    const tracks: [number, number][][] = [];
+    const assign = new Map<string, number>();
+    for (const [key, t] of list) {
+      let i = tracks.findIndex((iv) => iv.every(([a, b]) => t.y1 < a - 6 || t.y0 > b + 6));
+      if (i < 0) { i = tracks.length; tracks.push([]); }
+      tracks[i].push([t.y0, t.y1]);
+      assign.set(key, i);
+    }
+    for (const [key, i] of assign) trackX.set(key, gutterMid(gi) + (i - (tracks.length - 1) / 2) * TRACK);
+  }
+
+  const pipePts = new Map<string, Pt[]>();
+  for (const p of plans) {
+    const g1 = trackX.get(`o:${p.dp}:${p.from}`)!;
+    const a = { x: cx(p.from), y: cy(p.from) };
+    const b = { x: cx(p.to), y: cy(p.to) };
+    if (p.chan === null) {
+      pipePts.set(p.id, [a, { x: g1, y: a.y }, { x: g1, y: b.y }, b]);
+    } else {
+      const g2 = trackX.get(`i:${p.dc - 1}:${p.to}`)!;
+      pipePts.set(p.id, [a, { x: g1, y: a.y }, { x: g1, y: p.chan }, { x: g2, y: p.chan }, { x: g2, y: b.y }, b]);
+    }
+  }
+
   const laneAtom = new Map<string, string>();
   const laneCount = new Map<string, number>();
   for (const n of flow.nodes) {
@@ -84,12 +151,18 @@ function lineage(g: Graph, f: string) {
   return hops;
 }
 
-function FaceKey({ state, label }: { state: EvidenceState; label: string }) {
+type R = { x: number; y: number; w: number; h: number };
+const hit = (a: R, b: R, m = 0) => a.x < b.x + b.w + m && b.x < a.x + a.w + m && a.y < b.y + b.h + m && b.y < a.y + a.h + m;
+
+function KeyItem({ state, runs = 0, label }: { state: EvidenceState; runs?: number; label: string }) {
   return (
     <span className="flex items-center gap-1 whitespace-nowrap text-[13px] font-bold">
-      <svg viewBox="-24 -26 48 50" className="h-7 w-7" aria-hidden>
-        <Creature family="perception" atom={false} depth={1} children={0} state={state} runs={0} phase={0} still />
+      <svg viewBox="-24 -30 48 54" className="h-7 w-7" aria-hidden>
+        <Creature family="perception" atom={false} state={state} runs={runs} phase={0} still />
       </svg>
+      {runs === 0 && (
+        <svg viewBox="-8 -8 16 16" className="h-[14px] w-[14px]" aria-hidden><EvidenceGlyph state={state} /></svg>
+      )}
       {label}
     </span>
   );
@@ -101,9 +174,8 @@ export function FlowBoard() {
   const { taxonomy, runs, evidence, flow, online, ready } = useWorld(view ? view.still : null);
   const { ref, size } = useStageSize();
   const mobile = size.w > 0 && size.w < 640;
-  const headerH = mobile ? 60 : 72;
-  const colHeadH = 30;
-  const gutter = mobile ? 0 : 200;
+  const headerH = mobile ? 58 : 72;
+  const colHeadH = 26;
 
   // ——— font measurement (labels must fit their slot at ≥13px) ———
   const probe = useRef<HTMLSpanElement | null>(null);
@@ -134,23 +206,26 @@ export function FlowBoard() {
 
   const focusNode = view?.focus && g ? g.node.get(view.focus) ?? null : null;
   const zoom = view && focusNode ? view.zoom : "overview";
+  const bandH = headerH + (zoom !== "node" ? colHeadH : 0);
 
-  // ——— camera target ———
+  // ——— camera target (uniform scale everywhere) ———
   const target: View | null = useMemo(() => {
     if (!flow || !g || size.w === 0) return null;
-    // right margin leaves the last generation's name tags room on screen
-    const right = mobile ? 8 : 150;
-    const avail: CamBox = { x: gutter + 8, y: headerH + colHeadH, w: size.w - gutter - 8 - right, h: size.h - headerH - colHeadH - 12 };
     if (zoom === "region" && focusNode) {
       const lane = flow.lanes[focusNode.lane];
-      return fitView({ x: 0, y: lane.y - 10, w: flow.width, h: lane.h + 20 }, avail, mobile ? 3.2 : 2.2, 2.2);
+      const box = { x: 0, y: lane.y - 12, w: flow.width, h: lane.h + 24 };
+      if (mobile) {
+        const sc = 0.9;
+        return { sx: sc, sy: sc, tx: 4, ty: bandH + 8 - box.y * sc };
+      }
+      return fitView(box, { x: RAIL, y: bandH + 8, w: size.w - RAIL - TITLES - 16, h: size.h - bandH - 16 }, 1, 2);
     }
     if (zoom === "node" && focusNode) {
       const b = focusNode.box;
       const pad: CamBox = { x: b.x + b.w / 2 - b.w * 1.25, y: b.y + b.h / 2 - b.h * 1.8, w: b.w * 2.5, h: b.h * 3.6 };
       const nodeAvail: CamBox = mobile
         ? { x: 8, y: headerH + 8, w: size.w - 16, h: size.h * 0.52 - headerH - 16 }
-        : { x: 24, y: headerH + colHeadH, w: size.w - CARD_W - 16 - 72, h: size.h - headerH - colHeadH - 24 };
+        : { x: 24, y: headerH + 12, w: size.w - CARD_W - 16 - 72, h: size.h - headerH - 36 };
       // widen the frame to the direct parents so the parade's last leg is in shot
       let box = pad;
       for (const p of g.parents.get(focusNode.name) ?? []) {
@@ -162,29 +237,38 @@ export function FlowBoard() {
       const wide = fitView(box, nodeAvail, 1, 2.2);
       const cv = wide.sx >= (mobile ? 0.8 : 1.1) ? wide : fitView(pad, nodeAvail, 1, 2.2);
       // slide the focused creature next to its card so the speech tail stays short
-      // (upstream parents sit to the left/top, so they stay in shot)
       const fx = (b.x + b.w / 2) * cv.sx + cv.tx;
       const fy = (b.y + b.h / 2) * cv.sy + cv.ty;
       if (mobile) cv.ty += size.h * 0.54 - 8 - 84 - fy;
       else cv.tx += Math.max(0, size.w - 16 - CARD_W - 220 - fx);
       return cv;
     }
-    return fitView({ x: 0, y: 0, w: flow.width, h: flow.height }, avail, mobile ? 1.3 : 3.6, 4);
-  }, [flow, g, size.w, size.h, zoom, focusNode, mobile, gutter, headerH]);
+    if (mobile) {
+      const sc = MOBILE_OVERVIEW_S;
+      return { sx: sc, sy: sc, tx: MOBILE_RAIL, ty: bandH + 4 - 20 * sc };
+    }
+    const sc = Math.min((size.h - bandH - 14) / (flow.height - 28), (size.w - RAIL - TITLES - 48) / flow.width);
+    const total = RAIL + flow.width * sc + TITLES;
+    const left = Math.max(16, (size.w - total) / 2) + RAIL;
+    return { sx: sc, sy: sc, tx: left, ty: bandH + 6 - 14 * sc };
+  }, [flow, g, size.w, size.h, zoom, focusNode, mobile, bandH, headerH]);
 
   const cam = useFlowCamera(target, still);
   const v = cam.view;
 
-  // ——— selection, parade, bounce ———
+  // ——— selection, hover, parade, bounce ———
   const [run, setRun] = useState(0);
   const [landed, setLanded] = useState<string | null>(null);
+  const [hover, setHover] = useState<string | null>(null);
   const select = useCallback((name: string) => {
     setRun((r) => r + 1);
     update({ zoom: "node", focus: name });
   }, [update]);
   const selected = zoom === "node" && focusNode ? focusNode.name : null;
+  const lit = selected ?? hover;                   // whose lineage the pipes show
   const runKey = `${selected}:${run}`;
   const hops = useMemo(() => (g && selected ? lineage(g, selected) : null), [g, selected]);
+  const litHops = useMemo(() => (g && lit ? lineage(g, lit) : null), [g, lit]);
   const paradePipes: ParadePipe[] = useMemo(() => {
     if (!g || !flow || !hops) return [];
     const H = Math.max(0, ...hops.values());
@@ -221,67 +305,139 @@ export function FlowBoard() {
     return cardModel(selected, { taxonomy, evidence, runs, family: focusNode.family, depth: focusNode.depth });
   }, [selected, taxonomy, focusNode, evidence, runs]);
 
-  // ——— per-frame screen geometry ———
+  // ——— per-frame screen geometry + semantic-zoom labelling ———
   const scene = useMemo(() => {
     if (!v || !flow || !g) return null;
-    const X = (x: number) => x * v.sx + v.tx;
-    const Y = (y: number) => y * v.sy + v.ty;
-    const rowPitch = 64 * v.sy;
-    const colSp = 220 * v.sx;
+    const sc = v.sx;
+    const X = (x: number) => x * sc + v.tx;
+    const Y = (y: number) => y * sc + v.ty;
+    const rowPitch = 64 * sc;
+    const colSp = 220 * sc;
     // Glyph scale: as big as the row pitch allows; derived models put their
-    // name tag BELOW when a full-size tag fits under them, else beside.
-    // Elders (atoms) always wear a name plate beside them, so their hats
-    // never collide with the tag of the elder above.
+    // name tag BELOW when a full tag fits under them, else beside.
     const kFit = Math.min((rowPitch - 6) / 44, colSp / 110);
-    const font0 = 13;
-    const kBelow = (rowPitch - (font0 + 12) - 8) / 44;
-    const below = kBelow >= 0.95;
-    const k = clamp(below ? Math.min(kFit, kBelow) : kFit, 0.5, 1.6);
+    const kBelow = (rowPitch - 25 - 8) / 44;
+    const below = kBelow >= 0.8;
+    const kMax = mobile && zoom === "overview" ? 0.52 : 1.6;
+    const k = clamp(below ? Math.min(kFit, kBelow) : kFit, 0.45, kMax);
     const font = Math.round(clamp(11 + 2.5 * k, 13, 16));
     const tagH = font + 10;
-    const tube = clamp(2.5 + 2.8 * k, 4, 8);
-    const kAtom = Math.max(k, Math.min(1.2 * k, (rowPitch - 4) / 54));
+    const tube = clamp(2.5 + 2.8 * k, 3.5, 8);
+    const kAtom = Math.max(k, Math.min(1.2 * k, (rowPitch - 4) / 54, kMax * 1.1));
+
     const nodes = flow.nodes.map((n) => {
-      const cx = X(n.box.x + n.box.w / 2);
-      const cy = Y(n.box.y + n.box.h / 2);
       const atom = n.depth === 0;
       const kk = atom ? kAtom : k;
-      const text = displayName(n.name);
-      const fs = atom ? font + 1 : font;
-      const tw = measure.current(text, fs) + 16;
-      let tag: { x: number; y: number; w: number } | null;
-      const lastCol = n.col === flow.columns.length - 1;
-      if (below && !atom) {
-        tag = tw <= colSp - 14 && cx + tw / 2 <= size.w - 4 ? { x: cx - tw / 2, y: cy + 22 * kk + 3, w: tw } : null;
-      } else {
-        const x0 = cx + 24 * kk + 3;
-        const room = lastCol ? size.w - x0 - 8 : colSp - 24 * kk - 3 - 26 * k - 10;
-        tag = tw <= room ? { x: x0, y: cy - tagH / 2, w: tw } : null;
-      }
-      return { n, cx, cy, kk, text, fs, tag };
+      const cx = X(n.box.x + n.box.w / 2);
+      const cy = Y(n.box.y + n.box.h / 2);
+      const left = (n.family === "sequence" ? 27 : n.family === "representation" ? 24 : 20) * kk;
+      const right = (n.family === "representation" ? 24 : n.family === "decision" ? 21 : 19) * kk;
+      const top = (atom ? 31 : n.family === "decision" ? 30 : 26) * kk;
+      const body: R = { x: cx - left, y: cy - top, w: left + right, h: top + 22 * kk };
+      return { n, atom, kk, cx, cy, left, right, body };
     });
-    return { X, Y, k, font, tagH, below, tube, nodes };
-  }, [v, flow, g, size.w, fontsReady]); // eslint-disable-line react-hooks/exhaustive-deps
+
+    // pipes in screen space (+ segments for tag avoidance)
+    const pipes = flow.pipes.map((p) => {
+      const id = `${p.from}->${p.to}`;
+      const pts = g.pipePts.get(id)!.map((q) => ({ x: X(q.x), y: Y(q.y) }));
+      return { id, from: p.from, to: p.to, pts };
+    });
+    const segs: { r: R; from: string; to: string; first: boolean; last: boolean }[] = [];
+    const pad = tube / 2 + 1;
+    for (const p of pipes) {
+      for (let i = 0; i < p.pts.length - 1; i++) {
+        const a = p.pts[i], b = p.pts[i + 1];
+        segs.push({
+          r: { x: Math.min(a.x, b.x) - pad, y: Math.min(a.y, b.y) - pad, w: Math.abs(a.x - b.x) + 2 * pad, h: Math.abs(a.y - b.y) + 2 * pad },
+          from: p.from, to: p.to, first: i === 0, last: i === p.pts.length - 2,
+        });
+      }
+    }
+
+    // the visible stage for tags: under the header band, clear of the card / sheet
+    const stage: R = {
+      x: 4, y: bandH + 2,
+      w: (selected && !mobile ? size.w - 16 - CARD_W - 10 : size.w - 4) - 4,
+      h: (selected && mobile ? size.h * 0.54 - 12 : size.h - 4) - bandH - 2,
+    };
+    const inside = (r: R) => r.x >= stage.x && r.y >= stage.y && r.x + r.w <= stage.x + stage.w && r.y + r.h <= stage.y + stage.h;
+
+    // mobile lane tabs are placed first (they are obstacles for tags)
+    const tabs = mobile ? flow.lanes.map((l) => {
+      const label = fam(l.family).label;
+      const tw = measure.current(label, 13) + 18;
+      const x1 = Math.min(X(flow.width - 18), size.w - 8);
+      return { family: l.family, label, r: { x: x1 - tw, y: Y(l.y) - 11, w: tw, h: 22 } };
+    }) : [];
+
+    // greedy labelling in importance order
+    const childCount = (n: string) => g.children.get(n)!.length;
+    const order = [...nodes].sort((a, b) =>
+      Number(b.n.name === selected) - Number(a.n.name === selected)
+      || Number(b.atom) - Number(a.atom)
+      || childCount(b.n.name) - childCount(a.n.name)
+      || a.n.depth - b.n.depth
+      || (a.n.name < b.n.name ? -1 : 1));
+    const placed: R[] = tabs.map((t) => t.r);
+    const tags = new Map<string, { x: number; y: number; w: number; fs: number; text: string }>();
+    for (const q of order) {
+      const text = displayName(q.n.name);
+      const fs = q.atom && !mobile ? font + 1 : font;
+      const tw = measure.current(text, fs) + 33;       // 6 pad · 13 glyph · 5 gap · text · 9 pad
+      const right: R = { x: q.cx + q.right + 4, y: q.cy - tagH / 2, w: tw, h: tagH };
+      const leftR: R = { x: q.cx - q.left - 4 - tw, y: q.cy - tagH / 2, w: tw, h: tagH };
+      const under: R = { x: q.cx - tw / 2, y: q.cy + 22 * q.kk + 3, w: tw, h: tagH };
+      const underR: R = { ...under, x: q.cx - q.left };   // under, hung right (clears the gutter on its left)
+      const isSel = q.n.name === selected;
+      const cands = q.atom ? [leftR, right, under] : below ? [under, underR, right] : [right, under, underR, leftR];
+      const ok = (r: R) => inside(r)
+        && !nodes.some((o) => o !== q && hit(r, o.body, 1))
+        && !placed.some((o) => hit(r, o, 3))
+        && !segs.some((sg) => {
+          const own = (sg.from === q.n.name && sg.first) || (sg.to === q.n.name && sg.last);
+          return !own && hit(r, sg.r);
+        });
+      // the focused model is always named (under or right of it, clear of its incoming parade);
+      // it may sit over a foreign pipe, never over a creature or another tag
+      const pick = isSel
+        ? [under, underR, right].find((r) => inside(r) && !nodes.some((o) => o !== q && hit(r, o.body, 1)) && !placed.some((o) => hit(r, o, 3))) ?? cands.find(ok) ?? right
+        : cands.find(ok);
+      if (!pick) continue;
+      placed.push(pick);
+      tags.set(q.n.name, { x: pick.x, y: pick.y, w: pick.w, fs, text });
+    }
+
+    // trays hug everything drawn in their lane (same horizontal extent for all lanes)
+    let tx0 = X(6), tx1 = X(flow.width - 6);
+    for (const q of nodes) {
+      tx0 = Math.min(tx0, q.body.x - 10);
+      const t = tags.get(q.n.name);
+      if (t) { tx0 = Math.min(tx0, t.x - 10); tx1 = Math.max(tx1, t.x + t.w + 10); }
+    }
+    return { X, Y, sc, k, tagH, below, tube, nodes, pipes, tags, tabs, tx0, tx1 };
+  }, [v, flow, g, size.w, size.h, fontsReady, mobile, zoom, selected, bandH]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const pipeD = useMemo(() => {
-    if (!v || !flow || !g) return [];
-    return flow.pipes.map((p) => {
-      const id = `${p.from}->${p.to}`;
-      const pts = g.pipePts.get(id)!.map((q) => ({ x: q.x * v.sx + v.tx, y: q.y * v.sy + v.ty }));
+    if (!scene) return [];
+    return scene.pipes.map((p) => {
       let role: "anc" | "kid" | "dim" | "rest" = "rest";
-      if (hops && selected) role = hops.has(p.from) && hops.has(p.to) && hops.get(p.from)! > hops.get(p.to)! ? "anc" : p.from === selected ? "kid" : "dim";
-      return { id, d: roundedD(pts, 14), from: p.from, role };
+      if (litHops && lit) {
+        role = litHops.has(p.from) && litHops.has(p.to) && litHops.get(p.from)! > litHops.get(p.to)! ? "anc" : p.from === lit ? "kid" : "dim";
+      }
+      return { id: p.id, d: roundedD(p.pts, 14), from: p.from, role };
     });
-  }, [v, flow, g, hops, selected]);
+  }, [scene, litHops, lit]);
 
   // ——— the speech-bubble tail from the card to the focused creature ———
   const tail = (() => {
     if (!scene || !selected || !card) return null;
     const me = scene.nodes.find((q) => q.n.name === selected);
     if (!me) return null;
+    const myTag = scene.tags.get(selected);
     if (mobile) {
       const top = size.h * 0.54;
-      const tip = { x: me.cx, y: me.cy + 22 * me.kk + (me.tag && scene.below ? scene.tagH + 8 : 6) };
+      const tip = { x: me.cx, y: me.cy + 22 * me.kk + (myTag && myTag.y > me.cy ? scene.tagH + 8 : 6) };
       if (tip.y > top - 16) return null;
       const bx = clamp(tip.x, 44, size.w - 44);
       return { fill: `M${bx - 16} ${top + 4} Q${bx - 4} ${(top + tip.y) / 2} ${tip.x} ${tip.y} Q${bx + 8} ${(top + tip.y) / 2} ${bx + 16} ${top + 4} Z`,
@@ -296,7 +452,6 @@ export function FlowBoard() {
       line: `M${left + 1.5} ${by - 18} Q${mx} ${by - 6} ${tip.x} ${tip.y} Q${mx} ${by + 10} ${left + 1.5} ${by + 18}` };
   })();
 
-  const laneOf = (f: string) => g?.laneAtom.get(f);
   const familyOf = useCallback((n: string) => g?.node.get(n)?.family ?? "", [g]);
   const crumbs = focusNode && zoom !== "overview" ? fam(focusNode.family).label : null;
 
@@ -309,36 +464,34 @@ export function FlowBoard() {
           {scene && v && flow && g && (
             <svg className="h-full w-full" role="application" aria-label="Dataflow board of the model zoo">
               <defs>
-                <pattern id="flow-dots" patternUnits="userSpaceOnUse" x={v.tx} y={v.ty} width={32 * v.sx} height={32 * v.sy}>
+                <pattern id="flow-dots" patternUnits="userSpaceOnUse" x={v.tx} y={v.ty} width={32 * scene.sc} height={32 * scene.sc}>
                   <circle cx={1.5} cy={1.5} r={1.5} fill={DOT} />
                 </pattern>
               </defs>
               <rect width="100%" height="100%" fill={PAPER} />
               <rect width="100%" height="100%" fill="url(#flow-dots)" />
 
-              {/* lanes = families */}
+              {/* lane trays = families */}
               {flow.lanes.map((l) => {
                 const f = fam(l.family);
-                const x0 = scene.X(6), x1 = scene.X(flow.width - 6);
                 const rx = clamp(18 * scene.k, 10, 24);
-                // a shallow tray: the same hard offset edge the card and header wear
+                const y = scene.Y(l.y), h = l.h * scene.sc, w = scene.tx1 - scene.tx0;
                 return (
                   <g key={l.family}>
-                    <rect x={x0} y={scene.Y(l.y) + 4} width={x1 - x0} height={l.h * v.sy} rx={rx} fill={f.deep} fillOpacity={0.22} />
-                    <rect x={x0} y={scene.Y(l.y)} width={x1 - x0} height={l.h * v.sy} rx={rx}
-                      fill={PAPER} stroke={f.deep} strokeOpacity={0.45} strokeWidth={1.5} />
-                    <rect x={x0} y={scene.Y(l.y)} width={x1 - x0} height={l.h * v.sy} rx={rx} fill={f.fill} fillOpacity={0.3} />
+                    <rect x={scene.tx0} y={y + 4} width={w} height={h} rx={rx} fill={f.deep} fillOpacity={0.22} />
+                    <rect x={scene.tx0} y={y} width={w} height={h} rx={rx} fill={PAPER} stroke={f.deep} strokeOpacity={0.45} strokeWidth={1.5} />
+                    <rect x={scene.tx0} y={y} width={w} height={h} rx={rx} fill={f.fill} fillOpacity={0.3} />
                   </g>
                 );
               })}
 
-              {/* pipes = builds_on; tube colour = the parent's family */}
+              {/* pipes = builds_on; tube colour = the parent's family; hubs share one trunk */}
               {[...pipeD].sort((a, b) => (a.role === "dim" ? 0 : 1) - (b.role === "dim" ? 0 : 1)).map((p) => {
                 const col = fam(g.node.get(p.from)!.family).fill;
                 const on = p.role === "anc" || p.role === "kid";
                 const w = on ? scene.tube + 1.5 : scene.tube;
                 return (
-                  <g key={p.id} opacity={p.role === "dim" ? 0.28 : 1} fill="none" strokeLinecap="round" strokeLinejoin="round">
+                  <g key={p.id} opacity={p.role === "dim" ? 0.25 : 1} fill="none" strokeLinecap="round" strokeLinejoin="round">
                     {p.role === "anc" && (
                       <>
                         <path d={p.d} stroke={col} strokeWidth={w + 16} strokeOpacity={0.35} />
@@ -347,20 +500,20 @@ export function FlowBoard() {
                     )}
                     <path d={p.d} stroke={INK} strokeWidth={w + 3} strokeOpacity={on ? 0.9 : 0.45} />
                     <path d={p.d} stroke={col} strokeWidth={w} />
-                    <path d={p.d} stroke="#fff" strokeWidth={Math.max(1, w * 0.22)} strokeOpacity={0.7} transform={`translate(0 ${-w * 0.18})`} />
                   </g>
                 );
               })}
 
               {/* creatures */}
               {scene.nodes.map(({ n, cx, cy, kk }) => {
-                const ev = evBy.get(n.name);
-                const st = evidenceState(ev);
+                const st = evidenceState(evBy.get(n.name));
                 const isSel = n.name === selected;
                 return (
                   <g key={n.name} transform={`translate(${cx} ${cy})`} className={s.node} tabIndex={0} role="button"
                     aria-label={`${displayName(n.name)}, ${fam(n.family).label}, ${st}`}
                     onClick={() => select(n.name)}
+                    onPointerEnter={() => setHover(n.name)} onPointerLeave={() => setHover((h) => (h === n.name ? null : h))}
+                    onFocus={() => setHover(n.name)} onBlur={() => setHover((h) => (h === n.name ? null : h))}
                     onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); select(n.name); } }}>
                     <title>{displayName(n.name)}</title>
                     <circle className={s.ring} r={30 * kk} fill="none" stroke={INK} strokeWidth={3} strokeDasharray="5 4" />
@@ -368,59 +521,56 @@ export function FlowBoard() {
                     <circle r={24 * kk} fill="transparent" />
                     <g transform={`scale(${kk})`}>
                       <g key={isSel && landed === runKey ? runKey : "idle"} className={isSel && landed === runKey && !still ? s.bounce : undefined}>
-                        <Creature family={n.family} atom={n.depth === 0} depth={n.depth} children={g.children.get(n.name)!.length}
-                          state={st} runs={runsBy.get(n.name) ?? 0} phase={hash01(n.name)} still={still} />
+                        <Creature family={n.family} atom={n.depth === 0} state={st}
+                          runs={runsBy.get(n.name) ?? 0} phase={hash01(n.name)} still={still} />
                       </g>
                     </g>
                   </g>
                 );
               })}
 
-              {/* name tags: elders (atoms) wear their family colour, the selected one is inked */}
-              {scene.nodes.map(({ n, fs, tag, text }) => {
-                if (!tag) return null;
+              {/* name tags: evidence glyph + name; elders wear their family colour, the selected one is inked */}
+              {scene.nodes.map(({ n }) => {
+                const t = scene.tags.get(n.name);
+                if (!t) return null;
                 const isSel = n.name === selected;
                 const atom = n.depth === 0;
+                const st = evidenceState(evBy.get(n.name));
                 return (
                   <g key={n.name} pointerEvents="none">
-                    <rect x={tag.x} y={tag.y} width={tag.w} height={scene.tagH} rx={scene.tagH / 2}
+                    <rect x={t.x} y={t.y} width={t.w} height={scene.tagH} rx={scene.tagH / 2}
                       fill={isSel ? INK : atom ? fam(n.family).fill : "#fff"} stroke={INK} strokeWidth={atom || isSel ? 2 : 1.4} />
-                    <text x={tag.x + tag.w / 2} y={tag.y + scene.tagH / 2 + 0.5} fontSize={fs} textAnchor="middle" dominantBaseline="central"
-                      className={s.display} fill={isSel ? "#fff" : INK}>{text}</text>
+                    <g transform={`translate(${t.x + 12.5} ${t.y + scene.tagH / 2})`}>
+                      {isSel && <circle r={7.6} fill="#fff" />}
+                      <EvidenceGlyph state={st} />
+                    </g>
+                    <text x={t.x + 24} y={t.y + scene.tagH / 2 + 0.5} fontSize={t.fs} dominantBaseline="central"
+                      className={s.display} fill={isSel ? "#fff" : INK}>{t.text}</text>
                   </g>
                 );
               })}
 
-              {selected && v && (
+              {selected && (
                 <Parade pipes={paradePipes} view={v} size={clamp(scene.tube * 2.5, 11, 21)} still={still} runKey={runKey}
                   onLanded={() => setLanded(runKey)} />
               )}
 
-              {/* lane titles: family, how many, and which creature shape they wear */}
-              {flow.lanes.map((l) => {
+              {/* lane titles (desktop: right of the trays) / folder tabs (mobile) */}
+              {mobile ? scene.tabs.map((t) => (
+                <g key={t.family} className="cursor-pointer" onClick={() => { const a = g.laneAtom.get(t.family); if (a) update({ zoom: "region", focus: a }); }}>
+                  <rect x={t.r.x} y={t.r.y} width={t.r.w} height={t.r.h} rx={11} fill={fam(t.family).fill} stroke={INK} strokeWidth={1.8} />
+                  <text x={t.r.x + t.r.w / 2} y={t.r.y + 11.5} textAnchor="middle" dominantBaseline="central" className={s.display} fontSize={13} fill={INK}>{t.label}</text>
+                </g>
+              )) : zoom !== "node" && flow.lanes.map((l) => {
                 const f = fam(l.family);
-                const n = g.laneCount.get(l.family) ?? 0;
                 const top = scene.Y(l.y);
-                const atom = laneOf(l.family);
-                const go = () => atom && update({ zoom: "region", focus: atom });
-                if (top + 40 < headerH || top > size.h) return null;
-                if (mobile) {
-                  // a folder tab straddling the lane's top edge, right-aligned
-                  const tw = measure.current(f.label, 13) + 18;
-                  const x1 = scene.X(flow.width - 18);
-                  return (
-                    <g key={l.family} className="cursor-pointer" onClick={go}>
-                      <rect x={x1 - tw} y={top - 11} width={tw} height={22} rx={11} fill={f.fill} stroke={INK} strokeWidth={1.8} />
-                      <text x={x1 - tw / 2} y={top + 0.5} textAnchor="middle" dominantBaseline="central" className={s.display} fontSize={13} fill={INK}>{f.label}</text>
-                    </g>
-                  );
-                }
-                const x = scene.X(6) - 14;
-                if (x < 120) return null;
+                const x = scene.tx1 + 16;
+                if (x > size.w - 150 || top + 40 < bandH || top > size.h) return null;
+                const atom = g.laneAtom.get(l.family);
                 return (
-                  <g key={l.family} className="cursor-pointer" onClick={go}>
-                    <text x={x} y={top + 20} textAnchor="end" className={s.display} fontSize={18} fill={INK}>{f.label}</text>
-                    <text x={x} y={top + 42} textAnchor="end" fontSize={14} fontWeight={700} fill={INK_SOFT}>{n} {f.kind}</text>
+                  <g key={l.family} className="cursor-pointer" onClick={() => atom && update({ zoom: "region", focus: atom })}>
+                    <text x={x} y={top + 20} className={s.display} fontSize={18} fill={INK}>{f.label}</text>
+                    <text x={x} y={top + 42} fontSize={14} fontWeight={700} fill={INK_SOFT}>{g.laneCount.get(l.family) ?? 0} {f.kind}</text>
                   </g>
                 );
               })}
@@ -428,21 +578,19 @@ export function FlowBoard() {
           )}
         </div>
 
-        {/* column headers = generation depth, sticky under the header */}
-        {scene && flow && v && zoom !== "node" && (
-          <div className="pointer-events-none absolute inset-x-0 z-10" style={{ top: Math.max(headerH + 2, scene.Y(0) - colHeadH) }}>
-            {flow.columns.map((c) => {
-              const x = scene.X(c.x + 75);
-              if (x < -60 || x > size.w + 60) return null;
-              return (
-                <span key={c.depth} className="absolute -translate-x-1/2 whitespace-nowrap rounded-full px-2 text-[13px] font-extrabold leading-6"
-                  style={{ left: x, background: PAPER, color: INK }}>
-                  {c.depth === 0 ? "Atoms" : `Generation ${c.depth}`}
-                </span>
-              );
-            })}
-          </div>
-        )}
+        {/* opaque paper band behind the header (+ generation headers) */}
+        <div className="pointer-events-none absolute inset-x-0 top-0 z-30" style={{ height: bandH, background: PAPER, boxShadow: `0 1.5px 0 rgba(59,46,90,0.14)` }}>
+          {scene && flow && zoom !== "node" && flow.columns.map((c) => {
+            const x = scene.X(c.x + 75);
+            if (x < 30 || x > size.w - 30) return null;
+            return (
+              <span key={c.depth} className="absolute -translate-x-1/2 whitespace-nowrap text-[13px] font-extrabold leading-6"
+                style={{ left: x, top: headerH - 2, color: INK }}>
+                {c.depth === 0 ? "Atoms" : scene.sc * 220 < 130 ? `Gen ${c.depth}` : `Generation ${c.depth}`}
+              </span>
+            );
+          })}
+        </div>
 
         {tail && (
           <svg className="pointer-events-none absolute inset-0 z-30 h-full w-full" aria-hidden>
@@ -472,16 +620,17 @@ export function FlowBoard() {
             </nav>
           )}
           <div className="flex-1" />
-          {size.w >= 1180 && (
+          {size.w >= 1240 && (
             <div className="flex items-center gap-3" aria-label="What the faces mean">
-              <FaceKey state="champion" label="champion" />
-              <FaceKey state="trained" label="trained" />
-              <FaceKey state="provisional" label="new bar" />
-              <FaceKey state="untrained" label="not trained" />
+              <KeyItem state="champion" label="champion" />
+              <KeyItem state="trained" label="trained" />
+              <KeyItem state="provisional" label="provisional bar" />
+              <KeyItem state="untrained" label="not trained" />
+              <KeyItem state="trained" runs={1} label="has local runs" />
             </div>
           )}
           <input list="flow-models" placeholder="Find a model" aria-label="Find a model"
-            className={`${s.search} w-[132px] rounded-full border-2 bg-[#F3F0FF] px-3 py-1 text-[14px] font-bold placeholder:text-[#5E4F80] sm:w-[180px]`}
+            className={`${s.search} w-[132px] rounded-full border-2 bg-[#F3F0FF] px-3 py-1 text-[14px] font-bold placeholder:text-[#5E4F80] sm:w-[170px]`}
             style={{ borderColor: INK }}
             onChange={(e) => {
               const name = e.target.value.trim().replace(/ /g, "_");

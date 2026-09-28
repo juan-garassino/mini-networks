@@ -2,9 +2,9 @@
 
 // One creature per model, drawn in a local ±24 box centred on the node.
 // Every part is data (see encoding.ts):
-//   body shape ← family · segment count (caterpillar) ← number of children ·
-//   dice pips ← generation · top hat + 1.2× size ← atom ·
-//   eyes / mouth / medal / sweat / zzz ← evidence state · blush ← has local runs.
+//   silhouette (incl. lashes, antennae, facets, tail) ← family ·
+//   top hat ← atom · eyes / mouth / medal / sweat / zzz ← evidence state ·
+//   blush ← has local runs.
 import { memo } from "react";
 import type { EvidenceState } from "@/components/lab/shared/card-model";
 import { fam, GOLD, INK, SWEAT } from "./palette";
@@ -13,8 +13,6 @@ import s from "./flow.module.css";
 export interface CreatureProps {
   family: string;
   atom: boolean;
-  depth: number;
-  children: number;
   state: EvidenceState;
   runs: number;
   /** stable per-model phase for the rare blink (hash of the name). */
@@ -96,46 +94,32 @@ function Hat({ x, y, band }: { x: number; y: number; band: string }) {
   );
 }
 
-function Body({ family, children, depth, fill, deep }: { family: string; children: number; depth: number; fill: string; deep: string }) {
+function Body({ family, fill, deep }: { family: string; fill: string; deep: string }) {
   const line = { stroke: INK, strokeWidth: W, strokeLinejoin: "round" as const };
   switch (family) {
     case "perception":
-      // round eyeball; the lens cap faces downstream (toward its children)
+      // eyeball: a round ball with three lashes on its lid
       return (
         <>
-          <path d="M14 -9 Q24 0 14 9" fill="#fff" {...line} />
+          <path d="M-9 -15 L-12 -21 M0 -18 V-24.5 M9 -15 L12 -21" stroke={INK} strokeWidth={2} strokeLinecap="round" />
           <circle r={18} fill={fill} {...line} />
-          <path d="M-12 -8 A13 13 0 0 1 -3 -14" fill="none" stroke="#fff" strokeWidth={3} strokeLinecap="round" opacity={0.8} />
         </>
       );
-    case "sequence": {
-      // token caterpillar: one trailing segment per child (capped at 5)
-      const n = Math.min(children, 5);
-      const segs = Array.from({ length: n }, (_, i) => n - 1 - i);
+    case "sequence":
+      // token caterpillar: two tail segments curled up behind the head, antennae on top
       return (
         <>
-          {segs.map((i) => (
-            <g key={i}>
-              <circle cx={-17 - i * 10} cy={9} r={1.8} fill={INK} />
-              <circle cx={-17 - i * 10} cy={4} r={7.5} fill={fill} {...line} />
-            </g>
-          ))}
+          <circle cx={-19} cy={1} r={6.5} fill={fill} {...line} />
+          <circle cx={-12} cy={10} r={8} fill={fill} {...line} />
           <path d="M-5 -15 Q-8 -22 -11 -23 M5 -15 Q8 -22 11 -23" fill="none" stroke={INK} strokeWidth={1.6} strokeLinecap="round" />
           <circle cx={-11} cy={-23} r={2} fill={deep} stroke={INK} strokeWidth={1.2} />
           <circle cx={11} cy={-23} r={2} fill={deep} stroke={INK} strokeWidth={1.2} />
           <circle r={16} fill={fill} {...line} />
-          <path d="M-10 -7 A11 11 0 0 1 -3 -12" fill="none" stroke="#fff" strokeWidth={2.6} strokeLinecap="round" opacity={0.8} />
         </>
       );
-    }
     case "generative":
       // egg-cloud: an egg whose lower rim is a cloud of samples
-      return (
-        <>
-          <path d="M-16 5 C-16 -13 -8 -21 0 -21 C8 -21 16 -13 16 5 Q17 14 9 13 Q5 19 0 15 Q-5 19 -9 13 Q-17 14 -16 5 Z" fill={fill} {...line} />
-          <path d="M-9 -9 A11 11 0 0 1 -3 -15" fill="none" stroke="#fff" strokeWidth={2.6} strokeLinecap="round" opacity={0.8} />
-        </>
-      );
+      return <path d="M-16 5 C-16 -13 -8 -21 0 -21 C8 -21 16 -13 16 5 Q17 14 9 13 Q5 19 0 15 Q-5 19 -9 13 Q-17 14 -16 5 Z" fill={fill} {...line} />;
     case "representation":
       // mirror twins: two views of one thing across a mirror line
       return (
@@ -146,16 +130,15 @@ function Body({ family, children, depth, fill, deep }: { family: string; childre
         </>
       );
     case "structure":
-      // crystal: facets of a graph
+      // crystal: a cut gem (its facet lines are part of the silhouette)
       return (
         <>
           <path d="M-10 -17 H10 L18 -5 L0 19 L-18 -5 Z" fill={fill} {...line} />
           <path d="M-18 -5 H18 M-10 -17 L-5 -5 L0 19 L5 -5 L10 -17" fill="none" stroke={deep} strokeWidth={1.1} opacity={0.7} />
         </>
       );
-    case "decision": {
-      // dice bot: pips on the top face = generation (1 pip for an atom)
-      const pips = [[0, 0], [-5, 1.2], [5, -1.2], [0, -2.4]].slice(0, Math.min(depth + 1, 4));
+    case "decision":
+      // dice bot: a cube with an antenna
       return (
         <>
           <path d="M1 -19 V-26" stroke={INK} strokeWidth={1.6} strokeLinecap="round" />
@@ -163,15 +146,43 @@ function Body({ family, children, depth, fill, deep }: { family: string; childre
           <path d="M-15 -12 L-8 -19 H20 L13 -12 Z" fill="#FFD3E7" {...line} />
           <path d="M13 -12 L20 -19 V11 L13 18 Z" fill={deep} {...line} />
           <rect x={-15} y={-12} width={28} height={30} rx={4} fill={fill} {...line} />
-          <g transform="translate(3 -15.5)">
-            {pips.map(([x, y], i) => <ellipse key={i} cx={x} cy={y} rx={1.6} ry={1} fill={INK} />)}
-          </g>
         </>
       );
-    }
     default:
       return <circle r={16} fill={fill} {...line} />;
   }
+}
+
+/** The evidence glyph worn on every name tag (screen px, centred on 0,0, ≥12px). */
+export function EvidenceGlyph({ state, size = 13 }: { state: EvidenceState; size?: number }) {
+  const k = size / 13;
+  return (
+    <g transform={`scale(${k})`}>
+      {state === "champion" && (
+        <>
+          <circle r={6.2} fill={GOLD} stroke={INK} strokeWidth={1.4} />
+          <path d="M0 -3.6 l1.05 2.1 2.3 .33 -1.67 1.62 .4 2.3 -2.08 -1.1 -2.08 1.1 .4 -2.3 -1.67 -1.62 2.3 -.33z" fill="#fff" />
+        </>
+      )}
+      {state === "trained" && (
+        <>
+          <circle r={6.2} fill="#fff" stroke={INK} strokeWidth={1.4} />
+          <circle cx={-2.2} cy={-1.4} r={1} fill={INK} />
+          <circle cx={2.2} cy={-1.4} r={1} fill={INK} />
+          <path d="M-2.6 1.4 Q0 3.8 2.6 1.4" fill="none" stroke={INK} strokeWidth={1.3} strokeLinecap="round" />
+        </>
+      )}
+      {state === "provisional" && (
+        <path d="M0 -6.8 Q-5 -0.6 -5 1.9 A5 5 0 0 0 5 1.9 Q5 -0.6 0 -6.8Z" fill={SWEAT} stroke={INK} strokeWidth={1.4} strokeLinejoin="round" />
+      )}
+      {state === "untrained" && (
+        <>
+          <circle r={6.2} fill="#E4DEF7" stroke={INK} strokeWidth={1.4} />
+          <path d="M-2.4 -2.4 H2.4 L-2.4 2.4 H2.4" fill="none" stroke={INK} strokeWidth={1.4} strokeLinecap="round" strokeLinejoin="round" />
+        </>
+      )}
+    </g>
+  );
 }
 
 /** Where the face and hat sit for each body (local units). */
@@ -190,10 +201,7 @@ export const Creature = memo(function Creature(p: CreatureProps) {
   const twins = p.family === "representation";
   return (
     <g>
-      <ellipse cx={0} cy={21} rx={p.family === "sequence" ? 16 + Math.min(p.children, 5) * 5 : 17} ry={3.2}
-        transform={p.family === "sequence" ? `translate(${-Math.min(p.children, 5) * 5} 0)` : undefined}
-        fill={INK} opacity={0.12} />
-      <Body family={p.family} children={p.children} depth={p.depth} fill={f.fill} deep={f.deep} />
+      <Body family={p.family} fill={f.fill} deep={f.deep} />
       {twins ? (
         <>
           <Face x={-11} y={a.face[1]} k={a.face[2]} state={p.state} runs={0} phase={p.phase} still={p.still} />
