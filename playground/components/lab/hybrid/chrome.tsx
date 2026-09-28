@@ -22,7 +22,7 @@ export function PixelWindow({
 }) {
   const Tag = as;
   return (
-    <Tag aria-label={label} className={`${s.card} ${lifted ? s.cardLifted : ""} ${className ?? ""}`} style={style}>
+    <Tag data-chrome="1" aria-label={label} className={`${s.card} ${lifted ? s.cardLifted : ""} ${className ?? ""}`} style={style}>
       <div className={`${s.win} ${bodyClassName ?? ""}`} style={{ borderImageSource: frameUrl(kind) }}>
         {title != null && <div className={`${s.t15} ${s.gold} px-2 pt-0.5`}>{title}</div>}
         {children}
@@ -74,11 +74,9 @@ export function Typewriter({ text, still, className }: { text: string; still: bo
     }, 22);
     return () => clearInterval(id);
   }, [text, still, reduced]);
-  const done = n >= text.length;
   return (
     <p className={className} aria-label={text}>
       <span aria-hidden>{text.slice(0, n)}</span>
-      {!done && <span aria-hidden className={s.caret} />}
     </p>
   );
 }

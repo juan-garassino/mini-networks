@@ -1,8 +1,8 @@
-// Two media, one family identity. The chrome (everything you read) snaps to
-// the Sweetie-16 palette; the diorama is cardstock — the same hue per family,
-// lifted toward paper white so it reads as printed card, not pixels.
-import { FAMILY_INK as PAPER_FAMILY, familyName } from "@/components/lab/paper";
-
+// Two media, one identity.
+// Chrome (everything you read) = Sweetie-16 pixel windows printed on card.
+// Diorama = low-chroma cardstock: region colour is GROUND, so saturation is
+// reserved for evidence (the gold star seal) and focus — and there is ONE
+// accent, gold, shared by focus, champions and the quest route.
 
 export const SW = {
   night: "#1a1c2c",
@@ -23,92 +23,72 @@ export const SW = {
   ink: "#333c57",
 } as const;
 
-/** family → Sweetie-16 swatch (chrome) and cardstock tint / edge (map). */
-export interface FamilyInk { swatch: string; card: string; edge: string; label: string }
+// ── contemporary pixel UI tokens (read from the pixel skin's art palette:
+// hue-shifted ramps, indigo instead of black, warm lights, cool shades) ──
+import { PALETTE as PX, RAMPS as PXR } from "@/components/lab/pixel/art/palette";
+import { GROUND } from "./art.tsx";
+const px = (ramp: keyof typeof PXR, i: number) => PX[PXR[ramp][Math.max(0, Math.min(PXR[ramp].length - 1, i < 0 ? PXR[ramp].length + i : i))]];
+export const UI = {
+  ink: px("ocean", 0),        // outlines, deepest panel
+  panelDeep: px("ocean", 1),
+  panelShade: px("ocean", 1),
+  panel: px("ocean", 2),      // window fill
+  panelLit: px("ocean", 3),   // lit band under the top edge
+  panelHi: px("ocean", 4),    // warm-lit rim, top/left
+  text: px("ui", 1),          // warm paper white
+  dim: px("snow", 3),         // secondary text (≥4.5:1 on panel)
+  gold: px("gold", 3),        // headings, atom names, stars
+  goldLit: px("gold", 4),
+  cyan: px("shallow", 3),
+  cyanHi: px("shallow", 5),
+  cyanShade: px("shallow", 1),
+  good: px("meadow", 5),
+  warn: px("lava", 2),
+  plum: px("roof", 1),        // title plate
+  plumLit: px("roof", 2),
+  plumShade: px("roof", 0),
+  plumDeep: px("magic", 0),
+} as const;
 
+/** family → cardstock face (calm ground), card edge (thickness), prop ink, and
+ *  the VIVID printing ink used where punch is earned: emblems, plinth sides,
+ *  region signs. */
+export interface FamilyInk { face: string; edge: string; ink: string; vivid: string; label: string }
+
+// Six low-chroma cardstocks, distinct in hue AND value so the islands still
+// read in greyscale: sage, ochre, heather, sea-glass, rose clay, umber.
 export const FAMILY: Record<string, FamilyInk> = {
-  perception:     { swatch: SW.green,  card: "#74cf8f", edge: "#2a8a4b", label: "Perception" },
-  sequence:       { swatch: SW.butter, card: "#ffdb97", edge: "#c99440", label: "Sequence" },
-  generative:     { swatch: SW.orange, card: "#f59f80", edge: "#b85636", label: "Generative" },
-  representation: { swatch: SW.cyan,   card: "#a8f2f6", edge: "#3fa9b3", label: "Representation" },
-  decision:       { swatch: SW.berry,  card: "#d9798a", edge: "#84283b", label: "Decision" },
-  structure:      { swatch: SW.lime,   card: "#c6f4a0", edge: "#6fae43", label: "Structure" },
+  perception:     { face: "#a3c98a", edge: "#6f9a57", ink: "#4f6b3f", vivid: "#2e8b3e", label: "Perception" },
+  sequence:       { face: "#e3c27f", edge: "#b08a45", ink: "#77602f", vivid: "#c46a12", label: "Sequence" },
+  generative:     { face: "#b9a3d6", edge: "#8670a6", ink: "#5a4a72", vivid: "#7043b8", label: "Generative" },
+  representation: { face: "#8fcac0", edge: "#5a9a90", ink: "#3f6b65", vivid: "#10857c", label: "Representation" },
+  structure:      { face: "#e0a3a6", edge: "#ad6f73", ink: "#74504c", vivid: "#c23c5a", label: "Structure" },
+  decision:       { face: "#cdb58c", edge: "#98804f", ink: "#645540", vivid: "#8a5a1c", label: "Decision" },
 };
 
-const UNKNOWN: FamilyInk = { swatch: SW.mist, card: "#c9d6df", edge: "#6f8697", label: "Other" };
+const UNKNOWN: FamilyInk = { face: "#c9c3b5", edge: "#98917f", ink: "#625c4d", vivid: "#5d5a66", label: "Other" };
 export const familyInk = (f: string): FamilyInk =>
   FAMILY[f] ?? { ...UNKNOWN, label: f.charAt(0).toUpperCase() + f.slice(1) };
 
-/** Diorama materials (not family-coded). */
+/** Chrome swatch = the island's own printed ground, in a pixel border. */
+export const chromeSwatch = (f: string): string => GROUND[f]?.base ?? familyInk(f).face;
+export const familyLabel = (f: string): string => familyInk(f).label;
+
+/** Diorama materials. */
 export const PAPER = {
-  sea: "#3b5dc9",        // printed sea card
-  seaDeep: "#29366f",    // sea card fibre
-  river: "#6f95e6",      // channel between two region cutouts
+  sea: "#2c5a8c",        // deep printed-blue sea: a vivid board under calm grounds
+  seaHatch: "#3f72a8",   // engraved wave hatch
+  seaDeep: "#1d3d62",    // cast shadow of land onto sea
+  river: "#5b7d9c",      // channel between two families
   rim: "#fffaf0",        // die-cut white rim around every cutout
-  shadow: "#1a1c2c",     // cast shadow of card onto card
-  road: "#fff6df",       // paper road strip
-  roadCase: "#333c57",   // road strip cut line
-  walk: "#ffcd75",       // the focused model's walk home, painted over its roads
-  plank: "#c98b4f",      // bridge planks
-  ink: "#2b2a3a",        // map lettering
-  flag: "#e43b44",       // champion flag
+  shadow: "#1a1c2c",     // card-on-card shadow
+  road: "#f3ead7",       // road paper
+  path: "#e2d7c0",       // footpath (secondary builds_on) — lower value
+  ink: "#2b2a3a",        // inked lettering, mountains, chevrons
+  pencil: "#7d7a86",     // provisional / uncharted
+  gold: "#f2b632",       // THE accent: focus, champion seal, quest route
+  goldEdge: "#a8750f",
+  plank: "#b58555",      // bridges, docks
+  plankDark: "#7c5431",
+  dim: "#1a1c2c",        // value step-back when a model is focused (not a milky veil)
 } as const;
-
-// ── chrome swatches that match the paper map ──────────────────────────────
-// The map is the papercraft skin's; its family colours are not in Sweetie-16.
-// Each family's chrome swatch is the perceptually nearest Sweetie-16 colour
-// (CIE Lab), assigned greedily so no two families share a swatch. Structural
-// chrome colours (night, navy, ink, slate, white, mist) are never used.
-const SWATCH_POOL = [SW.plum, SW.berry, SW.orange, SW.butter, SW.lime, SW.green, SW.teal, SW.blue, SW.sky, SW.cyan];
-
-function lab(hex: string): [number, number, number] {
-  const v = [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16) / 255)
-    .map((c) => (c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4));
-  const x = (v[0] * 0.4124 + v[1] * 0.3576 + v[2] * 0.1805) / 0.95047;
-  const y = v[0] * 0.2126 + v[1] * 0.7152 + v[2] * 0.0722;
-  const z = (v[0] * 0.0193 + v[1] * 0.1192 + v[2] * 0.9505) / 1.08883;
-  const f = (t: number) => (t > 0.008856 ? Math.cbrt(t) : 7.787 * t + 16 / 116);
-  return [116 * f(y) - 16, 500 * (f(x) - f(y)), 200 * (f(y) - f(z))];
-}
-const dist = (a: string, b: string) => {
-  const p = lab(a), q = lab(b);
-  return Math.hypot(p[0] - q[0], p[1] - q[1], p[2] - q[2]);
-};
-
-/**
- * family → Sweetie-16 swatch, snapped from the map's family faces: the
- * assignment with the smallest TOTAL Lab distance (exhaustive, ≤ 10P6
- * options), so two close greens can't swap the way a greedy pick would.
- */
-export function snapSwatches(faces: Record<string, string>): Record<string, string> {
-  const fams = Object.keys(faces).sort();
-  const D = fams.map((f) => SWATCH_POOL.map((c) => dist(faces[f], c)));
-  let best = Infinity;
-  let bestPick: number[] = [];
-  const pick: number[] = [];
-  const used = new Array(SWATCH_POOL.length).fill(false);
-  const go = (i: number, sum: number) => {
-    if (sum >= best) return;
-    if (i === fams.length) { best = sum; bestPick = [...pick]; return; }
-    for (let c = 0; c < SWATCH_POOL.length; c++) {
-      if (used[c]) continue;
-      used[c] = true; pick.push(c);
-      go(i + 1, sum + D[i][c]);
-      used[c] = false; pick.pop();
-    }
-  };
-  if (fams.length <= SWATCH_POOL.length) go(0, 0);
-  const out: Record<string, string> = {};
-  fams.forEach((f, i) => { out[f] = bestPick.length ? SWATCH_POOL[bestPick[i]] : SW.mist; });
-  return out;
-}
-
-/**
- * Chrome swatch for a family = the island's own paper colour (the paper
- * skin's FAMILY_INK face), printed inside a pixel border. The swatch is data;
- * snapping it into Sweetie-16 turned violet into sea-blue and pink into
- * champion-red, so the legend lied. (snapSwatches is kept for reference.)
- */
-export const chromeSwatch = (f: string): string => PAPER_FAMILY[f]?.face ?? familyInk(f).swatch;
-/** Learner-facing family name (shared with the paper map's signs). */
-export const familyLabel = (f: string): string => familyName(f);

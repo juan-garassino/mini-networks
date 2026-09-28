@@ -7,6 +7,8 @@ import type { EvidenceState } from "@/components/lab/shared/card-model";
 import { displayName } from "@/components/lab/shared/card-model";
 import { PixelSprite, PixelWindow } from "./chrome.tsx";
 import { STAR } from "./pixel-art.ts";
+import { PixelEmblem } from "./emblem.tsx";
+import { UI } from "./palette.ts";
 import { NumText } from "./pixel-num.tsx";
 import { chromeSwatch } from "./palette.ts";
 import s from "./hybrid.module.css";
@@ -22,18 +24,37 @@ export interface MenuRow {
   state?: EvidenceState;
 }
 
-export function TitlePlate({ models, families, compact, onMenu, menuOpen }: {
-  models: number; families: number; compact: boolean; onMenu?: () => void; menuOpen?: boolean;
+/**
+ * The slim title: one pixel plate line — the zoo, its size, and a breadcrumb
+ * (All families › Sequence › transformer) that doubles as navigation.
+ */
+export function SlimTitle({ models, families, crumbs, onMenu, menuOpen, toast }: {
+  models: number; families: number;
+  crumbs: { label: string; onClick?: () => void }[];
+  onMenu?: () => void; menuOpen?: boolean;
+  /** a transient line (the Konami wave) */
+  toast?: string | null;
 }) {
   return (
     <PixelWindow kind="plate" as="header" label="Title">
-      <div className="flex items-center gap-3 px-2 pb-0.5">
-        <div className="flex-1">
-          <h1 className={compact ? s.t18 : s.t24}>The model zoo</h1>
-          <p className={`${s.t13} ${s.gold}`}><NumText text={`${models} models in ${families} families`} /></p>
-        </div>
+      <div className={s.titlebar}>
+        <h1 className={`${s.t18} whitespace-nowrap`} style={{ fontWeight: 700 }}>The model zoo</h1>
+        <span className={`${s.t14} ${s.gold} whitespace-nowrap`}><NumText text={`${models} models, ${families} families`} /></span>
+        {crumbs.length > 0 && (
+          <nav aria-label="You are here" className="flex min-w-0 items-center gap-1.5">
+            {crumbs.map((c, i) => (
+              <span key={i} className="flex min-w-0 items-center gap-1.5">
+                <span className={s.crumbSep} aria-hidden>›</span>
+                {c.onClick
+                  ? <button type="button" className={s.crumb} onClick={c.onClick}>{c.label}</button>
+                  : <span className={`${s.t16} truncate`}>{c.label}</span>}
+              </span>
+            ))}
+          </nav>
+        )}
+        {toast && <span className={`${s.t14} ${s.gold} whitespace-nowrap`}>{toast}</span>}
         {onMenu && (
-          <button type="button" className={s.btn} onClick={onMenu} aria-expanded={menuOpen}>
+          <button type="button" className={`${s.btn} ml-auto`} onClick={onMenu} aria-expanded={menuOpen}>
             {menuOpen ? "Close" : "Families"}
           </button>
         )}
@@ -65,7 +86,8 @@ export function RegionMenu({ title, rows, cursor, onPick, onHover, className, to
               <button type="button" role="menuitem"
                 className={`${s.row} ${touch ? s.rowTouch : ""} ${i === cursor ? s.rowHot : ""} ${r.kind === "family" ? s.t18 : s.t15}`}
                 onClick={() => onPick(r)} onMouseEnter={() => onHover(i)} onFocus={() => onHover(i)}>
-                {r.kind !== "back" && <span className={s.swatch} style={{ background: chromeSwatch(r.family) }} />}
+                {r.kind === "family" && <span className={s.swatch} style={{ background: chromeSwatch(r.family) }} />}
+                {r.kind === "model" && <PixelEmblem name={r.key} scale={1} color={r.atom ? UI.gold : UI.text} />}
                 <span className={`flex-1 min-w-0 break-words ${r.atom ? s.gold : ""} ${r.kind === "back" ? s.dim : ""}`}>
                   {r.kind === "model" ? displayName(r.label) : r.label}
                 </span>
