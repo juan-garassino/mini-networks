@@ -345,7 +345,9 @@ async function main() {
   for (const state of opts.states) {
     const url = `${opts.base}/lab/${opts.skin}/${STATES[state]}`;
     console.log(`${state}: ${url}`);
-    const c = await checkState(opts, state, url);
+    let c = await checkState(opts, state, url);
+    // A Fast Refresh rebuild right after an edit can miss the ready flag once.
+    if (!c.ok && c.why.includes("data-lab-ready")) c = await checkState(opts, state, url);
     for (const l of (c.logs ?? []).slice(0, 10)) console.log(`  console: ${l.slice(0, 200)}`);
     if (!c.ok) {
       exit = 2;
