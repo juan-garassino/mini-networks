@@ -55,3 +55,21 @@ class ModelInfo(BaseModel):
 
 class RunListResponse(BaseModel):
     runs: list[RunSummary] = Field(default_factory=list)
+
+
+class ModelEvidence(BaseModel):
+    """Proof-it-works signals per model — what the playground flags/faces encode."""
+
+    name: str
+    champion: bool = False                    # pulled Production checkpoint under runs/champions/<model>
+    champion_version: str | None = None       # registry version from champions/<model>/VERSION
+    gate_metric: str | None = None            # EvalSpec.metric (None = S-style checks only)
+    threshold_m: float | None = None          # M-tier gate bar
+    higher_is_better: bool = True
+    provisional: bool = False                 # bar not yet validated by an M cloud sweep
+    run_count: int = 0
+    best_metric: float | None = None          # best gate_metric across listed runs, by direction
+
+
+class EvidenceResponse(BaseModel):
+    models: list[ModelEvidence] = Field(default_factory=list)

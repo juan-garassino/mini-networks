@@ -23,6 +23,7 @@ class EvalSpec:
     loss_keys: tuple[str, ...] = ("loss",)  # metrics.jsonl keys for the S-tier trend check
     s_mode: str = "decreasing"              # "decreasing" | "finite"
     roundtrip: bool = True                  # load_checkpoint round-trip (compositions: False)
+    provisional: bool = False               # bar not yet validated by an M cloud sweep (surfaced in /web/evidence)
 
 
 def _acc(m: float, l: float, **kw) -> EvalSpec:
@@ -84,34 +85,34 @@ EVAL_SPECS: dict[str, EvalSpec] = {
     # mirror moe/mamba (sparse/hybrid capacity trades early CE for scaling
     # properties the M budget can't show). PROVISIONAL until the first
     # M cloud sweep sets honest bands.
-    "kimi":                  _loss(2.8, 2.2),
-    "deepseek":              _loss(2.8, 2.2),
+    "kimi":                  _loss(2.8, 2.2, provisional=True),
+    "deepseek":              _loss(2.8, 2.2, provisional=True),
     # PROVISIONAL: the val-accuracy jump may or may not land inside the M step
     # budget (20k steps); at L (100k) the paper's setup reaches ~1.0. Finalize
     # from the first M sweep. Train loss drops fast, so the S trend check holds.
-    "grokking":              _acc(0.50, 0.95),
+    "grokking":              _acc(0.50, 0.95, provisional=True),
     # PROVISIONAL: masked CE at t=0.5 over half the positions — its own unit,
     # NOT comparable to autoregressive eval_loss. Set from the first M sweep.
-    "text_diffusion":        _loss(3.2, 2.6),
+    "text_diffusion":        _loss(3.2, 2.6, provisional=True),
     # PROVISIONAL: mirrors the mobilenet/convnext band — the dual-pathway sum
     # should not cost accuracy on clean MNIST. Finalize from the first M sweep.
-    "rpp_classifier":        _acc(0.80, 0.93),
+    "rpp_classifier":        _acc(0.80, 0.93, provisional=True),
     # PROVISIONAL: features are deliberately weak (feature-only MLP baseline is
     # logged as mlp_baseline_accuracy every eval — the bar must sit well above
     # it so the gate provably measures message passing). Finalize both numbers
     # from the first M sweep.
-    "gnn":                   _acc(0.75, 0.90),
+    "gnn":                   _acc(0.75, 0.90, provisional=True),
     # PROVISIONAL: harder than plain segmentation (0.55) — the composite
     # two-digit task makes the click causally necessary. evaluate() also logs
     # wrong_prompt_iou (same mask scored vs the OTHER digit); the gap is the
     # promptability evidence. Finalize both from the first M sweep.
     "sam":                   EvalSpec(metric="eval_iou", thresholds={"M": 0.45, "L": 0.70},
-                                      higher_is_better=True),
+                                      higher_is_better=True, provisional=True),
     # PROVISIONAL: an untrained field scores ~7-10 dB on the dark background
     # (measured at S), so 20 is a real bar. evaluate() also reports psnr_min
     # over held-out views. Finalize from the first M sweep.
     "nerf":                  EvalSpec(metric="psnr", thresholds={"M": 20.0, "L": 26.0},
-                                      higher_is_better=True),
+                                      higher_is_better=True, provisional=True),
     # PROVISIONAL: gates the RAW policy vs random — search-assisted play wins
     # even untrained (measured at S: raw 0.375 vs search 0.94 with a fresh
     # net), so gating search would measure the planner, not the learning.
@@ -120,7 +121,7 @@ EVAL_SPECS: dict[str, EvalSpec] = {
     "alphazero":             EvalSpec(metric="success_rate",
                                       thresholds={"M": 0.75, "L": 0.95},
                                       loss_keys=("policy_loss", "value_loss", "loss"),
-                                      s_mode="finite"),
+                                      s_mode="finite", provisional=True),
     "rnn":                   _loss(2.8, 2.2),
     "rag":                   _loss(2.8, 2.2),
     "rlhf":                  _loss(3.0, 2.4, loss_keys=("pretrain_loss", "ppo_loss")),
@@ -189,7 +190,8 @@ EVAL_SPECS: dict[str, EvalSpec] = {
     # first M sweep. Three descending loss series feed the S trend check.
     "mode_connect":                 _composition(metric="ensemble_accuracy",
                                                  thresholds={"M": 0.88, "L": 0.95},
-                                                 loss_keys=("clf_a_loss", "clf_b_loss", "simplex_loss")),
+                                                 loss_keys=("clf_a_loss", "clf_b_loss", "simplex_loss"),
+                                                 provisional=True),
     # The deliverable is the curve, not a threshold: the "loss" series indexes
     # WIDTHS (one point per swept width), so a downward trend is meaningless
     # -> finite-only S-check. metric=None by design.
@@ -200,7 +202,7 @@ EVAL_SPECS: dict[str, EvalSpec] = {
     # image prefix carries the answer. Finalize on an owner-approved M sweep.
     "vlm":                          _composition(metric="answer_accuracy",
                                                  thresholds={"M": 0.6, "L": 0.9},
-                                                 loss_keys=("loss",)),
+                                                 loss_keys=("loss",), provisional=True),
 }
 
 

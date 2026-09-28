@@ -55,3 +55,46 @@ def test_models_endpoint(client):
     assert names == set(MODEL_NAMES)
     sample = client.get("/web/models").json()[0]
     assert "config_schema" in sample and "defaults" in sample
+
+
+def test_evidence_endpoint(client, runs_dir):
+    from mini_networks.core.registry import MODEL_NAMES
+
+    champ = runs_dir / "champions" / "vae" / "artifacts"
+    champ.mkdir(parents=True)
+    (champ / "model.pt").write_bytes(b"weights")
+    (runs_dir / "champions" / "vae" / "VERSION").write_text("3\n")
+
+    rows = {m["name"]: m for m in client.get("/web/evidence").json()["models"]}
+    # run_count must agree with /web/runs, which also lists the process-global
+    # in-memory job store (other tests may have left jobs there).
+    listed = [r["model"] for r in client.get("/web/runs").json()["runs"]]
+    assert set(rows) == set(MODEL_NAMES)
+
+    vae = rows["vae"]
+    assert vae["champion"] is True and vae["champion_version"] == "3"
+    assert vae["gate_metric"] == "eval_loss" and vae["higher_is_better"] is False
+    assert vae["threshold_m"] == 0.12
+    assert vae["run_count"] == listed.count("vae") >= 1
+
+    assert rows["gan"]["champion"] is False and rows["gan"]["champion_version"] is None
+    assert rows["kimi"]["provisional"] is True
+    assert rows["classifier"]["provisional"] is False
+    assert all(rows[n]["run_count"] == listed.count(n) for n in MODEL_NAMES)
+
+
+def test_evidence_best_metric_respects_direction():
+    from mini_networks.api.schemas.web import RunSummary
+    from mini_networks.web.evidence import build_evidence
+
+    runs = [
+        RunSummary(id=f"vae/{i}", model="vae", source="local", status="done",
+                   last_metrics={"eval_loss": v})
+        for i, v in enumerate([0.3, 0.1, 0.2])
+    ] + [
+        RunSummary(id="classifier/a", model="classifier", source="local", status="done",
+                   last_metrics={"eval_accuracy": 0.9}),
+    ]
+    rows = {e.name: e for e in build_evidence(runs, champions_root="/nonexistent")}
+    assert rows["vae"].best_metric == 0.1          # lower is better for losses
+    assert rows["classifier"].best_metric == 0.9   # eval_-prefixed key fallback

@@ -6,16 +6,20 @@ frontend never knows which. Run ids may contain ``/`` (local ids are
 """
 from __future__ import annotations
 
+import os
+
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import FileResponse
 
 from mini_networks.api.schemas.web import (
     ConfigResponse,
+    EvidenceResponse,
     MetricsResponse,
     ModelInfo,
     RunListResponse,
     SummaryResponse,
 )
+from mini_networks.web.evidence import build_evidence
 from mini_networks.web.lessons import list_lessons, read_lesson
 from mini_networks.web.model_catalog import list_model_infos
 from mini_networks.web.sources import RunNotFound, RunSource, get_run_source
@@ -64,6 +68,15 @@ async def run_artifact(run_id: str, name: str, source: RunSource = Depends(get_r
 @router.get("/models", response_model=list[ModelInfo])
 async def models():
     return list_model_infos()
+
+
+@router.get("/evidence", response_model=EvidenceResponse)
+async def evidence(source: RunSource = Depends(get_run_source)):
+    """Champion / gate bar / provisional flag / run count per model."""
+    # Champions live next to local runs (pull-champions writes <runs>/champions/)
+    # whichever RunSource lists the runs.
+    champions_root = os.environ.get("MINI_NETWORKS_RUNS", "runs")
+    return EvidenceResponse(models=build_evidence(source.list_runs(), champions_root))
 
 
 @router.get("/taxonomy")
