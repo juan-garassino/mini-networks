@@ -10,6 +10,7 @@ import { sprite } from "./raster";
 import { POINTER } from "./sprites";
 import { SpriteImg } from "./sprite-img";
 import { PixelWindow } from "./window";
+import { PixelNum } from "./pixel-num";
 import styles from "./pixel.module.css";
 
 export function TitleWindow({ taxonomyNames, zoom, focus, regionCount, mobile, onPick, onZoom, hidden }: {
@@ -50,8 +51,8 @@ export function TitleWindow({ taxonomyNames, zoom, focus, regionCount, mobile, o
       <div className="px-1">
         <h1 className="text-[24px] font-bold leading-none text-[#ffcd75]">The model zoo</h1>
         {!mobile && (
-          <p className="mt-2 text-[15px] leading-snug text-[#f4f4f4]">
-            {taxonomyNames.length} models across six lands. Pick one and the blob walks there from its root.
+          <p className="mt-2 text-[16px] leading-snug text-[#f4f4f4]">
+            <PixelNum value={taxonomyNames.length} /> models across six lands. Pick one and the blob walks there from its root.
           </p>
         )}
         <label className="mt-3 block">
@@ -84,7 +85,7 @@ export function TitleWindow({ taxonomyNames, zoom, focus, regionCount, mobile, o
         {zoom !== "overview" && focus && (
           <p className="mt-3 text-[17px] leading-tight">
             <span className="text-[#73eff7]">{familyLabel(focus.family)} land</span>
-            <span className="text-[#94b0c2]">, {regionCount} models</span>
+            <span className="text-[#94b0c2]">, <PixelNum value={regionCount} /> models</span>
           </p>
         )}
         {zoom !== "overview" && (

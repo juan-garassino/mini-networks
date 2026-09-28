@@ -6,12 +6,13 @@
 //   skills = mechanisms the model introduces · party = parents / children.
 import { useMemo } from "react";
 import { displayName, EVIDENCE_COPY, type CardModel } from "@/components/lab/shared/card-model";
-import { familyLabel } from "./palette";
+import { biomeOf, familyLabel, SWEETIE } from "./palette";
 import { sprite } from "./raster";
-import { POINTER } from "./sprites";
-import { castleFor, dotFor, type NodeLook } from "./terrain";
+import { POINTER, STAR } from "./sprites";
+import { castleFor, composeNode, dotFor, type NodeLook } from "./terrain";
 import { SpriteImg } from "./sprite-img";
 import { PixelWindow } from "./window";
+import { PixelNum } from "./pixel-num";
 import styles from "./pixel.module.css";
 
 const CELLS = 16;
@@ -64,7 +65,9 @@ export function StatusCard({ card, looks, atoms, onPick, onClose }: {
   onClose: () => void;
 }) {
   const look = looks.get(card.name) ?? { state: card.state, filled: false };
-  const portrait = useMemo(() => (card.atom ? castleFor(look) : dotFor(look)), [card.atom, look]);
+  // the model's own map sprite: castle + banner or level dot, with its evidence marker
+  const portrait = useMemo(() => composeNode(card.atom, look, biomeOf(card.family).shade), [card.atom, look, card.family]);
+  const star = useMemo(() => sprite(STAR), []);
   const meter = gateMeter(card);
   const equipped = championTag(card);
   const runs = card.evidence?.run_count ?? 0;
@@ -78,28 +81,31 @@ export function StatusCard({ card, looks, atoms, onPick, onClose }: {
     >
       <div className="px-2 pb-2 pt-1">
         <header className="flex items-start gap-3">
-          <div className="grid h-[72px] w-[72px] flex-none place-items-center bg-[#1a1c2c] outline outline-2 outline-[#566c86]">
-            <SpriteImg img={portrait} scale={card.atom ? 2 : 3} label={card.atom ? "Castle: an atom" : "Level dot: a derived model"} />
+          <div className="grid h-[96px] w-[96px] flex-none place-items-center outline outline-2 outline-[#1a1c2c]" style={{ background: SWEETIE[biomeOf(card.family).base] }}>
+            <SpriteImg img={portrait} scale={card.atom ? 1 : 2}
+              label={card.atom ? "Its castle on the map: an atom, banner shows the mechanism it introduces" : "Its level dot on the map: a derived model"} />
           </div>
           <div className="min-w-0 flex-1">
             <h2 className="text-[28px] font-bold leading-none text-[#f4f4f4]">{displayName(card.name)}</h2>
-            <p className="mt-2 text-[20px] font-bold leading-tight text-[#ffcd75]">LV {card.depth}</p>
+            <p className="mt-2 text-[20px] font-bold leading-tight text-[#ffcd75]">LV <PixelNum value={card.depth} scale={2} /></p>
           </div>
           <button type="button" className={styles.btn} onClick={onClose} aria-label="Close status (Esc)">Close</button>
         </header>
 
         <p className="mt-3 text-[16px] leading-snug">{card.description}</p>
-        {card.note && <p className={`${styles.muted} mt-1 text-[14px] leading-snug`}>{card.note}</p>}
+        {card.note && <p className={`${styles.muted} mt-1 text-[16px] leading-snug`}>{card.note}</p>}
 
         <dl className="mt-3 grid grid-cols-[auto_1fr] gap-x-4 gap-y-1 text-[16px] leading-tight">
           <dt className={styles.muted}>Class</dt>
           <dd>{familyLabel(card.family)}, {card.atom ? "atom" : "derived model"}</dd>
           <dt className={styles.muted}>Equipped</dt>
-          <dd className={equipped ? styles.gold : ""}>{equipped ?? "No champion"}</dd>
+          <dd className={equipped ? styles.gold : ""}>
+            {equipped ? (equipped.match(/\d+/) ? <>Champion v<PixelNum value={equipped.match(/\d+/)![0]} /></> : "Champion") : "No champion"}
+          </dd>
           <dt className={styles.muted}>Status</dt>
           <dd>{EVIDENCE_COPY[card.state]}</dd>
           <dt className={styles.muted}>Runs</dt>
-          <dd>{runs === 0 ? "None logged here" : `${runs} logged`}</dd>
+          <dd>{runs === 0 ? "None here yet" : <><PixelNum value={runs} /> local S-tier {runs === 1 ? "smoke test" : "smoke tests"}</>}</dd>
         </dl>
 
         {meter && (
@@ -108,23 +114,30 @@ export function StatusCard({ card, looks, atoms, onPick, onClose }: {
               <span className={styles.muted}>Gate</span>
               <span>{meter.metric}</span>
             </div>
-            <div className={`${styles.meter} mt-2`} role="meter" aria-valuemin={0} aria-valuemax={SPAN} aria-valuenow={meter.ratio ?? 0}
-              aria-label={`best ${meter.metric} relative to the bar`}>
+            <div className={`${styles.meter} mt-7`} role="meter" aria-valuemin={0} aria-valuemax={SPAN} aria-valuenow={meter.ratio ?? 0}
+              aria-label={meter.best == null ? "no M-tier score yet" : `best M-tier ${meter.metric} relative to the bar`}>
               {Array.from({ length: CELLS }, (_, i) => (
-                <span key={i} className={styles.cell}
+                <span key={i} className={meter.best == null ? styles.cellHollow : styles.cell}
                   style={i < meter.filled ? { background: meter.passes ? "#a7f070" : "#ef7d57" } : undefined} />
               ))}
               <span className={styles.tick} style={{ left: `${(1 / SPAN) * 100}%` }} aria-hidden />
+              {card.state === "champion" && (
+                <span className="absolute -top-[22px] -translate-x-1/2" style={{ left: `${(1 / SPAN) * 100}%` }} aria-hidden>
+                  <SpriteImg img={star} scale={1} />
+                </span>
+              )}
             </div>
-            <p className="mt-2 text-[15px] leading-snug">
-              Bar: {fmt(meter.bar)} {meter.higher ? "or more" : "or less"}.{" "}
+            <p className="mt-2 text-[16px] leading-snug">
+              Bar: <PixelNum value={fmt(meter.bar)} /> {meter.higher ? "or more" : "or less"}.{" "}
               {meter.best == null
-                ? <span className={styles.muted}>No local run has logged it yet.</span>
+                ? <span className={styles.muted}>
+                    No M-tier score yet.{runs > 0 && <> The <PixelNum value={runs} /> local {runs === 1 ? "run is an S-tier smoke test" : "runs are S-tier smoke tests"}.</>}
+                  </span>
                 : <span className={meter.passes ? styles.good : styles.warn}>
-                    Best local run: {fmt(meter.best)}, {meter.passes ? "passes" : "below the bar"}.
+                    Best M-tier score: <PixelNum value={fmt(meter.best)} />, {meter.passes ? "passes" : "below the bar"}.
                   </span>}
             </p>
-            {card.state === "champion" && <p className={`${styles.muted} text-[14px] leading-snug`}>The champion passed this bar in the cloud sweep.</p>}
+            {card.state === "champion" && <p className={`${styles.gold} mt-1 text-[16px] leading-snug`}>Cleared: the champion passed this bar in the cloud sweep.</p>}
           </section>
         )}
 

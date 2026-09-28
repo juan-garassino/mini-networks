@@ -15,7 +15,7 @@ export function Legend({ mobile, defaultOpen }: { mobile: boolean; defaultOpen: 
   const [override, setOverride] = useState<boolean | null>(null);
   const open = override ?? defaultOpen;
   const icons = useMemo(() => ({
-    castle: castleFor({ state: "champion", filled: true }),
+    castle: castleFor({ state: "champion", filled: true, mech: "self-attention" }),
     dot: dotFor({ state: "trained", filled: true }),
     dim: dotFor({ state: "untrained", filled: false }),
     star: sprite(STAR),
@@ -36,7 +36,7 @@ export function Legend({ mobile, defaultOpen }: { mobile: boolean; defaultOpen: 
   }
 
   const rows: [keyof typeof icons, string, number][] = [
-    ["castle", "Atom, a lineage root", 1],
+    ["castle", "Atom; banner shows its mechanism", 1],
     ["dot", "Model with runs", 1],
     ["star", "Champion passed the gate", 2],
     ["dim", "Not trained yet", 1],

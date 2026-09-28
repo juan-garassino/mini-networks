@@ -1,7 +1,7 @@
 // Region signboards: anchored on the region's set-piece plaza (world data),
 // nudged between a few fixed candidate spots so a sign never covers a name
 // label, a node or another sign. Pure screen-space geometry.
-export interface Rect { x: number; y: number; w: number; h: number }
+export interface Rect { x: number; y: number; w: number; h: number; weight?: number }
 
 const overlap = (a: Rect, b: Rect) =>
   Math.max(0, Math.min(a.x + a.w, b.x + b.w) - Math.max(a.x, b.x)) *
@@ -25,19 +25,43 @@ export function placeSigns(signs: SignIn[], obstacles: Rect[], bounds: Rect): Ma
     ];
     const cands: Rect[] = [];
     for (const dx of [0, -s.w / 3, s.w / 3]) for (const y of ys) cands.push({ x: cx + dx, y, w: s.w, h: s.h });
-    for (const dy of [16, -16, 32, -32, 48, -48]) cands.push({ x: cx, y: A.y + A.h / 2 - s.h / 2 + dy, w: s.w, h: s.h });
+    // beside the plaza, then a widening ring around it
+    const midY = A.y + A.h / 2 - s.h / 2;
+    cands.push({ x: A.x - s.w - 2, y: midY, w: s.w, h: s.h }, { x: A.x + A.w + 2, y: midY, w: s.w, h: s.h });
+    for (const r of [24, 48, 72, 96]) for (let a = 0; a < 16; a++) {
+      const t = (a / 16) * Math.PI * 2;
+      cands.push({ x: cx + Math.cos(t) * r * 1.6, y: A.y + A.h + 2 + Math.sin(t) * r, w: s.w, h: s.h });
+    }
     let best = cands[0], bestCost = Infinity;
     for (const c of cands) {
       let cost = 0;
-      for (const o of obstacles) cost += overlap(c, o);
+      for (const o of obstacles) cost += overlap(c, o) * (o.weight ?? 1);
       for (const p of placed) cost += 4 * overlap(c, p);
-      const out = Math.max(0, bounds.x - c.x) + Math.max(0, c.x + c.w - bounds.x - bounds.w);
-      cost += out * s.h * 2;
+      const outX = Math.max(0, bounds.x - c.x) + Math.max(0, c.x + c.w - bounds.x - bounds.w);
+      const outY = Math.max(0, bounds.y - c.y) + Math.max(0, c.y + c.h - bounds.y - bounds.h);
+      cost += (outX * s.h + outY * s.w) * 40; // a sign cut by the screen edge is unreadable
+      // prefer staying near the plaza: a sign far from its land names nothing
+      cost += 8 * Math.hypot(c.x + c.w / 2 - (A.x + A.w / 2), c.y + c.h / 2 - (A.y + A.h));
       if (cost < bestCost) { bestCost = cost; best = c; }
-      if (cost === 0) break;
     }
     placed.push(best);
     out.set(s.id, { x: best.x, y: best.y });
   }
   return out;
+}
+
+export interface ChipIn { id: string; cx: number; top: number; w: number; h: number }
+
+/** Greedy chips (mobile atom names): first come keeps its spot, later overlapping chips are culled. */
+export function cullChips(chips: ChipIn[], obstacles: Rect[], bounds: Rect): (ChipIn & { x: number })[] {
+  const kept: (ChipIn & { x: number })[] = [];
+  const taken: Rect[] = [...obstacles];
+  for (const c of chips) {
+    const r = { x: c.cx - c.w / 2, y: c.top, w: c.w, h: c.h };
+    if (r.x < bounds.x || r.y < bounds.y || r.x + r.w > bounds.x + bounds.w || r.y + r.h > bounds.y + bounds.h) continue;
+    if (taken.some((o) => overlap(r, o) > 0)) continue;
+    taken.push({ ...r, x: r.x - 2, w: r.w + 4 });
+    kept.push({ ...c, x: r.x });
+  }
+  return kept;
 }

@@ -494,3 +494,39 @@ export const KEY_BRIDGE: SpriteRows = [
   "6699999999999966",
   "6699999999999966",
 ];
+
+// ——— Atom banners: the mechanism each atom introduces, as a 5×5 glyph ———
+// Hung on the castle keep (red pennant, gold glyph). Atoms are exactly the
+// models that introduce a mechanism, so every castle wears a different one.
+export const BANNER: SpriteRows = [
+  "000000000",
+  "0RRRRRRR0",
+  "0RRRRRRR0",
+  "0RRRRRRR0",
+  "0RRRRRRR0",
+  "0RRRRRRR0",
+  "0RRRRRRR0",
+  "0RRRRRRR0",
+  "0RRRRRRR0",
+  ".0RRRRR0.",
+  "..0RRR0..",
+  "...000...",
+];
+export const MECH_GLYPHS: Record<string, SpriteRows> = {
+  convolution: ["x.x.x", ".....", "x.x.x", ".....", "x.x.x"],                 // 3×3 kernel taps
+  mlp: ["x...x", "xx.xx", "x.x.x", "xx.xx", "x...x"],                         // dense criss-cross
+  recurrence: [".xxx.", "x...x", "x.xxx", "x....", ".xxx."],                  // loop back
+  "self-attention": ["x.x.x", ".xxx.", "xxxxx", ".xxx.", "x.x.x"],            // all-to-all
+  "selective-scan": ["x....", "xx...", "xxx..", "xxxx.", "xxxxx"],            // decaying scan
+  "message-passing": ["x...x", ".xxx.", ".x.x.", ".xxx.", "x...x"],           // hub and spokes
+  "variational-latent": ["..x..", ".x.x.", ".x.x.", "x...x", "x...x"],        // bell curve
+  "adversarial-game": ["x...x", ".x.x.", "..x..", ".x.x.", "x...x"],          // crossed blades
+  "iterative-denoising": ["x.x.x", ".x.x.", "xx.xx", "xxxxx", "xxxxx"],       // noise → solid
+  "autoregressive-factorization": ["xxxxx", "xxxxx", "xx...", ".....", "....."], // raster so far
+  "skip-encoder-decoder": ["xxxxx", "x...x", "x...x", "x...x", ".xxx."],      // U with skip
+  "contrastive-infonce": ["x...x", "xx.xx", "xxxxx", "xx.xx", "x...x"],       // pulled together
+  "policy-gradient": ["..x..", ".xxx.", "x.x.x", "..x..", "..x.."],           // ascend
+  "value-based-rl": ["xxxxx", "x.x.x", "xxxxx", "x.x.x", "xxxxx"],            // Q-table
+  "neural-field-rendering": ["....x", "...x.", "xxx..", "xxx..", "xxx.."],    // ray into a volume
+  "tree-search-self-play": ["..x..", "..x..", ".x.x.", "x...x", "x.x.x"],     // search tree
+};

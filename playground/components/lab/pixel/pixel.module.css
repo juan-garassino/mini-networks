@@ -75,6 +75,20 @@
   pointer-events: none;
 }
 
+.chip {
+  position: absolute;
+  font: inherit;
+  font-size: 13px;
+  line-height: 1;
+  white-space: nowrap;
+  color: #ffcd75;
+  background: #1a1c2c;
+  border: 1px solid #ffcd75;
+  padding: 0 4px;
+  cursor: pointer;
+}
+.chip:focus-visible { outline: 2px solid #73eff7; outline-offset: 1px; }
+
 .hit {
   position: absolute;
   background: transparent;
@@ -138,6 +152,8 @@
   border: 2px solid #566c86;
 }
 .cell { flex: 1; height: 12px; background: #333c57; }
+.cellHollow { flex: 1; height: 12px; background: transparent; box-shadow: inset 0 0 0 1px #566c86; }
+
 .tick {
   position: absolute;
   top: -6px;

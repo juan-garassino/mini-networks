@@ -20,12 +20,17 @@ import {
   blank, blit, CLEAR, downsample, fillRect, flipX, recolor, sprite, toCanvas, type IndexImage,
 } from "./raster";
 import {
-  CACTUS, CASTLE, CRYSTAL, DOT, GLINTS, GLYPHS, GROUND, GROUND_OF, MUSHROOM, PINE, QSIGN, STAR, TREE,
+  BANNER, CACTUS, CASTLE, CRYSTAL, DOT, GLINTS, GLYPHS, GROUND, GROUND_OF, MECH_GLYPHS, MUSHROOM, PINE, QSIGN, STAR, TREE,
 } from "./sprites";
 
 export const TS = 16;
 
-export interface NodeLook { state: EvidenceState; filled: boolean }
+export interface NodeLook {
+  state: EvidenceState;
+  filled: boolean;
+  /** mechanism the model introduces (atoms wear it as a banner glyph). */
+  mech?: string;
+}
 
 export interface Layers {
   /** ts16: [water frame 0, water frame 1] */
@@ -371,7 +376,14 @@ function paintDecor(img: IndexImage, world: World, f: number) {
 // Node sprites per evidence look.
 export function castleFor(look: NodeLook): IndexImage {
   const base = sprite(CASTLE, { R: C_IDX.blue, r: C_IDX.navy });
-  return look.filled ? base : recolor(base, { [C_IDX.silver]: C_IDX.slate, [C_IDX.slate]: C_IDX.charcoal, [C_IDX.blue]: C_IDX.slate, [C_IDX.navy]: C_IDX.charcoal });
+  const c = look.filled ? base : recolor(base, { [C_IDX.silver]: C_IDX.slate, [C_IDX.slate]: C_IDX.charcoal, [C_IDX.blue]: C_IDX.slate, [C_IDX.navy]: C_IDX.charcoal });
+  const glyph = look.mech ? MECH_GLYPHS[look.mech] : undefined;
+  if (glyph) {
+    // banner on the keep: red pennant with the mechanism glyph in gold
+    blit(c, sprite(BANNER, { R: C_IDX.red }), 11, 10);
+    blit(c, sprite(glyph, { x: C_IDX.gold }), 13, 12);
+  }
+  return c;
 }
 export function dotFor(look: NodeLook): IndexImage {
   return look.filled
@@ -379,37 +391,43 @@ export function dotFor(look: NodeLook): IndexImage {
     : sprite(DOT, { F: C_IDX.slate, D: C_IDX.charcoal, H: C_IDX.silver });
 }
 
+/** Margin (world px) around a composed node so markers can overhang the footprint. */
+export const NODE_PAD = 8;
+
+/**
+ * One node as it appears on the map at ts16 (castle ×2 + banner + ground
+ * shadow, or level dot), with its evidence marker anchored ON the sprite:
+ * the star/sign overlaps the dot's upper-right rim or sits on the right
+ * tower's spire. Used by the map and by the status-card portrait.
+ */
+export function composeNode(atom: boolean, look: NodeLook, shade: number, frame: 0 | 1 = 0): IndexImage {
+  const fw = atom ? 64 : 32;
+  const img = blank(fw + 2 * NODE_PAD, fw + 2 * NODE_PAD);
+  const o = NODE_PAD;
+  if (atom) {
+    fillRect(img, o + 6, o + 58, fw - 10, 3, shade);
+    fillRect(img, o + 10, o + 61, fw - 18, 1, shade);
+    blit(img, castleFor(look), o, o, 2);
+  } else {
+    const d = dotFor(look);
+    blit(img, d, o + (fw - d.w) / 2, o + Math.floor((fw - d.h) / 2));
+  }
+  const mk = look.state === "champion" ? sprite(STAR) : look.state === "provisional" && frame === 0 ? sprite(QSIGN) : null;
+  if (mk) {
+    if (atom) blit(img, mk, o + fw - 12 - Math.floor(mk.w / 2), o - 6);
+    else blit(img, mk, o + 26 - Math.floor(mk.w / 2), o + 1);
+  }
+  return img;
+}
+
 function paintNodes(img: IndexImage, world: World, looks: Map<string, NodeLook>, f: number, frame: 0 | 1) {
-  const star = sprite(STAR), qs = sprite(QSIGN);
   for (const n of world.nodes) {
     const look = looks.get(n.name) ?? { state: "untrained", filled: false };
-    const fx = (n.foot.x * TS) / f, fy = (n.foot.y * TS) / f, fw = (n.foot.w * TS) / f, fh = (n.foot.h * TS) / f;
-    if (n.atom) {
-      const c = castleFor(look);
-      if (f === 1) {
-        // ground shadow under the keep, in the land's own shade tone
-        const t = Math.floor(n.center.y / TS) * world.cols + Math.floor(n.center.x / TS);
-        const reg = world.regions[world.regionOf[t]];
-        const shade = biomeOf(reg?.family ?? n.family).shade;
-        fillRect(img, fx + 6, fy + 58, fw - 10, 3, shade);
-        fillRect(img, fx + 10, fy + 61, fw - 18, 1, shade);
-        blit(img, c, fx, fy, 2);
-      }
-      else if (f === 2) blit(img, c, fx, fy, 1);
-      else blit(img, downsample(c, 2, (v) => (v === 0 ? 0.8 : 1)), fx, fy, 1);
-    } else {
-      const d0 = dotFor(look);
-      const d = f === 1 ? d0 : downsample(d0, f, (v) => (v === 0 ? 0.6 : 1));
-      blit(img, d, fx + (fw - d.w) / 2, fy + (fh - d.h) / 2);
-    }
-    if (f === 4) continue; // markers are too small to read at the far zoom
-    const mk = look.state === "champion" ? star : look.state === "provisional" && frame === 0 ? qs : null;
-    if (mk) {
-      const m = f === 1 ? mk : downsample(mk, 2, (v) => (v === 0 ? 0.6 : 1.2));
-      const ox = n.atom ? fw - m.w + (f === 1 ? 4 : 2) : fw - m.w + (f === 1 ? 5 : 2);
-      const oy = n.atom ? -(f === 1 ? 6 : 3) : -(f === 1 ? 5 : 2);
-      blit(img, m, fx + ox, fy + oy);
-    }
+    const t = Math.floor(n.center.y / TS) * world.cols + Math.floor(n.center.x / TS);
+    const shade = biomeOf(world.regions[world.regionOf[t]]?.family ?? n.family).shade;
+    let comp = composeNode(n.atom, f === 4 ? { ...look, state: "trained" } : look, shade, frame);
+    if (f > 1) comp = downsample(comp, f, (v) => (v === 0 ? 0.8 : v === C_IDX.gold || v === C_IDX.red ? 1.3 : 1));
+    blit(img, comp, (n.foot.x * TS - NODE_PAD) / f, (n.foot.y * TS - NODE_PAD) / f);
   }
 }
 
