@@ -1,0 +1,172 @@
+/* The hybrid skin's chrome: pixel windows printed on die-cut card.
+   Only the CARD casts a soft shadow; the pixel art itself stays crisp. */
+
+.stage {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  background: #3b5dc9;
+  color: #f4f4f4;
+  font-family: var(--font-hybrid-pixel), system-ui, sans-serif;
+}
+
+/* ── the paper card every pixel window is printed on ─────────────────── */
+.card {
+  padding: 5px;
+  border-radius: 7px;
+  background: #fffaf0;
+  /* card thickness (hard edge) + soft cast shadow onto the diorama */
+  box-shadow:
+    0 3px 0 #d9ccb0,
+    0 4px 0 #b8a887,
+    0 14px 18px -6px rgba(26, 28, 44, 0.55);
+}
+
+.cardLifted {
+  box-shadow:
+    0 3px 0 #d9ccb0,
+    0 5px 0 #b8a887,
+    0 22px 28px -8px rgba(26, 28, 44, 0.6);
+}
+
+/* ── the 9-slice pixel window (border-image set inline per kind) ─────── */
+.win {
+  border-style: solid;
+  border-width: 12px;
+  border-image-slice: 6 fill;
+  border-image-width: 12px;
+  border-image-repeat: stretch;
+  image-rendering: pixelated;
+  color: #f4f4f4;
+  line-height: 1.3;
+}
+
+.pad { padding: 4px 8px 6px; }
+
+/* type scale (Pixelify Sans; nothing under 13px) */
+.t13 { font-size: 13px; line-height: 18px; }
+.t15 { font-size: 15px; line-height: 21px; }
+.t18 { font-size: 18px; line-height: 24px; }
+.t24 { font-size: 24px; line-height: 28px; font-weight: 700; }
+.t30 { font-size: 30px; line-height: 32px; font-weight: 700; }
+
+.dim { color: #94b0c2; }
+.gold { color: #ffcd75; }
+.cyan { color: #73eff7; }
+.lime { color: #a7f070; }
+.red { color: #ef7d57; }
+
+/* menu rows */
+.row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  min-height: 26px;
+  padding: 2px 6px 2px 26px;
+  position: relative;
+  text-align: left;
+  color: #f4f4f4;
+  background: transparent;
+  border: 0;
+  cursor: pointer;
+  font: inherit;
+}
+.row:focus-visible {
+  outline: 2px solid #73eff7;
+  outline-offset: -2px;
+}
+.rowHot { background: #3b5dc9; }
+.rowHot::before {
+  content: "";
+  position: absolute;
+  left: 6px;
+  top: 50%;
+  width: 12px;
+  height: 12px;
+  margin-top: -6px;
+  background: var(--hybrid-hand);
+  background-size: 12px 12px;
+  image-rendering: pixelated;
+}
+
+.swatch {
+  flex: none;
+  width: 12px;
+  height: 12px;
+  /* white keyline + night outline: any family colour reads on navy or blue */
+  box-shadow: 0 0 0 1px #f4f4f4, 0 0 0 3px #1a1c2c;
+}
+
+/* pixel meter (gate bar) */
+.meter {
+  position: relative;
+  height: 14px;
+  background: #1a1c2c;
+  box-shadow: 0 0 0 2px #566c86;
+}
+.meterFill { position: absolute; top: 2px; bottom: 2px; left: 2px; }
+.meterTick {
+  position: absolute;
+  top: -5px;
+  bottom: -5px;
+  width: 4px;
+  margin-left: -2px;
+  background: #f4f4f4;
+  box-shadow: 0 0 0 2px #1a1c2c;
+}
+
+/* pixel button (close, menu) */
+.btn {
+  font: inherit;
+  font-size: 15px;
+  line-height: 18px;
+  padding: 3px 9px 4px;
+  color: #1a1c2c;
+  background: #ffcd75;
+  border: 0;
+  box-shadow: inset -2px -3px 0 #ef7d57, 0 0 0 2px #1a1c2c;
+  cursor: pointer;
+}
+.btn:focus-visible { outline: 3px solid #73eff7; outline-offset: 3px; }
+.btn:active { box-shadow: inset 2px 3px 0 #ef7d57, 0 0 0 2px #1a1c2c; }
+
+.scroll {
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: #566c86 #29366f;
+}
+
+/* caret for the typewriter line */
+.caret {
+  display: inline-block;
+  width: 8px;
+  height: 14px;
+  margin-left: 2px;
+  vertical-align: -2px;
+  background: #ffcd75;
+  animation: blink 1s steps(2, jump-none) infinite;
+}
+@keyframes blink { 50% { opacity: 0; } }
+
+/* pixel hand over the map: two-step bob (never under still / reduced motion) */
+.hand { position: absolute; pointer-events: none; image-rendering: pixelated; }
+.handBob { animation: bob 0.9s steps(2, jump-none) infinite; }
+@keyframes bob { 50% { transform: translateX(-4px); } }
+
+@media (prefers-reduced-motion: reduce) {
+  .handBob, .caret { animation: none; }
+}
+
+/* map nodes: keyboard focus ring drawn in chrome cyan */
+.node { cursor: pointer; outline: none; }
+.node:focus-visible .ring { stroke: #73eff7; stroke-width: 5; }
+
+/* phone: menu and party rows become 40px touch targets */
+.rowTouch { min-height: 40px; }
+
+/* pixel rule between the status window's sections (2px dashes, slate) */
+.rule {
+  height: 2px;
+  background: repeating-linear-gradient(90deg, #566c86 0 4px, transparent 4px 8px);
+}
