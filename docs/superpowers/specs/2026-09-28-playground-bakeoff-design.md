@@ -363,3 +363,6 @@ poor use of the screen, arbitrary/crowded paths inside, families don't feel like
   (mountain ranges, rivers, straits); roads follow valleys/coasts with fewer crossings,
   hub fans replaced by trunk-and-branch; invariants stay (spacing, labels off roads,
   lanes, determinism).
+- **Update:** the owner chose the silhouette — the C-shaped parchment continent (bay open to
+  the east, north-east arm with an islet tail, southern desert lobe). **Structure = underwater**:
+  a sunken reef city inside the bay (gnn → coral reef network, nerf → glass light temple).
