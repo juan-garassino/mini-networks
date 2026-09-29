@@ -13,7 +13,7 @@
 // clouds. Boats, trains, the critter and focus are drawn live (pixel-world).
 import type { Pt, World, WorldNode } from "@/lib/world";
 import {
-  artBlank, artBlit, artToCanvas, bakeCloudShadow, capital, castleSprite, isletBlobs, cloudSpots, cloudSprites, darker, markerSprite, props,
+  artBlank, artBlit, artToCanvas, parchmentize, bakeCloudShadow, capital, castleSprite, isletBlobs, cloudSpots, cloudSprites, darker, markerSprite, props,
   RAMPS, renderTerrain, SHADOW, CLEAR, type ArtImage, type EmblemMask, type Sprite, Painter,
 } from "./art";
 import type { NodeLook } from "./terrain";
@@ -199,7 +199,7 @@ export function familyHubs(world: World): Map<string, WorldNode> {
  * (not a downsample) — halo, cliffs, biomes, relief read at 1 CSS px per art
  * px — plus thin primary roads and one 12×15 micro-castle per family hub.
  */
-export function buildMiniLayer(world: World, emblems: ArtEmblems | null): { origin: Pt; px: number; canvas: HTMLCanvasElement } {
+export function buildMiniLayer(world: World, emblems: ArtEmblems | null, theme: Theme = "parchment"): { origin: Pt; px: number; canvas: HTMLCanvasElement } {
   const t = renderTerrain(world, { artPerTile: 3, extent: "all", canopies: true });
   const img = t.img;
   const A = (p: P): P => ({ x: (p.x - t.origin.x) / t.px, y: (p.y - t.origin.y) / t.px });
@@ -213,22 +213,44 @@ export function buildMiniLayer(world: World, emblems: ArtEmblems | null): { orig
     const c = A({ x: hub.center.x, y: (hub.foot.y + hub.foot.h) * 16 });
     artBlit(img, mini, c.x - mini.w / 2, c.y - mini.h + 1);
   }
-  return { origin: t.origin, px: t.px, canvas: artToCanvas(img) };
+  return { origin: t.origin, px: t.px, canvas: artToCanvas(theme === "parchment" ? parchmentize(img, t.land, 3) : img) };
 }
 
 // ————————————————————————————— compose —————————————————————————————
 
-export function buildArtLayers(world: World, looks: Map<string, NodeLook>, emblems: ArtEmblems | null, apt = 8): ArtLayers {
+export type Theme = "parchment" | "ocean";
+
+export function buildArtLayers(world: World, looks: Map<string, NodeLook>, emblems: ArtEmblems | null, apt = 8, theme: Theme = "parchment"): ArtLayers {
+  const ink = theme === "parchment";
   const clouds = cloudSprites(apt >= 8 ? 4 : 3).map((s) => s.img);
   const t = renderTerrain(world, { extent: "all", artPerTile: apt });
-  const img = t.img;
+  let img = t.img;
   const A = (p: P): P => ({ x: (p.x - t.origin.x) / t.px, y: (p.y - t.origin.y) / t.px });
-  const spots = cloudSpots(world, t, clouds);
+  // parchment has no clouds: the paper is the sky and the sea
+  const spots = ink ? [] : cloudSpots(world, t, clouds);
   for (const s of spots) bakeCloudShadow(img, s.img, s.x, s.y);
 
   // lineage paths on their lanes: cross-family roads are pressed trails (quiet),
   // primary roads packed-earth paths with a shadow-side edge, second parents stepping stones
   const polys = roadPolys(world).map(({ road, pts }) => ({ road, pts: pts.map(A) }));
+  if (ink) {
+    // parchment: lineage routes are dotted maroon ink with small arrowheads; second
+    // parents a sparser dot; cross-family routes a faint dash
+    for (const { road, pts } of polys) {
+      let k = 0;
+      const primary = road.kind !== "bridge" && road.primary;
+      walkPoly(pts, (x, y) => {
+        const on = primary ? k % 3 < 2 : road.kind === "bridge" ? k % 6 < 2 : k % 3 === 0;
+        k++;
+        if (on) put(img, x, y, primary ? RAMPS.ink[0] : RAMPS.ink[1]);
+      });
+    }
+    for (const { road } of polys) if (road.kind !== "bridge") for (const ch of road.chevrons) {
+      const c = A(ch);
+      for (const [dx, dy] of chevronOffsets(ch.angle, 2)) put(img, c.x + dx, c.y + dy, RAMPS.ink[0]);
+    }
+  }
+  if (!ink) {
   for (const { road, pts } of polys) if (road.kind === "bridge") walkPoly(pts, (x, y) => put(img, x, y, SHADOW[get(img, x, y)] ?? get(img, x, y)));
   for (const { road, pts } of polys) if (road.kind !== "bridge" && !road.primary) {
     let k = 0;
@@ -243,6 +265,8 @@ export function buildArtLayers(world: World, looks: Map<string, NodeLook>, emble
   for (const { road } of polys) if (road.kind !== "bridge") for (const ch of road.chevrons) {
     const c = A(ch);
     for (const [dx, dy] of chevronOffsets(ch.angle, 2)) { put(img, c.x + dx, c.y + dy, RAMPS.wood[0]); put(img, c.x + dx - Math.round(Math.cos(ch.angle)), c.y + dy - Math.round(Math.sin(ch.angle)), RAMPS.wood[0]); }
+  }
+
   }
 
   // faceted ridges along family borders no lineage crosses (lit / shadow faces, snow caps)
@@ -327,6 +351,7 @@ export function buildArtLayers(world: World, looks: Map<string, NodeLook>, emble
 
   for (const s of spots) artBlit(img, s.img, s.x, s.y);
 
+  if (ink) img = parchmentize(img, t.land, apt);
   const dimImg: ArtImage = { w: img.w, h: img.h, data: img.data.map((v) => (v === CLEAR ? v : darker(v))) };
   const farImg = downsample(img, 2, (v) => (v === RAMPS.ui[0] ? 0.8 : 1));
   const farDim = { w: farImg.w, h: farImg.h, data: farImg.data.map((v) => (v === CLEAR ? v : darker(v))) };

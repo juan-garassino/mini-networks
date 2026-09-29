@@ -46,6 +46,19 @@ const HEX = {
   magic: ["#4d2468", "#9a4aa6", "#eba0d6"],
   /** UI: ink (= deepest ocean indigo, never black), paper */
   ui: [OCEAN[0], "#fff6e0"],
+  // ——— parchment edition (?theme=parchment): paper, one maroon ink, muted land ———
+  /** the sea IS the paper: hatch shadow → grain → paper → highlight */
+  paper: ["#d4bd8c", "#e2cfa3", "#eee0bd", "#f6ecd2"],
+  /** the one cartographic ink: maroon, 2 lighter steps */
+  ink: ["#5a1a14", "#7e2e22", "#a64a34"],
+  /** muted sage land: forest clumps → meadow → pale */
+  sage: ["#2f5a3a", "#4f7a4c", "#6f9960", "#8fb07a", "#b4c79a"],
+  /** pale ochre + yellow desert */
+  ochreP: ["#b38a44", "#d0ac5a", "#e3c67c", "#f0dfa4"],
+  /** rust / orange-red mountains */
+  rustP: ["#7a2e22", "#a3462c", "#c9683e", "#e0935f"],
+  /** lavender-white snow with blue-grey shadows */
+  snowP: ["#8589ad", "#b3b3d3", "#dcd9ea", "#f4f1ea"],
   /** royal banner blue (castle banners, flags) — ocean + halo entries */
   banner: [OCEAN[0], OCEAN[2], OCEAN[4], "#62dcf2"],
 } as const;

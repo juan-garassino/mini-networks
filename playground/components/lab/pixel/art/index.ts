@@ -16,3 +16,4 @@ export {
   type CritterSheet, type Sprite,
 } from "./sprites";
 export { emblemMasks, type EmblemMask } from "./emblem";
+export { PARCHMENT, parchmentize, inkify, parchmentSprite, isWaterIdx } from "./parchment";

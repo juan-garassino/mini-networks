@@ -4,7 +4,7 @@
 // Compact two-column grid so it fits the open sea in the map's corner.
 import { useMemo, useState } from "react";
 import { familyLabel } from "./palette";
-import { BIOMES, castleSprite, markerSprite, Painter, PALETTE, props, RAMPS, type ArtImage } from "./art";
+import { BIOMES, castleSprite, markerSprite, Painter, PALETTE, PARCHMENT, props, RAMPS, type ArtImage } from "./art";
 import { ArtImg } from "./art-img";
 import { PixelWindow } from "./window";
 import styles from "./pixel.module.css";
@@ -22,7 +22,9 @@ function roadSample(kind: "road" | "stones" | "trail"): ArtImage {
   return p.img;
 }
 
-export function Legend({ mobile, defaultOpen, cartouche = false, inline = false }: { mobile: boolean; defaultOpen: boolean; cartouche?: boolean; inline?: boolean }) {
+export function Legend({ mobile, defaultOpen, cartouche = false, inline = false, tint }: {
+  mobile: boolean; defaultOpen: boolean; cartouche?: boolean; inline?: boolean; tint?: (img: ArtImage) => ArtImage;
+}) {
   const [override, setOverride] = useState<boolean | null>(null);
   const open = override ?? defaultOpen;
   const icons = useMemo(() => ({
@@ -73,7 +75,7 @@ export function Legend({ mobile, defaultOpen, cartouche = false, inline = false 
         {rows.map(([k, text, sc]) => (
           <li key={k} className="flex min-h-[26px] items-center gap-2 text-[14px] leading-[1.1]">
             <span className="grid w-[40px] flex-none place-items-center">
-              <ArtImg img={icons[k]} scale={sc} />
+              <ArtImg img={tint ? tint(icons[k]) : icons[k]} scale={sc} />
             </span>
             <span>{text}</span>
           </li>
@@ -82,7 +84,7 @@ export function Legend({ mobile, defaultOpen, cartouche = false, inline = false 
       <ul className="mt-2 grid grid-cols-2 gap-x-4 gap-y-1 px-1 sm:grid-cols-[auto_auto_auto]" aria-label="Each land is one family">
         {Object.entries(BIOMES).map(([fam, b]) => (
           <li key={fam} className="flex items-center gap-2 text-[14px] leading-tight">
-            <span aria-hidden className="h-[12px] w-[12px] flex-none outline outline-2 outline-[#1e1f4e]" style={{ background: PALETTE[RAMPS[b.mid][Math.min(3, RAMPS[b.mid].length - 1)]] }} />
+            <span aria-hidden className="h-[12px] w-[12px] flex-none outline outline-2 outline-[#1e1f4e]" style={{ background: PALETTE[(tint ? PARCHMENT : null)?.[RAMPS[b.mid][Math.min(3, RAMPS[b.mid].length - 1)]] ?? RAMPS[b.mid][Math.min(3, RAMPS[b.mid].length - 1)]] }} />
             {familyLabel(fam)}
           </li>
         ))}

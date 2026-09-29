@@ -11,7 +11,19 @@
 //   (unknown future family → open plain #a7f070)
 export interface Mark { mark: string; encodes: string; source: string }
 
+// PARCHMENT EDITION (default since 2026-09-29; ?theme=ocean keeps the old sea):
+// the same marks, recoloured by art/parchment.ts — sea = cream paper with ink
+// coastline + horizontal hatching and sparse ink wave glyphs; land in muted
+// sage / ochre / rust / lavender-snow; every cartographic mark in one maroon
+// ink ramp; the red X on the focused model is the only non-ink accent.
 export const ENCODING: Mark[] = [
+  { mark: "parchment sea: cream paper, thin ink coastline, horizontal hatching fading from the shore", encodes: "where land ends (sea tiles)", source: "world.terrain = SEA (art land mask)" },
+  { mark: "sparse ink wave glyphs on open paper", encodes: "open sea (far from any coast)", source: "coast distance field" },
+  { mark: "dotted maroon ink route with arrowheads", encodes: "builds_on edge (dense dots = primary parent, sparse = second parent, faint dashes = cross-family)", source: "world.roads[].lanePoints, chevrons" },
+  { mark: "red X under the focused model", encodes: "the focused model (X marks the spot)", source: "?focus= (URL)" },
+  { mark: "torn / burnt paper edge round the sheet", encodes: "the edge of the map sheet (frame only)", source: "viewport" },
+  { mark: "ink palm-isle vignette with 'N ruins' tag (overview sheet)", encodes: "the ruins isle of retired legacy models lies beyond", source: "world.ruinsIsland.names" },
+
   // terrain — the illustrator's art/ system (terrain-shade.ts), one height field lit from the top-left
   { mark: "land biome (hue-shifted ramps: meadow, dunes & stone, volcanic reach, icy highlands, savanna, crystal isle)", encodes: "family of the region", source: "world.regionOf → art/palette BIOMES" },
   { mark: "elevation bands (sand → ground → forest → rock → snow) with slope light", encodes: "distance inland + the family-border ranges (terrain relief; ridges = borders)", source: "world.terrain distance field + world.mountains" },

@@ -27,10 +27,10 @@ import { Sparkline } from "@/components/lab/shared/lesson/sparkline";
 import type { ModelEvidence, TaxonomyResponse } from "@/lib/types";
 import { familyLabel } from "./palette";
 import type { NodeLook } from "./terrain";
-import { artFlipX, artToCanvas, cloudSprites, critterSheet, emblemMasks, isletBlobs, props, RAMPS, PALETTE, type ArtImage, type Sprite } from "./art";
+import { artFlipX, artToCanvas, cloudSprites, critterSheet, emblemMasks, inkify, isletBlobs, parchmentSprite, props, RAMPS, PALETTE, type ArtImage, type Sprite } from "./art";
 import { T } from "@/lib/world";
 import { ArtImg } from "./art-img";
-import { buildArtLayers, buildMiniLayer, compassArt, chevronOffsets, familyHubs, islandSlots, nodeSprite, regionCut, roadPolys, type ArtEmblems, type ArtLayers } from "./world-art";
+import { type Theme, buildArtLayers, buildMiniLayer, compassArt, chevronOffsets, familyHubs, islandSlots, nodeSprite, regionCut, roadPolys, type ArtEmblems, type ArtLayers } from "./world-art";
 import { snapTile, toScreen, xformFor, type Stage, type Xform } from "./view";
 import { StatusCard } from "./status-card";
 import { placeSigns, type Rect } from "./signs";
@@ -51,6 +51,10 @@ const GOLD = hex(RAMPS.gold[3]), INK = hex(RAMPS.ui[0]);
 // each parent of the focus gets its own lit colour (primary first); children are foam-white
 export const PARENT_TONES = [hex(RAMPS.gold[3]), hex(RAMPS.shallow[4]), hex(RAMPS.meadow[6]), hex(RAMPS.lava[2])];
 const CHILD_TONE = hex(RAMPS.foam[1]);
+// parchment: parents in the ink ramp + muted accents, children in light ink
+const PARENT_TONES_INK = [hex(RAMPS.ink[0]), hex(RAMPS.rustP[2]), hex(RAMPS.sage[1]), hex(RAMPS.ochreP[0])];
+const CHILD_TONE_INK = hex(RAMPS.ink[2]);
+const X_RED = "#c8372d"; // the ONLY non-ink accent on the parchment map: X marks the focused model
 /** A sprite as a canvas with its anchor (art px). */
 type Stamp = { c: HTMLCanvasElement; ax: number; ay: number };
 const stamp = (s: Sprite, flip = false): Stamp => ({ c: artToCanvas(flip ? artFlipX(s.img) : s.img), ax: flip ? s.img.w - 1 - s.anchor.x : s.anchor.x, ay: s.anchor.y });
@@ -90,6 +94,50 @@ function regionTarget(world: World, focus: WorldNode, stage: Stage): CamBox {
  * Overview frame: land + its halo, plus both secret islands on desktop (the
  * "?" isle and the ruins archipelago sit fully in frame); on mobile land + ruins.
  */
+/** Ink palm-isle vignette: a mound, a palm and a rayed sun, in the maroon ink ramp. */
+function palmIsle(): ArtImage {
+  const w = 40, h = 30;
+  const img: ArtImage = { w, h, data: new Uint8Array(w * h).fill(255) };
+  const put = (x: number, y: number, v: number) => { if (x >= 0 && y >= 0 && x < w && y < h) img.data[y * w + x] = v; };
+  const I0 = RAMPS.ink[0], I1 = RAMPS.ink[1];
+  for (let x = 4; x < 36; x++) { const top = 24 - Math.round(4 * Math.sin(((x - 4) / 32) * Math.PI)); for (let y = top; y < 26; y++) put(x, y, y === top ? I0 : I1); }
+  for (let x = 0; x < 40; x += 3) put(x, 28, I1);                       // water line
+  for (let y = 9; y < 22; y++) put(14 + Math.round(Math.sin((y - 9) / 4) * 1.5), y, I0); // trunk
+  for (const [dx, dy] of [[-7, 2], [-5, -2], [0, -3], [5, -2], [7, 2]]) {
+    for (let k = 0; k <= 6; k++) put(14 + Math.round((dx * k) / 6), 9 + Math.round((dy * k) / 6 + (k * k) / 12), I0);
+  }
+  for (let a = 0; a < 16; a++) { const t = (a / 16) * Math.PI * 2; put(30 + Math.round(Math.cos(t) * 3), 8 + Math.round(Math.sin(t) * 3), I0); }
+  for (let a = 0; a < 8; a++) { const t = (a / 8) * Math.PI * 2; put(30 + Math.round(Math.cos(t) * 5), 8 + Math.round(Math.sin(t) * 5), I1); }
+  return img;
+}
+
+/** The torn / burnt paper edge: a jagged dark rim with a scorched brown band inside it. */
+function burntEdge(W: number, H: number, dpr: number): HTMLCanvasElement {
+  const c = document.createElement("canvas");
+  c.width = W; c.height = H;
+  const g = c.getContext("2d")!;
+  const px = 3 * dpr; // edge "pixels"
+  const n = (i: number, seed: number) => {
+    const x = Math.sin(i * 12.9898 + seed * 78.233) * 43758.5453;
+    return x - Math.floor(x);
+  };
+  const depth = (i: number, seed: number) => 2 + Math.round(3 * n(i, seed) + 2 * n(Math.floor(i / 5), seed + 1));
+  const band = (along: number, seed: number, draw: (i: number, d: number) => void) => { for (let i = 0; i < along; i++) draw(i, depth(i, seed)); };
+  const cols = Math.ceil(W / px), rows = Math.ceil(H / px);
+  const paint = (x: number, y: number, d: number, horizontal: boolean, flip: boolean) => {
+    for (let k = 0; k < d + 2; k++) {
+      g.fillStyle = k < d - 1 ? "#3a120d" : k < d ? "#5a1a14" : k === d ? "#8a5a36" : "#b8935e";
+      if (horizontal) g.fillRect(x * px, flip ? H - (k + 1) * px : k * px, px, px);
+      else g.fillRect(flip ? W - (k + 1) * px : k * px, y * px, px, px);
+    }
+  };
+  band(cols, 1, (i, d) => paint(i, 0, d, true, false));
+  band(cols, 2, (i, d) => paint(i, 0, d, true, true));
+  band(rows, 3, (i, d) => paint(0, i, d, false, false));
+  band(rows, 4, (i, d) => paint(0, i, d, false, true));
+  return c;
+}
+
 /** Integer tile for the desktop map sheet: 10 px per tile when the land's height fits, else 8. */
 function sheetTile(world: World, vp: { w: number; h: number }): 8 | 10 {
   const l = landBounds(world);
@@ -131,6 +179,12 @@ const hit = (a: Rect, b: Rect) => a.x < b.x + b.w && b.x < a.x + a.w && a.y < b.
 
 export function PixelWorld() {
   const { view, update } = useLabView();
+  // parchment is THE look (owner, 2026-09-29); ?theme=ocean keeps the old sea for comparison
+  const [theme, setTheme] = useState<Theme>("parchment");
+  useEffect(() => { if (new URLSearchParams(window.location.search).get("theme") === "ocean") setTheme("ocean"); }, []);
+  const ink = theme === "parchment";
+  const tint = useCallback((img: ArtImage) => (ink ? parchmentSprite(img) : img), [ink]);
+  const inkArt = useCallback((img: ArtImage) => (ink ? inkify(img) : img), [ink]);
   const still = view?.still ?? true;
   const { world, taxonomy, evidence, runs, ready } = useWorld(view ? view.still : null);
 
@@ -201,18 +255,18 @@ export function PixelWorld() {
   const [layers, setLayers] = useState<ArtLayers | null>(null);
   useEffect(() => {
     if (!world || !ready || !emblems) return;
-    setLayers(buildArtLayers(world, looks, emblems));
+    setLayers(buildArtLayers(world, looks, emblems, 8, theme));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [world, ready, lookSig, emblems]);
+  }, [world, ready, lookSig, emblems, theme]);
 
   // the desktop map sheet, composed natively at 10 art px per tile (1 art px = 1 screen px)
   const [sheet, setSheet] = useState<ArtLayers | null>(null);
   useEffect(() => {
     if (!world || !ready || !emblems || mobile || sheetT !== 10) return;
-    setSheet(buildArtLayers(world, looks, emblems, 10));
+    setSheet(buildArtLayers(world, looks, emblems, 10, theme));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [world, ready, lookSig, emblems, mobile, sheetT]);
-  const mini = useMemo(() => (world && emblems && typeof document !== "undefined" && mobile ? buildMiniLayer(world, emblems) : null), [world, emblems, mobile]);
+  }, [world, ready, lookSig, emblems, mobile, sheetT, theme]);
+  const mini = useMemo(() => (world && emblems && typeof document !== "undefined" && mobile ? buildMiniLayer(world, emblems, theme) : null), [world, emblems, mobile, theme]);
 
   const regionId = zoom === "region" && focusNode ? world?.regions.find((r) => r.family === focusNode.family)?.id ?? -1 : -1;
   // region cut-outs are precomputed once per layer build (idle time), so a fly into a
@@ -248,19 +302,23 @@ export function PixelWorld() {
   const focusSprite = useMemo(() => {
     if (!focusNode || !emblems || typeof document === "undefined") return null;
     const look = looks.get(focusNode.name) ?? { state: "untrained" as const, filled: false };
-    return stamp(nodeSprite(focusNode, look, emblems));
-  }, [focusNode, emblems, looks]);
+    const sp = nodeSprite(focusNode, look, emblems);
+    return stamp({ ...sp, img: tint(sp.img) });
+  }, [focusNode, emblems, looks, tint]);
 
   // ——— live-layer sprites ———
   const critter = useMemo(() => {
     if (typeof document === "undefined") return null;
     const sh = critterSheet();
-    return { right: sh.walk.map((f) => stamp(f)), left: sh.walk.map((f) => stamp(f, true)), idle: stamp(sh.idle[0], true), train: stamp(sh.train, true), w: sh.walk[0].img.w, h: sh.walk[0].img.h };
-  }, []);
+    const T2 = (f: Sprite) => ({ ...f, img: tint(f.img) });
+    return { right: sh.walk.map((f) => stamp(T2(f))), left: sh.walk.map((f) => stamp(T2(f), true)), idle: stamp(T2(sh.idle[0]), true), train: stamp(T2(sh.train), true), w: sh.walk[0].img.w, h: sh.walk[0].img.h };
+  }, [tint]);
   const small = useMemo(() => {
     if (typeof document === "undefined") return null;
-    return { boat: stamp(props.boat()), boatL: stamp(props.boat(true)), train: stamp(props.train(0)), trainL: stamp(props.train(0), true) };
-  }, []);
+    // parchment: galleons and engines are ink line art
+    const I = (f: Sprite) => ({ ...f, img: inkArt(f.img) });
+    return { boat: stamp(I(props.boat())), boatL: stamp(I(props.boat(true))), train: stamp(I(props.train(0))), trainL: stamp(I(props.train(0)), true) };
+  }, [inkArt]);
 
   // ——— motion: one rAF driver while anything is animating ———
   const [reduced, setReduced] = useState(false);
@@ -413,6 +471,7 @@ export function PixelWorld() {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const prevTile = useRef<number | null>(null);
   const dissolve = useRef<{ snap: HTMLCanvasElement | null; t0: number }>({ snap: null, t0: 0 });
+  const burnt = useRef<{ key: string; c: HTMLCanvasElement } | null>(null);
   const [drawn, setDrawn] = useState(false);
   const kinSprites = useMemo(() => {
     if (!world || !emblems || !lin || typeof document === "undefined") return null;
@@ -420,11 +479,12 @@ export function PixelWorld() {
     return new Map(names.map((name) => {
       const m = nodeOf.get(name)!;
       const look = looks.get(name) ?? { state: "untrained" as const, filled: false };
-      return [name, { s: stamp(nodeSprite(m, look, emblems)), node: m }] as const;
+      const sp = nodeSprite(m, look, emblems);
+      return [name, { s: stamp({ ...sp, img: tint(sp.img) }), node: m }] as const;
     }));
   }, [world, emblems, lin, looks, nodeOf]);
-  const latest = useRef({ sheet, xf, layers, spot, focusNode, vp, critter, small, lin, polys, focusSprite, zoom, trains, nodeOf, cardOpen, stage, kinSprites, world, parked, mini });
-  latest.current = { sheet, xf, layers, spot, focusNode, vp, critter, small, lin, polys, focusSprite, zoom, trains, nodeOf, cardOpen, stage, kinSprites, world, parked, mini };
+  const latest = useRef({ ink, sheet, xf, layers, spot, focusNode, vp, critter, small, lin, polys, focusSprite, zoom, trains, nodeOf, cardOpen, stage, kinSprites, world, parked, mini });
+  latest.current = { ink, sheet, xf, layers, spot, focusNode, vp, critter, small, lin, polys, focusSprite, zoom, trains, nodeOf, cardOpen, stage, kinSprites, world, parked, mini };
 
   const draw = useCallback((nowArg?: number) => {
     const c = canvasRef.current;
@@ -448,7 +508,8 @@ export function PixelWorld() {
     }
     prevTile.current = L.xf.tile;
     const dimAll = (L.zoom === "node" && !!L.focusNode) || (!!L.spot && L.zoom === "region");
-    ctx.fillStyle = hex(dimAll ? RAMPS.ocean[2] : RAMPS.ocean[3]); // sea beyond the art extent matches the (dimmed) layer
+    const INKM = L.ink;
+    ctx.fillStyle = INKM ? hex(dimAll ? RAMPS.paper[1] : RAMPS.paper[2]) : hex(dimAll ? RAMPS.ocean[2] : RAMPS.ocean[3]); // sea beyond the art extent matches the (dimmed) layer
     ctx.fillRect(0, 0, W, H);
     const { tile, ox, oy, k } = L.xf;
     const S = (q: Pt) => ({ x: (q.x * k + ox) * dpr, y: (q.y * k + oy) * dpr });
@@ -489,18 +550,21 @@ export function PixelWorld() {
     // the focused lineage: every parent road (own colour, primary gold) and child road (white),
     // each on its own lane, ink-edged, with ink chevrons parent → child
     if (L.lin && L.zoom === "node" && !far) {
+      const PT = INKM ? PARENT_TONES_INK : PARENT_TONES, CT = INKM ? CHILD_TONE_INK : CHILD_TONE;
       const lit = [
-        ...L.lin.children.map((r) => [r, CHILD_TONE] as const),
-        ...L.lin.parents.map((r, i) => [r, PARENT_TONES[i % PARENT_TONES.length]] as const).reverse(),
+        ...L.lin.children.map((r) => [r, CT] as const),
+        ...L.lin.parents.map((r, i) => [r, PT[i % PT.length]] as const).reverse(),
       ];
       for (const [r, tone] of lit) {
         const pts = L.polys.get(r.id) ?? [];
-        for (const [size, col] of [[3 * u, INK], [u, tone]] as [number, string][]) {
+        for (const [size, col] of (INKM ? [[2 * u, tone]] : [[3 * u, INK], [u, tone]]) as [number, string][]) {
           ctx.fillStyle = col;
           for (let i = 1; i < pts.length; i++) {
             const a = pts[i - 1], b = pts[i];
             const len = Math.hypot(b.x - a.x, b.y - a.y), step = 1 / Math.max(k, 0.25);
             for (let d = 0; d <= len; d += step) {
+              // parchment: a dotted treasure trail (2 on, 2 off, in art px)
+              if (INKM && d % 10 >= 5) continue;
               const q = S({ x: a.x + ((b.x - a.x) * d) / len, y: a.y + ((b.y - a.y) * d) / len });
               ctx.fillRect(Math.round(q.x - size / 2), Math.round(q.y - size / 2), Math.round(size), Math.round(size));
             }
@@ -534,8 +598,8 @@ export function PixelWorld() {
       for (let d = 20; d <= walked - 20; d += 16) {
         const s = S(w.at(d / w.len));
         const x = Math.round(s.x - 2 * bs / 2), y = Math.round(s.y - 2 * bs / 2);
-        ctx.fillStyle = INK; ctx.fillRect(x, y, 2 * bs, 2 * bs);
-        ctx.fillStyle = CHILD_TONE; ctx.fillRect(x + bs / 2, y + bs / 2, bs, bs);
+        if (INKM) { ctx.fillStyle = hex(RAMPS.ink[0]); ctx.fillRect(x + bs / 2, y + bs / 2, bs, bs); }
+        else { ctx.fillStyle = INK; ctx.fillRect(x, y, 2 * bs, 2 * bs); ctx.fillStyle = CHILD_TONE; ctx.fillRect(x + bs / 2, y + bs / 2, bs, bs); }
       }
     }
 
@@ -547,15 +611,27 @@ export function PixelWorld() {
       const sw = st.c.width * fs, sh = st.c.height * fs;
       const left = foot.x - st.ax * fs, top = foot.y - st.ay * fs;
       const pw = sw + 6 * bs;
-      ctx.fillStyle = INK; ctx.fillRect(Math.round(foot.x - pw / 2), Math.round(foot.y), Math.round(pw), Math.round(3 * bs));
-      ctx.fillStyle = GOLD; ctx.fillRect(Math.round(foot.x - pw / 2 + bs), Math.round(foot.y + bs / 2), Math.round(pw - 2 * bs), Math.round(bs));
+      if (INKM) {
+        // X marks the spot: a red pixel X (ink rimmed) under the model's feet
+        const R = 6 * bs;
+        for (const [col, th] of [[hex(RAMPS.ink[0]), 2 * bs], [X_RED, bs]] as [string, number][]) {
+          ctx.fillStyle = col;
+          for (let t = -R; t <= R; t += Math.max(1, bs / 2)) {
+            ctx.fillRect(Math.round(foot.x + t - th / 2), Math.round(foot.y + 2 * bs + t / 2 - th / 2), Math.round(th), Math.round(th));
+            ctx.fillRect(Math.round(foot.x + t - th / 2), Math.round(foot.y + 2 * bs - t / 2 - th / 2), Math.round(th), Math.round(th));
+          }
+        }
+      } else {
+        ctx.fillStyle = INK; ctx.fillRect(Math.round(foot.x - pw / 2), Math.round(foot.y), Math.round(pw), Math.round(3 * bs));
+        ctx.fillStyle = GOLD; ctx.fillRect(Math.round(foot.x - pw / 2 + bs), Math.round(foot.y + bs / 2), Math.round(pw - 2 * bs), Math.round(bs));
+      }
       ctx.drawImage(st.c, Math.round(left), Math.round(top), sw, sh);
       const x0 = left - 3 * bs, y0 = top - 3 * bs, x1 = left + sw + 3 * bs, y1 = foot.y + 4 * bs, arm = 5 * bs, th = bs;
       for (const [cx, cy, dx, dy] of [[x0, y0, 1, 1], [x1, y0, -1, 1], [x0, y1, 1, -1], [x1, y1, -1, -1]] as const) {
-        ctx.fillStyle = INK;
+        ctx.fillStyle = INKM ? hex(RAMPS.ink[0]) : INK;
         ctx.fillRect(Math.round(dx > 0 ? cx - th : cx - arm), Math.round(dy > 0 ? cy - th : cy - 2 * th), Math.round(arm + th), Math.round(3 * th));
         ctx.fillRect(Math.round(dx > 0 ? cx - th : cx - 2 * th), Math.round(dy > 0 ? cy - th : cy - arm), Math.round(3 * th), Math.round(arm + th));
-        ctx.fillStyle = GOLD;
+        ctx.fillStyle = INKM ? hex(RAMPS.paper[3]) : GOLD;
         ctx.fillRect(Math.round(dx > 0 ? cx : cx - arm + th), Math.round(dy > 0 ? cy : cy - th), Math.round(arm - th), Math.round(th));
         ctx.fillRect(Math.round(dx > 0 ? cx : cx - th), Math.round(dy > 0 ? cy : cy - arm + th), Math.round(th), Math.round(arm - th));
       }
@@ -615,6 +691,12 @@ export function PixelWorld() {
       const cu = Math.max(dpr, u - dpr);    // the critter reads one step smaller than the map art
       const hopY = now - hop.current < 200 ? -3 * cu : 0;
       ctx.drawImage(st.c, Math.round(s.x - st.ax * cu), Math.round(s.y - st.ay * cu + hopY), st.c.width * cu, st.c.height * cu);
+    }
+    // parchment: a torn, burnt paper edge frames the whole sheet
+    if (INKM) {
+      const key = `${W}x${H}`;
+      if (!burnt.current || burnt.current.key !== key) burnt.current = { key, c: burntEdge(W, H, dpr) };
+      ctx.drawImage(burnt.current.c, 0, 0);
     }
     const dz = dissolve.current;
     if (dz.snap && dz.t0 > 0 && now - dz.t0 < 100) {
@@ -873,10 +955,11 @@ export function PixelWorld() {
   }, [signs, world]);
 
   // map-sheet furniture placed in OPEN SEA on screen (sampled against world.terrain)
-  const compassImg = useMemo(() => (typeof document === "undefined" ? null : compassArt()), []);
+  const compassImg = useMemo(() => (typeof document === "undefined" ? null : inkArt(compassArt())), [inkArt]);
   const furnitureArt = useMemo(() => (typeof document === "undefined" ? null : {
-    ship: props.boat().img, serpent: props.dragon().img, cloudA: cloudSprites(4)[0].img, cloudB: cloudSprites(4)[2].img,
-  }), []);
+    ship: inkArt(props.boat().img), serpent: inkArt(props.dragon().img), cloudA: cloudSprites(4)[0].img, cloudB: cloudSprites(4)[2].img,
+    isle: palmIsle(),
+  }), [inkArt]);
   const furniture = useMemo(() => {
     if (!world || !sheetMode || !furnitureArt || !taxonomy) return [];
     const sea = (x: number, y: number, w: number, h: number) => {
@@ -904,11 +987,17 @@ export function PixelWorld() {
     place("serpent", furnitureArt.serpent, 2, grid([0.84, 0.9, 0.78, 0.72], [0.62, 0.55, 0.7, 0.45, 0.78]), "Sea serpent: here be dragons, toward the uncharted isle");
     place("ship", furnitureArt.ship, 3, grid([0.62, 0.55, 0.7, 0.48, 0.4, 0.3], [0.9, 0.86, 0.8, 0.94]),
       `Flagship: ${taxonomy.compositions.length} pipelines sail between the lands`, `${taxonomy.compositions.length} pipelines`);
-    place("cloudA", furnitureArt.cloudA, 2, [[vp.w - 60, 40], [vp.w - 80, 90], [vp.w * 0.6, 20]]);
-    place("cloudB", furnitureArt.cloudB, 2, [[40, vp.h * 0.55], [30, vp.h * 0.7], [vp.w * 0.3, vp.h - 20]]);
+    if (ink) {
+      // ink palm-isle with its sun: points the way to the ruins isle of retired legacy models
+      place("isle", furnitureArt.isle, 2, grid([0.9, 0.84, 0.1, 0.16, 0.78], [0.14, 0.22, 0.3, 0.08]),
+        `Ruins isle: ${world.ruinsIsland.names.length} retired models lie beyond`, `${world.ruinsIsland.names.length} ruins`);
+    } else {
+      place("cloudA", furnitureArt.cloudA, 2, [[vp.w - 60, 40], [vp.w - 80, 90], [vp.w * 0.6, 20]]);
+      place("cloudB", furnitureArt.cloudB, 2, [[40, vp.h * 0.55], [30, vp.h * 0.7], [vp.w * 0.3, vp.h - 20]]);
+    }
     return out;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [world, sheetMode, furnitureArt, taxonomy, xf.tile, xf.ox, xf.oy, vp.w, vp.h, plates, signs, uiRects]);
+  }, [world, ink, sheetMode, furnitureArt, taxonomy, xf.tile, xf.ox, xf.oy, vp.w, vp.h, plates, signs, uiRects]);
 
   const critterScreen = (() => {
     const w = walk.current;
@@ -921,7 +1010,7 @@ export function PixelWorld() {
 
   return (
     <LabMotion still={still}>
-      <div ref={rootRef} className={styles.root} data-lab-ready={drawn && ready && layers && (mobile || sheetT !== 10 || sheet) ? "1" : undefined}>
+      <div ref={rootRef} className={`${styles.root} ${ink ? styles.parchment : ""}`} data-lab-ready={drawn && ready && layers && (mobile || sheetT !== 10 || sheet) ? "1" : undefined}>
         <div
           className={styles.stage}
           onPointerDown={onPointerDown}
@@ -951,7 +1040,9 @@ export function PixelWorld() {
             return (
               <div key={l.node} aria-hidden className={`${styles.plate} ${cls} ${dim ? styles.plateDim : ""}`}
                 style={{ left: l.x, top: l.y, height: l.h, fontSize: l.font,
-                  ...(kinTone.has(l.node) && !focus ? { boxShadow: `inset 0 0 0 2px ${kinTone.get(l.node)}, 0 2px 0 #1e1f4e` } : {}) }}
+                  ...(kinTone.has(l.node) && !focus ? (ink
+                    ? { boxShadow: "none", background: "transparent", textDecoration: "underline", textDecorationColor: "#5a1a14", textUnderlineOffset: 3 }
+                    : { boxShadow: `inset 0 0 0 2px ${kinTone.get(l.node)}, 0 2px 0 #1e1f4e` }) : {}) }}
                 onClick={() => onNode(l.node)}>
                 <span>{displayName(l.node)}</span>
 
@@ -1088,12 +1179,12 @@ export function PixelWorld() {
           onZoom={(z) => update({ zoom: z })}
           hidden={mobile && cardOpen}
         />
-        {!mobile && <Legend mobile={false} defaultOpen={sheetMode} cartouche />}
+        {!mobile && <Legend mobile={false} defaultOpen={sheetMode} cartouche tint={ink ? tint : undefined} />}
         {miniMode && world && (
           <PixelWindow as="nav" aria-label="The six lands" className={`${styles.cartouche} absolute bottom-2 left-2 right-2`}>
             <div className="flex items-center justify-between">
               <h2 className="text-[16px] font-bold text-[#f5c24a]">Six lands, <PixelNum value={world.nodes.length} /> models</h2>
-              <Legend mobile defaultOpen={false} inline />
+              <Legend mobile defaultOpen={false} inline tint={ink ? tint : undefined} />
             </div>
             <ul className="mt-2 grid grid-cols-2 gap-2">
               {world.regions.map((r) => {
@@ -1112,7 +1203,7 @@ export function PixelWorld() {
           </PixelWindow>
         )}
         {card && emblems && landedFor === card.name && (
-          <StatusCard slide={animate} card={card} looks={looks} atoms={atoms} emblems={emblems} lesson={lesson} evidence={evidence} still={still}
+          <StatusCard tint={ink ? tint : undefined} slide={animate} card={card} looks={looks} atoms={atoms} emblems={emblems} lesson={lesson} evidence={evidence} still={still}
             descendants={stats.desc.get(card.name) ?? 0} maxDescendants={stats.maxDesc} maxRuns={stats.maxRuns}
             sailing={sailing} onSail={setSailing}
             onPick={go} onClose={() => update({ zoom: "region" })} />

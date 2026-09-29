@@ -79,10 +79,12 @@ function StatBar({ label, value, max, tone, note }: { label: string; value: numb
 }
 
 /** The model's own map sprite (castle per mechanism, or evidence marker with its emblem). */
+let CARD_TINT: ((img: import("./art").ArtImage) => import("./art").ArtImage) | undefined;
 function Emblem({ name, emblems, look, atom, scale = 1 }: {
   name: string; emblems: Emblems; look: NodeLook; atom: boolean; scale?: number;
 }) {
-  const img = useMemo(() => nodeSprite({ name, atom }, look, emblems).img, [name, emblems, look, atom]);
+  const tint = CARD_TINT;
+  const img = useMemo(() => { const im = nodeSprite({ name, atom }, look, emblems).img; return tint ? tint(im) : im; }, [name, emblems, look, atom, tint]);
   return <ArtImg img={img} scale={scale} />;
 }
 
@@ -103,10 +105,12 @@ function Row({ name, emblems, look, atom, onPick, trailing }: {
 }
 
 export function StatusCard({
-  slide = false, card, looks, atoms, emblems, lesson, evidence, still, descendants, maxDescendants, maxRuns,
+  tint, slide = false, card, looks, atoms, emblems, lesson, evidence, still, descendants, maxDescendants, maxRuns,
   sailing, onSail, onPick, onClose,
 }: {
   slide?: boolean;
+  /** theme recolour for sprites (parchment) */
+  tint?: (img: import("./art").ArtImage) => import("./art").ArtImage;
   card: CardModel;
   looks: Map<string, NodeLook>;
   atoms: Set<string>;
@@ -127,7 +131,8 @@ export function StatusCard({
   if (shownFor !== card.name) { setShownFor(card.name); setPage("Lesson"); }
   const look = looks.get(card.name) ?? { state: card.state, filled: false };
   const lookOf = (n: string) => looks.get(n) ?? { state: "untrained" as const, filled: false };
-  const portrait = useMemo(() => nodeSprite({ name: card.name, atom: card.atom }, look, emblems).img, [card.atom, look, emblems, card.name]);
+  CARD_TINT = tint;
+  const portrait = useMemo(() => { const im = nodeSprite({ name: card.name, atom: card.atom }, look, emblems).img; return tint ? tint(im) : im; }, [card.atom, look, emblems, card.name, tint]);
   const ground = PALETTE[RAMPS[artBiome(card.family).mid][Math.min(3, RAMPS[artBiome(card.family).mid].length - 1)]];
   const star = useMemo(() => sprite(STAR), []);
   const meter = gateMeter(card);
@@ -155,7 +160,7 @@ export function StatusCard({
     >
       <div className="px-2 pb-2 pt-1">
         <header className="flex items-start gap-3">
-          <div className="grid h-[104px] w-[96px] flex-none place-items-center border-2 border-[#1e1f4e] shadow-[inset_0_2px_0_rgba(255,246,224,0.35)]" style={{ background: ground }}>
+          <div className={`${styles.portrait} grid h-[104px] w-[96px] flex-none place-items-center border-2 border-[#1e1f4e] shadow-[inset_0_2px_0_rgba(255,246,224,0.35)]`} style={{ background: ground }}>
             <ArtImg img={portrait} scale={card.atom ? 2 : 3}
               label={`${displayName(card.name)} as it stands on the map`} />
           </div>
@@ -194,9 +199,9 @@ export function StatusCard({
                 </>
               ) : <p className="text-[17px] leading-[1.45]">{card.description}</p>}
               <div className="mt-4 space-y-2" aria-label="Stats">
-                <StatBar label="Built on it" value={descendants} max={maxDescendants} tone="#62dcf2"
+                <StatBar label="Built on it" value={descendants} max={maxDescendants} tone={tint ? "#7e2e22" : "#62dcf2"}
                   note={`${descendants} models build on it, directly or further down`} />
-                <StatBar label="Runs" value={runs} max={maxRuns} tone="#cbea5e" note={`${runs} logged runs (local S-tier smoke tests)`} />
+                <StatBar label="Runs" value={runs} max={maxRuns} tone={tint ? "#4f7a4c" : "#cbea5e"} note={`${runs} logged runs (local S-tier smoke tests)`} />
               </div>
               <dl className="mt-3 grid grid-cols-[88px_1fr] gap-x-2 gap-y-1 text-[16px] leading-snug">
                 <dt className={styles.muted}>Parents</dt>
