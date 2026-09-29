@@ -5,10 +5,13 @@
 import { useState } from "react";
 import { displayName } from "@/components/lab/shared/card-model";
 import { FAMILY_COPY, familyName, inkOf, PAPER } from "./encoding";
+import { STORY_FONT } from "./art";
 import styles from "./paper.module.css";
 
-export function PaperHud({ hudRef, zoom, family, focus, models, families, onWorld, onRegion, onFamily, onFind }: {
+export function PaperHud({ hudRef, storybook = false, zoom, family, focus, models, families, onWorld, onRegion, onFamily, onFind }: {
   hudRef?: React.Ref<HTMLDivElement>;
+  /** the storybook map: the title is the map's parchment cartouche */
+  storybook?: boolean;
   zoom: "overview" | "region" | "node";
   family: string | null;
   focus: string | null;
@@ -26,13 +29,17 @@ export function PaperHud({ hudRef, zoom, family, focus, models, families, onWorl
     if (hit) { onFind(hit); setQ(""); }
   };
   const link = "rounded px-0.5 font-semibold text-[#1F55AE] underline decoration-2 underline-offset-2 focus-visible:outline-2";
-  const title = zoom === "overview" || !family ? "The model zoo" : zoom === "node" && focus ? displayName(focus) : familyName(family);
-  const line = zoom === "overview" || !family
-    ? "Islands are families; castles are their first models."
+  const over = zoom === "overview" || !family;
+  const title = over ? (storybook ? "The Model Zoo" : "The model zoo") : zoom === "node" && focus ? displayName(focus) : familyName(family);
+  const line = over
+    ? (storybook ? "Neural networks across six lands. Explore, connect and see how they relate." : "Islands are families; castles are their first models.")
     : zoom === "region" ? FAMILY_COPY[family]?.line : null;
+  const cart = storybook && over;
   return (
     <div ref={hudRef} className="pointer-events-none absolute left-3 top-3 z-10 flex max-w-[calc(100%-24px)] flex-col items-start gap-2 sm:left-5 sm:top-4 sm:max-w-[420px]">
-      <nav aria-label="Map level" className={`${styles.card} pointer-events-auto w-full rounded-xl px-3.5 py-2.5`}>
+      <nav aria-label="Map level" className={cart ? "pointer-events-auto w-full px-4 py-3" : `${styles.card} pointer-events-auto w-full rounded-xl px-3.5 py-2.5`}
+        style={cart ? { background: "#F2E2C0", border: "2px solid #6A4127", outline: "1px solid rgba(59,42,32,0.6)", outlineOffset: -7,
+          boxShadow: "3px 5px 0 rgba(42,27,20,0.3)", fontFamily: STORY_FONT, color: "#3B2A20" } : undefined}>
         <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
           {zoom !== "overview" && family && (
             <span className="flex items-center gap-1 text-[14px]">
@@ -46,12 +53,14 @@ export function PaperHud({ hudRef, zoom, family, focus, models, families, onWorl
               )}
             </span>
           )}
-          <h1 className={`${styles.display} flex items-center gap-1.5 text-[23px] leading-none`} style={{ color: ink ? ink.edge : PAPER.ink }}>
+          <h1 className={`${cart ? "" : styles.display} flex items-center gap-1.5 leading-none ${cart ? "text-[34px] font-extrabold" : "text-[23px]"}`}
+            style={{ color: ink ? ink.edge : cart ? "#3B2A20" : PAPER.ink, fontFamily: cart ? STORY_FONT : undefined }}>
             {ink && <span aria-hidden className={`${styles.sticker} inline-block h-3.5 w-3.5 rounded-full`} style={{ background: ink.face }} />}
             {title}
           </h1>
         </div>
-        {line && <p className="mt-1 hidden truncate text-[14px] leading-snug text-[#5A4B3C] sm:block">{line}</p>}
+        {line && <p className={`mt-1 hidden text-[#5A4B3C] sm:block ${cart ? "max-w-[300px] text-[16px] leading-snug" : "truncate text-[14px] leading-snug"}`}
+          style={cart ? { fontFamily: STORY_FONT, color: "#3B2A20" } : undefined}>{line}</p>}
         <form role="search" className="mt-2" onSubmit={(e) => { e.preventDefault(); tryFind(q); }}>
           <label className="flex items-center gap-2 rounded-lg border-2 border-[#E3D6B8] bg-white/60 px-2.5 py-1">
             <svg width="15" height="15" viewBox="0 0 20 20" aria-hidden><circle cx="8.5" cy="8.5" r="6" fill="none" stroke={PAPER.ink} strokeWidth="2.6" /><path d="M13 13l5 5" stroke={PAPER.ink} strokeWidth="2.6" strokeLinecap="round" /></svg>

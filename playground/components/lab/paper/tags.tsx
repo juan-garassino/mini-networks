@@ -12,6 +12,7 @@ import { useMemo } from "react";
 import { placeScreenLabels, type Box, type Pt, type World } from "@/lib/world";
 import { displayName } from "@/components/lab/shared/card-model";
 import { PAPER } from "./encoding";
+import { STORY_FONT } from "./art";
 import { secretCaptions } from "./flavour";
 
 const CHAR = 0.56;                    // Fredoka average advance (em)
@@ -96,7 +97,7 @@ export function PaperTags({ hidden = false, world, place, size, focus, kin, coun
     });
     const labels = world.labels.filter((l) => !atomsOnly || l.node === focus || l.font === 15);
     return placeScreenLabels({ ...world, nodes: [...nodes, ...extra], labels }, { x: 0, y: 0, w: size.w, h: size.h }, size, {
-      font: { atom: 16, derived: 14 }, focus, edgeMargin: 24, gap: 6,
+      font: { atom: 15, derived: 13 }, focus, edgeMargin: 24, gap: 4,
       // family signs are placed first (they name the islands); tags avoid them and the HUD
       obstacles: [...screenObstacles, ...signs.map((g) => ({ x: g.x, y: g.y, w: g.w, h: 21 * 1.5 + 8 }))],
       measure: (t, f) => ({ w: CHAR * f * t.length + 16 + (counts[t] ? TICKET : 0), h: 1.35 * f + 8 }),
@@ -131,13 +132,15 @@ export function PaperTags({ hidden = false, world, place, size, focus, kin, coun
         const n = counts[l.node] ?? 0;
         return (
           <div key={l.node}
-            className="absolute flex items-center justify-center gap-1.5 whitespace-nowrap rounded-md"
+            className="absolute flex items-center justify-center gap-1.5 whitespace-nowrap"
             style={{
               left: l.x, top: l.y, width: l.w, height: l.h, fontSize: l.font,
-              fontWeight: l.font >= 16 ? 600 : 500,
-              background: hot ? PAPER.ink : muted ? "rgba(255,253,246,0.82)" : PAPER.die,
-              color: hot ? PAPER.die : muted ? "#6B5E50" : PAPER.ink,
-              boxShadow: muted ? "none" : "0 2px 0 rgba(43,33,24,0.28)",
+              // storybook model tag: parchment, ink frame, the map's serif
+              background: hot ? "#3B2A20" : muted ? "rgba(242,226,192,0.8)" : "#F2E2C0",
+              color: hot ? "#FCF3DE" : muted ? "#6B5E50" : "#3B2A20",
+              border: `1.2px solid ${hot ? "#3B2A20" : "#6A4127"}`, borderRadius: 2,
+              fontFamily: STORY_FONT, fontWeight: 700, letterSpacing: 0.1,
+              boxShadow: muted ? "none" : "1.5px 2.5px 0 rgba(42,27,20,0.25)",
             }}>
             {displayName(l.node)}
             {n > 0 && (

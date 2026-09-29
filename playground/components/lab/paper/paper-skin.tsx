@@ -21,22 +21,23 @@ import { fibreTile, octagon, pts, regionOutlines } from "./geometry";
 import { BridgeLayer, Flag, LandLayer, PaperDefs, RoadLayer, SeaLayer, Spot, SPOT_R } from "./map-layers";
 import { pieceAnchor } from "./set-pieces";
 import { FerryVoyage, HarbourPiers, SecretIslands, Train } from "./flavour";
-import { Billboards, SET_PIECE_H, spotBills, worldBills, type Bill } from "./billboards";
-import { diorama, TILT } from "./diorama";
+import { Billboards, SET_PIECE_H, type Bill } from "./billboards";
+import { diorama, FLAT } from "./diorama";
 import { PaperCritter } from "./critter";
 import { PaperCard } from "./card";
 import { PaperHud, PaperKey } from "./hud";
 import { PaperTags } from "./tags";
 import { CritterTraining, GrokkingNote, Note, RuinNote } from "./eggs";
 import { familyName, inkOf, PAPER } from "./encoding";
-import { ArtDefs, BigTree, CloudShadow } from "./art";
+import { ArtDefs, CompassRose, ScaleBar } from "./art";
+import { buildStory, StoryGround, StoryProps, StoryRoads } from "./storybook";
+import { FamilySigns, signBoxes } from "./signs";
 import { biomeOf, ClearingProps, ClearingStage, ClearingVignette, SCENE_H, sceneLayout, sceneTags, Stones } from "./clearing";
 import styles from "./paper.module.css";
 
 const CARD_W = 430 + 24 + 24;        // desktop booklet width + margins (screen px)
 const SHEET = 0.45;                   // phone bottom sheet height fraction
-const MAX_NODE_SCALE = 1.6;
-const TREE = 250;                     // foreground tree (screen px) at the bottom-right corner           // screen px per world px in the node view
+const MAX_NODE_SCALE = 1.6;           // screen px per world px in the node view
 const DIM = "rgba(24,32,52,0.27)";    // node view: everything off the family tree steps back one value
 
 /** Scene tags: below each member, else above it, else culled; focus first. */
@@ -104,7 +105,7 @@ function nodeBox(world: World, node: WorldNode, desktop: boolean): CamBox {
 export function PaperSkin() {
   const { view, update } = useLabView();
   const still = view?.still ?? true;
-  const { world, taxonomy, evidence, runs, ready } = useWorld(view ? view.still : null);
+  const { world, taxonomy, evidence, runs, ready } = useWorld(view ? view.still : null, "paper");
 
   const [fibre, setFibre] = useState<string | null>(null);
   useEffect(() => { setFibre(fibreTile()); }, []);
@@ -117,7 +118,7 @@ export function PaperSkin() {
     return () => window.removeEventListener("resize", on);
   }, []);
 
-  const outlines = useMemo(() => (world ? regionOutlines(world) : []), [world]);
+  const story = useMemo(() => (world ? buildStory(world) : null), [world]);
   const states = useMemo(() => {
     const m: Record<string, EvidenceState> = {};
     for (const n of world?.nodes ?? []) m[n.name] = evidenceState(evidence.find((e) => e.name === n.name));
@@ -194,7 +195,7 @@ export function PaperSkin() {
 
   // The diorama: the flat map is the ground plane, tilted away from the
   // viewer (CSS perspective); stand-up props are billboards at projected bases.
-  const dio = useMemo(() => diorama(Math.max(1, cam.size.w), Math.max(1, cam.size.h), TILT), [cam.size.w, cam.size.h]);
+  const dio = useMemo(() => diorama(Math.max(1, cam.size.w), Math.max(1, cam.size.h), FLAT), [cam.size.w, cam.size.h]);
   const place = useCallback((p: Pt) => {
     const f = { x: (p.x - cam.box.x) * cam.scale, y: (p.y - cam.box.y) * cam.scale };
     const q = dio.project(f);
@@ -311,13 +312,16 @@ export function PaperSkin() {
 
   const [comp, setComp] = useState<string | null>(null);
   const [ruin, setRuin] = useState<string | null>(null);
-  const select = useCallback((name: string) => { setComp(null); setRuin(null); update({ zoom: "node", focus: name }); }, [update]);
-  const toRegion = useCallback(() => { setComp(null); update({ zoom: "region" }); }, [update]);
-  const toWorld = useCallback(() => { setComp(null); update({ zoom: "overview", focus: null }); }, [update]);
+  // the clearing fades in only after the learner navigates (no fade on page load)
+  const navigated = useRef(false);
+  const go = useCallback((v: Parameters<typeof update>[0]) => { navigated.current = true; update(v); }, [update]);
+  const select = useCallback((name: string) => { setComp(null); setRuin(null); go({ zoom: "node", focus: name }); }, [go]);
+  const toRegion = useCallback(() => { setComp(null); go({ zoom: "region" }); }, [go]);
+  const toWorld = useCallback(() => { setComp(null); go({ zoom: "overview", focus: null }); }, [go]);
   const toFamily = useCallback((fam: string) => {
     const atom = world ? regionAtom(world, fam) : null;
-    if (atom) update({ zoom: "region", focus: atom });
-  }, [world, update]);
+    if (atom) go({ zoom: "region", focus: atom });
+  }, [world, go]);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -403,7 +407,7 @@ export function PaperSkin() {
       select: (name: string) => select(name),
       view: (v: { zoom: Zoom; focus?: string }) => {
         const f = v.focus ?? view?.focus ?? null;
-        update({ zoom: v.zoom, focus: v.zoom === "overview" ? null : f });
+        go({ zoom: v.zoom, focus: v.zoom === "overview" ? null : f });
       },
       critterClick: (n: number) => {
         if (!park) return false;
@@ -456,12 +460,7 @@ export function PaperSkin() {
     const q = place(p); return { x: q.x, y: q.y };
   };
   const zkLazy = useDeferredValue(zk);
-  const staticBills = useMemo(() => (world ? worldBills(world, zkLazy, pops, still).bills : []), [world, zkLazy, pops, still]);
-  const kinKey = kin?.names.join(",") ?? "";
-  const spots = useMemo(() => (world ? spotBills(world, zk, { states, focus, kin: kinKey ? kinKey.split(",") : null }) : { bills: [], kinBills: [] }),
-    [world, zk, states, focus, kinKey]);
-  const bills = useMemo(() => [...staticBills, ...spots.bills], [staticBills, spots.bills]);
-  const kinBills = spots.kinBills;
+  // (the storybook map draws its stand-ups in world space: StoryProps)
   // the champion flag stands on the focused / hovered spot only
   const flagBills = useMemo(() => {
     if (!world) return [];
@@ -483,19 +482,22 @@ export function PaperSkin() {
     return { family: r.family, box: { x: a.x - wide / 2, y: a.y - tall, w: wide, h: tall + 8 } };
   }) : []), [world, zk.place]);
   const obstacles = useMemo(() => {
-    const out: Box[] = pieceBoxes.map((p) => p.box);
+    const out: Box[] = zoom === "overview" && world ? signBoxes(world, Math.min(2.2, Math.max(1, (1 / Math.max(0.3, settled)) * 1.15))) : [];
     if (park) out.push({ x: park.x - 16, y: park.y - 50, w: 32, h: 54 });
     if (focusNode && focus && states[focus] === "champion") {
       const R = spotR(focus), c = focusNode.center, h = focusNode.atom ? 36 : 26;
       out.push({ x: c.x + 0.74 * R * 1.3 - 4, y: c.y - (0.5 * R + h) * 1.3 - 4, w: h * 0.62 * 1.3 + 10, h: h * 1.3 + 6 });
     }
     return out;
-  }, [pieceBoxes, park, focusNode, focus, states, spotR]);
+  }, [park, focusNode, focus, states, spotR, zoom, world, settled]);
   // chrome no tag may sit under: the HUD, and the foreground tree's canopy
   const chrome = useMemo(() => {
     const out: Box[] = [];
     if (hudH) out.push({ x: 0, y: 0, w: desktop ? 460 : vp.w, h: hudH + 6 });
-    if (desktop && zoom !== "node") out.push({ x: vp.w - TREE * 0.8, y: vp.h - TREE * 0.95, w: TREE * 0.8, h: TREE * 0.95 });
+    if (zoom === "overview") {
+      out.push({ x: 0, y: vp.h - 120, w: 230, h: 120 });               // compass + scale bar
+      out.push({ x: vp.w - 130, y: vp.h - 60, w: 130, h: 60 });        // map key button
+    }
     return out;
   }, [hudH, desktop, zoom, vp.w, vp.h]);
   const regionSigns = useMemo(() => (zoom === "overview" && cam.scale >= 0.3
@@ -507,7 +509,7 @@ export function PaperSkin() {
       <div data-lab-ready={drawn ? "1" : undefined} className={`${styles.stage} relative h-full w-full overflow-hidden`}>
         <div ref={cam.ref} {...cam.handlers} onPointerDown={onPointerDown} onPointerUp={onPointerUp}
           className="absolute inset-0 touch-none select-none">
-          {world && (
+          {world && story && (
             <>
               {/* the ground plane: flat map, tilted */}
               <div className="absolute" style={{
@@ -517,15 +519,12 @@ export function PaperSkin() {
                 <svg viewBox={groundBox} width={dio.ground.w} height={dio.ground.h} className="block" role="application" aria-label="Paper map of the model zoo"
                   style={{ transform: groundCss, transformOrigin: "0 0" }}>
                   <PaperDefs fibre={fibre} />
-                  <SeaLayer world={world} />
+                  <ArtDefs />
+                  <StoryGround world={world} story={story} />
                   <SecretIslands world={world} />
-                  <g aria-hidden pointerEvents="none">
-                    {world.seaSlots.map((b, i) => <CloudShadow key={i} x={b.x + b.w / 2 + 40} y={b.y + b.h * 0.7 + 60} size={70} variant={i % 3} />)}
-                  </g>
-                  <HarbourPiers world={world} k={zk.place} />
-                  <LandLayer world={world} outlines={outlines} fibre={Boolean(fibre)} />
-                  <RoadLayer world={world} lineage={kin ? [] : lineage} loud={loud} />
-                  <BridgeLayer world={world} />
+                  <StoryRoads story={story} trail={kin ? kin.roads.filter((r) => lineage.includes(r)) : lineage} />
+                  <StoryProps world={world} story={story} states={states} focus={zoom === "overview" ? null : focus} />
+                  <FamilySigns world={world} show={zoom === "overview"} scale={1 / Math.max(0.3, settled)} />
                   {/* every spot stays mounted in one place (keyboard focus survives);
                       the lifted family tree is redrawn above the dim sheet as ghosts */}
                   <g>
@@ -539,8 +538,7 @@ export function PaperSkin() {
                     <>
                       <rect x={rest.box.x - rest.box.w * 2} y={rest.box.y - rest.box.h * 2} width={rest.box.w * 5} height={rest.box.h * 5} fill={DIM} pointerEvents="none" />
                       <g pointerEvents="none">
-                        <RoadLayer world={world} lineage={lineage} only={kin.roads} loud={loud} />
-                        <BridgeLayer world={world} only={kin.roads} />
+                        <StoryRoads story={story} trail={lineage} />
                         {treeNode && treeNode.name !== focus && <Spot node={treeNode} state={states[treeNode.name]} focused onSelect={select} ghost flag={false} bare />}
                         {focusNode && focus && <Spot node={focusNode} state={states[focus]} focused onSelect={select} ghost flag={false} bare />}
                       </g>
@@ -562,8 +560,7 @@ export function PaperSkin() {
                 style={{ transform: propCss, transformOrigin: "0 0" }}>
                 {/* node view: props off the family tree step back with the ground */}
                 <ArtDefs />
-                <g opacity={kin ? 0.55 : 1}><Billboards bills={bills} place={restPlace} /></g>
-                {kinBills.length > 0 && <Billboards bills={kinBills} place={restPlace} />}
+
               </svg>
               {/* small live pieces follow the camera every frame */}
               <svg className="pointer-events-none absolute inset-0 h-full w-full" viewBox={`0 0 ${Math.max(1, cam.size.w)} ${Math.max(1, cam.size.h)}`} aria-hidden>
@@ -580,7 +577,7 @@ export function PaperSkin() {
 
         {sceneOn && lay && (
           <div className={`${styles.scene} absolute inset-0 z-[6] overflow-hidden`} key={lay.family}
-            style={{ animation: still ? "none" : undefined, background: biomeOf(lay.family).floor }}>
+            style={{ animation: still || !navigated.current ? "none" : undefined, background: biomeOf(lay.family).floor }}>
             <div className="absolute left-0 top-0" style={{
               width: vp.w, height: vp.h, transformOrigin: "0 0",
               transform: `translate(${sceneZoom.tx}px, ${sceneZoom.ty}px) scale(${sceneZoom.z})`,
@@ -626,16 +623,18 @@ export function PaperSkin() {
           </div>
         )}
 
-        {/* a big foreground cutout overlapping the frame edge (depth only, no data) */}
-        {world && desktop && zoom === "overview" && (
-          <svg aria-hidden className="pointer-events-none absolute bottom-0 right-0 z-[4]" width={TREE} height={TREE} viewBox={`${-TREE / 2} ${-TREE} ${TREE} ${TREE}`}>
-            <BigTree x={TREE * 0.22} y={TREE * 0.12} size={TREE} />
+        {/* storybook furniture: compass rose + scale bar with the real pipeline count */}
+        {world && zoom === "overview" && (
+          <svg aria-hidden className="pointer-events-none absolute bottom-2 left-3 z-[4]" width={240} height={124} viewBox="0 0 240 124">
+            <ArtDefs />
+            <CompassRose x={48} y={50} r={34} />
+            <ScaleBar x={160} y={88} w={110} label={`${taxonomy?.compositions.length ?? 22} pipelines`} />
           </svg>
         )}
         {world && !sceneOn && (
           <PaperTags world={world} place={place} version={restKey} hidden={moving} size={cam.size} focus={focus} kin={kin?.names ?? null}
             counts={stableCounts} obstacles={obstacles} spotR={(n) => spotR(n) * (world.nodes.find((x) => x.name === n)?.atom ? zk.atom : zk.derived)}
-            atomsOnly={zoom === "overview"} regionSigns={regionSigns}
+            atomsOnly={!desktop} regionSigns={null}
             screenObstacles={chrome} />
         )}
 
@@ -658,10 +657,10 @@ export function PaperSkin() {
           </Note>
         )}
 
-        <PaperHud hudRef={hudRef} zoom={zoom} family={active} focus={focus} models={models}
+        <PaperHud hudRef={hudRef} storybook zoom={zoom} family={active} focus={focus} models={models}
           families={world ? world.regions.map((r) => r.family) : []}
           onWorld={toWorld} onRegion={toRegion} onFamily={toFamily} onFind={select} />
-        {zoom === "overview" && <PaperKey hideOnMobile={false} startOpen={zoom === "overview"} />}
+        {zoom === "overview" && <div className="absolute bottom-0 right-0 z-10"><PaperKey hideOnMobile={false} startOpen={zoom === "overview"} /></div>}
         {card && arrived && (
           <PaperCard card={card} still={still} onPick={select} onClose={toRegion}
             runs={runs} evidence={evidence} comp={comp} onComp={setComp} ready={drawn} />
