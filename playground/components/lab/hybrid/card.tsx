@@ -168,6 +168,30 @@ export const LessonCard = memo(function LessonCard({
         </header>
         <p className={`${s.t16} ${s.measure}`}>{L?.what ?? card.description}</p>
 
+        {/* 2 · pipelines (above the fold): each is a boat line; select one to sail it */}
+        {compositions.length > 0 && (
+          <section>
+            <h3 className={s.h3}>Pipelines it sails in</h3>
+            <ul className="mt-1">
+              {compositions.map((c) => (
+                <li key={c.name}>
+                  <button type="button" aria-pressed={sailing === c.name}
+                    className={`${s.row} ${s.rowTight} ${mobile ? s.rowTouch : ""} ${sailing === c.name ? s.rowSel : ""} ${s.t16}`}
+                    onClick={() => onSail(sailing === c.name ? null : c.name)}>
+                    <PixelEmblem name={c.name} scale={1} color={UI.cyan} />
+                    <span className="min-w-0 flex-1 break-words">{words(c.name)}</span>
+                  </button>
+                  {sailing === c.name && (
+                    <p className={`${s.t14} ${s.measure} px-2 pb-1`}>
+                      {COMPOSITION_LESSONS[c.name] ?? `Joins ${c.composes.map(words).join(", ")}.`}
+                      {c.name === DOUBLE_DESCENT_EGG.composition && <span className={`${s.gold} block mt-1`}>{DOUBLE_DESCENT_EGG.caption} Watch the boat dip twice.</span>}
+                    </p>
+                  )}
+                </li>
+              ))}
+            </ul>
+          </section>
+        )}
         {/* 2 · anatomy + the one idea it adds */}
         <section>
           <h3 className={s.h3}>How it thinks</h3>
@@ -222,30 +246,6 @@ export const LessonCard = memo(function LessonCard({
           {tryAvailable(card.name, evidence) && <TryIt name={card.name} />}
         </section>
 
-        {/* 5 · pipelines: each is a boat line; select one to sail it */}
-        {compositions.length > 0 && (
-          <section>
-            <h3 className={s.h3}>Pipelines it sails in</h3>
-            <ul className="mt-1">
-              {compositions.map((c) => (
-                <li key={c.name}>
-                  <button type="button" aria-pressed={sailing === c.name}
-                    className={`${s.row} ${s.rowTight} ${mobile ? s.rowTouch : ""} ${sailing === c.name ? s.rowSel : ""} ${s.t16}`}
-                    onClick={() => onSail(sailing === c.name ? null : c.name)}>
-                    <PixelEmblem name={c.name} scale={1} color={UI.cyan} />
-                    <span className="min-w-0 flex-1 break-words">{words(c.name)}</span>
-                  </button>
-                  {sailing === c.name && (
-                    <p className={`${s.t14} ${s.measure} px-2 pb-1`}>
-                      {COMPOSITION_LESSONS[c.name] ?? `Joins ${c.composes.map(words).join(", ")}.`}
-                      {c.name === DOUBLE_DESCENT_EGG.composition && <span className={`${s.gold} block mt-1`}>{DOUBLE_DESCENT_EGG.caption} Watch the boat dip twice.</span>}
-                    </p>
-                  )}
-                </li>
-              ))}
-            </ul>
-          </section>
-        )}
       </div>
     </PixelWindow>
   );

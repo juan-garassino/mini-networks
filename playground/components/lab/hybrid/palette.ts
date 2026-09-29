@@ -34,7 +34,8 @@ export const UI = {
   panelShade: "#24265c",      // cool inner shade (ocean 0↔1 midpoint)
   panel: px("ocean", 1),      // deep indigo body
   panelLit: px("ocean", 3),   // inner lit bevel, top/left
-  panelHi: px("ocean", 4),    // outer lit bevel, top/left
+  panelHi: px("ocean", 4),    // inner lit bevel, top/left
+  bevelHi: px("snow", 2),     // outer lit bevel: a visible cool-white catch-light
   text: px("ui", 1),          // warm paper white
   dim: px("snow", 3),         // secondary text (≥4.5:1 on panel)
   gold: px("gold", 3),        // headings, atom names, stars

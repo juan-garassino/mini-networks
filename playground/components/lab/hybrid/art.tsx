@@ -63,24 +63,28 @@ function roadStyle(r: Road, lifted: boolean): RoadStyle {
   if (r.kind === "bridge") return "long";
   return r.primary ? "primary" : "path";
 }
+// Fat gold roads with a brown edge, as in the paper diorama specimen (world px).
 const RW: Record<RoadStyle, { rim: number; edge: number; core: number; fill: string; op: number }> = {
-  primary: { rim: 15, edge: 11, core: 7.5, fill: "url(#pa-cobble)", op: 1 },
-  path: { rim: 9, edge: 6.5, core: 4, fill: R.gold[LIT], op: 0.95 },
-  long: { rim: 6, edge: 4, core: 2.4, fill: R.gold[LIT], op: 0.6 },   // cross-family: quiet until focused
-  lineage: { rim: 17, edge: 13, core: 9, fill: "url(#pa-cobble)", op: 1 },
+  primary: { rim: 27, edge: 22, core: 16, fill: "url(#pa-cobble)", op: 1 },
+  path: { rim: 17, edge: 13, core: 8.5, fill: R.gold[LIT], op: 1 },
+  long: { rim: 8, edge: 5.5, core: 3, fill: R.gold[LIT], op: 0.55 },     // cross-family: a pencil-weight line until focused
+  lineage: { rim: 30, edge: 24, core: 18, fill: "url(#pa-cobble)", op: 1 },
 };
 
 export function PaperRoads({ roads, lifted }: { roads: Road[]; lifted: boolean }) {
   const ds = roads.map((r) => ({ r, d: lineD(r.lanePoints), st: roadStyle(r, lifted) }));
   return (
     <g fill="none" strokeLinecap="round" strokeLinejoin="round">
-      {ds.map(({ r, d, st }) => <path key={`s${r.id}`} d={d} stroke={P.shadow} strokeOpacity={0.18 * RW[st].op} strokeWidth={RW[st].rim} transform="translate(2 3)" />)}
+      {ds.map(({ r, d, st }) => <path key={`s${r.id}`} d={d} stroke={P.shadow} strokeOpacity={0.22 * RW[st].op} strokeWidth={RW[st].rim} transform="translate(3 6)" />)}
       {ds.map(({ r, d, st }) => <path key={`w${r.id}`} d={d} stroke={P.die} strokeWidth={RW[st].rim} opacity={RW[st].op} />)}
-      {ds.map(({ r, d, st }) => <path key={`e${r.id}`} d={d} stroke={R.gold[SHADE]} strokeWidth={RW[st].edge} opacity={RW[st].op} />)}
-      {ds.map(({ r, d, st }) => <path key={`c${r.id}`} d={d} stroke={RW[st].fill} strokeWidth={RW[st].core} opacity={RW[st].op} />)}
+      {ds.map(({ r, d, st }) => <path key={`e${r.id}`} d={d} stroke={R.orange[SHADE]} strokeWidth={RW[st].edge} opacity={RW[st].op} />)}
+      {ds.map(({ r, d, st }) => <path key={`b${r.id}`} d={d} stroke={R.gold[LIT]} strokeWidth={RW[st].core} opacity={RW[st].op} />)}
+      {ds.map(({ r, d, st }) => <path key={`c${r.id}`} d={d} stroke={RW[st].fill} strokeWidth={RW[st].core} opacity={RW[st].op * (st === "primary" || st === "lineage" ? 0.6 : 1)} />)}
+      {ds.map(({ r, d, st }) => st === "primary" || st === "lineage"
+        ? <path key={`h${r.id}`} d={d} stroke={R.gold[HI]} strokeWidth={2.4} strokeDasharray="1 18" transform="translate(-2 -3)" /> : null)}
       {ds.map(({ r, st }) => st === "long" ? null : r.chevrons.map((c, i) => (
-        <path key={`v${r.id}${i}`} d="M-2.4 -3L1.6 0L-2.4 3" transform={`translate(${f1(c.x)} ${f1(c.y)}) rotate(${f1((c.angle * 180) / Math.PI)})`}
-          stroke={st === "lineage" ? R.red[DEEP] : R.gold[DEEP]} strokeWidth={st === "lineage" ? 2 : 1.4} opacity={st === "lineage" ? 1 : 0.75} />
+        <path key={`v${r.id}${i}`} d="M-3.4 -4.2L2.2 0L-3.4 4.2" transform={`translate(${f1(c.x)} ${f1(c.y)}) rotate(${f1((c.angle * 180) / Math.PI)})`}
+          stroke={st === "lineage" ? R.red[DEEP] : R.wood[DEEP]} strokeWidth={st === "lineage" ? 2.6 : 2} opacity={st === "lineage" ? 1 : 0.8} />
       )))}
     </g>
   );

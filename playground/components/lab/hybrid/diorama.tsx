@@ -11,7 +11,7 @@ import { samplePolyline, type Box, type Pt, type World, type WorldNode } from "@
 import type { EvidenceState } from "@/components/lab/shared/card-model";
 import { NEXT_ERA, RUINS } from "@/components/lab/shared/eggs";
 import {
-  AtomSpot, BIOME, CapitalSpot, CloudShadow, CritterArt, FogIsland, HOUSES, LevelSpot, Mountains, PaperBoat, PaperCloud,
+  AtomLandmark, AtomSpot, BIOME, CapitalSpot, CloudShadow, CritterArt, FogIsland, HOUSES, LevelSpot, Mountains, PaperBoat, PaperCloud,
   PaperDragon, PaperTrain, Pier, Ruins, SET_PIECES, SteamBoat, CRITTER_WALK, P, R,
 } from "@/components/lab/paper/art";
 import { CRITTER } from "@/components/lab/shared/critter";
@@ -23,6 +23,8 @@ export { SPOT_R, spotScale };
 
 /** Ground tilt: matches the paper library's flat level spots (0.68). */
 export const TILT = 0.68;
+/** atom landmark height = spot radius × this (≈2× the old castle) */
+export const LANDMARK_K = 3.4;
 /** world px → projected px (the SVG's coordinate space). */
 export const proj = (p: Pt): Pt => ({ x: p.x, y: p.y * TILT });
 export const projBox = (b: Box): Box => ({ x: b.x, y: b.y * TILT, w: b.w, h: b.h * TILT });
@@ -30,10 +32,26 @@ export const projBox = (b: Box): Box => ({ x: b.x, y: b.y * TILT, w: b.w, h: b.h
 const f1 = (n: number) => Math.round(n * 10) / 10;
 const TG = `scale(1 ${TILT})`;
 
+// ── the ruins islet: compact and varied (world.ruinsIsland.box is a long
+// strip sized for one stamp per name; we keep its centre and group the
+// retired models into up to 4 ruin sites on a small blob) ──────────────────
+export function ruinsLayout(world: World) {
+  const B = world.ruinsIsland.box;
+  const cx = B.x + B.w / 2, cy = B.y + B.h / 2;
+  const box = { x: cx - 170, y: cy - 90, w: 340, h: 180 };
+  const names = world.ruinsIsland.names;
+  const n = Math.min(4, names.length);
+  const groups: string[][] = Array.from({ length: n }, () => []);
+  names.forEach((id, i) => groups[Math.floor((i * n) / names.length)].push(id));
+  const at = [{ x: -105, y: -12 }, { x: -30, y: 34 }, { x: 45, y: -26 }, { x: 115, y: 22 }];
+  const sites = groups.map((g, i) => ({ ids: g, p: { x: cx + at[i].x, y: cy + at[i].y }, size: 30 + ((i * 7) % 3) * 8, flip: i % 2 === 1 }));
+  return { box, sites };
+}
+
 // ── ground: printed land, foam, rim, thickness ──────────────────────────────
 const Ground = memo(function Ground({ world, outlines, showSecrets }: { world: World; outlines: string[]; showSecrets: boolean }) {
   const hidden = islandD(world.hiddenIsland.box, 1.7);
-  const ruins = islandD(world.ruinsIsland.box, 4.1);
+  const ruins = islandD(ruinsLayout(world).box, 4.1);
   const ids = [...world.regions.map((r) => `hy-r${r.id}`), ...(showSecrets ? ["hy-hidden", "hy-ruins"] : [])];
   const faces = [...world.regions.map((r) => groundOf(r.family).fill), "url(#pa-meadow)", "url(#pa-sand)"];
   const ds = [...outlines, hidden, ruins];
@@ -134,16 +152,17 @@ function buildProps(world: World, showSecrets: boolean, sailing: string[], steam
   // secrets (only once the learner pans or zooms away from the framed view)
   if (showSecrets) {
     const H = world.hiddenIsland, Ru = world.ruinsIsland;
-    put("fog", { x: H.box.x + H.box.w / 2, y: H.box.y + H.box.h * 0.75 }, (x, y) => <FogIsland x={x} y={y} size={86} />);
+    put("fog", { x: H.box.x - 70, y: H.box.y + H.box.h * 0.8 }, (x, y) => <FogIsland x={x} y={y} size={80} />);
     put("dragon", H.dragons, (x, y) => <PaperDragon x={x} y={y} size={46} silhouette />);
-    Ru.names.forEach((id, i) => {
-      const p = Ru.slots[i];
-      const r = RUINS.find((q) => q.id === id);
-      if (!p || !r) return;
-      put(`ru-${id}`, p, (x, y) => (
-        <g data-secret={`ruin:${id}`} className={s.node} role="button" tabIndex={0} aria-label={`Ruin: ${r.name}`}>
-          <Ruins x={x} y={y} size={34} />
-          <title>{`${r.name} — ${r.epitaph}`}</title>
+    // ruin sites: varied stamps, each with a ≥40px transparent hit area
+    ruinsLayout(world).sites.forEach((site, i) => {
+      const first = RUINS.find((q) => q.id === site.ids[0]);
+      put(`ru-${i}`, site.p, (x, y) => (
+        <g data-secret={`ruin:${i}`} className={s.node} role="button" tabIndex={0}
+          aria-label={`Ruins: ${site.ids.map((id) => RUINS.find((q) => q.id === id)?.name ?? id).join(", ")}`}>
+          <rect x={x - 28} y={y - site.size - 10} width={56} height={site.size + 18} fill="#000" fillOpacity={0.001} />
+          <Ruins x={x} y={y} size={site.size} flip={site.flip} />
+          <title>{first ? `${first.name} — ${first.epitaph}` : "Ruins"}</title>
         </g>
       ));
     });
@@ -207,14 +226,19 @@ const Spot = memo(function Spot({ n, state, focused, capital, stations, scale, a
   }
   return (
     <g {...common} transform={`translate(${f1(c.x)} ${f1(c.y - (focused ? 6 : 0))}) scale(${f1(k * 100) / 100})`}>
+      {n.atom ? (
+        // atom = its own mechanism landmark (paper art AtomLandmark) standing
+        // behind a glossy two-tier plinth; capitals keep their city around it
+        <>
+          {capital && <CapitalSpot name={n.name} state={state} r={r} family={n.family} />}
+          <AtomLandmark name={n.name} state={state} x={0} y={-r * TILT * 0.45} size={Math.round(r * LANDMARK_K)} />
+          <AtomSpot name={n.name} state={state} r={r} family={n.family} castle={false} />
+        </>
+      ) : <LevelSpot name={n.name} state={state} r={r} />}
       {focused && (
+        // the focus ring is drawn over everything the spot brings (a capital's houses, a castle)
         <ellipse rx={r + 14} ry={(r + 14) * TILT} fill="none" stroke={R.red[2]} strokeWidth={5} strokeDasharray="10 7" className={s.ring} />
       )}
-      {n.atom
-        ? capital
-          ? <CapitalSpot name={n.name} state={state} r={r} family={n.family} />
-          : <AtomSpot name={n.name} state={state} r={r} family={n.family} />
-        : <LevelSpot name={n.name} state={state} r={r} />}
       {stations > 0 && (
         // station notches: one per recorded run (max 6)
         <g transform={`translate(0 ${r * TILT + 12})`}>
@@ -275,7 +299,7 @@ export interface DioramaProps {
   scale: number;
   still: boolean;
   critter: { training: boolean } | null;
-  ferry: { points: Pt[]; t: number; families: string[] } | null;
+  ferry: { points: Pt[]; t: number; families: string[]; reference?: Pt[] | null; crest?: Pt | null } | null;
   trains: { points: Pt[]; t: number }[];
   /** Konami wave: start stamp + per-model delay (ms); rings run on CSS, no per-frame React */
   konami: { t0: number; schedule: Record<string, number> } | null;
@@ -327,8 +351,11 @@ export const Diorama = memo(function Diorama(p: DioramaProps) {
           // the quest route: the critter's walk from the root atom, dotted in red ink
           <path d={lineD(quest)} fill="none" stroke={R.red[2]} strokeWidth={5} strokeDasharray="0.1 11" strokeLinecap="round" />
         )}
+        {p.ferry?.reference && (
+          <path d={lineD(p.ferry.reference)} fill="none" stroke="#FFFFFF" strokeOpacity={0.45} strokeWidth={2} strokeDasharray="3 7" />
+        )}
         {p.ferry && p.ferry.points.length > 1 && (
-          <path d={lineD(p.ferry.points)} fill="none" stroke="#FFFFFF" strokeWidth={4} strokeDasharray="8 8" strokeLinecap="round" />
+          <path d={lineD(p.ferry.points)} fill="none" stroke="#FFFFFF" strokeWidth={p.ferry.reference ? 6 : 4} strokeDasharray={p.ferry.reference ? undefined : "8 8"} strokeLinecap="round" strokeLinejoin="round" />
         )}
       </g>
       <g>{ordered.filter((n) => lifted(n) && n.name !== focus?.name).map(spot)}</g>
@@ -336,6 +363,15 @@ export const Diorama = memo(function Diorama(p: DioramaProps) {
       {p.ferry && p.ferry.points.length > 1 && (() => {
         const q = proj(samplePolyline(p.ferry.points).at(p.ferry.t));
         return <SteamBoat x={f1(q.x)} y={f1(q.y)} size={56} />;
+      })()}
+      {p.ferry?.crest && (() => {
+        const c = proj(p.ferry.crest), fs = 14 / Math.max(scale, 0.05);
+        return (
+          <g aria-hidden pointerEvents="none" style={{ fontFamily: "var(--font-hybrid-round), system-ui" }}>
+            <rect x={c.x - fs * 4.6} y={c.y - fs * 2.6} width={fs * 9.2} height={fs * 1.6} rx={fs * 0.4} fill={P.die} stroke={R.gold[3]} strokeWidth={fs * 0.1} />
+            <text x={c.x} y={c.y - fs * 1.8} textAnchor="middle" dominantBaseline="central" fontSize={fs} fontWeight={600} fill={P.ink}>threshold</text>
+          </g>
+        );
       })()}
       {p.trains.map((tr, i) => {
         const q = samplePolyline(tr.points).at(tr.t);

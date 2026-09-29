@@ -19,9 +19,9 @@ interface FrameInks { outline: string; lit: string[]; shade: string[]; fill: str
 // ribbon, not the frame.
 const RIVET: [string, string, string] = [UI.goldLit, UI.gold, UI.goldShade];
 const FRAMES: Record<FrameKind, FrameInks> = {
-  window: { outline: UI.ink, lit: [UI.panelHi, UI.panelLit], shade: [UI.ink, UI.panelShade], fill: UI.panel, rivet: RIVET },
-  plate: { outline: UI.ink, lit: [UI.panelHi, UI.panelLit], shade: [UI.ink, UI.panelShade], fill: UI.panel, rivet: RIVET },
-  dialog: { outline: UI.ink, lit: [UI.panelHi, UI.panelLit], shade: [UI.ink, UI.panelShade], fill: UI.panel, rivet: RIVET },
+  window: { outline: UI.ink, lit: [UI.bevelHi, UI.panelHi], shade: [UI.ink, UI.panelShade], fill: UI.panel, rivet: RIVET },
+  plate: { outline: UI.ink, lit: [UI.bevelHi, UI.panelHi], shade: [UI.ink, UI.panelShade], fill: UI.panel, rivet: RIVET },
+  dialog: { outline: UI.ink, lit: [UI.bevelHi, UI.panelHi], shade: [UI.ink, UI.panelShade], fill: UI.panel, rivet: RIVET },
   hot: { outline: UI.ink, lit: [UI.cyanHi, UI.cyan], shade: [UI.ink, UI.cyanShade], fill: UI.cyanShade, rivet: RIVET },
 };
 

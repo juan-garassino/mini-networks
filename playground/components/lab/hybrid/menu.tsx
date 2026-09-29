@@ -64,7 +64,7 @@ export const SlimTitle = memo(function SlimTitle({ models, families, crumbs, onM
   );
 });
 
-export const RegionMenu = memo(function RegionMenu({ title, rows, cursor, onPick, onHover, className, touch, footer, style, compact, ribbonColor }: {
+export const RegionMenu = memo(function RegionMenu({ title, rows, cursor, onPick, onHover, className, touch, footer, style, compact, ribbonColor, legend }: {
   title: string;
   rows: MenuRow[];
   cursor: number;
@@ -80,6 +80,8 @@ export const RegionMenu = memo(function RegionMenu({ title, rows, cursor, onPick
   compact?: boolean;
   /** the header ribbon's cardstock colour (the family's, or gold for the family list) */
   ribbonColor?: string;
+  /** the map key, when the menu is the overview's corner cartouche */
+  legend?: React.ReactNode;
 }) {
   const hasAtoms = rows.some((r) => r.atom);
   return (
@@ -103,6 +105,7 @@ export const RegionMenu = memo(function RegionMenu({ title, rows, cursor, onPick
           );
         })}
       </ul>
+      {legend && <div className={s.keyRule}>{legend}</div>}
       {footer && <p className={`${s.t13} ${s.dim} px-2`}>{footer}</p>}
       {hasAtoms && (
         <p className={`${s.t13} ${s.dim} px-2 pb-1`}>
