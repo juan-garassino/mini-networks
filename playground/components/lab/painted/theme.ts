@@ -108,7 +108,7 @@ export const PAPER_TITLE: Record<string, string> = {
 
 export const IMAGES = {
   grid: "/local/pixel-map-grid.png",
-  clean: "/local/pixel-map-clean.png",
+  clean: "/local/pixel-map-clean2.png",
   baked: "/local/pixel-map.png",
   paper: "/local/paper-map.png",
 } as const;

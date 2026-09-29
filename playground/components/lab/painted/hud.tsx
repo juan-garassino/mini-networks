@@ -59,7 +59,7 @@ export function Controls({ theme, map, render, labels, set, online }: {
       <Seg label="Map" value={map} theme={theme} onChange={(v) => set({ map: v })} options={[{ v: "pixel", t: "Pixel" }, { v: "paper", t: "Paper" }]} />
       {map === "pixel" && (
         <Seg label="Image" value={render} theme={theme} onChange={(v) => set({ render: v, labels: v === "baked" ? "baked" : "ours" })}
-          options={[{ v: "grid", t: "Grid" }, { v: "clean", t: "Clean" }, { v: "baked", t: "Baked" }]} />
+          options={[{ v: "clean", t: "Clean" }, { v: "grid", t: "Grid" }, { v: "baked", t: "Baked" }]} />
       )}
       <Seg label="Labels" value={labels} theme={theme} onChange={(v) => set({ labels: v })} options={[{ v: "ours", t: "Ours" }, { v: "baked", t: "Baked" }]} />
       <div className="mt-0.5 flex flex-wrap items-center gap-x-2.5 gap-y-1" aria-label="Marker legend">

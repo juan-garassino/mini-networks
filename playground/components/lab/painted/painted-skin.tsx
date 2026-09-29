@@ -28,9 +28,15 @@ import { Controls, Search, type Labels, type Render } from "./hud";
 import { FAMILY_TITLE, IMAGES, THEMES } from "./theme";
 
 const W = IMAGE.w, H = IMAGE.h;
-// The grid image is built from 4px blocks, so any scale where 4·k is a whole
-// number keeps every block crisp: quarter steps below 1×, then 1.5×, 2×, 3×.
-const PIXEL_SCALES = [0.25, 0.5, 0.75, 1, 1.25, 1.5, 2, 2.5, 3];
+// render=grid: the grid image is 3px blocks (scripts/pixelate_map.py --cell 3
+// on clean2), so the camera only rests where 3·k is a whole number (thirds)
+// and every block stays a crisp block. render=clean/baked have no consistent
+// pixel grid (apparent pitch drifts 2–14px), so they zoom smoothly: overview =
+// whole map (contain-fit), then any scale up to PIXEL_MAX, drawn with
+// image-rendering: pixelated so upscales stay crisp.
+const GRID_CELL = 3;
+const PIXEL_SCALES = [1, 2, 3, 4, 5, 6, 7, 8, 9].map((n) => n / GRID_CELL);
+const PIXEL_MAX = 3;
 const PAPER_MAX = 2;
 const CARD_W = 380; // desktop card width incl. margin (screen px)
 
@@ -45,7 +51,7 @@ function parseOpts(search: string): Opts {
   const p = new URLSearchParams(search);
   const map: MapId = p.get("map") === "paper" ? "paper" : "pixel";
   const r = p.get("render");
-  const render: Render = r === "clean" || r === "baked" ? r : "grid";
+  const render: Render = r === "grid" || r === "baked" ? r : "clean";
   const l = p.get("labels");
   const labels: Labels = l === "ours" || l === "baked" ? l : map === "pixel" && render === "baked" ? "baked" : "ours";
   return { map, render, labels };
@@ -101,11 +107,12 @@ export function PaintedSkin() {
   const { taxonomy, evidence, runs, family, ready, online } = useWorld(view ? view.still : null);
 
   const mapId: MapId = opts?.map ?? "pixel";
-  const render: Render = opts?.render ?? "grid";
+  const render: Render = opts?.render ?? "clean";
   const labels: Labels = opts?.labels ?? "ours";
   const theme = THEMES[mapId];
   const map = useMemo(() => resolveMap(mapId, render), [mapId, render]);
   const imgSrc = mapId === "paper" ? IMAGES.paper : IMAGES[render];
+  const snapGrid = mapId === "pixel" && render === "grid";
   const ours = labels === "ours";
   const heal = mapId === "paper" && ours;
 
@@ -158,14 +165,17 @@ export function PaintedSkin() {
   // Overview shows the WHOLE map (contain-fit); zooming in goes up from there.
   const fit = Math.min(vp.w / W, vp.h / H);
   const levels = useMemo(() => {
-    if (mapId === "pixel") {
+    if (snapGrid) {
       const snap = (k: number) => [...PIXEL_SCALES].reverse().find((s) => s <= k + 1e-3) ?? PIXEL_SCALES[0];
       const up = (k: number) => PIXEL_SCALES.find((s) => s >= k - 1e-3) ?? 3;
       const base = snap(fit);
-      return { overview: base, region: up(base * 1.8), node: up(Math.max(base * 2.2, 1)), min: PIXEL_SCALES[0], max: 3 };
+      return { overview: base, region: up(base * 1.8), node: up(Math.max(base * 2.2, 1)), min: PIXEL_SCALES[0], max: PIXEL_MAX };
+    }
+    if (mapId === "pixel") {
+      return { overview: fit, region: Math.min(PIXEL_MAX, fit * 1.8), node: Math.min(PIXEL_MAX, Math.max(fit * 2.2, 1.2)), min: fit * 0.8, max: PIXEL_MAX };
     }
     return { overview: fit, region: Math.min(PAPER_MAX, fit * 1.8), node: Math.min(PAPER_MAX, Math.max(fit * 2.2, 1.2)), min: fit * 0.8, max: PAPER_MAX };
-  }, [mapId, fit]);
+  }, [mapId, fit, snapGrid]);
 
   const target: CamBox = useMemo(() => {
     const zoom = view?.zoom ?? "overview";
@@ -198,7 +208,7 @@ export function PaintedSkin() {
     const fx = (e.clientX - rect.left) / rect.width, fy = (e.clientY - rect.top) / rect.height;
     const cur = vp.w / cam.box.w;
     let k: number;
-    if (mapId === "pixel") {
+    if (snapGrid) {
       wheelAcc.current += e.deltaY;
       if (Math.abs(wheelAcc.current) < 40) return;
       const dir = wheelAcc.current < 0 ? 1 : -1;
@@ -209,7 +219,7 @@ export function PaintedSkin() {
       k = clamp(cur * Math.exp(-e.deltaY * 0.0015), levels.min, levels.max);
     }
     zoomTo(k, fx, fy);
-  }, [cam.box, vp.w, mapId, levels]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [cam.box, vp.w, snapGrid, levels]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Zoom about a screen fraction (fx, fy); keeps the map centred when it's smaller than the view.
   const zoomTo = (k: number, fx = 0.5, fy = 0.5) => {
@@ -224,7 +234,7 @@ export function PaintedSkin() {
   };
   const stepZoom = (dir: 1 | -1) => {
     const cur = vp.w / cam.box.w;
-    if (mapId === "pixel") {
+    if (snapGrid) {
       const next = dir > 0 ? PIXEL_SCALES.find((s) => s > cur + 1e-3) : [...PIXEL_SCALES].reverse().find((s) => s < cur - 1e-3);
       if (next !== undefined) zoomTo(clamp(next, levels.min, levels.max));
     } else zoomTo(clamp(cur * (dir > 0 ? 1.4 : 1 / 1.4), levels.min, levels.max));
@@ -249,11 +259,11 @@ export function PaintedSkin() {
 
   // live scale; the pixel map snaps to its integer level once the flight lands
   let S = cam.scale > 0 && Number.isFinite(cam.scale) ? cam.scale : 1;
-  if (mapId === "pixel" && Math.abs(S - Math.round(S)) < 0.01) S = Math.round(S);
+  if (snapGrid) { const q = Math.round(S * GRID_CELL) / GRID_CELL; if (Math.abs(S - q) < 0.01) S = q; }
   const ox = Math.round(-cam.box.x * S), oy = Math.round(-cam.box.y * S);
   // layout scale: the resting scale of the current target (tags re-layout per level, not per frame)
   const Sl = manual ? vp.w / manual.w : vp.w / target.w;
-  const layoutS = Number.isFinite(Sl) && Sl > 0 ? (mapId === "pixel" ? Math.round(Sl) || 1 : Sl) : 1;
+  const layoutS = Number.isFinite(Sl) && Sl > 0 ? (snapGrid ? Math.round(Sl * GRID_CELL) / GRID_CELL || 1 : Sl) : 1;
 
   // ——— fonts + tags
   const [fontsReady, setFontsReady] = useState(false);
