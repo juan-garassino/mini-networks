@@ -378,3 +378,7 @@ centre + north-east (blue-domed cathedral, ancient ruins, a desert stilt town), 
 the southern lava forge, Decision the east (green village + an underwater domed city in the
 south-east bay), Structure a floating cyberpunk island top-right. lib/world v3 reproduces
 this geography; the pixel illustrator redraws its set-pieces in the palette reference.
+- **Final references (owner, 2026-09-29 15:42):** PIXEL skin = the final pixel map (local:
+  playground/.lab-shots/refs/map-reference.png — composition + palette); PAPER skin = the
+  storybook map (refs/paper-map-reference.png) redrawn in the paper-craft medium, on its own
+  geography preset. Both adapted to the real 44-model taxonomy; images never committed.
