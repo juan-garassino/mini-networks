@@ -27,7 +27,7 @@ function parse(search: string): View {
   };
 }
 
-const FALLBACK_DEMO = "rnn";
+const FALLBACK_DEMO = "lora";
 
 // only same-site paths (no protocol-relative or absolute URLs)
 function safeFrom(v: string | null): string | null {
