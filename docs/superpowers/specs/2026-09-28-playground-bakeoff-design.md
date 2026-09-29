@@ -345,3 +345,21 @@ separate discipline with its own agents and a specimen-sheet review loop.
   review per asset against the reference descriptions; builders integrate art exports.
 - Hybrid inherits paper's art; its chrome moves to contemporary pixel style. Flow's
   creatures get the same material/light treatment (sticker gloss, shading, soft shadow).
+
+## Round 4 (2026-09-29 afternoon) — continent v3 + Wild West + Cyberpunk
+Owner: "we need to review the layout and the shape of the continent. Also I would like a
+wild west part and a cyberpunk part!" Problems confirmed by the owner: too blobby/generic,
+poor use of the screen, arbitrary/crowded paths inside, families don't feel like places.
+- **Decision = Wild West** (RL frontier: rewards, gambling, gold rush): canyon mesas, red
+  desert, a saloon boomtown, railroad + station, cacti, tumbleweeds, wanted posters; dice
+  keep → saloon/casino, maze fort → canyon labyrinth, rook → frontier fort.
+- **Sequence = Cyberpunk** (the LLM frontier): a neon megacity at night inside the map —
+  grid streets, towers with lit windows, holo signs, magenta/cyan neon; transformer's spire
+  as the neon capital tower, kimi/deepseek/moe as arcologies. Its night palette is a
+  deliberate pocket, framed by its border.
+- **Continent v3 (lib/world)**: a designed silhouette instead of grown blobs (a memorable
+  shape with a central bay/inland sea, peninsulas per family), sized to the viewport aspect
+  (16:10) so land fills the frame; each family a distinct geography with natural borders
+  (mountain ranges, rivers, straits); roads follow valleys/coasts with fewer crossings,
+  hub fans replaced by trunk-and-branch; invariants stay (spacing, labels off roads,
+  lanes, determinism).
