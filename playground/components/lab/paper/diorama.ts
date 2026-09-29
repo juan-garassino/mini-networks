@@ -19,7 +19,7 @@ export interface Tilt {
   originY: number;
 }
 
-export const TILT: Tilt = { angle: 32, persp: 1600, originY: 0.6 };
+export const TILT: Tilt = { angle: 40, persp: 1800, originY: 0.6 };
 export const FLAT: Tilt = { angle: 0, persp: 1700, originY: 0.62 };
 
 export interface Diorama {

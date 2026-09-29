@@ -10,9 +10,11 @@ import { samplePolyline, type Pt, type World } from "@/lib/world";
 import { PieceArt, PIECE_TOP, pieceAnchor } from "./set-pieces";
 import type { EvidenceState } from "@/components/lab/shared/card-model";
 import {
-  AtomSpot, BIOME, CapitalSpot, familyRamp, FogIsland, HOUSES, LevelSpot, Mountains, PaperBoat, PaperCloud, Ruins, SET_PIECES,
+  AtomLandmark, BIOME, familyRamp, FogIsland, HOUSES, LevelSpot, Mountains, PaperBoat, PaperCloud, Ruins, SET_PIECES,
 } from "./art";
 import styles from "./paper.module.css";
+
+
 import { tileCenter } from "./geometry";
 
 export type Place = (p: Pt) => { x: number; y: number; k: number };
@@ -24,7 +26,6 @@ export interface Bill { key: string; at: Pt; node: ReactNode }
  *  separately so the node view can lift them above the dimmed map. */
 export function worldBills(world: World, k: { atom: number; place: number; derived: number },
   pops: Record<string, number>, still: boolean,
-  spot: { states: Record<string, EvidenceState>; focus: string | null; hover: string | null; kin: string[] | null },
 ): { bills: Bill[]; kinBills: Bill[] } {
   const bills: Bill[] = [];
   const kinBills: Bill[] = [];
@@ -35,7 +36,7 @@ export function worldBills(world: World, k: { atom: number; place: number; deriv
     const pop = pops[r.family] ?? 0;
     bills.push({ key: `sp-${r.family}`, at: { x: a.x, y: a.y },
       node: sp
-        ? <g key={pop} className={!still && pop > 0 ? styles.popup : undefined}><sp.C size={120 * k.place} /></g>
+        ? <g key={pop} className={!still && pop > 0 ? styles.popup : undefined}><sp.C size={SET_PIECE_H * k.place} /></g>
         : <PieceArt family={r.family} s={a.s * k.place} sx={a.sx * k.place} pop={pop} animate={!still && pop > 0} /> });
   }
   const fam = new Map(world.nodes.map((n) => [n.name, n.family]));
@@ -47,15 +48,15 @@ export function worldBills(world: World, k: { atom: number; place: number; deriv
         node: <H.C size={H.H * 0.42 * hk} /> });
     });
   }
+  // one range per border stretch (its midpoint), two on long borders — the
+  // specimen reads as a few big landmarks, not a picket of peaks
   world.mountains.forEach((line, li) => {
     const s = samplePolyline(line);
-    const step = 110 * k.place;
-    const n = Math.max(1, Math.floor(s.length / step));
-    for (let i = 0; i <= n; i++) {
-      const p = s.at(i / n);
-      bills.push({ key: `m-${li}-${i}`, at: { x: p.x, y: p.y + 8 },
-        node: <Mountains size={[38, 46, 42][i % 3] * k.place} snow={i % 2 === 0} /> });  // fixed rhythm, not data
-    }
+    const ts = s.length > 360 ? [0.28, 0.72] : [0.5];
+    ts.forEach((t, i) => {
+      const p = s.at(t);
+      bills.push({ key: `m-${li}-${i}`, at: { x: p.x, y: p.y + 8 }, node: <Mountains size={(s.length > 200 ? 64 : 48) * k.place} snow={(li + i) % 2 === 0} /> });
+    });
   });
   for (const d of world.decor) {
     // the world's own thinning key (variant 0 ≈ ¼ of cells), then every other one: ~60 props
@@ -81,8 +82,20 @@ export function worldBills(world: World, k: { atom: number; place: number; deriv
   // the secret islands
   const hi = world.hiddenIsland;
   bills.push({ key: "fog", at: { x: hi.box.x + hi.box.w / 2, y: hi.box.y + hi.box.h * 0.8 }, node: <FogIsland size={150} /> });
-  world.ruinsIsland.slots.forEach((p, i) => bills.push({ key: `ru-${i}`, at: p, node: <Ruins size={42} /> }));
+  world.ruinsIsland.slots.forEach((p, i) => bills.push({ key: `ru-${i}`, at: p,
+    // varied silhouettes (size + mirror by index; no data)
+    node: <Ruins size={[40, 50, 34, 46][i % 4]} flip={i % 3 === 1} /> }));
 
+  return { bills, kinBills: [] as Bill[] };
+}
+
+/** The level spots as billboards — split from the static props so a
+ *  selection rebuilds ~44 spots, not ~1000 props. */
+export function spotBills(world: World, k: { atom: number; derived: number },
+  spot: { states: Record<string, EvidenceState>; focus: string | null; kin: string[] | null },
+): { bills: Bill[]; kinBills: Bill[] } {
+  const bills: Bill[] = [];
+  const kinBills: Bill[] = [];
   // level spots (stand up so their thickness and glints read)
   const kin = spot.kin ? new Set(spot.kin) : null;
   for (const n of world.nodes) {
@@ -91,8 +104,9 @@ export function worldBills(world: World, k: { atom: number; place: number; deriv
     const zoom = on ? 1.3 : n.atom ? k.atom : k.derived;
     const city = world.cities.find((c) => c.node === n.name);
     const r = n.atom ? 32 : 20;
+    // atoms: the illustrator's per-mechanism landmark when exported (AtomLandmark), else the castle spot
     const node = n.atom
-      ? (city?.capital ? <CapitalSpot name={n.name} state={st} r={r * 1.1} family={n.family} /> : <AtomSpot name={n.name} state={st} r={r} family={n.family} />)
+      ? <AtomLandmark name={n.name} state={st} size={city?.capital ? 124 : 94} />
       : <LevelSpot name={n.name} state={st} r={r} />;
     // the art draws the spot's top face centred at 0,0 — its base sits a thickness lower
     const bill = { key: `s-${n.name}`, at: { x: n.center.x, y: n.center.y + 0.1 }, node: <g transform={`scale(${zoom})`}>{node}</g> };
@@ -115,3 +129,6 @@ export const Billboards = memo(function Billboards({ bills, place }: { bills: Bi
 });
 
 export { PIECE_TOP };
+
+/** Set-piece height, world px: landmarks dominate their island (specimen). */
+export const SET_PIECE_H = 175;

@@ -12,6 +12,7 @@ import { memo, useEffect, useMemo, useState } from "react";
 import { samplePolyline, type Pt, type World } from "@/lib/world";
 import { dipDepth, NEXT_ERA, RUINS } from "@/components/lab/shared/eggs";
 import { inkOf, PAPER } from "./encoding";
+import { SteamBoat } from "./art";
 
 // ── cities ───────────────────────────────────────────────────────────────
 export const CityLayer = memo(function CityLayer({ world, k = 1 }: { world: World; k?: number }) {
@@ -188,7 +189,8 @@ export function FerryVoyage({ route, dips, still, family, place }: {
       <path d={d} fill="none" stroke={PAPER.die} strokeWidth={5} strokeDasharray="10 8" strokeLinecap="round" opacity={0.9} />
       <path d={d} fill="none" stroke={PAPER.ink} strokeWidth={2} strokeDasharray="10 8" strokeLinecap="round" />
       <g transform={`translate(${b.x.toFixed(1)} ${b.y.toFixed(1)}) scale(${b.k.toFixed(4)})`}>
-        <Boat x={0} y={0} angle={p.angle} size={2.2} sail={inkOf(family).edge} />
+        {/* a composition under way: the paddle steamer with its smoke trail */}
+        <g transform={`scale(${Math.cos(p.angle) < 0 ? -1 : 1} 1)`}><SteamBoat size={54} /></g>
       </g>
     </g>
   );

@@ -5,7 +5,7 @@
 // sentence → animated anatomy → lineage mini-map → proof (curve, samples,
 // try it) → pipelines (select one = its boat sails on the map).
 // Desktop: pinned right. Phone: a bottom sheet. Content: cardModel + useLesson.
-import { useEffect, useState } from "react";
+import { memo, useEffect, useState } from "react";
 import { motion } from "motion/react";
 import { iconFor } from "@/lib/icons";
 import { COMPOSITION_LESSONS } from "@/lib/lessons";
@@ -96,7 +96,7 @@ function TryIt({ name, evidence }: { name: string; evidence: ModelEvidence[] }) 
   );
 }
 
-export function PaperCard({ card, still, onPick, onClose, runs = [], evidence = [], comp = null, onComp }: {
+export const PaperCard = memo(function PaperCard({ card, still, onPick, onClose, runs = [], evidence = [], comp = null, onComp }: {
   card: CardModel; still: boolean; onPick: (n: string) => void; onClose: () => void;
   runs?: RunSummary[]; evidence?: ModelEvidence[];
   /** the composition whose boat is sailing, and a setter (null = none) */
@@ -235,4 +235,4 @@ export function PaperCard({ card, still, onPick, onClose, runs = [], evidence = 
       )}
     </motion.aside>
   );
-}
+});

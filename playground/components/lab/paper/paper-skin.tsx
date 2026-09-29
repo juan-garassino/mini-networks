@@ -4,7 +4,7 @@
 // → camera → paint world geometry → screen-space tags → lesson booklet →
 // data-lab-ready → window.__lab. Every position comes from lib/world; every
 // mark is declared in encoding.ts (eggs included).
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { startTransition, useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
 import {
   ferryRoute, parkingSpot, pathToAtom, samplePolyline, type Box, type Pt, type World, type WorldNode,
 } from "@/lib/world";
@@ -19,9 +19,9 @@ import {
 } from "@/components/lab/shared/eggs";
 import { fibreTile, octagon, pts, regionOutlines } from "./geometry";
 import { BridgeLayer, Flag, LandLayer, PaperDefs, RoadLayer, SeaLayer, Spot, SPOT_R } from "./map-layers";
-import { PIECE_TOP, pieceAnchor } from "./set-pieces";
+import { pieceAnchor } from "./set-pieces";
 import { FerryVoyage, HarbourPiers, SecretIslands, Train } from "./flavour";
-import { Billboards, worldBills, type Bill } from "./billboards";
+import { Billboards, SET_PIECE_H, spotBills, worldBills, type Bill } from "./billboards";
 import { diorama, TILT } from "./diorama";
 import { PaperCritter } from "./critter";
 import { PaperCard } from "./card";
@@ -29,12 +29,13 @@ import { PaperHud, PaperKey } from "./hud";
 import { PaperTags } from "./tags";
 import { CritterTraining, GrokkingNote, Note, RuinNote } from "./eggs";
 import { familyName, inkOf, PAPER } from "./encoding";
-import { ArtDefs } from "./art";
+import { ArtDefs, BigTree, CloudShadow } from "./art";
 import styles from "./paper.module.css";
 
 const CARD_W = 430 + 24 + 24;        // desktop booklet width + margins (screen px)
 const SHEET = 0.45;                   // phone bottom sheet height fraction
-const MAX_NODE_SCALE = 1.6;           // screen px per world px in the node view
+const MAX_NODE_SCALE = 1.6;
+const TREE = 250;                     // foreground tree (screen px) at the bottom-right corner           // screen px per world px in the node view
 const DIM = "rgba(24,32,52,0.27)";    // node view: everything off the family tree steps back one value
 
 const union = (boxes: Box[]): Box => {
@@ -133,8 +134,14 @@ export function PaperSkin() {
     }
     if (zoom === "region" && focusNode) return frame(world.camera.regions[focusNode.family], vp.w, vp.h, { top, right: 0, bottom: 0 });
     const p = 24;
+    if (!desktop) {
+      // phone: the whole map would be ~0.3× (8px spots) — frame the central 60%
+      // of the land instead; drag to see the rest
+      const w = overviewBox.w * 0.6, cx = overviewBox.x + overviewBox.w / 2, cy = overviewBox.y + overviewBox.h / 2;
+      return frame({ x: cx - w / 2, y: cy - w * 0.9, w, h: w * 1.8 }, vp.w, vp.h, { top, right: 0, bottom: 56 });
+    }
     return frame({ x: overviewBox.x - p, y: overviewBox.y - p, w: overviewBox.w + p * 2, h: overviewBox.h + p * 2 }, vp.w, vp.h,
-      { top: desktop ? 0 : top, right: 0, bottom: 0 });
+      { top: 0, right: 0, bottom: 0 });
   }, [world, overviewBox, zoom, focusNode, vp.w, vp.h, hudH, desktop]);
 
   // zoom-out reaches the secret islands (camera.all), never further
@@ -144,15 +151,25 @@ export function PaperSkin() {
   // at the whole-map zoom atoms/capitals hold a ~48px octagon, derived models
   // shrink to small dots that grow back into spots as you zoom in, and
   // set-pieces / mountains / harbours scale up so each island reads as a place.
+  // The zoom factors follow the SETTLED scale (the camera's destination, then
+  // debounced after drags/wheel), never the per-frame tween: rebuilding ~10k
+  // SVG nodes on every quantum step stalled the fly-to.
   const q = (v: number) => Math.round(v * 20) / 20;
+  // Rebuilt only once the camera has rested (220ms after the last frame), and
+  // as a transition so the rebuild never blocks a camera frame.
+  const [settled, setSettled] = useState(cam.scale);
+  useEffect(() => {
+    const id = setTimeout(() => startTransition(() => setSettled(cam.scale)), still ? 0 : 220);
+    return () => clearTimeout(id);
+  }, [cam.scale, still]);
   const zk = useMemo(() => {
-    const sc = cam.scale;
+    const sc = settled;
     return {
       atom: q(Math.min(2.2, Math.max(1, 48 / (63 * sc)))),
       derived: q(Math.min(1, Math.max(0.45, (sc - 0.4) / 0.3))),
       place: q(Math.min(1.7, Math.max(1, 0.75 / sc))),
     };
-  }, [cam.scale >= 0 ? q(cam.scale) : 0]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [q(settled)]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // The diorama: the flat map is the ground plane, tilted away from the
   // viewer (CSS perspective); stand-up props are billboards at projected bases.
@@ -163,12 +180,57 @@ export function PaperSkin() {
     return { x: q.x, y: q.y, k: q.k * cam.scale };
   }, [dio, cam.box.x, cam.box.y, cam.scale]);
   const camKey = `${cam.box.x.toFixed(1)},${cam.box.y.toFixed(1)},${cam.box.w.toFixed(1)},${cam.size.w},${cam.size.h}`;
-  const groundBox = `${cam.box.x + dio.ground.x / cam.scale} ${cam.box.y + dio.ground.y / cam.scale} ${dio.ground.w / cam.scale} ${dio.ground.h / cam.scale}`;
+  // The heavy layers (ground ~thousands of paths, ~1000 billboards) render at
+  // the camera's REST pose only; while the camera moves they are moved by a
+  // single CSS transform (exact for the flat ground, near-exact for props),
+  // and re-rendered once it rests. Name tags are placed at rest too.
+  const [rest, setRest] = useState({ key: camKey, box: cam.box, scale: cam.scale });
+  useEffect(() => {
+    const now = { key: camKey, box: cam.box, scale: cam.scale };
+    if (still) { setRest(now); return; }
+    const id = setTimeout(() => startTransition(() => setRest(now)), 140);
+    return () => clearTimeout(id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [camKey, still]);
+  const restKey = rest.key;
+  const moving = restKey !== camKey;
+  // The camera has LANDED on its target: the lesson card and the node-view
+  // lift/dim mount only then, so nothing heavy mounts mid-flight.
+  const landed = useMemo(() => {
+    if (moving) return false;
+    const f = fitBox(target, Math.max(1, cam.size.w), Math.max(1, cam.size.h));
+    return Math.abs(f.x - rest.box.x) < 2 && Math.abs(f.y - rest.box.y) < 2 && Math.abs(f.w - rest.box.w) < 2;
+  }, [moving, target, cam.size.w, cam.size.h, rest]);
+  const restPlace = useCallback((p: Pt) => {
+    const f = { x: (p.x - rest.box.x) * rest.scale, y: (p.y - rest.box.y) * rest.scale };
+    const q = dio.project(f);
+    return { x: q.x, y: q.y, k: q.k * rest.scale };
+  }, [dio, rest]);
+  // flat-space delta rest → now: f_now = f_rest·k + d
+  const fk = cam.scale / Math.max(1e-6, rest.scale);
+  const fd = { x: (rest.box.x - cam.box.x) * cam.scale, y: (rest.box.y - cam.box.y) * cam.scale };
+  const groundCss = moving
+    ? `translate(${dio.ground.x * fk + fd.x - dio.ground.x}px, ${dio.ground.y * fk + fd.y - dio.ground.y}px) scale(${fk})`
+    : undefined;
+  // screen-space delta for the billboards, fitted at two points near the centre
+  const propCss = useMemo(() => {
+    if (!moving) return undefined;
+    const a = { x: cam.box.x + cam.box.w / 2, y: cam.box.y + cam.box.h * 0.6 }, b = { x: a.x + cam.box.w / 4, y: a.y };
+    const ra = restPlace(a), rb = restPlace(b), na = place(a), nb = place(b);
+    const k = Math.hypot(nb.x - na.x, nb.y - na.y) / Math.max(1e-6, Math.hypot(rb.x - ra.x, rb.y - ra.y));
+    return `translate(${na.x - ra.x * k}px, ${na.y - ra.y * k}px) scale(${k})`;
+  }, [moving, cam.box, restPlace, place]);
+  const groundBox = `${rest.box.x + dio.ground.x / rest.scale} ${rest.box.y + dio.ground.y / rest.scale} ${dio.ground.w / rest.scale} ${dio.ground.h / rest.scale}`;
 
   // hover / keyboard focus: region view lifts that spot's family tree
   const [hovered, setHovered] = useState<string | null>(null);
   const hoverNode = zoom === "region" && hovered && world ? world.nodes.find((n) => n.name === hovered) : undefined;
-  const treeNode = zoom === "node" ? focusNode : hoverNode;
+  // sticky: once landed for this view, panning away keeps the card open
+  const [landedFor, setLandedFor] = useState<string | null>(null);
+  const viewKey = `${zoom}:${focus}`;
+  useEffect(() => { if (landed) setLandedFor(viewKey); }, [landed, viewKey]);
+  const arrived = still || landedFor === viewKey;
+  const treeNode = zoom === "node" ? (arrived ? focusNode : undefined) : hoverNode;
 
   const walk = useMemo(() => (world && focus ? pathToAtom(world, focus) : null), [world, focus]);
   const treeName = treeNode?.name ?? focus;
@@ -297,7 +359,7 @@ export function PaperSkin() {
       if (dd < (n.atom ? SPOT_R.atom + 6 : SPOT_R.derived + 6) && dd < bestD) { best = n; bestD = dd; }
     }
     if (best) { select(best.name); return; }
-    const ri = world.ruinsIsland.slots.findIndex((p) => Math.hypot(p.x - wx, p.y - 10 - wy) < 22);
+    const ri = world.ruinsIsland.slots.findIndex((p) => Math.hypot(p.x - wx, p.y - 14 - wy) < Math.max(28, 18 / cam.scale));
     if (ri >= 0) { setRuin(world.ruinsIsland.names[ri]); return; }
     setRuin(null);
     const tx = Math.floor(wx / world.tile), ty = Math.floor(wy / world.tile);
@@ -335,9 +397,13 @@ export function PaperSkin() {
   const orderedNodes = useMemo(() => (world ? [...world.nodes].sort((a, b) => a.center.y - b.center.y) : []), [world]);
   const spotR = useCallback((n: string) => (world?.nodes.find((x) => x.name === n)?.atom ? SPOT_R.atom : SPOT_R.derived), [world]);
   const toScreen = (p: Pt) => { const q = place(p); return { x: q.x, y: q.y }; };
-  const spotCtx = useMemo(() => ({ states, focus, hover: hovered, kin: kin?.names ?? null }), [states, focus, hovered, kin]);
-  const { bills, kinBills } = useMemo(() => (world ? worldBills(world, zk, pops, still, spotCtx) : { bills: [], kinBills: [] }),
-    [world, zk, pops, still, spotCtx]);
+  const zkLazy = useDeferredValue(zk);
+  const staticBills = useMemo(() => (world ? worldBills(world, zkLazy, pops, still).bills : []), [world, zkLazy, pops, still]);
+  const kinKey = kin?.names.join(",") ?? "";
+  const spots = useMemo(() => (world ? spotBills(world, zk, { states, focus, kin: kinKey ? kinKey.split(",") : null }) : { bills: [], kinBills: [] }),
+    [world, zk, states, focus, kinKey]);
+  const bills = useMemo(() => [...staticBills, ...spots.bills], [staticBills, spots.bills]);
+  const kinBills = spots.kinBills;
   // the champion flag stands on the focused / hovered spot only
   const flagBills = useMemo(() => {
     if (!world) return [];
@@ -355,8 +421,8 @@ export function PaperSkin() {
   // solid things no name tag may cover (world px)
   const pieceBoxes = useMemo(() => (world ? world.regions.filter((r) => r.setPiece).map((r) => {
     const a = pieceAnchor(world, r);
-    const tall = (PIECE_TOP[r.family] ?? 100) * a.s * zk.place;
-    return { family: r.family, box: { x: a.x - 50 * a.sx * zk.place, y: a.y - tall, w: 100 * a.sx * zk.place, h: tall + 8 } };
+    const tall = SET_PIECE_H * zk.place, wide = tall * 0.95;
+    return { family: r.family, box: { x: a.x - wide / 2, y: a.y - tall, w: wide, h: tall + 8 } };
   }) : []), [world, zk.place]);
   const obstacles = useMemo(() => {
     const out: Box[] = pieceBoxes.map((p) => p.box);
@@ -367,6 +433,13 @@ export function PaperSkin() {
     }
     return out;
   }, [pieceBoxes, park, focusNode, focus, states, spotR]);
+  // chrome no tag may sit under: the HUD, and the foreground tree's canopy
+  const chrome = useMemo(() => {
+    const out: Box[] = [];
+    if (hudH) out.push({ x: 0, y: 0, w: desktop ? 460 : vp.w, h: hudH + 6 });
+    if (desktop && zoom !== "node") out.push({ x: vp.w - TREE * 0.8, y: vp.h - TREE * 0.95, w: TREE * 0.8, h: TREE * 0.95 });
+    return out;
+  }, [hudH, desktop, zoom, vp.w, vp.h]);
   const regionSigns = useMemo(() => (zoom === "overview" && cam.scale >= 0.3
     ? pieceBoxes.map((p) => ({ text: familyName(p.family), color: inkOf(p.family).edge, box: p.box }))
     : null), [zoom, pieceBoxes, cam.scale >= 0.3]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -383,10 +456,14 @@ export function PaperSkin() {
                 left: dio.ground.x, top: dio.ground.y, width: dio.ground.w, height: dio.ground.h,
                 transform: dio.css.transform, transformOrigin: dio.css.transformOrigin,
               }}>
-                <svg viewBox={groundBox} width={dio.ground.w} height={dio.ground.h} className="block" role="application" aria-label="Paper map of the model zoo">
+                <svg viewBox={groundBox} width={dio.ground.w} height={dio.ground.h} className="block" role="application" aria-label="Paper map of the model zoo"
+                  style={{ transform: groundCss, transformOrigin: "0 0", willChange: moving ? "transform" : undefined }}>
                   <PaperDefs fibre={fibre} />
                   <SeaLayer world={world} />
                   <SecretIslands world={world} />
+                  <g aria-hidden pointerEvents="none">
+                    {world.seaSlots.map((b, i) => <CloudShadow key={i} x={b.x + b.w / 2 + 40} y={b.y + b.h * 0.7 + 60} size={70} variant={i % 3} />)}
+                  </g>
                   <HarbourPiers world={world} k={zk.place} />
                   <LandLayer world={world} outlines={outlines} fibre={Boolean(fibre)} />
                   <RoadLayer world={world} lineage={kin ? [] : lineage} loud={loud} />
@@ -402,7 +479,7 @@ export function PaperSkin() {
                   </g>
                   {kin && (
                     <>
-                      <rect x={cam.box.x - cam.box.w} y={cam.box.y - cam.box.h} width={cam.box.w * 3} height={cam.box.h * 3} fill={DIM} pointerEvents="none" />
+                      <rect x={rest.box.x - rest.box.w * 2} y={rest.box.y - rest.box.h * 2} width={rest.box.w * 5} height={rest.box.h * 5} fill={DIM} pointerEvents="none" />
                       <g pointerEvents="none">
                         <RoadLayer world={world} lineage={lineage} only={kin.roads} loud={loud} />
                         <BridgeLayer world={world} only={kin.roads} />
@@ -423,11 +500,15 @@ export function PaperSkin() {
                 </svg>
               </div>
               {/* stand-up props: billboards in screen space, far → near */}
-              <svg className="pointer-events-none absolute inset-0 h-full w-full" viewBox={`0 0 ${Math.max(1, cam.size.w)} ${Math.max(1, cam.size.h)}`} aria-hidden>
+              <svg className="pointer-events-none absolute inset-0 h-full w-full" viewBox={`0 0 ${Math.max(1, cam.size.w)} ${Math.max(1, cam.size.h)}`} aria-hidden
+                style={{ transform: propCss, transformOrigin: "0 0", willChange: moving ? "transform" : undefined }}>
                 {/* node view: props off the family tree step back with the ground */}
                 <ArtDefs />
-                <g opacity={kin ? 0.55 : 1}><Billboards bills={bills} place={place} /></g>
-                {kinBills.length > 0 && <Billboards bills={kinBills} place={place} />}
+                <g opacity={kin ? 0.55 : 1}><Billboards bills={bills} place={restPlace} /></g>
+                {kinBills.length > 0 && <Billboards bills={kinBills} place={restPlace} />}
+              </svg>
+              {/* small live pieces follow the camera every frame */}
+              <svg className="pointer-events-none absolute inset-0 h-full w-full" viewBox={`0 0 ${Math.max(1, cam.size.w)} ${Math.max(1, cam.size.h)}`} aria-hidden>
                 {trains.map((t) => <Train key={t.m} line={t.line} still={still} place={place} />)}
                 {ferry && focusNode && <FerryVoyage key={comp} route={ferry} dips={comp === "double_descent"} still={still} family={focusNode.family} place={place} />}
                 <Billboards bills={flagBills} place={place} />
@@ -439,10 +520,17 @@ export function PaperSkin() {
           )}
         </div>
 
+        {/* a big foreground cutout overlapping the frame edge (depth only, no data) */}
+        {world && desktop && zoom !== "node" && (
+          <svg aria-hidden className="pointer-events-none absolute bottom-0 right-0 z-[4]" width={TREE} height={TREE} viewBox={`${-TREE / 2} ${-TREE} ${TREE} ${TREE}`}>
+            <BigTree x={TREE * 0.22} y={TREE * 0.12} size={TREE} />
+          </svg>
+        )}
         {world && (
-          <PaperTags world={world} place={place} version={camKey} size={cam.size} focus={focus} kin={kin?.names ?? null}
+          <PaperTags world={world} place={place} version={restKey} hidden={moving} size={cam.size} focus={focus} kin={kin?.names ?? null}
             counts={stableCounts} obstacles={obstacles} spotR={(n) => spotR(n) * (world.nodes.find((x) => x.name === n)?.atom ? zk.atom : zk.derived)}
-            atomsOnly={zoom === "overview"} regionSigns={regionSigns} />
+            atomsOnly={zoom === "overview"} regionSigns={regionSigns}
+            screenObstacles={chrome} />
         )}
 
         {/* eggs */}
@@ -468,7 +556,7 @@ export function PaperSkin() {
           families={world ? world.regions.map((r) => r.family) : []}
           onWorld={toWorld} onRegion={toRegion} onFamily={toFamily} onFind={select} />
         {zoom !== "node" && <PaperKey hideOnMobile={false} startOpen={zoom === "overview"} />}
-        {card && (
+        {card && arrived && (
           <PaperCard card={card} still={still} onPick={select} onClose={toRegion}
             runs={runs} evidence={evidence} comp={comp} onComp={setComp} />
         )}

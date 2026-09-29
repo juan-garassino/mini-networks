@@ -28,7 +28,11 @@ export function standingBox(place: Place, b: Box): Box {
   return { x: q.x - w / 2, y: q.y - h, w, h };
 }
 
-export function PaperTags({ world, place, size, focus, kin, counts, obstacles, spotR, atomsOnly = false, regionSigns = null, version }: {
+export function PaperTags({ hidden = false, world, place, size, focus, kin, counts, obstacles, spotR, atomsOnly = false, regionSigns = null, version, screenObstacles = [] }: {
+  /** the camera is moving: tags wait (placed again when it rests) */
+  hidden?: boolean;
+  /** screen-px boxes of chrome (HUD) no tag or sign may sit under */
+  screenObstacles?: Box[];
   world: World;
   place: Place;
   size: { w: number; h: number };
@@ -47,6 +51,36 @@ export function PaperTags({ world, place, size, focus, kin, counts, obstacles, s
   version: string;
 }) {
   const T = world.tile;
+  // region signs (whole-map view): beside their set-piece, clear of tags and spots
+  const signs = useMemo(() => {
+    if (!regionSigns) return [];
+    const taken: Box[] = [...screenObstacles];
+    const feet = world.nodes.map((n) => {
+      const q = place(n.center), r = spotR(n.name) * q.k + 4;
+      return { x: q.x - r, y: q.y - r, w: 2 * r, h: 2 * r };
+    });
+    const out: { key: string; x: number; y: number; w: number; text: string; color: string }[] = [];
+    for (const g of regionSigns) {
+      const pb = standingBox(place, g.box);
+      const f = 21, w = CHAR * 1.02 * f * g.text.length + 28, h = f * 1.5 + 8;
+      const cands = [
+        { x: pb.x + pb.w + 8, y: pb.y + pb.h / 2 - h / 2 }, { x: pb.x - 8 - w, y: pb.y + pb.h / 2 - h / 2 },
+        { x: pb.x + pb.w / 2 - w / 2, y: pb.y + pb.h + 6 }, { x: pb.x + pb.w / 2 - w / 2, y: pb.y - h - 6 },
+        // staked on the piece's own base (covers only its foot)
+        { x: pb.x + pb.w / 2 - w / 2, y: pb.y + pb.h - h * 0.8 },
+        { x: pb.x + pb.w + 8, y: pb.y + pb.h - h }, { x: pb.x - 8 - w, y: pb.y + pb.h - h },
+      ];
+      const ok = cands.map((c) => ({ ...c, w, h })).find((c) =>
+        c.x > 12 && c.y > 12 && c.x + w < size.w - 12 && c.y + h < size.h - 12 &&
+        !taken.some((t) => hit(c, t, 4)) && !feet.some((t) => hit(c, t, 2)));
+      if (!ok) continue;
+      taken.push(ok);
+      out.push({ key: g.text, x: ok.x, y: ok.y, w, text: g.text, color: g.color });
+    }
+    return out;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [regionSigns, version, screenObstacles]);
+
   const placed = useMemo(() => {
     if (size.w < 10) return [];
     const toTiles = (b: Box) => ({ x: b.x / T, y: b.y / T, w: b.w / T, h: b.h / T });
@@ -63,37 +97,12 @@ export function PaperTags({ world, place, size, focus, kin, counts, obstacles, s
     const labels = world.labels.filter((l) => !atomsOnly || l.node === focus || l.font === 15);
     return placeScreenLabels({ ...world, nodes: [...nodes, ...extra], labels }, { x: 0, y: 0, w: size.w, h: size.h }, size, {
       font: { atom: 16, derived: 14 }, focus, edgeMargin: 24, gap: 6,
+      // family signs are placed first (they name the islands); tags avoid them and the HUD
+      obstacles: [...screenObstacles, ...signs.map((g) => ({ x: g.x, y: g.y, w: g.w, h: 21 * 1.5 + 8 }))],
       measure: (t, f) => ({ w: CHAR * f * t.length + 16 + (counts[t] ? TICKET : 0), h: 1.35 * f + 8 }),
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [world, version, size.w, size.h, focus, counts, obstacles, atomsOnly]);
-
-  // region signs (whole-map view): beside their set-piece, clear of tags and spots
-  const signs = useMemo(() => {
-    if (!regionSigns) return [];
-    const taken: Box[] = placed.map((l) => ({ x: l.x, y: l.y, w: l.w, h: l.h }));
-    const feet = world.nodes.map((n) => {
-      const q = place(n.center), r = spotR(n.name) * q.k + 4;
-      return { x: q.x - r, y: q.y - r, w: 2 * r, h: 2 * r };
-    });
-    const out: { key: string; x: number; y: number; w: number; text: string; color: string }[] = [];
-    for (const g of regionSigns) {
-      const pb = standingBox(place, g.box);
-      const f = 21, w = CHAR * 1.02 * f * g.text.length + 28, h = f * 1.5 + 8;
-      const cands = [
-        { x: pb.x + pb.w + 8, y: pb.y + pb.h / 2 - h / 2 }, { x: pb.x - 8 - w, y: pb.y + pb.h / 2 - h / 2 },
-        { x: pb.x + pb.w / 2 - w / 2, y: pb.y + pb.h + 6 }, { x: pb.x + pb.w / 2 - w / 2, y: pb.y - h - 6 },
-      ];
-      const ok = cands.map((c) => ({ ...c, w, h })).find((c) =>
-        c.x > 12 && c.y > 12 && c.x + w < size.w - 12 && c.y + h < size.h - 12 &&
-        !taken.some((t) => hit(c, t, 4)) && !feet.some((t) => hit(c, t, 2)));
-      if (!ok) continue;
-      taken.push(ok);
-      out.push({ key: g.text, x: ok.x, y: ok.y, w, text: g.text, color: g.color });
-    }
-    return out;
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [placed, regionSigns, version]);
+  }, [world, version, size.w, size.h, focus, counts, obstacles, atomsOnly, signs, screenObstacles]);
 
   // captions for the secret islands, greedily culled against everything above
   const extras = useMemo(() => {
@@ -115,7 +124,7 @@ export function PaperTags({ world, place, size, focus, kin, counts, obstacles, s
 
   const kinSet = kin ? new Set(kin) : null;
   return (
-    <div aria-hidden className="pointer-events-none absolute inset-0 z-[5] overflow-hidden">
+    <div aria-hidden className="pointer-events-none absolute inset-0 z-[5] overflow-hidden" style={{ visibility: hidden ? "hidden" : undefined }}>
       {placed.map((l) => {
         const hot = l.node === focus;
         const muted = kinSet ? !kinSet.has(l.node) : false;

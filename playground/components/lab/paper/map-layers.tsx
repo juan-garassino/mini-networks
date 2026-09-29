@@ -56,6 +56,9 @@ export const LandLayer = memo(function LandLayer({ world, outlines, fibre }: {
     <g aria-hidden>
       {/* cast shadow on the sea, card edge, die-cut rim, face, fibre */}
       {world.regions.map((r) => <path key={`s${r.id}`} d={outlines[r.id]} fill={PAPER.seaDeep} opacity={0.75} transform="translate(7 11)" />)}
+      {/* white foam where land meets sea (two soft bands) */}
+      {world.regions.map((r) => <path key={`fo${r.id}`} d={outlines[r.id]} fill="none" stroke="#FFFFFF" strokeOpacity={0.3} strokeWidth={40} strokeLinejoin="round" />)}
+      {world.regions.map((r) => <path key={`fp${r.id}`} d={outlines[r.id]} fill="none" stroke="#FFFFFF" strokeOpacity={0.5} strokeWidth={22} strokeLinejoin="round" />)}
       {world.regions.map((r) => <path key={`e${r.id}`} d={outlines[r.id]} fill={inkOf(r.family).edge} stroke={PAPER.die} strokeWidth={7} strokeLinejoin="round" transform="translate(0 6)" />)}
       {world.regions.map((r) => <path key={`r${r.id}`} d={outlines[r.id]} fill={PAPER.die} stroke={PAPER.die} strokeWidth={7} strokeLinejoin="round" />)}
       {world.regions.map((r) => <path key={`f${r.id}`} d={outlines[r.id]} fill={GROUND[r.family] ?? inkOf(r.family).face} />)}
@@ -64,7 +67,7 @@ export const LandLayer = memo(function LandLayer({ world, outlines, fibre }: {
   );
 });
 
-const CHEVRON = "M-3 -3.2 L1.4 0 L-3 3.2";
+const CHEVRON = "M-3.6 -4 L1.8 0 L-3.6 4";
 
 /**
  * Roads on their lanes (lanePoints), parent → child chevrons on the trunks.
@@ -92,15 +95,18 @@ export const RoadLayer = memo(function RoadLayer({ world, lineage, only, loud }:
   return (
     <g aria-hidden fill="none" strokeLinecap="round" strokeLinejoin="round">
       {paths.map((r) => <path key={`p${r.id}`} d={r.d} stroke={PAPER.footpath} strokeWidth={2.6} opacity={0.75} />)}
-      {trunks.map((r) => <path key={`s${r.id}`} d={r.d} stroke={PAPER.shadow} strokeWidth={14} transform="translate(2 3)" />)}
-      {trunks.map((r) => <path key={`r${r.id}`} d={r.d} stroke={PAPER.die} strokeWidth={14} />)}
-      {trunks.map((r) => <path key={`e${r.id}`} d={r.d} stroke={PAPER.road} strokeWidth={10} />)}
-      {trunks.map((r) => <path key={`g${r.id}`} d={r.d} stroke={PAPER.gold} strokeWidth={6} />)}
+      {/* raised cobble road: cast shadow, die-cut rim, dark edge, gold, cobbles, lit crown */}
+      {trunks.map((r) => <path key={`s${r.id}`} d={r.d} stroke="rgba(15,10,32,0.2)" strokeWidth={20} transform="translate(3 5)" />)}
+      {trunks.map((r) => <path key={`r${r.id}`} d={r.d} stroke={PAPER.die} strokeWidth={20} />)}
+      {trunks.map((r) => <path key={`e${r.id}`} d={r.d} stroke="#BA5530" strokeWidth={16} />)}
+      {trunks.map((r) => <path key={`g${r.id}`} d={r.d} stroke="#FFCB2E" strokeWidth={11} />)}
+      {trunks.map((r) => <path key={`gc${r.id}`} d={r.d} stroke="url(#pa-cobble)" strokeWidth={11} opacity={0.6} />)}
+      {trunks.map((r) => <path key={`h${r.id}`} d={r.d} stroke="#FFEB94" strokeWidth={2.2} strokeDasharray="1 14" transform="translate(-2 -3)" />)}
       {trunks.map((r) => (
         <g key={`c${r.id}`}>
           {r.chevrons.map((c, i) => (
             <path key={i} d={CHEVRON} transform={`translate(${c.x.toFixed(1)} ${c.y.toFixed(1)}) rotate(${(c.angle * 180 / Math.PI).toFixed(1)})`}
-              stroke={PAPER.road} strokeWidth={1.7} />
+              stroke="#7E3528" strokeWidth={2} />
           ))}
         </g>
       ))}
