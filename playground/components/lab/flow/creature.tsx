@@ -20,6 +20,8 @@ export interface CreatureProps {
   emblem?: LucideIcon | null;
   /** grokking egg: the idea has "clicked" */
   eureka?: boolean;
+  /** body mark for the mechanism category it introduces */
+  trait?: Trait;
 }
 
 const W = 2; // outline width in local units (scales with the creature)
@@ -222,14 +224,59 @@ export function EvidenceGlyph({ state, size = 13 }: { state: EvidenceState; size
 }
 
 /** Where the face and hat sit for each body (local units). */
-const ANCHORS: Record<string, { face: [number, number, number]; hat: [number, number]; medal: [number, number] }> = {
-  perception: { face: [0, 1, 1], hat: [-2, -17], medal: [12, 14] },
-  sequence: { face: [0, 1, 0.95], hat: [0, -15], medal: [11, 13] },
-  generative: { face: [0, 0, 1], hat: [0, -20], medal: [12, 12] },
-  representation: { face: [0, 2, 0.62], hat: [-11, -9], medal: [0, 15] },
-  structure: { face: [0, -2, 0.9], hat: [0, -16], medal: [12, 8] },
-  decision: { face: [-1, 3, 0.95], hat: [-4, -20], medal: [10, 17] },
+type Anchor = { face: [number, number, number]; hat: [number, number]; medal: [number, number]; belly: [number, number, number]; trait: [number, number] };
+const ANCHORS: Record<string, Anchor> = {
+  perception: { face: [0, -5, 0.85], hat: [-2, -17], medal: [13, 12], belly: [0, 8.5, 7.5], trait: [-13, -7] },
+  sequence: { face: [1, -5, 0.8], hat: [0, -15], medal: [12, 11], belly: [1, 7.5, 6.8], trait: [-12, -6] },
+  generative: { face: [0, -7, 0.85], hat: [0, -20], medal: [12, 10], belly: [0, 6, 7], trait: [-12, -8] },
+  representation: { face: [0, -2, 0.55], hat: [-11, -9], medal: [17, 11], belly: [0, 13, 6.5], trait: [-19, -5] },
+  structure: { face: [0, -8, 0.75], hat: [0, -16], medal: [12, 4], belly: [0, 5, 6.5], trait: [-11, -9] },
+  decision: { face: [-1, -3, 0.8], hat: [-4, -20], medal: [11, 16], belly: [-1, 9.5, 6.5], trait: [-10, -7] },
 };
+
+export type Trait = "eye" | "stripes" | "curl" | "spots" | "puff" | "bolt" | "bypass" | "pack" | "wave" | null;
+/** One body mark per mechanism CATEGORY the model introduces (first match wins). */
+export function traitFor(mechs: string[]): Trait {
+  const m = mechs.join(" ");
+  if (/spectrogram|mel-|waveform/.test(m)) return "wave";
+  if (/attention|patch|bidirectional|promptable/.test(m)) return "eye";
+  if (/residual|hyper-conn|low-rank|pathway/.test(m)) return "bypass";
+  if (/recurren|scan|delayed/.test(m)) return "curl";
+  if (/expert|routing|retrieval|message-passing|multi-token/.test(m)) return "pack";
+  if (/policy|value|reward|preference|advantage|tree-search|adversarial/.test(m)) return "bolt";
+  if (/denois|masked-text/.test(m)) return "puff";
+  if (/latent|contrast|metric|reconstruction|distillation|field|embedding/.test(m)) return "spots";
+  if (/conv|mlp|encoder|bbox/.test(m)) return "stripes";
+  return null;
+}
+
+function TraitMark({ t, x, y, deep }: { t: Trait; x: number; y: number; deep: string }) {
+  if (!t) return null;
+  const ink = { fill: "none", stroke: INK, strokeWidth: 1.5, strokeLinecap: "round" as const, strokeLinejoin: "round" as const };
+  return (
+    <g transform={`translate(${x} ${y})`}>
+      {t === "eye" && (<><circle r={3.4} fill="#fff" stroke={INK} strokeWidth={1.4} /><circle cx={0.6} cy={0.4} r={1.5} fill={INK} /></>)}
+      {t === "stripes" && <path d="M-2 -4 q3 1 2.5 4 M1.5 -5 q3 1 2.5 4 M-4.5 -1 q3 1 2.5 4" {...ink} stroke={deep} strokeWidth={2} />}
+      {t === "curl" && <path d="M0 0 a1.6 1.6 0 1 1 1.6 1.8 a3.2 3.2 0 1 1 -3.4 -3.8" {...ink} />}
+      {t === "spots" && (<><circle cx={-2} cy={-2} r={1.5} fill={deep} /><circle cx={2.2} cy={-0.5} r={1.2} fill={deep} /><circle cx={-0.6} cy={2.4} r={1.1} fill={deep} /></>)}
+      {t === "puff" && (<><circle cx={-2} cy={0} r={2.6} fill="#fff" stroke={INK} strokeWidth={1.2} /><circle cx={1.8} cy={-1.4} r={2.2} fill="#fff" stroke={INK} strokeWidth={1.2} /></>)}
+      {t === "bolt" && <path d="M1 -5 L-2.5 0.5 H0.5 L-1 5 L3 -1 H0 Z" fill={GOLD} stroke={INK} strokeWidth={1.1} strokeLinejoin="round" />}
+      {t === "bypass" && <path d="M-4 3 Q-4 -4 1 -4 L3.5 -4 M1.5 -6 L3.8 -4 L1.5 -2" {...ink} />}
+      {t === "pack" && <rect x={-3.5} y={-4} width={7} height={8} rx={2} fill={deep} stroke={INK} strokeWidth={1.3} />}
+      {t === "wave" && <path d="M-4.5 0 q1.1 -3 2.2 0 t2.2 0 t2.2 0 t2.2 0" {...ink} />}
+    </g>
+  );
+}
+
+function Belly({ x, y, r, fill, Icon }: { x: number; y: number; r: number; fill: string; Icon: LucideIcon }) {
+  const i = r * 1.45;
+  return (
+    <g transform={`translate(${x} ${y})`}>
+      <circle r={r} fill={hexMix(fill, "#ffffff", 0.72)} stroke={INK} strokeWidth={1.3} />
+      <Icon x={-i / 2} y={-i / 2} width={i} height={i} strokeWidth={2.6} color={INK} />
+    </g>
+  );
+}
 
 function Pennant({ x, y, fill }: { x: number; y: number; fill: string }) {
   return (
@@ -250,15 +297,6 @@ function Bulb({ y }: { y: number }) {
   );
 }
 
-function Badge({ x, y, Icon }: { x: number; y: number; Icon: LucideIcon }) {
-  return (
-    <g transform={`translate(${x} ${y})`}>
-      <circle r={8.5} fill="#fff" stroke={INK} strokeWidth={1.6} />
-      <Icon x={-5.5} y={-5.5} width={11} height={11} strokeWidth={2.4} color={INK} />
-    </g>
-  );
-}
-
 export const Creature = memo(function Creature(p: CreatureProps) {
   const f = fam(p.family);
   const a = ANCHORS[p.family] ?? ANCHORS.perception;
@@ -274,6 +312,8 @@ export const Creature = memo(function Creature(p: CreatureProps) {
       {(GLOSS[p.family] ?? []).map(([x, y, rx, ry], i) => (
         <ellipse key={i} cx={x} cy={y} rx={rx} ry={ry} transform={`rotate(-28 ${x} ${y})`} fill="#fff" opacity={i ? 0.95 : 0.8} />
       ))}
+      {p.emblem && <Belly x={a.belly[0]} y={a.belly[1]} r={a.belly[2]} fill={f.fill} Icon={p.emblem} />}
+      <TraitMark t={p.trait ?? null} x={a.trait[0]} y={a.trait[1]} deep={f.deep} />
       {twins ? (
         <>
           <Face x={-11} y={a.face[1]} k={a.face[2]} state={p.state} />
@@ -287,7 +327,6 @@ export const Creature = memo(function Creature(p: CreatureProps) {
       {p.atom && <Hat x={a.hat[0]} y={a.hat[1]} band={f.deep} />}
       {p.atom && p.capital && <Pennant x={a.hat[0] + 3} y={a.hat[1] - 12} fill={f.deep} />}
       {p.state === "champion" && <Medal x={a.medal[0]} y={a.medal[1]} />}
-      {p.emblem && <Badge x={twins ? -14 : -a.medal[0] - 1} y={a.medal[1] + (twins ? -2 : 0)} Icon={p.emblem} />}
       {p.eureka && <Bulb y={a.hat[1] - 4} />}
     </g>
   );

@@ -169,7 +169,7 @@ export function FlowCard({ c, lesson, mobile, still, evidence, familyOf, onPick,
 
       <Section title="One forward pass">
         <Anatomy stages={schematicFor(c.name)} animate={!still} size={mobile ? 330 : 380} labelPx={13}
-          palette={{ node: INK, edge: "#8C7EC4", active: ACCENT, text: INK, accent: f.deep, fill: "#fff" }}
+          palette={{ node: INK, edge: "#5E4F80", active: ACCENT, text: INK, accent: f.deep, fill: "#fff" }}
           title={`${displayName(c.name)} — one forward pass`} />
         {c.introduces.map((m) => (
           <p key={m.key} className="mt-1 text-[15px] leading-snug"><b>Adds {words(m.key)}</b>: {m.description}</p>

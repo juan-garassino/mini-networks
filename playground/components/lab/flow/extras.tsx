@@ -13,11 +13,22 @@ import s from "./flow.module.css";
 
 // ——— boats ———
 export function Boat({ x, y, k = 1, sail = "#fff", angle = 0 }: { x: number; y: number; k?: number; sail?: string; angle?: number }) {
+  // a glossy sticker ferry: white die-cut rim, lit hull, coloured sail, shine
+  const hull = "M-10 0 H10 Q9 6 5 7 H-5 Q-9 6 -10 0 Z";
+  const sailD = "M1 -14 Q8 -8 9 -1 H1 Z";
+  const jib = "M-1 -12 L-7 -1 H-1 Z";
   return (
     <g transform={`translate(${x} ${y}) rotate(${angle}) scale(${k})`}>
-      <path d="M-9 1 H9 L6 6 H-6 Z" fill="#fff" stroke={INK} strokeWidth={1.6} strokeLinejoin="round" />
-      <path d="M0 0 V-12" stroke={INK} strokeWidth={1.4} />
-      <path d="M1 -12 L8 -1 H1 Z" fill={sail} stroke={INK} strokeWidth={1.3} strokeLinejoin="round" />
+      <ellipse cx={1.5} cy={8.5} rx={10} ry={2} fill={INK} opacity={0.18} />
+      <g stroke="#fff" strokeWidth={4.5} strokeLinejoin="round" fill="#fff">
+        <path d={hull} /><path d={sailD} /><path d={jib} /><path d="M0 0 V-15" />
+      </g>
+      <path d={hull} fill="#7C6AA8" stroke={INK} strokeWidth={1.4} strokeLinejoin="round" />
+      <path d="M-8 1.5 H8" stroke="#fff" strokeWidth={1.2} opacity={0.6} />
+      <path d="M0 0 V-15" stroke={INK} strokeWidth={1.4} />
+      <path d={sailD} fill={sail} stroke={INK} strokeWidth={1.3} strokeLinejoin="round" />
+      <path d={jib} fill="#fff" stroke={INK} strokeWidth={1.3} strokeLinejoin="round" />
+      <path d="M3 -10 Q6 -6 6.5 -3" stroke="#fff" strokeWidth={1.3} fill="none" strokeLinecap="round" opacity={0.9} />
     </g>
   );
 }
@@ -36,7 +47,7 @@ export function Dock({ x, y, boats, more, all, sailing, onSail }: {
         <g key={b.name} className="cursor-pointer" onClick={(e) => { e.stopPropagation(); onSail(b.name); }}>
           <title>{`${b.label} — click to sail`}</title>
           <rect x={x - w + 4 + i * step} y={y - 30} width={step} height={34} fill="transparent" />
-          {sailing !== b.name && <Boat x={x - w + 20 + i * step} y={y - 6} k={1.25} />}
+          {sailing !== b.name && <Boat x={x - w + 20 + i * step} y={y - 6} k={1.15} />}
         </g>
       ))}
       {more > 0 && (

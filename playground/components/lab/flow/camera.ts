@@ -8,7 +8,7 @@
 // are drawn at their own screen size, so nothing is distorted.
 // Everything else mirrors the shared camera: fly-to tween, drag-pan,
 // wheel-zoom, instant jumps under still=1.
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 
 export interface CamBox { x: number; y: number; w: number; h: number }
 /** screen = world · s + t (per axis). */
@@ -43,10 +43,39 @@ export function useStageSize() {
   return { ref, size };
 }
 
+/**
+ * The camera never re-renders the board per frame. The board is drawn once
+ * for the SETTLED view; while flying / dragging / wheeling, a single matrix on
+ * the board group (gRef) maps settled → current. When motion stops the view
+ * settles (one React render: labels are placed for the new frame) and the
+ * matrix resets to identity in the same layout pass (no flash).
+ */
 export function useFlowCamera(target: View | null, still: boolean) {
-  const [view, setView] = useState<View | null>(target);
-  const viewRef = useRef(view);
-  useEffect(() => { viewRef.current = view; }, [view]);
+  const gRef = useRef<SVGGElement | null>(null);
+  const cur = useRef<View | null>(null);
+  const settledRef = useRef<View | null>(null);
+  const [settled, setSettled] = useState<View | null>(null);
+  // elements that must hide while the camera moves (e.g. the card's speech tail) —
+  // toggled on the DOM directly so a flight never re-renders the board
+  const hideWhileMoving = useRef<HTMLElement | SVGElement | null>(null);
+  const setMoving = useCallback((m: boolean) => {
+    const el = hideWhileMoving.current;
+    if (el) el.style.visibility = m ? "hidden" : "";
+  }, []);
+
+  const apply = useCallback(() => {
+    const g = gRef.current, c = cur.current, s = settledRef.current;
+    if (!g || !c || !s) return;
+    const k = c.sx / s.sx;
+    const tx = c.tx - s.tx * k, ty = c.ty - s.ty * k;
+    if (Math.abs(k - 1) < 1e-6 && Math.abs(tx) < 0.01 && Math.abs(ty) < 0.01) g.removeAttribute("transform");
+    else g.setAttribute("transform", `matrix(${k} 0 0 ${k} ${tx} ${ty})`);
+  }, []);
+  useLayoutEffect(() => { settledRef.current = settled; apply(); }, [settled, apply]);
+  const settle = useCallback(() => {
+    if (cur.current) setSettled({ ...cur.current });
+    setMoving(false);
+  }, [setMoving]);
 
   const k = target ? `${target.sx.toFixed(4)} ${target.sy.toFixed(4)} ${target.tx.toFixed(1)} ${target.ty.toFixed(1)}` : "";
   const targetRef = useRef(target);
@@ -54,28 +83,24 @@ export function useFlowCamera(target: View | null, still: boolean) {
   useEffect(() => {
     const to = targetRef.current;
     if (!to) return;
-    const from = viewRef.current;
-    if (still || !from) { setView(to); return; }
+    const from = cur.current;
+    if (still || !from || !settledRef.current) { cur.current = to; settle(); return; }
+    setMoving(true);
     const t0 = performance.now();
     let raf = 0;
-    // Tween scales in log space so zooming feels even, then derive the
-    // translation from a tweened world-centre (no swooping arc).
     const step = (now: number) => {
       const e = ease(Math.min(1, (now - t0) / FLY_MS));
-      setView({
-        sx: Math.exp(Math.log(from.sx) + (Math.log(to.sx) - Math.log(from.sx)) * e),
-        sy: Math.exp(Math.log(from.sy) + (Math.log(to.sy) - Math.log(from.sy)) * e),
-        tx: from.tx + (to.tx - from.tx) * e,
-        ty: from.ty + (to.ty - from.ty) * e,
-      });
+      const sx = Math.exp(Math.log(from.sx) + (Math.log(to.sx) - Math.log(from.sx)) * e);
+      cur.current = { sx, sy: sx, tx: from.tx + (to.tx - from.tx) * e, ty: from.ty + (to.ty - from.ty) * e };
+      apply();
       if (e < 1) raf = requestAnimationFrame(step);
+      else { cur.current = to; settle(); }
     };
     raf = requestAnimationFrame(step);
     return () => cancelAnimationFrame(raf);
-  }, [k, still]);
+  }, [k, still, apply, settle, setMoving]);
 
-  // Drag-pan that still lets a plain click reach the creature under it:
-  // capture the pointer only once the pointer has actually travelled.
+  // Drag-pan that still lets a plain click reach the creature under it.
   const drag = useRef<{ x: number; y: number; moved: boolean; id: number } | null>(null);
   const suppressClick = useRef(false);
   const onPointerDown = useCallback((e: React.PointerEvent) => {
@@ -84,7 +109,7 @@ export function useFlowCamera(target: View | null, still: boolean) {
   }, []);
   const onPointerMove = useCallback((e: React.PointerEvent) => {
     const d = drag.current;
-    if (!d) return;
+    if (!d || !cur.current) return;
     const dx = e.clientX - d.x;
     const dy = e.clientY - d.y;
     if (!d.moved) {
@@ -94,29 +119,35 @@ export function useFlowCamera(target: View | null, still: boolean) {
     }
     d.x = e.clientX;
     d.y = e.clientY;
-    setView((v) => (v ? { ...v, tx: v.tx + dx, ty: v.ty + dy } : v));
-  }, []);
+    cur.current = { ...cur.current, tx: cur.current.tx + dx, ty: cur.current.ty + dy };
+    apply();
+  }, [apply]);
   const onPointerUp = useCallback(() => {
-    if (drag.current?.moved) suppressClick.current = true;
+    if (drag.current?.moved) { suppressClick.current = true; settle(); }
     drag.current = null;
-  }, []);
+  }, [settle]);
   const onClickCapture = useCallback((e: React.MouseEvent) => {
     if (suppressClick.current) { e.stopPropagation(); suppressClick.current = false; }
   }, []);
+  const wheelT = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const onWheel = useCallback((e: React.WheelEvent) => {
+    const v = cur.current;
+    if (!v) return;
     const rect = (e.currentTarget as Element).getBoundingClientRect();
     const mx = e.clientX - rect.left;
     const my = e.clientY - rect.top;
     const f = Math.exp(-e.deltaY * 0.0015);
-    setView((v) => {
-      if (!v) return v;
-      const g = Math.min(Math.max(f, 0.18 / Math.min(v.sx, v.sy)), 4 / Math.max(v.sx, v.sy));
-      return { sx: v.sx * g, sy: v.sy * g, tx: mx - (mx - v.tx) * g, ty: my - (my - v.ty) * g };
-    });
-  }, []);
+    const g = Math.min(Math.max(f, 0.12 / v.sx), 3 / v.sx);
+    cur.current = { sx: v.sx * g, sy: v.sy * g, tx: mx - (mx - v.tx) * g, ty: my - (my - v.ty) * g };
+    apply();
+    clearTimeout(wheelT.current);
+    wheelT.current = setTimeout(settle, 180);
+  }, [apply, settle]);
 
   return {
-    view,
+    view: settled,
+    gRef,
+    hideWhileMoving,
     handlers: { onPointerDown, onPointerMove, onPointerUp, onPointerCancel: onPointerUp, onClickCapture, onWheel },
   };
 }
