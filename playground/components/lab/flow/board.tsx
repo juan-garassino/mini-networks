@@ -257,7 +257,7 @@ export function FlowBoard() {
     if (!flow || !graph || !fontsReady || size.w === 0) return null;
     const slot = (name: string, atom: boolean) => lineW(wrapName(displayName(name)), atom ? 14 : 13) + TAG_OVER + 2;
     return mobile ? layoutMobile(flow, slot)
-      : layoutBoard(flow, graph.children, slot, 2, (name) => wrapName(displayName(name)).length);
+      : layoutBoard(flow, graph.parents, slot, 2, (name) => wrapName(displayName(name)).length);
   }, [flow, graph, fontsReady, mobile, size.w > 0, lineW]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const evBy = useMemo(() => new Map<string, ModelEvidence>(evidence.map((e) => [e.name, e])), [evidence]);

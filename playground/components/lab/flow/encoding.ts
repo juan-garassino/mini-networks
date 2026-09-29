@@ -3,7 +3,7 @@
 export interface Encoding { mark: string; encodes: string; source: string }
 
 export const ENCODING: Encoding[] = [
-  { mark: "creature position", encodes: "tray = family (lane), column = generation depth, row = buildFlow's order within the lane", source: "flow.nodes[] lane/depth/row (buildFlow), ONE uniform camera scale" },
+  { mark: "creature position", encodes: "tray = family (lane), column = generation depth, row = grouped by primary parent (each brood contiguous beside its parent), atoms in buildFlow order", source: "flow.nodes[] lane/depth + primary parent, ONE uniform camera scale" },
   { mark: "phone layout: trays stacked, each the screen's width; inside, generations stack top → bottom as bands of creature + name cells", encodes: "same lane / generation / order as the desktop, re-flowed for a 374px screen", source: "geometry.ts layoutMobile" },
   { mark: "tray packing (trays side by side, desktop 2 columns / phone 1)", encodes: "nothing beyond the tray's family: trays are packed to fill the screen; cross-family edges are portals at rest so trays need not touch", source: "geometry.ts layoutBoard" },
   { mark: "column width", encodes: "room for the longest name in that generation (every creature owns a name slot to its right at the overview)", source: "measured names" },
@@ -26,8 +26,9 @@ export const ENCODING: Encoding[] = [
   { mark: "generation headers inside each tray (Atoms / Gen n)", encodes: "generation depth of each column of that tray", source: "flow.nodes[].depth" },
   { mark: "pipe (plum-rimmed tube)", encodes: "builds_on edge; vertical runs stay in buildFlow's gutters", source: "flow.pipes[] (ends at the creature centres)" },
   { mark: "trunk that branches (one tube per parent in the gutter after its column, a branch off at each child's row)", encodes: "all same-family edges of that parent; a pipe leaves from the END of its parent's name tag, so no pipe runs under a name; different parents get separate tracks", source: "flow.pipes grouped by parent" },
-  { mark: "portal: a short pipe end at a creature's upper-left, in another family's colour, wearing that parent's species glyph", encodes: "a cross-family builds_on edge (8 in the zoo) at rest; hover it to trace, click to visit the parent", source: "flow.pipes[].crossLane" },
-  { mark: "full cross-family route drawn above everything (white casing, chevrons)", encodes: "that cross-family edge, shown only while either end is hovered, focused or selected", source: "flow.pipes[].crossLane + lit model" },
+  { mark: "portal badge: a short pipe end at a creature's upper-left in the parent's family colour, wearing that parent's species glyph", encodes: "a builds_on edge from a SECONDARY parent (any cross-family parent, or a same-family parent that isn't the primary) at rest; hover to trace, click to visit the parent", source: "flow.pipes + primary parent (deepest same-family parent)" },
+  { mark: "comb: one spine per parent in its own gutter track, short straight branches to its children", encodes: "builds_on edges from a model's PRIMARY parent only; children are ordered so each parent's brood is contiguous and centred beside it", source: "flow.pipes + primary parent (geometry.ts)" },
+  { mark: "full portal route drawn above everything (white casing, chevrons)", encodes: "that secondary-parent edge, shown only while either end is hovered, focused or selected", source: "flow.pipes + lit model" },
   { mark: "pipe core colour", encodes: "family of the parent it flows from (a foreign colour in a lane = cross-family edge)", source: "flow.pipes[].from → family" },
   { mark: "chevrons inside a pipe", encodes: "direction parent → child (shown on lit pipes and when zoomed in)", source: "chevronsAlong(pipe)" },
   { mark: "bright vs faded pipes and creatures on hover, keyboard focus or selection", encodes: "bright = that model, its ancestry and its children; faded = unrelated", source: "taxonomy builds_on closure" },

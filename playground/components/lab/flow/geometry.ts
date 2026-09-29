@@ -55,7 +55,7 @@ const GAP = 8;            // creature ↔ name slot
 const TRACK = 11;         // between trunks in a gutter
 const GUTTER_PAD = 10;    // name slot end ↔ first trunk, last trunk ↔ next creature
 const ROW = 42;           // min row pitch (fits a two-line name tag)
-const PAD_TOP = 30;       // tab + generation headers
+const PAD_TOP = 40;       // tab + generation headers
 const PAD_SIDE = 14;
 const PAD_BOTTOM = 18;
 const BLOCK_GAP = 22;
@@ -63,7 +63,7 @@ export const DESIGN = { w: 1440 - 32, h: 900 - 72 - 20 };
 
 export function layoutBoard(
   flow: FlowLayout,
-  children: Map<string, string[]>,
+  parents: Map<string, string[]>,
   slotPx: (name: string, atom: boolean) => number,
   columns: 1 | 2 = 2,
   tagLines: (name: string) => number = () => 1,
@@ -85,34 +85,93 @@ export function layoutBoard(
     type Local = { lane: number; w: number; h: number; nodes: BNode[]; pipes: BPipe[]; heads: { depth: number; x: number }[]; steps: [number, number, number, number][] };
     // fit (pass 2): the tray's final size after packing edge to edge — extra width
     // opens the gutters evenly, extra height spreads the rows (≤1.8×) then centres
+    // ——— primary parents: only they get a pipe (secondary parents are portal badges) ———
+    // primary = the deepest same-lane parent (first listed on ties); an edge from any
+    // other parent — same family or not — is a portal edge, routed only when lit
+    const primaryOf = new Map<string, string | null>();
+    for (const n of flow.nodes) {
+      const same = (parents.get(n.name) ?? []).filter((p) => byName.has(p) && laneIdx(p) === n.lane);
+      let best: string | null = null;
+      for (const p of same) if (!best || byName.get(p)!.depth > byName.get(best)!.depth) best = p;
+      primaryOf.set(n.name, best);
+    }
+    const isPrimary = (from: string, to: string) => primaryOf.get(to) === from;
+
     const buildLocal = (li: number, fit?: { w: number; h: number }): Local => {
       const lane = flow.lanes[li];
       const ns = flow.nodes.filter((n) => n.lane === li);
       const depths = [...new Set(ns.map((n) => n.depth))].sort((a, b) => a - b);
-      const inner0 = lane.h * ay - 20 * ay;
-      const ayF = fit ? ay * Math.min(1.8, Math.max(1, (fit.h - u(PAD_TOP) - u(PAD_BOTTOM)) / Math.max(1, inner0))) : ay;
-      const dyF = fit ? Math.max(0, (fit.h - (u(PAD_TOP) + lane.h * ayF + u(PAD_BOTTOM) - 20 * ayF)) / 2) : 0;
-      const ly = (y: number) => u(PAD_TOP) + dyF + (y - lane.y) * ayF;
-      // trunk intervals per gutter (depth index) → number of tracks
+      // ——— rows: each parent's children contiguous and centred beside it ———
+      const tagH = (n: string) => tagLines(n) * 14.6 + 9;
+      const pitch = (a: string, b: string) => u(Math.max(ROW, (tagH(a) + tagH(b)) / 2 + 6));
+      const y0 = new Map<string, number>();
+      const pack = (order: string[], want: Map<string, number>) => {
+        let prev: string | null = null;
+        for (const n of order) {
+          let y = want.get(n)!;
+          if (prev !== null) y = Math.max(y, y0.get(prev)! + pitch(prev, n));
+          y0.set(n, y);
+          prev = n;
+        }
+      };
+      const col = (d: number) => ns.filter((n) => n.depth === d).map((n) => n.name);
+      // atoms: buildFlow order, stacked
+      { const c = col(depths[0]).sort((a, b) => cyO(a) - cyO(b)); pack(c, new Map(c.map((n) => [n, 0]))); }
+      for (const d of depths.slice(1)) {
+        const c = col(d);
+        const pY = (n: string) => { const p = primaryOf.get(n); return p && y0.has(p) ? y0.get(p)! : cyO(n); };
+        c.sort((a, b) => pY(a) - pY(b) || cyO(a) - cyO(b));
+        // groups by primary parent, each centred on its parent
+        const want = new Map<string, number>();
+        let i = 0;
+        while (i < c.length) {
+          const p = primaryOf.get(c[i]) ?? null;
+          let j = i;
+          while (j < c.length && (primaryOf.get(c[j]) ?? null) === p) j++;
+          const g = c.slice(i, j);
+          let span = 0;
+          for (let k = 1; k < g.length; k++) span += pitch(g[k - 1], g[k]);
+          const start = pY(g[0]) - span / 2;
+          let acc = start;
+          g.forEach((n, k) => { if (k) acc += pitch(g[k - 1], n); want.set(n, acc); });
+          i = j;
+        }
+        pack(c, want);
+      }
+      // parents re-centre on their (primary) children, back to front
+      for (const d of [...depths].reverse().slice(1)) {
+        const c = col(d).sort((a, b) => y0.get(a)! - y0.get(b)!);
+        const want = new Map(c.map((n) => {
+          const kids = ns.filter((k) => primaryOf.get(k.name) === n).map((k) => y0.get(k.name)!);
+          return [n, kids.length ? (Math.min(...kids) + Math.max(...kids)) / 2 : y0.get(n)!] as const;
+        }));
+        c.sort((a, b) => want.get(a)! - want.get(b)!);
+        pack(c, want);
+      }
+      const minY = Math.min(...y0.values()), maxY = Math.max(...y0.values());
+      const innerH = maxY - minY + u(ROW);
+      const baseH = u(PAD_TOP) + innerH + u(PAD_BOTTOM);
+      const spread = fit ? Math.min(1.8, Math.max(1, (fit.h - u(PAD_TOP) - u(PAD_BOTTOM)) / innerH)) : 1;
+      const dyF = fit ? Math.max(0, (fit.h - (u(PAD_TOP) + innerH * spread + u(PAD_BOTTOM))) / 2) : 0;
+      const yOf = (n: string) => u(PAD_TOP) + dyF + (y0.get(n)! - minY + u(ROW) / 2) * spread;
+
+      // trunk intervals per gutter: one comb per parent (primary edges only)
       const trunkIv = new Map<string, { g: number; y0: number; y1: number }>();
       const grow = (key: string, g: number, a: number, b: number) => {
         const t = trunkIv.get(key) ?? { g, y0: Infinity, y1: -Infinity };
         t.y0 = Math.min(t.y0, a, b); t.y1 = Math.max(t.y1, a, b); trunkIv.set(key, t);
       };
+      const mine = samePipes.filter((q) => laneIdx(q.from) === li && isPrimary(q.from, q.to));
       const chanOf = new Map<string, number | null>();
       const usedChans: number[] = [];
-      for (const p of samePipes.filter((q) => laneIdx(q.from) === li)) {
+      for (const p of mine) {
         const dp = byName.get(p.from)!.depth, dc = byName.get(p.to)!.depth;
         let chan: number | null = null;
         if (dc - dp > 1) {
-          // the channel a long edge rides across the skipped generations: the free
-          // horizontal nearest the midpoint that stays clear of every name tag
-          // (≥ half a two-line tag + a tube) of the columns it crosses
-          const mid = (ly(cyO(p.from)) + ly(cyO(p.to))) / 2;
-          const blockers = ns.filter((n) => n.depth > dp && n.depth < dc)
-            .map((n) => ({ y: ly(cyO(n.name)), clear: u((tagLines(n.name) * 14.6 + 9) / 2 + 5) }));
+          const mid = (yOf(p.from) + yOf(p.to)) / 2;
+          const blockers = ns.filter((n) => n.depth > dp && n.depth < dc).map((n) => ({ y: yOf(n.name), clear: u(tagH(n.name) / 2 + 5) }));
           let bestC = mid, bestD = Infinity;
-          for (let yy = ly(lane.y) + u(8); yy <= ly(lane.y + lane.h) - u(8); yy += u(1)) {
+          for (let yy = u(8); yy <= baseH * spread + dyF * 2 - u(8); yy += u(1)) {
             if (blockers.some((b) => Math.abs(b.y - yy) < b.clear) || usedChans.some((c) => Math.abs(c - yy) < u(7))) continue;
             const d = Math.abs(yy - mid);
             if (d < bestD) { bestD = d; bestC = yy; }
@@ -121,8 +180,8 @@ export function layoutBoard(
           usedChans.push(bestC);
         }
         chanOf.set(`${p.from}->${p.to}`, chan);
-        grow(`o:${p.from}`, dp, ly(cyO(p.from)), chan ?? ly(cyO(p.to)));
-        if (chan !== null) grow(`i:${p.to}`, dc - 1, chan, ly(cyO(p.to)));
+        grow(`o:${p.from}`, dp, yOf(p.from), chan ?? yOf(p.to));
+        if (chan !== null) grow(`i:${p.to}`, dc - 1, chan, yOf(p.to));
       }
       const trackOf = new Map<string, number>();
       const tracksIn = new Map<number, number>();
@@ -131,14 +190,14 @@ export function layoutBoard(
           .sort(([ka, a], [kb, b]) => (b.y1 - b.y0) - (a.y1 - a.y0) || a.y0 - b.y0 || (ka < kb ? -1 : 1));
         const tracks: [number, number][][] = [];
         for (const [key, t] of list) {
-          let i = tracks.findIndex((iv) => iv.every(([a, b]) => t.y1 < a - u(6) || t.y0 > b + u(6)));
+          let i = tracks.findIndex((iv) => iv.every(([a, b]) => t.y1 < a - u(10) || t.y0 > b + u(10)));
           if (i < 0) { i = tracks.length; tracks.push([]); }
           tracks[i].push([t.y0, t.y1]);
           trackOf.set(key, i);
         }
         tracksIn.set(g, tracks.length);
       }
-      // columns: creature, then the widest name slot of the column, then its trunks
+      // columns: creature, then the widest name slot of the column, then its combs
       const colX = new Map<number, number>();
       const trunkX0 = new Map<number, number>();
       const extraX = fit ? Math.max(0, fit.w - natural(li)) / depths.length : 0;
@@ -153,16 +212,16 @@ export function layoutBoard(
         right = Math.max(right, end);
         const nt = tracksIn.get(d) ?? 0;
         trunkX0.set(d, end + u(GUTTER_PAD) + extraX * 0.3);
-        x = end + u(GUTTER_PAD) + Math.max(0, nt - 1) * u(TRACK) + u(GUTTER_PAD) + R + u(GAP) + extraX;
+        x = end + u(GUTTER_PAD) + Math.max(0, nt - 1) * u(TRACK * 1.6) + u(GUTTER_PAD) + R + u(GAP) + extraX;
       }
       const nodes: BNode[] = ns.map((n) => {
         const cx = colX.get(n.depth)!;
-        return { name: n.name, family: n.family, depth: n.depth, lane: li, col: n.col, x: cx, y: ly(cyO(n.name)),
+        return { name: n.name, family: n.family, depth: n.depth, lane: li, col: n.col, x: cx, y: yOf(n.name),
           slotStart: cx + R + u(GAP), slotEnd: cx + R + u(GAP) + u(slotPx(n.name, n.depth === 0)) };
       });
       const at = new Map(nodes.map((n) => [n.name, n]));
-      const tx = (key: string, g: number) => trunkX0.get(g)! + (trackOf.get(key) ?? 0) * u(TRACK);
-      const pipes: BPipe[] = samePipes.filter((q) => laneIdx(q.from) === li).map((p) => {
+      const tx = (key: string, g: number) => trunkX0.get(g)! + (trackOf.get(key) ?? 0) * u(TRACK * 1.6);
+      const pipes: BPipe[] = mine.map((p) => {
         const a = at.get(p.from)!, b = at.get(p.to)!;
         const id = `${p.from}->${p.to}`;
         const chan = chanOf.get(id) ?? null;
@@ -174,9 +233,9 @@ export function layoutBoard(
         return { id, from: p.from, to: p.to, pts, crossLane: false };
       });
       const w = fit ? fit.w : right + u(PAD_SIDE);
-      const h = fit ? fit.h : u(PAD_TOP) + lane.h * ay + u(PAD_BOTTOM) - 20 * ay;
-      // full tray: packed edge to edge with its neighbours (no dead corners)
+      const h = fit ? fit.h : baseH;
       const steps: [number, number, number, number][] = depths.map(() => [0, w, 0, h]);
+      void lane;
       return { lane: li, w, h, nodes, pipes, heads, steps };
     };
     const naturalW = new Map<number, number>();
@@ -283,7 +342,8 @@ export function layoutBoard(
     }
     // cross-family edges: drawn only when lit — a smooth arc between the two creatures
     const nodes = new Map(list.map((n) => [n.name, n]));
-    for (const p of flow.pipes.filter((q) => laneIdx(q.from) !== laneIdx(q.to))) {
+    // portal edges (drawn only when lit): cross-family, and same-family secondary parents
+    for (const p of flow.pipes.filter((q) => laneIdx(q.from) !== laneIdx(q.to) || !isPrimary(q.from, q.to))) {
       const a = nodes.get(p.from)!, b = nodes.get(p.to)!;
       const A = { x: a.slotEnd, y: a.y }, B = { x: b.x - R, y: b.y };
       const dx = Math.max(u(80), Math.abs(B.x - A.x) * 0.45);
@@ -306,7 +366,6 @@ export function layoutBoard(
       ruins: { x: -u(90) - u(340), y: height / 2 - u(230), w: u(340), h: u(460) },
     };
   }
-  void children;
   return out!;
 }
 
@@ -374,9 +433,17 @@ export function layoutMobile(
     const lower = list.filter((n) => n.lane === li && n.depth === d).map((n) => n.y);
     return Math.max(...lower) + R + u(M.CORRIDOR * 0.45) + (l ? 0 : 0);
   };
+  // only the primary (deepest same-family) parent gets a pipe; the rest are portals
+  const prim = new Map<string, string>();
+  for (const p of flow.pipes) {
+    if (laneOf(p.from) !== laneOf(p.to)) continue;
+    const cur = prim.get(p.to);
+    const dp = byName.get(p.from)!.depth;
+    if (!cur || dp > byName.get(cur)!.depth || (dp === byName.get(cur)!.depth && p.from < cur)) prim.set(p.to, p.from);
+  }
   for (const p of flow.pipes) {
     const a = nodes.get(p.from)!, b = nodes.get(p.to)!;
-    if (laneOf(p.from) !== laneOf(p.to)) {
+    if (laneOf(p.from) !== laneOf(p.to) || prim.get(p.to) !== p.from) {
       const A = { x: a.x - R, y: a.y }, B = { x: b.x - R, y: b.y };
       const dx = Math.max(u(60), Math.abs(B.y - A.y) * 0.25);
       const pts: Pt[] = [];
