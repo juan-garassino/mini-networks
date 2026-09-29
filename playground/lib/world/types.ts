@@ -26,14 +26,25 @@ export type Terrain = (typeof T)[keyof typeof T];
 
 export interface Region {
   family: string;
+  /**
+   * v3: part of the region lies UNDERWATER (Decision's sunken city on the
+   * bay's seabed). Seabed tiles are T.SEA with regionOf = id (footprints,
+   * roads and set-pieces on them keep their own codes); skins paint them as
+   * shallow water over ruins, never as land.
+   */
+  underwater: boolean;
+  /** v3: the region is a separate FLOATING island (islet families: Structure). Its tiles are ordinary land. */
+  floating: boolean;
   /** index into World.regions; also the value stored in World.regionOf. */
   id: number;
   /** data-derived: the family has zero cross-family edges. */
   islet: boolean;
   tiles: number;
   targetTiles: number;
-  /** growth seed, tile coords. */
+  /** growth seed, tile coords (v3: first skeleton tile). */
   seed: Pt;
+  /** v3: the authored spine the region grew from (tile coords; a single point for reefs). */
+  skeleton: Pt[];
   /** signature set-piece footprint, tile coords (null if none fit). */
   setPiece: Box | null;
   /** tile-coord bounding box of the region's tiles. */
@@ -54,6 +65,8 @@ export interface WorldNode {
   foot: Box;
   /** footprint centre in px. */
   center: Pt;
+  /** v3: the biome sub-zone (of its own family) under the node's centre, else null (always set by buildWorld; optional so hand-made nodes still type-check). */
+  zone?: ZoneKind | null;
 }
 
 export type RoadKind = "primary" | "secondary" | "bridge";
@@ -192,7 +205,55 @@ export interface Lineage {
   descendants: string[];
 }
 
+/** v3: how two neighbouring families are separated. */
+export type BorderKind = "range" | "river" | "strait";
+
+/**
+ * v3: one natural border between two adjacent families. Underneath, every
+ * border is a 1-tile band of T.RIVER tiles (2 tiles for a strait) so roads can
+ * only cross on a Bridge; `kind` says how to PAINT it: a mountain range (the
+ * bridge is a pass, `World.mountains` holds its peaks), a river, or a strait
+ * (a sea channel running coast to coast).
+ */
+export interface Border {
+  /** families, a < b. */
+  a: string;
+  b: string;
+  kind: BorderKind;
+  /** px polyline along the border (tile centres of its longest run, one end to the other). */
+  path: Pt[];
+  /** every T.RIVER/T.BRIDGE tile of this border. */
+  tiles: number[];
+}
+
+export type IsletKind = "rock" | "lighthouse" | "dome" | "floating";
+/** v3: a decorative islet (px polygon); its tiles stay T.SEA — skins draw it from the polygon. */
+export interface Islet {
+  kind: IsletKind;
+  poly: Pt[];
+}
+
+export type ZoneKind =
+  | "forest" | "town" | "wildwest" | "snow" | "cathedral" | "ruins" | "desert" | "forge" | "village" | "underwater" | "cyber"
+  | "meadow" | "sky";
+/** v3: a biome sub-zone of a family (px polygon, authored from the reference map) — where its look and set-pieces go. */
+export interface Zone {
+  family: string;
+  zone: ZoneKind;
+  poly: Pt[];
+}
+
+/** v3: a family's traced outline (px, simplified; outer ring of its land tiles — seabed excluded). */
+export interface Shape {
+  family: string;
+  poly: Pt[];
+}
+
 export interface World {
+  /** v3: the layout generation (WORLD_VERSION). */
+  version: number;
+  /** v3: the geography preset this world was built with. */
+  preset: "pixel" | "paper";
   cols: number;
   rows: number;
   tile: 16;
@@ -216,10 +277,27 @@ export interface World {
   mountains: Pt[][];
   hiddenIsland: SecretIsland;
   ruinsIsland: SecretIsland;
+  /** v3: natural borders between adjacent families (sorted by a, b). */
+  borders: Border[];
+  /**
+   * v3: the authored continent coast, smoothed, in PX — before the coast
+   * noise (the tiles are the truth; these are the artists' guides).
+   */
+  outline: Pt[];
+  /** v3: the south-east bay polygon (px) whose seabed holds the sunken city. */
+  bay: Pt[];
+  /** v3: decorative islets (their tiles stay T.SEA). */
+  islets: Islet[];
+  /** v3: biome sub-zones per family (authored from the reference). */
+  zones: Zone[];
+  /** v3: each family's traced land outline. */
+  shapes: Shape[];
   warnings: string[];
 }
 
 export interface WorldOptions {
+  /** v3 geography preset: "pixel" (default; refs/map-reference.png) or "paper" (refs/paper-map-reference.png). */
+  preset?: "pixel" | "paper";
   /** label size override (px); default w = 0.6·font·chars + 8, h = 1.35·font + 4. */
   measure?: (text: string, font: 13 | 15) => { w: number; h: number };
   /** debug hook: called after every layout attempt with its hard failures (empty = accepted). */

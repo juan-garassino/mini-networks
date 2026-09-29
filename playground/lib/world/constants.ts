@@ -3,6 +3,8 @@
 // ambiguous the chosen interpretation is written next to the number.
 
 export const TILE = 16 as const;
+/** v3: layout generation — bumped when the map's geography changes (skins may key cached art on it). */
+export const WORLD_VERSION = 3;
 
 // ── regions ──────────────────────────────────────────────────────────────
 /**
@@ -93,6 +95,14 @@ export const ATOM_EDGE_W = 2;
 export const ATOM_EDGE_CAP = 5;
 /** Not in the spec: the distance-to-placed-atoms term is capped (tiles) so atoms don't flee to the rim. */
 export const ATOM_SPREAD_CAP = 20;
+/**
+ * v3: atoms with an authored reference spot (continent.ts ATOM_ANCHORS) pay
+ * this per tile away from it — strong enough to dominate the edge/border
+ * terms, so the map reads like the owner's reference.
+ */
+export const W_ATOM_ANCHOR = 3;
+/** v3: set-pieces pay this per tile away from their authored landmark spot (edge distance capped at 3 still counts). */
+export const W_SETPIECE_ANCHOR = 0.35;
 /** v2 0.3 → 0.8: the spread cap grew with the world, so the border pull must too. */
 export const ATOM_BORDER_W = 0.8;
 /**
@@ -104,6 +114,29 @@ export const ATOM_BORDER_W = 0.8;
  */
 export const GEN_STEP = 12;
 export const W_SECONDARY = 0.5;
+/**
+ * v3 trunk-and-branch (replaces the radial sibling fan): a hub's same-family
+ * children sit along 1 trunk (2 from TRUNK_SPLIT children), TRUNK_OFF tiles to
+ * alternating sides of the trunk line, TRUNK_HALF tiles apart along it
+ * (÷ max(|cos|,|sin|) so diagonal trunks keep the Chebyshev FOOT_GAP), the
+ * first one TRUNK_FIRST(_ATOM) tiles from the hub centre.
+ */
+export const TRUNK_SPLIT = 4;
+export const TRUNK_OFF = 4;
+export const TRUNK_HALF = 4.5;
+export const TRUNK_FIRST = 9;
+export const TRUNK_FIRST_ATOM = 10;
+/** min separation of two trunks, in 22.5° steps (5 → 112.5°). */
+export const TRUNK_MIN_SEP = 5;
+/** candidate cost per squared tile from the trunk slot (÷ GEN_STEP, like the v2 distance term). */
+export const W_TRUNK = 1;
+/** trunk bearing score: continue outward from the hub's parent / lean toward borders its children bridge. */
+export const W_TRUNK_OUT = 0.5;
+export const W_TRUNK_PULL = 0.6;
+/** trunk bearing score: keep clear of the hub's own bridges out and of the region's other atoms nearby. */
+export const W_TRUNK_AVOID = 0.5;
+/** 1 = children with a cross-family parent ride the trunk too (0 = they wait at their bridge; measured: shorter roads but ~20% more crossings). */
+export const TRUNK_CROSS_KIDS = 1;
 /** v2 1.5 → 4: every term is /GEN_STEP, which grew 7→12; keeps cross-family children at their bridge. */
 export const W_CROSS_BORDER = 4;
 /** Not in the spec: derived nodes with cross-family children lean toward that border (atoms get the same pull via ATOM_BORDER_W). */

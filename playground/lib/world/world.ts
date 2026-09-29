@@ -9,10 +9,11 @@ import type {
 import { T } from "./types.ts";
 import {
   CAMERA_NODE_PAD, CAMERA_REGION_PAD, FERRY_FOOT, FERRY_LAND, FERRY_ROAD, FERRY_SEA, HIDDEN_DEFAULT, MAX_RETRIES,
-  RETRY_AREA_MUL, TILE,
+  RETRY_AREA_MUL, TILE, WORLD_VERSION,
 } from "./constants.ts";
 import { buildGraph } from "./graph.ts";
-import { growRegions, sharesBorder } from "./regions.ts";
+import { PRESETS } from "./continent.ts";
+import { growRegions, sharesBorder, traceBorders, traceShapes } from "./regions.ts";
 import { placeAll } from "./place.ts";
 import { routeRoads } from "./roads.ts";
 import { labelZones, placeLabels } from "./labels.ts";
@@ -31,14 +32,24 @@ const pad = (b: Box, p: number, W: number, H: number): Box => {
   const y = Math.max(0, b.y - p);
   return { x, y, w: Math.min(W, b.x + b.w + p) - x, h: Math.min(H, b.y + b.h + p) - y };
 };
+const inPoly = (poly: Pt[], x: number, y: number) => {
+  let c = false;
+  for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
+    const a = poly[i], b = poly[j];
+    if ((a.y > y) !== (b.y > y) && x < ((b.x - a.x) * (y - a.y)) / (b.y - a.y) + a.x) c = !c;
+  }
+  return c;
+};
 const px = (b: Box): Box => ({ x: b.x * TILE, y: b.y * TILE, w: b.w * TILE, h: b.h * TILE });
 
 export function buildWorld(tax: TaxonomyResponse, fam: FamilyMap, opts: WorldOptions = {}): World {
   const g = buildGraph(tax, fam);
+  const presetName = opts.preset === "paper" ? "paper" : "pixel";
+  const preset = PRESETS[presetName];
   for (let attempt = 0; ; attempt++) {
     const warnings = [...g.warnings];
     const failures: string[] = [];
-    const rg = growRegions(g, RETRY_AREA_MUL ** attempt, warnings);
+    const rg = growRegions(g, RETRY_AREA_MUL ** attempt, warnings, preset);
     for (const reg of rg.regions) {
       if (reg.tiles < reg.targetTiles * 0.85) failures.push(`region ${reg.family} reached ${reg.tiles}/${reg.targetTiles} tiles`);
     }
@@ -46,11 +57,12 @@ export function buildWorld(tax: TaxonomyResponse, fam: FamilyMap, opts: WorldOpt
       const [a, b] = key.split("|");
       const ia = rg.regions.find((r) => r.family === a)!.id;
       const ib = rg.regions.find((r) => r.family === b)!.id;
-      if (!sharesBorder(rg.cols, rg.rows, rg.regionOf, ia, ib)) failures.push(`regions ${a} and ${b} do not touch`);
+      // paper: a bridge road may cross a third land on its way (roads still must route)
+      if (preset.requireAdjacent && !sharesBorder(rg.cols, rg.rows, rg.regionOf, ia, ib)) failures.push(`regions ${a} and ${b} do not touch`);
     }
     const coast = new Uint8Array(rg.terrain.length);
     for (let i = 0; i < coast.length; i++) coast[i] = rg.terrain[i] === T.COAST ? 1 : 0;
-    const pl = placeAll(g, rg);
+    const pl = placeAll(g, rg, preset);
     failures.push(...pl.failures);
     const lz = labelZones(g, rg, pl.foot, opts);
     const rr = routeRoads(g, rg, pl.foot, coast, lz.zone);
@@ -70,10 +82,12 @@ export function buildWorld(tax: TaxonomyResponse, fam: FamilyMap, opts: WorldOpt
     for (const name of g.names) {
       const foot = pl.foot.get(name);
       if (!foot) continue;
+      const cx = foot.x + foot.w / 2, cy = foot.y + foot.h / 2;
+      const z = rg.zones.find((q) => q.family === g.family.get(name) && inPoly(q.poly, cx, cy));
       nodes.push({
         name, family: g.family.get(name)!, depth: g.depth.get(name)!, atom: g.atom.get(name)!,
         primary: g.primary.get(name)!, parents: [...g.parents.get(name)!], foot: { ...foot },
-        center: { x: (foot.x + foot.w / 2) * TILE, y: (foot.y + foot.h / 2) * TILE },
+        center: { x: cx * TILE, y: cy * TILE }, zone: z ? z.zone : null,
       });
     }
     const lmask = labelTiles(cols, rows, lb.labels);
@@ -111,10 +125,15 @@ export function buildWorld(tax: TaxonomyResponse, fam: FamilyMap, opts: WorldOpt
       const b = l ? union(px(nd.foot), l.box) : px(nd.foot);
       camera.nodes[nd.name] = { focus: { ...nd.center }, box: pad(b, CAMERA_NODE_PAD * TILE, W, H) };
     }
+    const tpx = (p: Pt): Pt => ({ x: Math.round(p.x * TILE * 100) / 100, y: Math.round(p.y * TILE * 100) / 100 });
     return {
-      cols, rows, tile: TILE, terrain: rg.terrain, regionOf: rg.regionOf, regions, nodes,
+      version: WORLD_VERSION, preset: presetName, cols, rows, tile: TILE, terrain: rg.terrain, regionOf: rg.regionOf, regions, nodes,
       roads: rr.roads, bridges: rr.bridges, labels: lb.labels, decor, seaSlots: slots, camera,
-      harbours, cities, mountains, hiddenIsland, ruinsIsland, warnings,
+      harbours, cities, mountains, hiddenIsland, ruinsIsland,
+      borders: traceBorders(rg, TILE), outline: rg.outline.map(tpx), bay: rg.bay.map(tpx),
+      islets: rg.islets.map((i) => ({ kind: i.kind, poly: i.poly.map(tpx) })),
+      zones: rg.zones.map((z) => ({ family: z.family, zone: z.zone, poly: z.poly.map(tpx) })),
+      shapes: traceShapes(rg, TILE), warnings,
     };
   }
 }

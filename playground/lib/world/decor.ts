@@ -86,7 +86,8 @@ function dilate(m: Uint8Array, cols: number, rows: number): Uint8Array {
 export function seaSlots(rg: RegionGrid, labelMask: Uint8Array): Box[] {
   const { cols, rows, terrain } = rg;
   const free = new Uint8Array(cols * rows);
-  for (let i = 0; i < free.length; i++) free[i] = terrain[i] === T.SEA && !labelMask[i] ? 1 : 0;
+  // v3: the reef (sea tiles with an owner) is not free water
+  for (let i = 0; i < free.length; i++) free[i] = terrain[i] === T.SEA && rg.regionOf[i] < 0 && !labelMask[i] ? 1 : 0;
   const out: Box[] = [];
   const dp = new Int16Array(cols * rows);
   for (let k = 0; k < SEA_SLOTS; k++) {

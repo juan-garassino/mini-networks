@@ -86,7 +86,7 @@ export function routeRoads(
   const sib = new Int16Array(n).fill(-1);
   for (let i = 0; i < n; i++) {
     const t = terrain[i];
-    if (t === T.LAND || t === T.COAST || t === T.ROAD) walk[i] = 1;
+    if (t === T.LAND || t === T.COAST || t === T.ROAD || (t === T.SEA && regionOf[i] >= 0)) walk[i] = 1; // v3: reef causeways
     if (t === T.RIVER) river[i] = 1;
   }
   const goal = new Uint8Array(n);

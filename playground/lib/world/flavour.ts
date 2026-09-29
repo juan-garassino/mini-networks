@@ -12,6 +12,8 @@ import type { Box, City, Harbour, Pt, SecretIsland } from "./types.ts";
 import { T } from "./types.ts";
 import type { Graph } from "./graph.ts";
 import type { RegionGrid } from "./regions.ts";
+import { isReef } from "./regions.ts";
+import { pairKey } from "./graph.ts";
 import {
   CAPITAL_MIN_CHILDREN, CITY_BASE, CITY_INSET, CITY_MAX, CITY_PER_CHILD, CITY_RING, HARBOUR_RADIUS,
   HARBOUR_SPLIT_BOATS, MOUNTAIN_MIN, MOUNTAIN_ROAD_CLEAR, SECRET_GAP, SECRET_H, SECRET_MIN_W, SECRET_PITCH, TILE,
@@ -22,13 +24,16 @@ import { fnv1a, hash2 } from "./rng.ts";
 const N4X = [1, -1, 0, 0];
 const N4Y = [0, 0, 1, -1];
 
-/** 1 = a tile no flavour may use (footprints, set-pieces, roads, bridges, rivers, sea, label tiles). */
+/**
+ * 1 = a tile no flavour may use (footprints, set-pieces, roads, bridges,
+ * rivers, open sea, label tiles). v3: seabed tiles are free (the sunken city).
+ */
 export function occupiedMask(rg: RegionGrid, labelMask: Uint8Array): Uint8Array {
   const { terrain } = rg;
   const m = new Uint8Array(terrain.length);
   for (let i = 0; i < m.length; i++) {
     const t = terrain[i];
-    if (!(t === T.LAND || t === T.COAST) || labelMask[i]) m[i] = 1;
+    if (!(t === T.LAND || t === T.COAST || isReef(rg, i)) || labelMask[i]) m[i] = 1;
   }
   return m;
 }
@@ -170,7 +175,7 @@ export function placeHarbours(
   return out;
 }
 
-/** Mountain ranges beside border rivers, far from every road and bridge. */
+/** Mountain ranges beside RANGE borders (v3; v2: every border), far from every road and bridge. */
 export function placeMountains(rg: RegionGrid, busy: Uint8Array, used: Uint8Array): Pt[][] {
   const { cols, rows, terrain, regionOf } = rg;
   const n = cols * rows;
@@ -189,7 +194,11 @@ export function placeMountains(rg: RegionGrid, busy: Uint8Array, used: Uint8Arra
       const ny = y + N4Y[k];
       if (nx < 0 || ny < 0 || nx >= cols || ny >= rows) continue;
       const u = ny * cols + nx;
-      if (terrain[u] === T.RIVER && regionOf[u] !== regionOf[i]) { cand[i] = 1; break; }
+      if (terrain[u] === T.RIVER && regionOf[u] >= 0 && regionOf[u] !== regionOf[i] &&
+          rg.borderKind.get(pairKey(rg.regions[regionOf[u]].family, rg.regions[regionOf[i]].family)) === "range") {
+        cand[i] = 1;
+        break;
+      }
     }
   }
   const nb = (i: number) => {
@@ -290,3 +299,4 @@ export function secretIsland(world: Box, names: string[], side: "east" | "south"
     : { x: box.x - 4 * TILE, y: box.y + h + 2 * TILE };
   return { box, names: [...names], slots, dragons };
 }
+

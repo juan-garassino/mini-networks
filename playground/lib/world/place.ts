@@ -7,9 +7,13 @@ import {
   ATOM_BORDER_W, ATOM_EDGE_CAP, ATOM_GAP, ATOM_EDGE_MIN, ATOM_EDGE_W, ATOM_SIZE, ATOM_SPREAD_CAP, BORDER_NEAR_SLACK,
   DERIVED_EDGE_MIN, DERIVED_SIZE, FOOT_GAP, GEN_STEP, SETPIECE_BIG_MIN_TILES,
   SETPIECE_FOOT_GAP, SETPIECE_LINE_BUFFER, SETPIECE_SIZES_BIG, SETPIECE_SIZES_SMALL,
-  SIBLING_CONE_DEG, LOOKAHEAD_MAX, W_CROSS_BORDER, W_DESC_BORDER, W_NOISE, W_SECONDARY, W_SIBLING,
+  SIBLING_CONE_DEG, LOOKAHEAD_MAX, TRUNK_FIRST, TRUNK_FIRST_ATOM, TRUNK_HALF, TRUNK_MIN_SEP, TRUNK_OFF, TRUNK_SPLIT,
+  W_ATOM_ANCHOR, W_CROSS_BORDER, W_DESC_BORDER, W_NOISE, W_SECONDARY, W_SETPIECE_ANCHOR, W_SIBLING, W_TRUNK, W_TRUNK_OUT,
+  W_TRUNK_AVOID, W_TRUNK_PULL, TRUNK_CROSS_KIDS,
 } from "./constants.ts";
 import { FAR, bfs, edgeDistance } from "./grid.ts";
+import { FRAME_H, FRAME_W, PRESETS } from "./continent.ts";
+import type { Preset } from "./continent.ts";
 import { fnv1a, hash2 } from "./rng.ts";
 
 export interface Placement {
@@ -23,11 +27,12 @@ export interface Placement {
 
 const centerOf = (b: Box): Pt => ({ x: b.x + b.w / 2, y: b.y + b.h / 2 });
 
-export function placeAll(g: Graph, rg: RegionGrid): Placement {
+export function placeAll(g: Graph, rg: RegionGrid, preset: Preset = PRESETS.pixel): Placement {
   const { cols, rows, regionOf, terrain } = rg;
   const n = cols * rows;
   const famId = new Map(rg.regions.map((r) => [r.family, r.id]));
-  const edge = edgeDistance(cols, rows, (i) => terrain[i] === T.LAND || terrain[i] === T.COAST);
+  // v3: reef tiles (sea with an owner) are ground for underwater regions
+  const edge = edgeDistance(cols, rows, (i) => terrain[i] === T.LAND || terrain[i] === T.COAST || (terrain[i] === T.SEA && regionOf[i] >= 0));
   const blocked = new Uint8Array(n); // footprint tiles dilated by FOOT_GAP
   const foot = new Map<string, Box>();
   const failures: string[] = [];
@@ -164,6 +169,9 @@ export function placeAll(g: Graph, rg: RegionGrid): Placement {
     return boxOf(order[0]);
   };
   const tileAt = (p: Pt) => Math.min(n - 1, Math.max(0, Math.floor(p.y) * cols + Math.floor(p.x)));
+  /** v3: authored reference spots (frame units) → tile coords. */
+  const toTile = (p: [number, number]): Pt => ({ x: (p[0] * cols) / FRAME_W, y: (p[1] * rows) / FRAME_H });
+  const anchorTile = (name: string): Pt | null => (preset.atomAnchors[name] ? toTile(preset.atomAnchors[name]) : null);
 
   // ── atoms ────────────────────────────────────────────────────────────
   const descendants = (a: string) => {
@@ -212,7 +220,10 @@ export function placeAll(g: Graph, rg: RegionGrid): Placement {
           for (const f of fields) border += f[ti];
           border /= fields.length;
         }
-        pushCand(cands, x, y, -(ATOM_EDGE_W * Math.min(e, ATOM_EDGE_CAP) + spread - ATOM_BORDER_W * border));
+        // v3: the reference map's label spot pulls the atom (dominates spread/border terms)
+        const an = anchorTile(a);
+        const pull = an ? W_ATOM_ANCHOR * Math.hypot(c.x - an.x, c.y - an.y) : 0;
+        pushCand(cands, x, y, -(ATOM_EDGE_W * Math.min(e, ATOM_EDGE_CAP) + (an ? 0 : spread) - ATOM_BORDER_W * border) + pull);
       }
       atomsLeft--;
       const best = pickFeasible(cands, r, atomsLeft, derivedLeft[r]);
@@ -258,6 +269,137 @@ export function placeAll(g: Graph, rg: RegionGrid): Placement {
     if (!moved) break;
   }
   const cone = (SIBLING_CONE_DEG * Math.PI) / 180;
+
+  // ── v3 trunk-and-branch ──────────────────────────────────────────────
+  // A hub's same-family children line up along one or two TRUNKS leaving it
+  // (not a radial fan): child k of a trunk sits TRUNK_OFF tiles to alternate
+  // sides of the trunk line, staggered outward, so its road is a short branch
+  // off a shared trunk road. Trunk bearings are chosen once per hub: open own
+  // land ahead, continuing outward from the hub's own parent, and leaning
+  // toward the borders its children must bridge.
+  interface Plan { dirs: Pt[]; slot: Map<string, [number, number]>; first: number }
+  const plans = new Map<string, Plan>();
+  const order = new Map(derived.map((m, i) => [m, i]));
+  const unit = (x: number, y: number): Pt => { const L = Math.hypot(x, y) || 1; return { x: x / L, y: y / L }; };
+  /**
+   * unit vector from the hub toward whatever pulls child `c`'s same-family
+   * subtree: parents outside it (cross-family or secondary, once placed) and
+   * the borders its cross-family children must bridge.
+   */
+  const borderDir = (r: number, f: string, hc: Pt): Pt | null => {
+    const bf = borderField(r, famId.get(f)!);
+    let bi = -1;
+    let bd = Infinity;
+    for (const i of regionTiles[r]) {
+      if (bf[i] !== 0) continue;
+      const x = i % cols;
+      const d = Math.hypot(x + 0.5 - hc.x, (i - x) / cols + 0.5 - hc.y);
+      if (d < bd) { bd = d; bi = i; }
+    }
+    if (bi < 0) return null;
+    const x = bi % cols;
+    return unit(x + 0.5 - hc.x, (bi - x) / cols + 0.5 - hc.y);
+  };
+  const pullOf = (c: string, r: number, hc: Pt, hub: string): Pt | null => {
+    const fam = g.family.get(c)!;
+    const sub = new Set<string>([c]);
+    const st = [c];
+    while (st.length) for (const ch of g.children.get(st.pop()!)!) if (g.family.get(ch) === fam && !sub.has(ch)) { sub.add(ch); st.push(ch); }
+    let v = { x: 0, y: 0 };
+    const add = (u: Pt | null, w = 1) => { if (u) v = { x: v.x + w * u.x, y: v.y + w * u.y }; };
+    for (const d of sub) {
+      for (const p of g.parents.get(d)!) {
+        if (sub.has(p) || p === hub) continue;
+        const pb = foot.get(p);
+        if (pb) { const q = centerOf(pb); add(unit(q.x - hc.x, q.y - hc.y)); }
+        else if (g.family.get(p) !== fam) add(borderDir(r, g.family.get(p)!, hc));
+      }
+      for (const ch of g.children.get(d)!) if (g.family.get(ch) !== fam) add(borderDir(r, g.family.get(ch)!, hc));
+    }
+    return v.x || v.y ? unit(v.x, v.y) : null;
+  };
+  const planFor = (hub: string, r: number): Plan => {
+    const hit = plans.get(hub);
+    if (hit) return hit;
+    const hb = foot.get(hub)!;
+    const hc = centerOf(hb);
+    const kids = g.primaryChildren.get(hub)!.filter((c) => g.family.get(c) === g.family.get(hub) &&
+      (TRUNK_CROSS_KIDS || !g.parents.get(c)!.some((p) => g.family.get(p) !== g.family.get(c))))
+      .sort((a, b) => order.get(a)! - order.get(b)!);
+    const nT = kids.length >= TRUNK_SPLIT ? 2 : 1;
+    const first = g.atom.get(hub) ? TRUNK_FIRST_ATOM : TRUNK_FIRST;
+    const perTrunk = Math.ceil(kids.length / nT);
+    const pp = g.primary.get(hub);
+    const out = pp && foot.has(pp) && g.family.get(pp) === g.family.get(hub)
+      ? (() => { const q = centerOf(foot.get(pp)!); return unit(hc.x - q.x, hc.y - q.y); })() : null;
+    const pulls = kids.map((c) => pullOf(c, r, hc, hub));
+    // directions to keep clear: the hub's own bridges out, and the region's other atoms (their children need that land)
+    const avoid: Pt[] = [];
+    for (const ch of g.children.get(hub)!) if (g.family.get(ch) !== g.family.get(hub)) { const d = borderDir(r, g.family.get(ch)!, hc); if (d) avoid.push(d); }
+    for (const o of g.membersOf.get(g.family.get(hub)!)!) {
+      if (o === hub || !g.atom.get(o) || !foot.has(o)) continue;
+      const q = centerOf(foot.get(o)!);
+      if (Math.hypot(q.x - hc.x, q.y - hc.y) < 3 * GEN_STEP) avoid.push(unit(q.x - hc.x, q.y - hc.y));
+    }
+    const score = (ang: number) => {
+      const d = { x: Math.cos(ang), y: Math.sin(ang) };
+      const pe = { x: -d.y, y: d.x };
+      const m = Math.max(Math.abs(d.x), Math.abs(d.y));
+      const len = first + perTrunk * (TRUNK_HALF / m) + 2;
+      let room = 0;
+      for (let a = 3; a <= len; a += 1) {
+        for (const l of [-TRUNK_OFF, 0, TRUNK_OFF]) {
+          const x = Math.floor(hc.x + a * d.x + l * pe.x);
+          const y = Math.floor(hc.y + a * d.y + l * pe.y);
+          if (x < 0 || y < 0 || x >= cols || y >= rows) { room -= 2; continue; }
+          const i = y * cols + x;
+          if (regionOf[i] !== r || edge[i] < 2) room -= 2;
+          else if (blocked[i]) room -= 1.5;
+          else room += 1;
+        }
+      }
+      let s = room / (3 * len);
+      if (out) s += W_TRUNK_OUT * (d.x * out.x + d.y * out.y);
+      for (const p of pulls) if (p) s += W_TRUNK_PULL * Math.max(0, d.x * p.x + d.y * p.y);
+      for (const q of avoid) s -= W_TRUNK_AVOID * Math.max(0, d.x * q.x + d.y * q.y);
+      return s;
+    };
+    const angs = Array.from({ length: 16 }, (_, k) => (k * Math.PI) / 8);
+    const sc = angs.map(score);
+    let b1 = 0;
+    for (let k = 1; k < 16; k++) if (sc[k] > sc[b1] + 1e-9) b1 = k;
+    const dirs = [{ x: Math.cos(angs[b1]), y: Math.sin(angs[b1]) }];
+    if (nT === 2) {
+      let b2 = -1;
+      for (let k = 0; k < 16; k++) {
+        const sep = Math.min(Math.abs(k - b1), 16 - Math.abs(k - b1));
+        if (sep < TRUNK_MIN_SEP) continue;
+        if (b2 < 0 || sc[k] > sc[b2] + 1e-9) b2 = k;
+      }
+      if (b2 >= 0) dirs.push({ x: Math.cos(angs[b2]), y: Math.sin(angs[b2]) });
+    }
+    // children with a pull ride the trunk that faces it; the rest balance the load
+    const slot = new Map<string, [number, number]>();
+    const load = dirs.map(() => 0);
+    const cap = Math.ceil(kids.length / dirs.length);
+    const pick = (c: string, p: Pt | null) => {
+      let t = -1;
+      for (let k = 0; k < dirs.length; k++) {
+        if (load[k] >= cap) continue;
+        const v = p ? dirs[k].x * p.x + dirs[k].y * p.y : -load[k];
+        const bv = t < 0 ? -Infinity : p ? dirs[t].x * p.x + dirs[t].y * p.y : -load[t];
+        if (v > bv + 1e-9) t = k;
+      }
+      if (t < 0) t = 0;
+      slot.set(c, [t, load[t]++]);
+    };
+    kids.forEach((c, i) => { if (pulls[i]) pick(c, pulls[i]); });
+    kids.forEach((c, i) => { if (!pulls[i]) pick(c, null); });
+    const plan = { dirs, slot, first };
+    plans.set(hub, plan);
+    return plan;
+  };
+
   for (const m of derived) {
     const fam = g.family.get(m)!;
     const r = famId.get(fam)!;
@@ -277,6 +419,21 @@ export function placeAll(g: Graph, rg: RegionGrid): Placement {
       ? g.primaryChildren.get(prim)!.filter((s) => s !== m && foot.has(s))
           .map((s) => { const c = centerOf(foot.get(s)!); return Math.atan2(c.y - pc.y, c.x - pc.x); })
       : [];
+    // v3: trunk slot → desired centre (same-family primary only)
+    let target: Pt | null = null;
+    // nodes with a cross-family parent are border towns: they wait at their bridge, off the trunk
+    const borderTown = !TRUNK_CROSS_KIDS && g.parents.get(m)!.some((p) => g.family.get(p) !== fam);
+    if (pc && prim && g.family.get(prim) === fam && !borderTown) {
+      const plan = planFor(prim, r);
+      const sl = plan.slot.get(m);
+      if (sl) {
+        const d = plan.dirs[sl[0]];
+        const mm = Math.max(Math.abs(d.x), Math.abs(d.y));
+        const along = plan.first + sl[1] * (TRUNK_HALF / mm);
+        const side = sl[1] % 2 === 0 ? 1 : -1;
+        target = { x: pc.x + along * d.x - side * TRUNK_OFF * d.y, y: pc.y + along * d.y + side * TRUNK_OFF * d.x };
+      }
+    }
     const nseed = fnv1a(m);
     const cands = newCands(DERIVED_SIZE);
     for (const i of regionTiles[r]) {
@@ -286,10 +443,13 @@ export function placeAll(g: Graph, rg: RegionGrid): Placement {
       const cx = x + DERIVED_SIZE / 2;
       const cy = y + DERIVED_SIZE / 2;
       let cost = 0;
-      if (pc) {
+      if (target) {
+        cost += (W_TRUNK * ((cx - target.x) ** 2 + (cy - target.y) ** 2)) / GEN_STEP;
+      } else if (pc) {
         const d = Math.hypot(cx - pc.x, cy - pc.y);
         cost += (d - GEN_STEP * k) ** 2 / GEN_STEP;
         const bearing = sibBearings.length ? Math.atan2(cy - pc.y, cx - pc.x) : 0;
+        if (target) sibBearings.length = 0; // v3: trunks replace the sibling cone
         for (const b of sibBearings) {
           let diff = Math.abs(bearing - b);
           if (diff > Math.PI) diff = 2 * Math.PI - diff;
@@ -328,13 +488,17 @@ export function placeAll(g: Graph, rg: RegionGrid): Placement {
   }
   const setPiece: (Box | null)[] = rg.regions.map((reg) => {
     const sizes = reg.tiles >= SETPIECE_BIG_MIN_TILES ? SETPIECE_SIZES_BIG : SETPIECE_SIZES_SMALL;
+    // v3: the landmark goes where the reference draws the region's label (edge distance still rewarded)
+    const an = preset.setPieceAnchors[reg.family] ? toTile(preset.setPieceAnchors[reg.family]) : null;
     for (const [w, h] of sizes) {
       let best: Box | null = null;
-      let bestE = -1;
+      let bestE = -Infinity;
       for (const i of regionTiles[reg.id]) {
         const x = i % cols;
         const y = (i - x) / cols;
-        const e = fitEdge(x, y, w, h, reg.id, 1, spBlock);
+        const e0 = fitEdge(x, y, w, h, reg.id, 1, spBlock);
+        if (e0 < 0) continue;
+        const e = an ? Math.min(e0, 3) - W_SETPIECE_ANCHOR * Math.hypot(x + w / 2 - an.x, y + h / 2 - an.y) : e0;
         if (e <= bestE) continue;
         const buf = SETPIECE_LINE_BUFFER;
         const box = { x: x - buf, y: y - buf, w: w + 2 * buf, h: h + 2 * buf };

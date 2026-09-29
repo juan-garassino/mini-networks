@@ -1,7 +1,7 @@
 // Debug viewer for the world contract. Prints an ASCII terrain map and build
 // timings; optionally writes a debug SVG of the world (or of the flow layout).
 //
-//   node --experimental-strip-types --no-warnings lib/world/dump.ts [--svg out.svg] [--flow]
+//   node --experimental-strip-types --no-warnings lib/world/dump.ts [--preset pixel|paper] [--svg out.svg] [--zones] [--flow]
 import { readFileSync, writeFileSync } from "node:fs";
 import type { TaxonomyResponse } from "../types.ts";
 import type { FlowLayout, World } from "./types.ts";
@@ -19,6 +19,7 @@ const args = process.argv.slice(2);
 const svgAt = args.indexOf("--svg");
 const svgPath = svgAt >= 0 ? args[svgAt + 1] : null;
 const flowMode = args.includes("--flow");
+const zonesOn = args.includes("--zones"); // --zones: overlay the biome sub-zones
 const walkAt = args.indexOf("--walk"); // --walk <model>: overlay pathToAtom
 const ferryAt = args.indexOf("--ferry"); // --ferry <composition>: overlay ferryRoute
 
@@ -64,6 +65,24 @@ function ascii(w: World): string {
   return `${lines.join("\n")}\n${legend}  ~ sea  = river  # road  H bridge  @ node  S set-piece  * decor`;
 }
 
+const poly = (pts: { x: number; y: number }[]) => (pts.length ? `M${pts.map((p) => `${p.x.toFixed(1)} ${p.y.toFixed(1)}`).join(" L")} Z` : "");
+
+/** proper crossings between road centrelines that share no endpoint node. */
+export function roadCrossings(w: World): string[] {
+  type P = { x: number; y: number };
+  const orient = (a: P, b: P, c: P) => Math.sign((b.x - a.x) * (c.y - a.y) - (b.y - a.y) * (c.x - a.x));
+  const out: string[] = [];
+  for (let i = 0; i < w.roads.length; i++) for (let j = i + 1; j < w.roads.length; j++) {
+    const A = w.roads[i], B = w.roads[j];
+    if ([A.from, A.to].some((x) => x === B.from || x === B.to)) continue;
+    for (let p = 1; p < A.points.length; p++) for (let q = 1; q < B.points.length; q++) {
+      const a = A.points[p - 1], b = A.points[p], c = B.points[q - 1], d = B.points[q];
+      if (orient(a, b, c) * orient(a, b, d) < 0 && orient(c, d, a) * orient(c, d, b) < 0) out.push(`${A.id} x ${B.id}`);
+    }
+  }
+  return out;
+}
+
 function worldSvg(w: World): string {
   const overlay: string[] = [];
   if (walkAt >= 0) {
@@ -96,6 +115,7 @@ function worldSvg(w: World): string {
   out.push(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="${A.x} ${A.y} ${A.w} ${A.h}" width="${A.w}" height="${A.h}">`);
   out.push(`<rect x="${A.x}" y="${A.y}" width="${A.w}" height="${A.h}" fill="#24568f"/>`);
   out.push(`<rect width="${W}" height="${H}" fill="#2f6fb8"/>`);
+  out.push(`<g shape-rendering="crispEdges">`);
   // secret islands (outside camera.world)
   for (const [isl, fill, mark] of [[w.hiddenIsland, "#d9c98f", "?"], [w.ruinsIsland, "#9a9a8a", "†"]] as const) {
     const b = isl.box;
@@ -113,14 +133,40 @@ function worldSvg(w: World): string {
       const r = w.regionOf[y * w.cols + x];
       let x2 = x;
       while (x2 < w.cols && w.regionOf[y * w.cols + x2] === r) x2++;
-      if (r >= 0) out.push(`<rect x="${x * S}" y="${y * S}" width="${(x2 - x) * S}" height="${S}" fill="${colorOf(w.regions[r].family)}"/>`);
+      if (r >= 0) {
+        const reef = w.regions[r].underwater;
+        out.push(`<rect x="${x * S}" y="${y * S}" width="${(x2 - x) * S}" height="${S}" fill="${colorOf(w.regions[r].family)}"${reef ? ` opacity="0.35"` : ""}/>`);
+      }
       x = x2;
     }
   }
+  const kindAt = new Map<number, string>();
+  for (const b of w.borders) for (const t of b.tiles) kindAt.set(t, b.kind);
+  const kindFill: Record<string, string> = { range: "#9b8a74", river: "#5aa0e8", strait: "#2f6fb8" };
   for (let i = 0; i < w.terrain.length; i++) {
     if (w.terrain[i] !== T.RIVER) continue;
-    out.push(`<rect x="${(i % w.cols) * S}" y="${Math.floor(i / w.cols) * S}" width="${S}" height="${S}" fill="#5aa0e8"/>`);
+    out.push(`<rect x="${(i % w.cols) * S}" y="${Math.floor(i / w.cols) * S}" width="${S}" height="${S}" fill="${kindFill[kindAt.get(i) ?? "river"]}"/>`);
   }
+  out.push(`</g>`);
+  out.push(`<path d="${poly(w.bay)}" fill="none" stroke="#fff" stroke-width="1.5" stroke-dasharray="3 6" opacity="0.5"/>`);
+  out.push(`<path d="${poly(w.outline)}" fill="none" stroke="#fff" stroke-width="1" stroke-dasharray="2 8" opacity="0.35"/>`);
+  for (const isl of w.islets) {
+    out.push(`<path d="${poly(isl.poly)}" fill="${isl.kind === "rock" ? "#8f8a80" : isl.kind === "dome" ? "#7fd0e0" : "#cfc09a"}" stroke="#2b2118" stroke-width="1.5"/>`);
+    if (isl.kind === "lighthouse") { const c = isl.poly[0]; out.push(`<circle cx="${c.x - 10}" cy="${c.y}" r="4" fill="#e23d3d"/>`); }
+  }
+  if (zonesOn) {
+    for (const z of w.zones) {
+      out.push(`<path d="${poly(z.poly)}" fill="none" stroke="#000" stroke-width="1.5" stroke-dasharray="6 4" opacity="0.45"/>`);
+      const c = z.poly.reduce((a, p) => ({ x: a.x + p.x / z.poly.length, y: a.y + p.y / z.poly.length }), { x: 0, y: 0 });
+      out.push(`<text x="${c.x}" y="${c.y}" font-size="16" font-family="serif" font-style="italic" text-anchor="middle" fill="#000" opacity="0.55">${z.zone}</text>`);
+    }
+  }
+  for (const b of w.borders) {
+    out.push(`<polyline points="${b.path.map((p) => `${p.x},${p.y}`).join(" ")}" fill="none" stroke="${b.kind === "range" ? "#4a3120" : "#0b3d91"}" stroke-width="${b.kind === "strait" ? 5 : 2}" stroke-dasharray="${b.kind === "range" ? "1 5" : "none"}" stroke-linecap="round" opacity="0.6"/>`);
+    const m = b.path[Math.floor(b.path.length / 2)];
+    if (m) out.push(`<text x="${m.x + 10}" y="${m.y}" font-size="12" font-style="italic" font-family="serif" fill="#1b1b1b">${b.kind}</text>`);
+  }
+
   for (const d of w.decor) {
     out.push(`<circle cx="${((d.tile % w.cols) + 0.5) * S}" cy="${(Math.floor(d.tile / w.cols) + 0.5) * S}" r="${3 * d.scale}" fill="#2d6b3a" opacity="0.5"/>`);
   }
@@ -199,7 +245,10 @@ function flowSvg(f: FlowLayout): string {
   return out.join("\n");
 }
 
+const presetAt = args.indexOf("--preset"); // --preset pixel|paper
+const preset = presetAt >= 0 && args[presetAt + 1] === "paper" ? "paper" : "pixel";
 const world = buildWorld(tax, fam, {
+  preset,
   onAttempt: (a, f) => { if (f.length) console.log(`attempt ${a} failed: ${f.join("; ")}`); },
 });
 const flow = buildFlow(tax, fam);
@@ -217,7 +266,7 @@ console.log(`lanes ${JSON.stringify(world.roads.reduce<Record<number, number>>((
 }
 console.log("regions:", world.regions.map((r) => `${r.family} ${r.tiles}/${r.targetTiles}${r.islet ? " islet" : ""}${r.setPiece ? ` sp ${r.setPiece.w}×${r.setPiece.h}` : " no-sp"}`).join(", "));
 console.log(`flow ${flow.width}×${flow.height}  lanes ${flow.lanes.map((l) => l.family).join(" / ")}  crossings ${flow.crossings} (seed ${flow.seedCrossings})`);
-console.log(`median buildWorld ${time(() => buildWorld(tax, fam), 15).toFixed(1)}ms  buildFlow ${time(() => buildFlow(tax, fam), 15).toFixed(1)}ms`);
+console.log(`median buildWorld (${preset}) ${time(() => buildWorld(tax, fam, { preset }), 15).toFixed(1)}ms  buildFlow ${time(() => buildFlow(tax, fam), 15).toFixed(1)}ms`);
 {
   const bd = (a: { x: number; y: number; w: number; h: number }, b: { x: number; y: number; w: number; h: number }) =>
     Math.hypot(Math.max(0, b.x - (a.x + a.w), a.x - (b.x + b.w)), Math.max(0, b.y - (a.y + a.h), a.y - (b.y + b.h)));
@@ -230,6 +279,14 @@ console.log(`median buildWorld ${time(() => buildWorld(tax, fam), 15).toFixed(1)
   }).map((l) => l.node);
   const roadLen = world.roads.reduce((a, r) => a + r.length, 0);
   console.log(`ambiguous labels ${amb.length}${amb.length ? ` (${amb.join(", ")})` : ""}  road px ${roadLen.toFixed(0)}  anchors ${JSON.stringify(world.labels.reduce<Record<string, number>>((m, l) => { m[l.anchor] = (m[l.anchor] ?? 0) + 1; return m; }, {}))}`);
+}
+console.log(`borders ${world.borders.map((b) => `${b.a}|${b.b}:${b.kind}(${b.tiles.length})`).join(", ")}`);
+{
+  const cx = roadCrossings(world);
+  console.log(`road crossings ${cx.length}${cx.length ? ` (${cx.join("; ")})` : ""}`);
+  let land = 0;
+  for (let i = 0; i < world.terrain.length; i++) if (world.terrain[i] !== T.SEA) land++;
+  console.log(`land fill ${(land / world.terrain.length * 100).toFixed(0)}% of ${world.cols}×${world.rows} (aspect ${(world.cols / world.rows).toFixed(2)})  islets ${world.islets.length}  zones ${world.zones.length}  shapes ${world.shapes.map((x) => x.poly.length).join("/")}`);
 }
 console.log("warnings:", world.warnings.length ? world.warnings : "none");
 if (svgPath) {
