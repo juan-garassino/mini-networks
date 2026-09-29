@@ -49,6 +49,11 @@ web/                 read-layer: metrics.py (pivot) + sources.py (Local/MLflow/
                      Composite RunSource) + model_catalog.py — reader of the contract
                      evidence.py: /web/evidence — per model champion (+version),
                      EvalSpec gate metric + M bar, provisional flag, run count
+                     feedback.py: /web/feedback — the owner's lab notes + pictures
+                     (Feedback tab on every /lab page) → playground/.lab-shots/
+                     feedback/<id>/{note.json,img-N.*,status.json}; the agent
+                     relays each note and writes status.json (refused when
+                     MN_DISABLE_TRAIN=1)
 cloud/               publisher.py: JobSpec + Pub/Sub publisher (cloud train dispatch)
                      sweep_shard.py: task-index→item sharding for the parallel
                      sweep job + GCS shard upload + report merge
@@ -155,6 +160,7 @@ Writes `runs/sweep/<ts>/report.{md,json}`; non-zero exit on any non-pass.
 - `cd playground && npm test` — lib/world layout invariants (node --test + strip-types, no deps)
 - `make lab-shoot SKIN=<skin> ROUND=<n>` — headless screenshots of a /lab skin (4 states × desktop/mobile → gitignored `playground/.lab-shots/<skin>/r<n>/`; ≤2 Chrome at once; `--typecheck`/`--check-only` via `node scripts/shoot.mjs`)
 - `make lab-board` — build `playground/.lab-shots/board.html`, the round-by-round bake-off comparison page
+- Lab feedback loop: the owner writes notes (+ pasted pictures) in the Feedback tab on any `/lab/<skin>` page; read new ones in `playground/.lab-shots/feedback/*/note.json` (images beside them), relay to the skin's builder, then write `status.json` `{"status":"relayed"|"addressed","reply":"…"}` so the tab shows the loop closing
 - `make -C infra/gcp validate` — terraform fmt-check + validate (static, no cloud)
 - `make -C infra/gcp build-train[-gpu]` / `dry-run[-sweep]` — build the CPU/cu121 images / run MODE=train or one MODE=sweep-task shard against a local sqlite MLflow
 - `make -C infra/gcp sweep TIER=M [ITEMS=a,b,c]` — execute the parallel L4 gate sweep (one Cloud Run task per item); `make -C infra/gcp sweep-report SWEEP=<id>` merges the shards into report.{md,json}

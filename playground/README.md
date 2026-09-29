@@ -26,6 +26,12 @@ Four skins of the same world compete to replace the editions
   URL state, still mode and card model live in `components/lab/shared/`.
 - URL params: `zoom=overview|region|node`, `focus=<model>`, `still=1` (freezes
   motion and polling for deterministic screenshots).
+- Feedback: every `/lab` page has a Feedback tab (note + pasted/dropped pictures,
+  stamped with the exact view) → `POST /web/feedback` → `.lab-shots/feedback/<id>/`;
+  status (new → relayed → addressed) and replies show back in the tab.
+- Art: `components/lab/paper/art/` (Sticker Star material system, 16 atom
+  landmarks; specimens at `/lab/paper/specimens`) and `components/lab/pixel/art/`
+  (hue-shifted ramps, elevation terrain, sprites; `/lab/pixel/specimens`).
 - Screenshots: `node scripts/shoot.mjs --skin <skin> --round <n> [--base URL]
   [--typecheck] [--check-only]` → `.lab-shots/<skin>/r<n>/*.jpg` (gitignored);
   `node scripts/board.mjs` builds the comparison board.
