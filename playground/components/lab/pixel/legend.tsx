@@ -4,7 +4,7 @@
 // Compact two-column grid so it fits the open sea in the map's corner.
 import { useMemo, useState } from "react";
 import { familyLabel } from "./palette";
-import { BIOMES, castleSprite, markerSprite, Painter, PALETTE, PARCHMENT, props, RAMPS, type ArtImage } from "./art";
+import { BIOMES, castleSprite, markerSprite, Painter, PALETTE, props, RAMPS, type ArtImage } from "./art";
 import { ArtImg } from "./art-img";
 import { PixelWindow } from "./window";
 import styles from "./pixel.module.css";
@@ -44,9 +44,9 @@ export function Legend({ mobile, defaultOpen, cartouche = false, inline = false,
   const place = mobile ? "bottom-2 left-2 right-2" : "bottom-3 right-3";
   if (!open) {
     return (
-      <button type="button" className={`${styles.btn} ${inline ? "" : `absolute ${mobile ? "bottom-3 left-3" : "bottom-4 right-4"}`}`}
+      <button type="button" className={`${styles.btn} ${styles.keyTab} ${inline ? "" : `absolute ${mobile ? "bottom-3 left-3" : "bottom-4 right-4"}`}`}
         onClick={() => setOverride(true)} aria-expanded={false}>
-        Map key
+        Key
       </button>
     );
   }
@@ -84,7 +84,7 @@ export function Legend({ mobile, defaultOpen, cartouche = false, inline = false,
       <ul className="mt-2 grid grid-cols-2 gap-x-4 gap-y-1 px-1 sm:grid-cols-[auto_auto_auto]" aria-label="Each land is one family">
         {Object.entries(BIOMES).map(([fam, b]) => (
           <li key={fam} className="flex items-center gap-2 text-[14px] leading-tight">
-            <span aria-hidden className="h-[12px] w-[12px] flex-none outline outline-2 outline-[#1e1f4e]" style={{ background: PALETTE[(tint ? PARCHMENT : null)?.[RAMPS[b.mid][Math.min(3, RAMPS[b.mid].length - 1)]] ?? RAMPS[b.mid][Math.min(3, RAMPS[b.mid].length - 1)]] }} />
+            <span aria-hidden className="h-[12px] w-[12px] flex-none outline outline-2 outline-[#1e1f4e]" style={{ background: PALETTE[RAMPS[b.mid][Math.min(3, RAMPS[b.mid].length - 1)]] }} />
             {familyLabel(fam)}
           </li>
         ))}

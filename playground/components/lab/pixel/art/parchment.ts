@@ -58,7 +58,8 @@ const hash = (x: number, y: number) => {
  * paper line hugging the coast, sparse paper grain, and ink ridge outlines on
  * the rust highlands (shadow side).
  */
-export function parchmentize(img: ArtImage, land: Uint8Array | null, apt: number): ArtImage {
+export function parchmentize(img: ArtImage, land: Uint8Array | null, apt: number, opts: { keepLand?: boolean } = {}): ArtImage {
+  const keepLand = opts.keepLand ?? true;
   const { w, h } = img;
   const out: ArtImage = { w, h, data: new Uint8Array(img.data.length) };
   const water = new Uint8Array(w * h);
@@ -66,13 +67,15 @@ export function parchmentize(img: ArtImage, land: Uint8Array | null, apt: number
   const notWater = new Uint8Array(w * h);
   for (let i = 0; i < notWater.length; i++) notWater[i] = water[i] ? 0 : 1;
   const d = chamfer(notWater, w, h, 64);
-  const P = RAMPS.paper, s = apt / 8;           // hatch spacing scales with art resolution
+  const P = RAMPS.paper, s = Math.max(0.6, apt / 8);           // hatch spacing scales with art resolution
   const gap = Math.max(2, Math.round(3 * s));
   for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
     const i = y * w + x;
     const v = img.data[i];
     if (v === CLEAR) { out.data[i] = CLEAR; continue; }
-    if (!water[i]) { out.data[i] = PARCHMENT[v]; continue; }
+    // owner 2026-09-29 ("more variations of colour", T4 palette): the LAND keeps the
+    // full hue-shifted art ramps and slope light; only the sea becomes paper
+    if (!water[i]) { out.data[i] = keepLand ? v : PARCHMENT[v]; continue; }
     const dd = d[i];
     let o = P[2];
     if (dd <= 1.2) o = RAMPS.ink[2];                                    // thin ink coastline
@@ -100,6 +103,7 @@ export function parchmentize(img: ArtImage, land: Uint8Array | null, apt: number
     if (!ok) continue;
     WAVE.forEach((row, yy) => { for (let xx = 0; xx < row.length; xx++) if (row[xx] === "#") out.data[(y0 + yy) * w + x0 + xx] = RAMPS.ink[1]; });
   }
+  if (keepLand) return out;
   // ink ridges: rust pixels with non-rust land below/right get an ink edge
   const rust = new Set(RAMPS.rustP);
   const src = new Uint8Array(out.data);
@@ -131,4 +135,27 @@ export function inkify(img: ArtImage): ArtImage {
 /** Apply the parchment table to a sprite (castles, markers, critter keep their muted colours). */
 export function parchmentSprite(img: ArtImage): ArtImage {
   return { w: img.w, h: img.h, data: img.data.map((v) => PARCHMENT[v]) };
+}
+
+/** 1px ink outline round every opaque sprite pixel (transparent neighbours → ink); size unchanged. */
+export function inkOutline(img: ArtImage, ink = RAMPS.ink[0]): ArtImage {
+  const out: ArtImage = { w: img.w, h: img.h, data: new Uint8Array(img.data) };
+  const { w, h } = img;
+  for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
+    const i = y * w + x;
+    if (img.data[i] !== CLEAR) continue;
+    const n = (xx: number, yy: number) => xx >= 0 && yy >= 0 && xx < w && yy < h && img.data[yy * w + xx] !== CLEAR;
+    if (n(x - 1, y) || n(x + 1, y) || n(x, y - 1) || n(x, y + 1)) out.data[i] = ink;
+  }
+  return out;
+}
+
+/** Ink outline round a MASK inside a composite (sprites painted over terrain). */
+export function inkAroundMask(img: ArtImage, mask: Uint8Array, ink = RAMPS.ink[0]) {
+  const { w, h } = img;
+  for (let y = 1; y < h - 1; y++) for (let x = 1; x < w - 1; x++) {
+    const i = y * w + x;
+    if (mask[i]) continue;
+    if (mask[i - 1] || mask[i + 1] || mask[i - w] || mask[i + w]) img.data[i] = ink;
+  }
 }

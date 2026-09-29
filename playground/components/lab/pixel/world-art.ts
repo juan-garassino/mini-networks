@@ -11,9 +11,9 @@
 // secret-island props · compass · nodes (castles per mechanism with the
 // species emblem on the banner; evidence markers with the species emblem) ·
 // clouds. Boats, trains, the critter and focus are drawn live (pixel-world).
-import type { Pt, World, WorldNode } from "@/lib/world";
+import { T, type Pt, type World, type WorldNode } from "@/lib/world";
 import {
-  artBlank, artBlit, artToCanvas, parchmentize, bakeCloudShadow, capital, castleSprite, isletBlobs, cloudSpots, cloudSprites, darker, markerSprite, props,
+  artBlank, artBlit, artToCanvas, chamfer, parchmentize, inkAroundMask, fbm3, biomeOf as artBiomeOf, type RampName, type TerrainArt, bakeCloudShadow, capital, castleSprite, isletBlobs, cloudSpots, cloudSprites, darker, markerSprite, props,
   RAMPS, renderTerrain, SHADOW, CLEAR, type ArtImage, type EmblemMask, type Sprite, Painter,
 } from "./art";
 import type { NodeLook } from "./terrain";
@@ -216,6 +216,82 @@ export function buildMiniLayer(world: World, emblems: ArtEmblems | null, theme: 
   return { origin: t.origin, px: t.px, canvas: artToCanvas(theme === "parchment" ? parchmentize(img, t.land, 3) : img) };
 }
 
+/**
+ * Tiny islets scattered on the parchment sea (cartographic atmosphere, like the
+ * reference): lumpy sand/grass blobs lit top-left, far from every coast and
+ * from the secret islands; the parchment pass then hatches round them.
+ */
+function seaIslets(img: ArtImage, t: TerrainArt, apt: number) {
+  const W = img.w, H = img.h;
+  const dist = chamfer(t.land, W, H, 400);
+  const cell = Math.round(apt * 9);
+  const h = (x: number, y: number, k: number) => { const v = Math.sin(x * 12.9898 + y * 78.233 + k * 37.719) * 43758.5453; return v - Math.floor(v); };
+  for (let gy = cell; gy < H - cell; gy += cell) for (let gx = cell; gx < W - cell; gx += cell) {
+    if (h(gx, gy, 1) > 0.34) continue;
+    const cx = gx + Math.floor(h(gx, gy, 2) * cell * 0.6), cy = gy + Math.floor(h(gx, gy, 3) * cell * 0.6);
+    const r = Math.max(2, Math.round((2 + h(gx, gy, 4) * 3) * (apt / 8)));
+    if (dist[cy * W + cx] < apt * 5 + r || t.region[cy * W + cx] < -1) continue;
+    const grassy = h(gx, gy, 5) < 0.5;
+    for (let dy = -r - 1; dy <= r + 1; dy++) for (let dx = -r - 2; dx <= r + 2; dx++) {
+      const e = (dx * dx) / ((r + 1.2) ** 2) + (dy * dy) / ((r * 0.75 + 0.6) ** 2) + (h(cx + dx, cy + dy, 6) - 0.5) * 0.25;
+      if (e > 1) continue;
+      const lit = dx + dy < -r * 0.4, dark = dx + dy > r * 0.6;
+      const ramp = grassy && e < 0.55 ? RAMPS.meadow : RAMPS.sand;
+      const k = dark ? 2 : lit ? ramp.length - 2 : ramp.length - 3;
+      const x = cx + dx, y = cy + dy;
+      if (x >= 0 && y >= 0 && x < W && y < H) img.data[y * W + x] = ramp[k];
+    }
+  }
+}
+
+/**
+ * Variety INSIDE each family (owner: "more variations of colour", T4 palette):
+ * low-frequency patches re-shade the biome's ground onto a neighbour ramp at
+ * the SAME relative step, so slope light and relief survive — orange-ochre sand
+ * patches in the lowlands, yellow-green meadows, grassy savanna in the dunes,
+ * red-brown outcrops on the uplands. Road / footprint / set-piece tiles stay calm.
+ */
+function biomeMix(world: World, t: TerrainArt, apt: number) {
+  const img = t.img, W = img.w, H = img.h;
+  type Mix = { to: RampName; seed: number; lo: number; hi: number; hMin: number; hMax: number };
+  const MIX: Record<string, Mix[]> = {
+    meadow:  [{ to: "sand", seed: 11, lo: 0.66, hi: 2, hMin: 0, hMax: 0.34 }, { to: "savanna", seed: 12, lo: 0, hi: 0.3, hMin: 0.1, hMax: 0.5 }],
+    savanna: [{ to: "meadow", seed: 13, lo: 0.62, hi: 2, hMin: 0, hMax: 0.6 }, { to: "sand", seed: 14, lo: 0, hi: 0.28, hMin: 0, hMax: 0.4 }],
+    dunes:   [{ to: "savanna", seed: 15, lo: 0.64, hi: 2, hMin: 0.1, hMax: 0.55 }, { to: "rock", seed: 16, lo: 0, hi: 0.26, hMin: 0.25, hMax: 1 }],
+    volcanic:[{ to: "sand", seed: 17, lo: 0.64, hi: 2, hMin: 0, hMax: 0.35 }],
+    ice:     [{ to: "meadow", seed: 18, lo: 0.6, hi: 2, hMin: 0, hMax: 0.3 }, { to: "stone", seed: 19, lo: 0, hi: 0.25, hMin: 0.3, hMax: 1 }],
+    crystal: [{ to: "meadow", seed: 20, lo: 0.66, hi: 2, hMin: 0, hMax: 0.3 }, { to: "rock", seed: 21, lo: 0, hi: 0.22, hMin: 0.2, hMax: 1 }],
+  };
+  const stepIn = new Map<number, { ramp: number[]; k: number }>();
+  const TS = 16, px = t.px;
+  for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+    const i = y * W + x;
+    if (!t.land[i] || t.region[i] < 0) continue;
+    const reg = world.regions[t.region[i]];
+    if (!reg) continue;
+    const b = artBiomeOf(reg.family);
+    const mixes = MIX[b.key];
+    if (!mixes) continue;
+    const tx = Math.floor((t.origin.x + (x + 0.5) * px) / TS), ty = Math.floor((t.origin.y + (y + 0.5) * px) / TS);
+    const code = tx >= 0 && ty >= 0 && tx < world.cols && ty < world.rows ? world.terrain[ty * world.cols + tx] : T.SEA;
+    if (code === T.ROAD || code === T.FOOT || code === T.SETPIECE || code === T.BRIDGE) continue;
+    const v = img.data[i];
+    const mid = RAMPS[b.mid];
+    const k = mid.indexOf(v);
+    if (k < 0) continue;                                   // only the biome's own ground is re-shaded
+    const hh = t.height[i];
+    for (const m of mixes) {
+      if (hh < m.hMin || hh > m.hMax) continue;
+      const n = fbm3(x / apt, y / apt, m.seed, 7);
+      if (n < m.lo || n > m.hi) continue;
+      const to = RAMPS[m.to];
+      img.data[i] = to[Math.max(0, Math.min(to.length - 1, Math.round((k / Math.max(1, mid.length - 1)) * (to.length - 1))))];
+      break;
+    }
+  }
+  void stepIn;
+}
+
 // ————————————————————————————— compose —————————————————————————————
 
 export type Theme = "parchment" | "ocean";
@@ -229,6 +305,19 @@ export function buildArtLayers(world: World, looks: Map<string, NodeLook>, emble
   // parchment has no clouds: the paper is the sky and the sea
   const spots = ink ? [] : cloudSpots(world, t, clouds);
   for (const s of spots) bakeCloudShadow(img, s.img, s.x, s.y);
+  if (ink) biomeMix(world, t, apt);
+  // sprite mask: every opaque pixel of a painted landmark (for the ink outline pass)
+  const mask = new Uint8Array(img.w * img.h);
+  const blitM = (dst: ArtImage, src: ArtImage, x: number, y: number, flip = false) => {
+    artBlit(dst, src, x, y, flip);
+    if (!ink) return;
+    x = Math.round(x); y = Math.round(y);
+    for (let sy = 0; sy < src.h; sy++) for (let sx = 0; sx < src.w; sx++) {
+      if (src.data[sy * src.w + (flip ? src.w - 1 - sx : sx)] === CLEAR) continue;
+      const px = x + sx, py = y + sy;
+      if (px >= 0 && py >= 0 && px < dst.w && py < dst.h) mask[py * dst.w + px] = 1;
+    }
+  };
 
   // lineage paths on their lanes: cross-family roads are pressed trails (quiet),
   // primary roads packed-earth paths with a shadow-side edge, second parents stepping stones
@@ -284,7 +373,7 @@ export function buildArtLayers(world: World, looks: Map<string, NodeLook>, emble
   peaks.forEach((pk, i) => {
     const s = props.snowPeak(i % 3 === 1 ? "stone" : "rock");
     const flip = i % 2 === 1;
-    artBlit(img, s.img, pk.x - (flip ? s.img.w - 1 - s.anchor.x : s.anchor.x), pk.y - s.anchor.y + ((i * 3) % 4), flip);
+    blitM(img, s.img, pk.x - (flip ? s.img.w - 1 - s.anchor.x : s.anchor.x), pk.y - s.anchor.y + ((i * 3) % 4), flip);
   });
 
   // bridges: planks across the river
@@ -293,7 +382,7 @@ export function buildArtLayers(world: World, looks: Map<string, NodeLook>, emble
   for (const br of world.bridges) for (const tile of br.tiles) {
     const c = A({ x: (tile % world.cols) * TS + TS / 2, y: Math.floor(tile / world.cols) * TS + TS / 2 });
     const s = br.axis === "h" ? bh : bv;
-    artBlit(img, s.img, c.x - s.img.w / 2, c.y - s.img.h / 2);
+    blitM(img, s.img, c.x - s.img.w / 2, c.y - s.img.h / 2);
   }
 
   // cities: one house per block, lit when the atom has runs or a champion;
@@ -307,14 +396,14 @@ export function buildArtLayers(world: World, looks: Map<string, NodeLook>, emble
       const cy = city.blocks.reduce((a, b) => a + b.y + b.h, 0) / city.blocks.length;
       const c = A({ x: cx, y: cy });
       const x0 = c.x - cap.anchor.x, y0 = c.y - cap.anchor.y;
-      artBlit(img, cap.img, x0, y0);
+      blitM(img, cap.img, x0, y0);
       hall = { x0, y0, x1: x0 + cap.img.w, y1: y0 + cap.img.h };
     }
     city.blocks.forEach((b, i) => {
       const s = props.house(i % 4, lit);
       const c = A({ x: b.x + b.w / 2, y: b.y + b.h });
       if (hall && c.x > hall.x0 - 4 && c.x < hall.x1 + 4 && c.y > hall.y0 && c.y < hall.y1 + 8) return;
-      artBlit(img, s.img, c.x - s.anchor.x, c.y - s.anchor.y);
+      blitM(img, s.img, c.x - s.anchor.x, c.y - s.anchor.y);
     });
   }
 
@@ -322,14 +411,14 @@ export function buildArtLayers(world: World, looks: Map<string, NodeLook>, emble
   const pier = props.pier();
   for (const h of world.harbours) if (h.boats > 0) {
     const c = A(h.pt);
-    artBlit(img, pier.img, c.x - pier.anchor.x, c.y - pier.anchor.y);
+    blitM(img, pier.img, c.x - pier.anchor.x, c.y - pier.anchor.y);
   }
 
   // secret islands: next-era stones + a dragon; ruins
   const qs = props.questionStone(), ru = props.ruins(), dr = props.dragon();
-  for (const s of islandSlots(world.hiddenIsland)) { const c = A(s); artBlit(img, qs.img, c.x - qs.anchor.x, c.y - qs.anchor.y); }
-  { const c = A(world.hiddenIsland.dragons); artBlit(img, dr.img, c.x - dr.anchor.x, c.y - dr.anchor.y); }
-  for (const s of islandSlots(world.ruinsIsland)) { const c = A(s); artBlit(img, ru.img, c.x - ru.anchor.x, c.y - ru.anchor.y); }
+  for (const s of islandSlots(world.hiddenIsland)) { const c = A(s); blitM(img, qs.img, c.x - qs.anchor.x, c.y - qs.anchor.y); }
+  { const c = A(world.hiddenIsland.dragons); blitM(img, dr.img, c.x - dr.anchor.x, c.y - dr.anchor.y); }
+  for (const s of islandSlots(world.ruinsIsland)) { const c = A(s); blitM(img, ru.img, c.x - ru.anchor.x, c.y - ru.anchor.y); }
 
   // compass rose in the emptiest sea (north is up)
   // (the compass rose is screen furniture now: pixel-world pins it to a corner)
@@ -346,12 +435,13 @@ export function buildArtLayers(world: World, looks: Map<string, NodeLook>, emble
       const px = Math.round(foot.x - s.anchor.x + x), py = Math.round(foot.y - s.anchor.y + y);
       put(img, px, py, SHADOW[get(img, px, py)] ?? get(img, px, py));
     }
-    artBlit(img, s.img, foot.x - s.anchor.x, foot.y - s.anchor.y);
+    blitM(img, s.img, foot.x - s.anchor.x, foot.y - s.anchor.y);
   }
 
   for (const s of spots) artBlit(img, s.img, s.x, s.y);
 
-  if (ink) img = parchmentize(img, t.land, apt);
+  if (ink) seaIslets(img, t, apt);
+  if (ink) { img = parchmentize(img, t.land, apt); inkAroundMask(img, mask); }
   const dimImg: ArtImage = { w: img.w, h: img.h, data: img.data.map((v) => (v === CLEAR ? v : darker(v))) };
   const farImg = downsample(img, 2, (v) => (v === RAMPS.ui[0] ? 0.8 : 1));
   const farDim = { w: farImg.w, h: farImg.h, data: farImg.data.map((v) => (v === CLEAR ? v : darker(v))) };

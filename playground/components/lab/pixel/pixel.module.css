@@ -336,3 +336,16 @@
 .parchment .portrait { background: #eee0bd !important; border-color: #5a1a14 !important; }
 .portrait { image-rendering: pixelated; }
 .parchment .plateKin { box-shadow: none; background: transparent; }
+
+/* parchment: lighter title cartouche (thin ink border), small ink Key tab */
+.parchment header.cartouche {
+  border-width: 1px;
+  outline: 0;
+  box-shadow: 0 2px 0 rgba(90, 26, 20, 0.18);
+  background-color: rgba(246, 236, 210, 0.92);
+  padding: 10px 12px;
+}
+.parchment header.cartouche h1 { font-size: 20px; }
+.parchment header.cartouche p { font-size: 14px !important; }
+.keyTab { font-size: 14px; padding: 1px 10px 3px; }
+.parchment .keyTab { background: #f6ecd2; border-width: 1px; }

@@ -27,7 +27,7 @@ import { Sparkline } from "@/components/lab/shared/lesson/sparkline";
 import type { ModelEvidence, TaxonomyResponse } from "@/lib/types";
 import { familyLabel } from "./palette";
 import type { NodeLook } from "./terrain";
-import { artFlipX, artToCanvas, cloudSprites, critterSheet, emblemMasks, inkify, isletBlobs, parchmentSprite, props, RAMPS, PALETTE, type ArtImage, type Sprite } from "./art";
+import { artFlipX, artToCanvas, cloudSprites, critterSheet, emblemMasks, inkify, inkOutline, isletBlobs, props, RAMPS, PALETTE, type ArtImage, type Sprite } from "./art";
 import { T } from "@/lib/world";
 import { ArtImg } from "./art-img";
 import { type Theme, buildArtLayers, buildMiniLayer, compassArt, chevronOffsets, familyHubs, islandSlots, nodeSprite, regionCut, roadPolys, type ArtEmblems, type ArtLayers } from "./world-art";
@@ -183,7 +183,8 @@ export function PixelWorld() {
   const [theme, setTheme] = useState<Theme>("parchment");
   useEffect(() => { if (new URLSearchParams(window.location.search).get("theme") === "ocean") setTheme("ocean"); }, []);
   const ink = theme === "parchment";
-  const tint = useCallback((img: ArtImage) => (ink ? parchmentSprite(img) : img), [ink]);
+  // parchment keeps the full art colours on land sprites; they get a 1px ink outline to sit on paper
+  const tint = useCallback((img: ArtImage) => (ink ? inkOutline(img) : img), [ink]);
   const inkArt = useCallback((img: ArtImage) => (ink ? inkify(img) : img), [ink]);
   const still = view?.still ?? true;
   const { world, taxonomy, evidence, runs, ready } = useWorld(view ? view.still : null);
@@ -818,7 +819,6 @@ export function PixelWorld() {
   const uiRects = useMemo<Rect[]>(() => {
     const r: Rect[] = mobile ? [{ x: 0, y: 0, w: vp.w, h: MOBILE_TOP }] : [{ x: 0, y: 0, w: 344, h: zoom === "overview" ? 200 : 196 }];
     if (mobile) r.push({ x: 0, y: vp.h - MOBILE_KEY, w: vp.w, h: MOBILE_KEY });
-    else if (zoom === "overview") r.push({ x: vp.w - 470, y: vp.h - 330, w: 470, h: 330 }); // map-key cartouche
     else r.push({ x: vp.w - 130, y: vp.h - 56, w: 130, h: 56 }); // "Map key" button
     return r;
   }, [mobile, vp.w, vp.h, zoom]);
@@ -961,7 +961,8 @@ export function PixelWorld() {
     isle: palmIsle(),
   }), [inkArt]);
   const furniture = useMemo(() => {
-    if (!world || !sheetMode || !furnitureArt || !taxonomy) return [];
+    // corners carry ink vignettes at the overview AND at region zoom (no dead sea quarters)
+    if (!world || !(sheetMode || (zoom === "region" && !mobile && ink)) || !furnitureArt || !taxonomy) return [];
     const sea = (x: number, y: number, w: number, h: number) => {
       for (let sy = y; sy <= y + h; sy += 12) for (let sx = x; sx <= x + w; sx += 12) {
         const wx = (sx - xf.ox) / xf.k, wy = (sy - xf.oy) / xf.k;
@@ -970,7 +971,7 @@ export function PixelWorld() {
       }
       return true;
     };
-    const taken: Rect[] = [...uiRects, ...plates, ...signs, { x: 0, y: vp.h - 110, w: 110, h: 110 }, { x: vp.w - 470, y: vp.h - 330, w: 470, h: 330 }];
+    const taken: Rect[] = [...uiRects, ...plates, ...signs, { x: 0, y: vp.h - 110, w: 110, h: 110 }];
     const out: { key: string; x: number; y: number; img: ArtImage; scale: number; label?: string; caption?: string }[] = [];
     const place = (key: string, img: ArtImage, scale: number, cands: [number, number][], label?: string, caption?: string) => {
       const w = img.w * scale, h = img.h * scale + (caption ? 24 : 0);
@@ -997,7 +998,7 @@ export function PixelWorld() {
     }
     return out;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [world, ink, sheetMode, furnitureArt, taxonomy, xf.tile, xf.ox, xf.oy, vp.w, vp.h, plates, signs, uiRects]);
+  }, [world, ink, sheetMode, zoom, mobile, furnitureArt, taxonomy, xf.tile, xf.ox, xf.oy, vp.w, vp.h, plates, signs, uiRects]);
 
   const critterScreen = (() => {
     const w = walk.current;
@@ -1157,7 +1158,7 @@ export function PixelWorld() {
         )}
 
         {/* map-sheet furniture: compass, flagship, sea serpent, clouds breaking the frame */}
-        {sheetMode && furniture.map((f) => (
+        {furniture.map((f) => (
           <div key={f.key} className="pointer-events-none absolute" style={{ left: f.x, top: f.y }} aria-hidden={f.label ? undefined : true}>
             <ArtImg img={f.img} scale={f.scale} label={f.label} />
             {f.caption && <div className={styles.pierTag} style={{ position: "static", marginTop: 2, width: "auto", padding: "0 6px" }}>{f.caption}</div>}
@@ -1179,7 +1180,7 @@ export function PixelWorld() {
           onZoom={(z) => update({ zoom: z })}
           hidden={mobile && cardOpen}
         />
-        {!mobile && <Legend mobile={false} defaultOpen={sheetMode} cartouche tint={ink ? tint : undefined} />}
+        {!mobile && <Legend mobile={false} defaultOpen={false} cartouche tint={ink ? tint : undefined} />}
         {miniMode && world && (
           <PixelWindow as="nav" aria-label="The six lands" className={`${styles.cartouche} absolute bottom-2 left-2 right-2`}>
             <div className="flex items-center justify-between">
