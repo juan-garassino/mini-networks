@@ -28,6 +28,7 @@ import type { ModelEvidence, TaxonomyResponse } from "@/lib/types";
 import { familyLabel } from "./palette";
 import { downsample } from "./raster";
 import type { NodeLook } from "./terrain";
+import { BIOME_INK, seaSprites } from "./art/biomes";
 import { artFlipX, artToCanvas, cloudSprites, critterSheet, emblemMasks, inkify, inkOutline, isletBlobs, props, RAMPS, PALETTE, type ArtImage, type Sprite } from "./art";
 import { T } from "@/lib/world";
 import { ArtImg } from "./art-img";
@@ -201,7 +202,7 @@ export function PixelWorld() {
   const tint = useCallback((img: ArtImage) => (ink ? inkOutline(img) : img), [ink]);
   const inkArt = useCallback((img: ArtImage) => (ink ? inkify(img) : img), [ink]);
   const still = view?.still ?? true;
-  const { world, taxonomy, evidence, runs, ready } = useWorld(view ? view.still : null);
+  const { world, taxonomy, evidence, runs, ready } = useWorld(view ? view.still : null, "pixel");
 
   // ——— viewport & stage ———
   const rootRef = useRef<HTMLDivElement | null>(null);
@@ -724,7 +725,7 @@ export function PixelWorld() {
       ctx.drawImage(st.c, s.x - st.ax * U, s.y - st.ay * U + hopY, st.c.width * U, st.c.height * U);
     }
     // parchment: a torn, burnt paper edge frames the whole sheet
-    if (INKM) {
+    if (INKM && !(L.world && L.world.preset === "pixel" && L.world.zones?.length)) {
       const key = `${W}x${H}`;
       if (!burnt.current || burnt.current.key !== key) burnt.current = { key, c: burntEdge(W, H, dpr) };
       ctx.drawImage(burnt.current.c, 0, 0);
@@ -990,9 +991,13 @@ export function PixelWorld() {
   const d2 = (im: ArtImage, f: number) => downsample(im, f, (v) => (v === 255 ? 0.7 : 1));
   const compassImg = useMemo(() => (typeof document === "undefined" ? null : inkArt(d2(compassArt(), 4))), [inkArt]);
   const furnitureArt = useMemo(() => (typeof document === "undefined" ? null : {
-    ship: inkArt(props.boat().img), serpent: inkArt(d2(props.dragon().img, 2)), cloudA: cloudSprites(4)[0].img, cloudB: cloudSprites(4)[2].img,
-    isle: palmIsle(), compass: inkArt(props.compass().img),
-  }), [inkArt]);
+    // parchment (round 5): the reference's coloured sea furniture, ink-ringed
+    ship: ink ? inkOutline(seaSprites().ship.img, BIOME_INK) : inkArt(props.boat().img),
+    serpent: ink ? inkOutline(seaSprites().serpent.img, BIOME_INK) : inkArt(d2(props.dragon().img, 2)),
+    cloudA: cloudSprites(4)[0].img, cloudB: cloudSprites(4)[2].img,
+    isle: ink ? seaSprites().ruins.img : palmIsle(), compass: ink ? seaSprites().compass.img : inkArt(props.compass().img),
+    pipes: seaSprites().pipelines.img,
+  }), [inkArt, ink]);
   const furniture = useMemo(() => {
     // corners carry ink vignettes at the overview AND at region zoom (no dead sea quarters)
     if (!world || !(sheetMode || (zoom === "region" && !mobile && ink)) || !furnitureArt || !taxonomy) return [];
@@ -1019,14 +1024,23 @@ export function PixelWorld() {
     };
     const grid = (xs: number[], ys: number[]) => xs.flatMap((fx) => ys.map((fy) => [fx * vp.w, fy * vp.h] as [number, number]));
     // compass rose: a big ink vignette in the emptiest sea corner (same grid)
-    place("compass", furnitureArt.compass, Q, [[0.07, 0.86], [0.08, 0.72], [0.93, 0.86], [0.92, 0.2], [0.35, 0.9], [0.62, 0.88]].map(([fx, fy]) => [fx * vp.w, fy * vp.h] as [number, number]), "Compass: north is up");
-    place("serpent", furnitureArt.serpent, Q, grid([0.84, 0.9, 0.78, 0.72], [0.62, 0.55, 0.7, 0.45, 0.78]), "Sea serpent: here be dragons, toward the uncharted isle");
-    place("ship", furnitureArt.ship, Q, grid([0.62, 0.55, 0.7, 0.48, 0.4, 0.3], [0.9, 0.86, 0.8, 0.94]),
+    place("compass", furnitureArt.compass, Q, [[0.06, 0.86], [0.07, 0.86], [0.08, 0.72], [0.93, 0.86], [0.92, 0.2], [0.35, 0.9], [0.62, 0.88]].map(([fx, fy]) => [fx * vp.w, fy * vp.h] as [number, number]), "Compass: north is up");
+    place("serpent", furnitureArt.serpent, Q, ink ? grid([0.06, 0.1, 0.14, 0.9], [0.55, 0.62, 0.48, 0.7]) : grid([0.84, 0.9, 0.78, 0.72], [0.62, 0.55, 0.7, 0.45, 0.78]), "Sea serpent: here be dragons, toward the uncharted isle");
+    if (!ink || !sheetMode) place("ship", furnitureArt.ship, Q, grid([0.62, 0.55, 0.7, 0.48, 0.4, 0.3], [0.9, 0.86, 0.8, 0.94]),
       `Flagship: ${taxonomy.compositions.length} pipelines sail between the lands`, `${taxonomy.compositions.length} pipelines`);
-    if (ink) {
-      // ink palm-isle with its sun: points the way to the ruins isle of retired legacy models
+    else place("ship", furnitureArt.ship, Q, grid([0.05, 0.09, 0.13], [0.42, 0.36, 0.3]), `A galleon: one of the ${taxonomy.compositions.length} pipelines`);
+    if (ink && sheetMode) {
+      // corner icons with REAL counts (the reference's top-right / bottom-right)
+      const pin = (key: string, img: ArtImage, x: number, y: number, label: string, caption: string) => {
+        const w = img.w * Q, h = img.h * Q + 24;
+        const r = { x: Math.round(x - w / 2), y: Math.round(y), w, h };
+        taken.push(r); out.push({ key, x: r.x, y: r.y, img, scale: Q, label, caption });
+      };
+      pin("ruins", furnitureArt.isle, vp.w - 70, 18, `Ruins isle: ${RUINS.length} retired models lie beyond the sea`, `${RUINS.length} ruins`);
+      pin("pipes", furnitureArt.pipes, vp.w - 90, vp.h - 150, `${taxonomy.compositions.length} pipelines sail between the lands`, `${taxonomy.compositions.length} pipelines`);
+    } else if (ink) {
       place("isle", furnitureArt.isle, Q, grid([0.9, 0.84, 0.1, 0.16, 0.78], [0.14, 0.22, 0.3, 0.08]),
-        `Ruins isle: ${world.ruinsIsland.names.length} retired models lie beyond`, `${world.ruinsIsland.names.length} ruins`);
+        `Ruins isle: ${RUINS.length} retired models lie beyond`, `${RUINS.length} ruins`);
     } else {
       place("cloudA", furnitureArt.cloudA, 2, [[vp.w - 60, 40], [vp.w - 80, 90], [vp.w * 0.6, 20]]);
       place("cloudB", furnitureArt.cloudB, 2, [[40, vp.h * 0.55], [30, vp.h * 0.7], [vp.w * 0.3, vp.h - 20]]);

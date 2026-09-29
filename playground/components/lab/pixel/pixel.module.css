@@ -357,3 +357,20 @@
     1px 1px 0 #f6ecd2, -1px -1px 0 #f6ecd2, 1px -1px 0 #f6ecd2, -1px 1px 0 #f6ecd2,
     2px 0 0 #f6ecd2, -2px 0 0 #f6ecd2, 0 2px 0 #f6ecd2, 0 -2px 0 #f6ecd2;
 }
+
+/* round 5 (final reference): names on small parchment plates with a thin ink border */
+.parchment .plate, .parchment .plateAtom {
+  color: #3b140e;
+  background: #f6ecd2;
+  border: 1px solid #7e2e22;
+  box-shadow: 0 2px 0 rgba(90, 26, 20, 0.35);
+  text-shadow: none;
+  padding: 0 5px;
+}
+.parchment .plateAtom { font-weight: 700; }
+.parchment .sign {
+  background: #f6ecd2;
+  border: 2px solid #5a1a14;
+  box-shadow: 0 2px 0 rgba(90, 26, 20, 0.35);
+  text-shadow: none;
+}

@@ -19,6 +19,7 @@ import {
 import type { NodeLook } from "./terrain";
 import { downsample } from "./raster";
 import { composeAuthored } from "./art/authored";
+import { buildMapV3 } from "./world-v3";
 
 export type ArtEmblems = Map<string, Map<number, EmblemMask>>;
 
@@ -339,6 +340,8 @@ export function pipSprite(state: NodeLook["state"]): ArtImage {
 }
 
 export function buildArtLayers(world: World, looks: Map<string, NodeLook>, emblems: ArtEmblems | null, apt = 8, theme: Theme = "parchment"): ArtLayers {
+  // round 5: parchment = the owner's final map on world v3 + the zone art library
+  if (theme === "parchment" && world.preset === "pixel" && world.zones?.length) return buildMapV3(world, looks, emblems, apt);
   const ink = theme === "parchment";
   const clouds = cloudSprites(apt >= 8 ? 4 : 3).map((s) => s.img);
   // parchment = the illustrator's AUTHORED continent (calm designed fields, heroes,
