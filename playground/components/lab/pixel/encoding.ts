@@ -21,7 +21,11 @@ export const ENCODING: Mark[] = [
   { mark: "river (water band)", encodes: "border between two families", source: "world.terrain = RIVER" },
   { mark: "canopy clumps", encodes: "the forest-able band of that land's biome", source: "art/ stampCanopy by biome" },
   { mark: "clouds with cast shadows", encodes: "atmosphere only, over the empty sea slots (no data); one veils the hidden island", source: "world.seaSlots, world.hiddenIsland" },
-  { mark: "compass rose at ×2, chunky gold N/W/E/S with ink outline (first open sea from the lower-left)", encodes: "north is up", source: "art terrain land mask (placement)" },
+  { mark: "flagship in open sea with an 'N pipelines' tag (overview sheet)", encodes: "how many pipelines (compositions) sail between the lands", source: "taxonomy.compositions.length" },
+  { mark: "sea serpent in open water toward the right edge (overview sheet)", encodes: "'here be dragons': the uncharted isle lies that way (it peeks in at the edge)", source: "world.hiddenIsland" },
+  { mark: "gold-studded cartouches (title / map key / six lands)", encodes: "the map sheet's own furniture: search, legend, the families with model counts", source: "taxonomy, world.regions" },
+  { mark: "desktop overview = full-bleed sheet at 10 px per tile (land fills the height, sea cropped), atom names only", encodes: "the whole zoo; derived names appear from region zoom (semantic zoom)", source: "renderTerrain(artPerTile 10), world.labels priority" },
+  { mark: "compass rose pinned to the lower-left corner, chunky gold N/W/E/S with ink outline", encodes: "north is up", source: "screen corner (map furniture)" },
   { mark: "faceted snow-capped peaks (lit / shadow faces)", encodes: "a family border that no lineage crosses", source: "world.mountains" },
   // lineage
   { mark: "3-art-px two-tone road on its own lane (dark edge, light cobble core, cast shadow)", encodes: "builds_on edge to the model's primary parent; parallel roads never merge", source: "world.roads[].lanePoints (primary=true)" },

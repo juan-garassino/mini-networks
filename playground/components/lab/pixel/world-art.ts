@@ -77,6 +77,10 @@ export function chevronOffsets(angle: number, arm = 1): [number, number][] {
 }
 
 /** Road polylines to draw: each road's lane, plus stubs into derived markers' feet. */
+export function compassArt(): ArtImage {
+  return outlined(scale2(props.compass().img), RAMPS.ui[0]);
+}
+
 export function roadPolys(world: World): { road: World["roads"][number]; pts: Pt[] }[] {
   const byName = new Map(world.nodes.map((n) => [n.name, n]));
   return world.roads.map((road) => {
@@ -214,9 +218,9 @@ export function buildMiniLayer(world: World, emblems: ArtEmblems | null): { orig
 
 // ————————————————————————————— compose —————————————————————————————
 
-export function buildArtLayers(world: World, looks: Map<string, NodeLook>, emblems: ArtEmblems | null): ArtLayers {
-  const clouds = cloudSprites(4).map((s) => s.img);
-  const t = renderTerrain(world, { extent: "all" });
+export function buildArtLayers(world: World, looks: Map<string, NodeLook>, emblems: ArtEmblems | null, apt = 8): ArtLayers {
+  const clouds = cloudSprites(apt >= 8 ? 4 : 3).map((s) => s.img);
+  const t = renderTerrain(world, { extent: "all", artPerTile: apt });
   const img = t.img;
   const A = (p: P): P => ({ x: (p.x - t.origin.x) / t.px, y: (p.y - t.origin.y) / t.px });
   const spots = cloudSpots(world, t, clouds);
@@ -304,24 +308,8 @@ export function buildArtLayers(world: World, looks: Map<string, NodeLook>, emble
   for (const s of islandSlots(world.ruinsIsland)) { const c = A(s); artBlit(img, ru.img, c.x - ru.anchor.x, c.y - ru.anchor.y); }
 
   // compass rose in the emptiest sea (north is up)
-  // compass rose at ×2 (chunky gold N/W/E/S) with an ink outline: the first open-sea
-  // spot scanning from the world's lower-left corner
-  const cp = { img: outlined(scale2(props.compass().img), RAMPS.ui[0]) };
-  {
-    const wb = world.camera.world;
-    const tl = A({ x: wb.x, y: wb.y }), br = A({ x: wb.x + wb.w, y: wb.y + wb.h });
-    const clear = (x0: number, y0: number) => {
-      for (let y = y0 - 8; y < y0 + cp.img.h + 8; y += 2) for (let x = x0 - 8; x < x0 + cp.img.w + 8; x += 2) {
-        if (x < 0 || y < 0 || x >= t.img.w || y >= t.img.h || t.land[y * t.img.w + x]) return false;
-      }
-      return true;
-    };
-    let placed = false;
-    for (let dy = 0; dy < 260 && !placed; dy += 8) for (let dx = 0; dx < 360 && !placed; dx += 8) {
-      const x0 = Math.round(tl.x + 70 + dx), y0 = Math.round(br.y - cp.img.h - 24 - dy);
-      if (clear(x0, y0)) { artBlit(img, cp.img, x0, y0); placed = true; }
-    }
-  }
+  // (the compass rose is screen furniture now: pixel-world pins it to a corner)
+  void outlined; void scale2;
 
   // nodes, back to front
   const nodes = [...world.nodes].sort((a, b) => a.center.y - b.center.y);

@@ -247,3 +247,29 @@
   100% { transform: translateX(0); opacity: 1; }
 }
 .slideIn { animation: slideIn 160ms steps(4, end) both; }
+
+/* pixel cartouche: the map sheet's own furniture (title, key, lands) — gold
+   corner studs + a double rim, drawn with CSS gradients only */
+.cartouche {
+  border: 2px solid #f5c24a;
+  outline: 2px solid #1e1f4e;
+  box-shadow: inset 0 0 0 2px #1e1f4e, inset 0 0 0 3px #a4602b, 0 6px 18px rgba(20, 18, 50, 0.45);
+  background-image:
+    linear-gradient(#f5c24a, #f5c24a), linear-gradient(#f5c24a, #f5c24a),
+    linear-gradient(#f5c24a, #f5c24a), linear-gradient(#f5c24a, #f5c24a);
+  background-size: 6px 6px;
+  background-position: 3px 3px, calc(100% - 3px) 3px, 3px calc(100% - 3px), calc(100% - 3px) calc(100% - 3px);
+  background-repeat: no-repeat;
+  background-color: #22265c;
+}
+.landBtn {
+  width: 100%;
+  text-align: left;
+  font: inherit;
+  color: #fff6e0;
+  background: #2a2f6c;
+  border: 1px solid #4a60b6;
+  padding: 6px 8px;
+  cursor: pointer;
+}
+.landBtn:hover, .landBtn:focus-visible { border-color: #f5c24a; outline: none; }

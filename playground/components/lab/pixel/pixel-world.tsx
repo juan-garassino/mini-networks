@@ -27,8 +27,10 @@ import { Sparkline } from "@/components/lab/shared/lesson/sparkline";
 import type { ModelEvidence, TaxonomyResponse } from "@/lib/types";
 import { familyLabel } from "./palette";
 import type { NodeLook } from "./terrain";
-import { artFlipX, artToCanvas, critterSheet, emblemMasks, isletBlobs, props, RAMPS, PALETTE, type Sprite } from "./art";
-import { buildArtLayers, buildMiniLayer, chevronOffsets, familyHubs, islandSlots, nodeSprite, regionCut, roadPolys, type ArtEmblems, type ArtLayers } from "./world-art";
+import { artFlipX, artToCanvas, cloudSprites, critterSheet, emblemMasks, isletBlobs, props, RAMPS, PALETTE, type ArtImage, type Sprite } from "./art";
+import { T } from "@/lib/world";
+import { ArtImg } from "./art-img";
+import { buildArtLayers, buildMiniLayer, compassArt, chevronOffsets, familyHubs, islandSlots, nodeSprite, regionCut, roadPolys, type ArtEmblems, type ArtLayers } from "./world-art";
 import { snapTile, toScreen, xformFor, type Stage, type Xform } from "./view";
 import { StatusCard } from "./status-card";
 import { placeSigns, type Rect } from "./signs";
@@ -41,7 +43,7 @@ import styles from "./pixel.module.css";
 const CARD_W = 400 + 16 + 8;
 const SHEET = 0.52;
 const MOBILE_TOP = 84;
-const MOBILE_KEY = 60;
+const MOBILE_KEY = 236;     // mobile overview: the lands cartouche under the map
 const TITLE_GUTTER = 120;
 const TS = 16;
 const hex = (i: number) => PALETTE[i];
@@ -88,6 +90,33 @@ function regionTarget(world: World, focus: WorldNode, stage: Stage): CamBox {
  * Overview frame: land + its halo, plus both secret islands on desktop (the
  * "?" isle and the ruins archipelago sit fully in frame); on mobile land + ruins.
  */
+/** Integer tile for the desktop map sheet: 10 px per tile when the land's height fits, else 8. */
+function sheetTile(world: World, vp: { w: number; h: number }): 8 | 10 {
+  const l = landBounds(world);
+  return l.h * (10 / 16) <= vp.h * 1.03 && l.w * (10 / 16) <= vp.w ? 10 : 8;
+}
+function landBounds(world: World): CamBox {
+  let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+  for (const r of world.regions) { x0 = Math.min(x0, r.bbox.x * TS); y0 = Math.min(y0, r.bbox.y * TS); x1 = Math.max(x1, (r.bbox.x + r.bbox.w) * TS); y1 = Math.max(y1, (r.bbox.y + r.bbox.h) * TS); }
+  return { x: x0, y: y0, w: x1 - x0, h: y1 - y0 };
+}
+/**
+ * Desktop overview = a full-bleed map sheet: the land fills the viewport height
+ * (cover-fit, the camera crops sea, not land), nudged east until the uncharted
+ * "?" isle just peeks in at the right edge.
+ */
+function sheetBox(world: World, vp: { w: number; h: number }): CamBox {
+  const l = landBounds(world);
+  const t = sheetTile(world, vp);
+  const w = (vp.w * 16) / t, h = (vp.h * 16) / t;
+  let cx = l.x + l.w / 2;
+  const hidden = Math.min(...isletBlobs(world.hiddenIsland).map((b) => b.cx - b.rx));
+  const want = hidden + 70 - (cx + w / 2);
+  const room = l.x - 12 - (cx - w / 2);
+  cx += Math.max(0, Math.min(want, room));
+  return { x: cx - w / 2, y: l.y + l.h / 2 - h / 2, w, h };
+}
+
 function overviewBox(world: World, mobile: boolean): CamBox {
   let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
   const grow = (x: number, y: number, w: number, h: number) => { x0 = Math.min(x0, x); y0 = Math.min(y0, y); x1 = Math.max(x1, x + w); y1 = Math.max(y1, y + h); };
@@ -124,7 +153,7 @@ export function PixelWorld() {
 
   const stage: Stage = useMemo(() => {
     if (mobile && zoom === "overview") return { x: 0, y: MOBILE_TOP, w: vp.w, h: Math.max(120, vp.h - MOBILE_TOP - MOBILE_KEY) };
-    if (zoom === "overview" && vp.w >= 1200) return { x: TITLE_GUTTER, y: 0, w: vp.w - TITLE_GUTTER, h: vp.h };
+    void TITLE_GUTTER; // desktop overview is full-bleed: the title is a cartouche ON the map
     if (!cardOpen) return { x: 0, y: 0, w: vp.w, h: vp.h };
     return mobile ? { x: 0, y: 0, w: vp.w, h: Math.round(vp.h * (1 - SHEET)) } : { x: 0, y: 0, w: Math.max(200, vp.w - CARD_W), h: vp.h };
   }, [cardOpen, mobile, zoom, vp.w, vp.h]);
@@ -133,8 +162,9 @@ export function PixelWorld() {
     if (!world) return { x: 0, y: 0, w: 1, h: 1 };
     if (zoom === "node" && focusNode) return padBox(world.camera.nodes[focusNode.name].box, 2.2, focusNode.center);
     if (zoom === "region" && focusNode) return regionTarget(world, focusNode, stage);
+    if (!mobile && vp.w > 0) return sheetBox(world, vp);
     return overviewBox(world, mobile);
-  }, [world, zoom, focusNode, stage, mobile]);
+  }, [world, zoom, focusNode, stage, mobile, vp.w, vp.h]);
 
   const cam = useCamera({ world: world?.camera.all ?? target, target, still, minWidth: 180 });
   const miniMode = mobile && zoom === "overview";
@@ -148,8 +178,12 @@ export function PixelWorld() {
   const atTarget = Math.abs(cam.box.w - fitted.w) < 1 && Math.abs(cam.box.x - fitted.x) < 1 && Math.abs(cam.box.y - fitted.y) < 1;
   const prog = Math.abs(flight.current.w0 - fitBox(target, stage.w, stage.h).w) < 1 ? 1
     : 1 - Math.abs(cam.box.w - fitBox(target, stage.w, stage.h).w) / Math.abs(flight.current.w0 - fitBox(target, stage.w, stage.h).w);
+  const sheetMode = !mobile && zoom === "overview" && !!world;
+  const sheetT = world && vp.w > 0 ? sheetTile(world, vp) : 8;
   const xf: Xform = miniMode
     ? xformFor(cam.box, stage, 32, { tile: 3 })
+    : sheetMode && prog > 0.25
+    ? xformFor(cam.box, stage, 32, { tile: sheetT as 8 })
     : xformFor(cam.box, stage, 32, prog > 0.25 ? { tile: fitT.tile } : { fit: zoom === "overview" ? "contain" : "cover" });
 
   // ——— identity: species emblems (async raster), evidence looks, cached layers ———
@@ -171,10 +205,38 @@ export function PixelWorld() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [world, ready, lookSig, emblems]);
 
+  // the desktop map sheet, composed natively at 10 art px per tile (1 art px = 1 screen px)
+  const [sheet, setSheet] = useState<ArtLayers | null>(null);
+  useEffect(() => {
+    if (!world || !ready || !emblems || mobile || sheetT !== 10) return;
+    setSheet(buildArtLayers(world, looks, emblems, 10));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [world, ready, lookSig, emblems, mobile, sheetT]);
   const mini = useMemo(() => (world && emblems && typeof document !== "undefined" && mobile ? buildMiniLayer(world, emblems) : null), [world, emblems, mobile]);
 
   const regionId = zoom === "region" && focusNode ? world?.regions.find((r) => r.family === focusNode.family)?.id ?? -1 : -1;
-  const spot = useMemo(() => (layers && regionId >= 0 ? regionCut(layers, regionId) : null), [layers, regionId]);
+  // region cut-outs are precomputed once per layer build (idle time), so a fly into a
+  // region never stalls the camera on a full-layer pass
+  const cuts = useRef(new Map<number, HTMLCanvasElement>());
+  useEffect(() => {
+    cuts.current = new Map();
+    if (!layers || !world) return;
+    let i = 0, alive = true;
+    const next = () => {
+      if (!alive || i >= world.regions.length) return;
+      const r = world.regions[i++];
+      if (!cuts.current.has(r.id)) cuts.current.set(r.id, regionCut(layers, r.id));
+      setTimeout(next, 30);
+    };
+    const id = setTimeout(next, 200);
+    return () => { alive = false; clearTimeout(id); };
+  }, [layers, world]);
+  const spot = useMemo(() => {
+    if (!layers || regionId < 0) return null;
+    let c = cuts.current.get(regionId);
+    if (!c) { c = regionCut(layers, regionId); cuts.current.set(regionId, c); }
+    return c;
+  }, [layers, regionId]);
 
   // ——— focus: lineage + the loud sprite ———
   const lin = useMemo(() => (world && focusNode ? lineage(world, focusNode.name) : null), [world, focusNode]);
@@ -361,8 +423,8 @@ export function PixelWorld() {
       return [name, { s: stamp(nodeSprite(m, look, emblems)), node: m }] as const;
     }));
   }, [world, emblems, lin, looks, nodeOf]);
-  const latest = useRef({ xf, layers, spot, focusNode, vp, critter, small, lin, polys, focusSprite, zoom, trains, nodeOf, cardOpen, stage, kinSprites, world, parked, mini });
-  latest.current = { xf, layers, spot, focusNode, vp, critter, small, lin, polys, focusSprite, zoom, trains, nodeOf, cardOpen, stage, kinSprites, world, parked, mini };
+  const latest = useRef({ sheet, xf, layers, spot, focusNode, vp, critter, small, lin, polys, focusSprite, zoom, trains, nodeOf, cardOpen, stage, kinSprites, world, parked, mini });
+  latest.current = { sheet, xf, layers, spot, focusNode, vp, critter, small, lin, polys, focusSprite, zoom, trains, nodeOf, cardOpen, stage, kinSprites, world, parked, mini };
 
   const draw = useCallback((nowArg?: number) => {
     const c = canvasRef.current;
@@ -400,18 +462,20 @@ export function PixelWorld() {
     const Ly = L.layers;
     const layer = far ? (stepBack ? Ly.farDim : Ly.far) : (stepBack ? Ly.dim : Ly.full);
     const o = S(Ly.origin);
-    if (tile === 3 && L.mini) {
+    if ((tile as number) === 10 && L.sheet) {
+      const so = S(L.sheet.origin);
+      ctx.drawImage(L.sheet.full, Math.round(so.x), Math.round(so.y), L.sheet.full.width * dpr, L.sheet.full.height * dpr);
+    } else if (tile === 3 && L.mini) {
       // far overview: the native 3-art-px-per-tile map at 1 CSS px per art px
       const mo = S(L.mini.origin);
       ctx.drawImage(L.mini.canvas, Math.round(mo.x), Math.round(mo.y), L.mini.canvas.width * dpr, L.mini.canvas.height * dpr);
       prevTile.current = tile;
       if (!drawn) setDrawn(true);
       return;
-    }
-    ctx.drawImage(layer, Math.round(o.x), Math.round(o.y), layer.width * ap, layer.height * ap);
+    } else ctx.drawImage(layer, Math.round(o.x), Math.round(o.y), layer.width * ap, layer.height * ap);
     if (L.spot && L.zoom === "region" && !far) ctx.drawImage(L.spot, Math.round(o.x), Math.round(o.y), L.spot.width * ap, L.spot.height * ap);
-    const u = Math.max(1, tile / 8) * dpr;   // one art px on screen (≥1)
-    const bs = Math.max(2, tile / 8) * dpr;  // UI marks never smaller than ×2
+    const u = Math.max(1, Math.floor(tile / 8)) * dpr;   // one art px on screen (≥1, integer)
+    const bs = Math.max(2, Math.floor(tile / 8)) * dpr;  // UI marks never smaller than ×2
     const n = L.focusNode;
     const drawStamp = (st: Stamp, at: Pt, scale: number) => {
       const q = S(at);
@@ -671,7 +735,9 @@ export function PixelWorld() {
   const tile = xf.tile;
   const uiRects = useMemo<Rect[]>(() => {
     const r: Rect[] = mobile ? [{ x: 0, y: 0, w: vp.w, h: MOBILE_TOP }] : [{ x: 0, y: 0, w: 344, h: zoom === "overview" ? 200 : 196 }];
-    r.push(mobile ? { x: 0, y: vp.h - 56, w: 130, h: 56 } : { x: vp.w - 130, y: vp.h - 56, w: 130, h: 56 }); // "Map key" button
+    if (mobile) r.push({ x: 0, y: vp.h - MOBILE_KEY, w: vp.w, h: MOBILE_KEY });
+    else if (zoom === "overview") r.push({ x: vp.w - 470, y: vp.h - 330, w: 470, h: 330 }); // map-key cartouche
+    else r.push({ x: vp.w - 130, y: vp.h - 56, w: 130, h: 56 }); // "Map key" button
     return r;
   }, [mobile, vp.w, vp.h, zoom]);
   const labelText = useMemo(() => new Map((world?.labels ?? []).map((l) => [l.text, l.node])), [world]);
@@ -703,7 +769,8 @@ export function PixelWorld() {
       out = out.filter((l) => l.node === focusNode.name || (!hit(l, crit) && !(fp && hit(l, fp))));
     }
     return out
-      .filter((l) => (tile > 4 || nodeOf.get(l.node)?.atom))
+      // semantic zoom: at the overview only atoms (their cities) are named; derived names at region zoom
+      .filter((l) => (zoom !== "overview" ? tile > 4 || nodeOf.get(l.node)?.atom : nodeOf.get(l.node)?.atom))
       .filter((l) => l.node === focusNode?.name || !uiRects.some((u) => hit(l, u)))
       .filter((l) => !cardOpen || (l.x + l.w <= stage.x + stage.w - 8 && l.y + l.h <= stage.y + stage.h - 8));
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -805,6 +872,44 @@ export function PixelWorld() {
     });
   }, [signs, world]);
 
+  // map-sheet furniture placed in OPEN SEA on screen (sampled against world.terrain)
+  const compassImg = useMemo(() => (typeof document === "undefined" ? null : compassArt()), []);
+  const furnitureArt = useMemo(() => (typeof document === "undefined" ? null : {
+    ship: props.boat().img, serpent: props.dragon().img, cloudA: cloudSprites(4)[0].img, cloudB: cloudSprites(4)[2].img,
+  }), []);
+  const furniture = useMemo(() => {
+    if (!world || !sheetMode || !furnitureArt || !taxonomy) return [];
+    const sea = (x: number, y: number, w: number, h: number) => {
+      for (let sy = y; sy <= y + h; sy += 12) for (let sx = x; sx <= x + w; sx += 12) {
+        const wx = (sx - xf.ox) / xf.k, wy = (sy - xf.oy) / xf.k;
+        const tx = Math.floor(wx / TS), ty = Math.floor(wy / TS);
+        if (tx >= 0 && ty >= 0 && tx < world.cols && ty < world.rows && world.terrain[ty * world.cols + tx] !== T.SEA) return false;
+      }
+      return true;
+    };
+    const taken: Rect[] = [...uiRects, ...plates, ...signs, { x: 0, y: vp.h - 110, w: 110, h: 110 }, { x: vp.w - 470, y: vp.h - 330, w: 470, h: 330 }];
+    const out: { key: string; x: number; y: number; img: ArtImage; scale: number; label?: string; caption?: string }[] = [];
+    const place = (key: string, img: ArtImage, scale: number, cands: [number, number][], label?: string, caption?: string) => {
+      const w = img.w * scale, h = img.h * scale + (caption ? 24 : 0);
+      for (const [cx, cy] of cands) {
+        const x = Math.round(cx - w / 2), y = Math.round(cy - h / 2);
+        if (x < -w / 2 || y < -h / 2 || x > vp.w - w / 2 || y > vp.h - h / 2) continue;
+        if (!sea(Math.max(0, x), Math.max(0, y), Math.min(w, vp.w - Math.max(0, x)), Math.min(h, vp.h - Math.max(0, y)))) continue;
+        if (taken.some((t) => hit({ x, y, w, h }, t))) continue;
+        taken.push({ x, y, w, h }); out.push({ key, x, y, img, scale, label, caption });
+        return;
+      }
+    };
+    const grid = (xs: number[], ys: number[]) => xs.flatMap((fx) => ys.map((fy) => [fx * vp.w, fy * vp.h] as [number, number]));
+    place("serpent", furnitureArt.serpent, 2, grid([0.84, 0.9, 0.78, 0.72], [0.62, 0.55, 0.7, 0.45, 0.78]), "Sea serpent: here be dragons, toward the uncharted isle");
+    place("ship", furnitureArt.ship, 3, grid([0.62, 0.55, 0.7, 0.48, 0.4, 0.3], [0.9, 0.86, 0.8, 0.94]),
+      `Flagship: ${taxonomy.compositions.length} pipelines sail between the lands`, `${taxonomy.compositions.length} pipelines`);
+    place("cloudA", furnitureArt.cloudA, 2, [[vp.w - 60, 40], [vp.w - 80, 90], [vp.w * 0.6, 20]]);
+    place("cloudB", furnitureArt.cloudB, 2, [[40, vp.h * 0.55], [30, vp.h * 0.7], [vp.w * 0.3, vp.h - 20]]);
+    return out;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [world, sheetMode, furnitureArt, taxonomy, xf.tile, xf.ox, xf.oy, vp.w, vp.h, plates, signs, uiRects]);
+
   const critterScreen = (() => {
     const w = walk.current;
     if (!w || tile < 16 || !critter) return null;
@@ -816,7 +921,7 @@ export function PixelWorld() {
 
   return (
     <LabMotion still={still}>
-      <div ref={rootRef} className={styles.root} data-lab-ready={drawn && ready && layers ? "1" : undefined}>
+      <div ref={rootRef} className={styles.root} data-lab-ready={drawn && ready && layers && (mobile || sheetT !== 10 || sheet) ? "1" : undefined}>
         <div
           className={styles.stage}
           onPointerDown={onPointerDown}
@@ -960,6 +1065,19 @@ export function PixelWorld() {
           </PixelWindow>
         )}
 
+        {/* map-sheet furniture: compass, flagship, sea serpent, clouds breaking the frame */}
+        {sheetMode && furniture.map((f) => (
+          <div key={f.key} className="pointer-events-none absolute" style={{ left: f.x, top: f.y }} aria-hidden={f.label ? undefined : true}>
+            <ArtImg img={f.img} scale={f.scale} label={f.label} />
+            {f.caption && <div className={styles.pierTag} style={{ position: "static", marginTop: 2, width: "auto", padding: "0 6px" }}>{f.caption}</div>}
+          </div>
+        ))}
+        {!miniMode && compassImg && vp.w > 0 && (
+          <div className="pointer-events-none absolute" style={{ left: 18, bottom: sheetMode ? 18 : 64 }} aria-hidden>
+            <ArtImg img={compassImg} scale={sheetMode ? 1 : 1} label="Compass: north is up" />
+          </div>
+        )}
+
         <TitleWindow
           taxonomyNames={world?.nodes.map((n) => n.name) ?? []}
           zoom={zoom}
@@ -970,7 +1088,29 @@ export function PixelWorld() {
           onZoom={(z) => update({ zoom: z })}
           hidden={mobile && cardOpen}
         />
-        {!(mobile && cardOpen) && <Legend mobile={mobile} defaultOpen={false} />}
+        {!mobile && <Legend mobile={false} defaultOpen={sheetMode} cartouche />}
+        {miniMode && world && (
+          <PixelWindow as="nav" aria-label="The six lands" className={`${styles.cartouche} absolute bottom-2 left-2 right-2`}>
+            <div className="flex items-center justify-between">
+              <h2 className="text-[16px] font-bold text-[#f5c24a]">Six lands, <PixelNum value={world.nodes.length} /> models</h2>
+              <Legend mobile defaultOpen={false} inline />
+            </div>
+            <ul className="mt-2 grid grid-cols-2 gap-2">
+              {world.regions.map((r) => {
+                const hub = hubs.get(r.family);
+                const count = world.nodes.filter((n) => n.family === r.family).length;
+                return (
+                  <li key={r.id}>
+                    <button type="button" className={styles.landBtn} onClick={() => openLand(r.id)}>
+                      <span className="block text-[15px] font-bold leading-tight">{familyLabel(r.family)}</span>
+                      <span className="block text-[13px] leading-tight text-[#bccbe8]"><PixelNum value={count} /> models{hub ? `, from ${displayName(hub.name)}` : ""}</span>
+                    </button>
+                  </li>
+                );
+              })}
+            </ul>
+          </PixelWindow>
+        )}
         {card && emblems && landedFor === card.name && (
           <StatusCard slide={animate} card={card} looks={looks} atoms={atoms} emblems={emblems} lesson={lesson} evidence={evidence} still={still}
             descendants={stats.desc.get(card.name) ?? 0} maxDescendants={stats.maxDesc} maxRuns={stats.maxRuns}

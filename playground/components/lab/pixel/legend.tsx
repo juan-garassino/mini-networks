@@ -22,7 +22,7 @@ function roadSample(kind: "road" | "stones" | "trail"): ArtImage {
   return p.img;
 }
 
-export function Legend({ mobile, defaultOpen }: { mobile: boolean; defaultOpen: boolean }) {
+export function Legend({ mobile, defaultOpen, cartouche = false, inline = false }: { mobile: boolean; defaultOpen: boolean; cartouche?: boolean; inline?: boolean }) {
   const [override, setOverride] = useState<boolean | null>(null);
   const open = override ?? defaultOpen;
   const icons = useMemo(() => ({
@@ -39,10 +39,10 @@ export function Legend({ mobile, defaultOpen }: { mobile: boolean; defaultOpen: 
     trail: roadSample("trail"),
   }), []);
 
-  const place = mobile ? "bottom-2 left-2 right-2" : "bottom-4 right-4";
+  const place = mobile ? "bottom-2 left-2 right-2" : "bottom-3 right-3";
   if (!open) {
     return (
-      <button type="button" className={`${styles.btn} absolute ${mobile ? "bottom-3 left-3" : "bottom-4 right-4"}`}
+      <button type="button" className={`${styles.btn} ${inline ? "" : `absolute ${mobile ? "bottom-3 left-3" : "bottom-4 right-4"}`}`}
         onClick={() => setOverride(true)} aria-expanded={false}>
         Map key
       </button>
@@ -64,7 +64,7 @@ export function Legend({ mobile, defaultOpen }: { mobile: boolean; defaultOpen: 
   ];
 
   return (
-    <PixelWindow as="section" aria-label="Map key" className={`absolute ${place} ${mobile ? "" : "w-[430px]"}`}>
+    <PixelWindow as="section" aria-label="Map key" className={`${cartouche ? styles.cartouche : ""} ${inline && mobile ? "fixed inset-x-2 bottom-2 z-10" : `absolute ${place}`} ${mobile ? "" : "w-[430px]"}`}>
       <div className="flex items-center justify-between px-1">
         <h2 className="text-[16px] font-bold leading-none text-[#f5c24a]">Map key</h2>
         <button type="button" className={styles.btn} onClick={() => setOverride(false)} aria-expanded>Hide</button>

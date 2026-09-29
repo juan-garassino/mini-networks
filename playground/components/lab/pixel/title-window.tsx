@@ -47,7 +47,7 @@ export function TitleWindow({ taxonomyNames, zoom, focus, regionCount, mobile, o
   const pick = (n: string) => { setQ(""); input.current?.blur(); onPick(n); };
 
   return (
-    <PixelWindow as="header" className={`absolute ${mobile ? "left-2 right-2 top-2 !py-2 !px-3" : "left-4 top-4 w-[320px]"}`}>
+    <PixelWindow as="header" className={`${styles.cartouche} absolute ${mobile ? "left-2 right-2 top-2 !py-2 !px-3" : "left-4 top-4 w-[320px]"}`}>
       <div className={mobile ? "flex items-center gap-3" : "px-1"}>
         <h1 className={`${mobile ? "flex-none text-[18px]" : "text-[24px]"} font-bold leading-none text-[#f5c24a]`}>The model zoo</h1>
         {!mobile && zoom === "overview" && (
