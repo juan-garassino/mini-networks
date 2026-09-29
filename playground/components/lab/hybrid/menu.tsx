@@ -64,7 +64,7 @@ export const SlimTitle = memo(function SlimTitle({ models, families, crumbs, onM
   );
 });
 
-export const RegionMenu = memo(function RegionMenu({ title, rows, cursor, onPick, onHover, className, touch, footer, style, compact }: {
+export const RegionMenu = memo(function RegionMenu({ title, rows, cursor, onPick, onHover, className, touch, footer, style, compact, ribbonColor }: {
   title: string;
   rows: MenuRow[];
   cursor: number;
@@ -78,10 +78,12 @@ export const RegionMenu = memo(function RegionMenu({ title, rows, cursor, onPick
   style?: React.CSSProperties;
   /** phone overview: families as a two-column grid (the map gets the height) */
   compact?: boolean;
+  /** the header ribbon's cardstock colour (the family's, or gold for the family list) */
+  ribbonColor?: string;
 }) {
   const hasAtoms = rows.some((r) => r.atom);
   return (
-    <PixelWindow as="nav" label="Jump to" title={title} className={className} style={style} bodyClassName={`${s.scroll} min-h-0 flex-1`}>
+    <PixelWindow as="nav" label="Jump to" ribbon={{ text: title, color: ribbonColor ?? "#FFCB2E" }} className={className} style={style} bodyClassName={`${s.scroll} min-h-0 flex-1`}>
       <ul className={compact ? "grid grid-cols-2 py-1" : "py-1"} role="menu">
         {rows.map((r, i) => {
           return (

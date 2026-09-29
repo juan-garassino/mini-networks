@@ -10,23 +10,29 @@ export type FrameKind = "window" | "plate" | "dialog" | "hot";
 // highlight, a cool bottom-right shade, a coloured outline, rounded 2px
 // corners. Depth comes from the ramp + the paper card's soft shadow, not
 // from a heavy bevel.
-interface FrameInks { outline: string; hi: string; shade: string; lit: string; fill: string }
+interface FrameInks { outline: string; lit: string[]; shade: string[]; fill: string; rivet: [string, string, string] }
 
+// Round 4 (critic r2): one panel system built from the pixel palette's ui /
+// banner / ocean ramps — deep indigo body (never royal blue, so it stops
+// fighting the sea), a 2px lit top-left bevel, a cool bottom-right shade, and
+// gold-ramp rivets in the corners. The family colour lives in the header
+// ribbon, not the frame.
+const RIVET: [string, string, string] = [UI.goldLit, UI.gold, UI.goldShade];
 const FRAMES: Record<FrameKind, FrameInks> = {
-  window: { outline: UI.ink, hi: UI.panelHi, shade: UI.panelShade, lit: UI.panelLit, fill: UI.panel },
-  plate: { outline: UI.plumDeep, hi: UI.goldLit, shade: UI.plumShade, lit: UI.plumLit, fill: UI.plum },
-  dialog: { outline: UI.ink, hi: UI.panelHi, shade: UI.ink, lit: UI.panelShade, fill: UI.panelDeep },
-  hot: { outline: UI.ink, hi: UI.cyanHi, shade: UI.cyanShade, lit: UI.cyan, fill: UI.cyanShade },
+  window: { outline: UI.ink, lit: [UI.panelHi, UI.panelLit], shade: [UI.ink, UI.panelShade], fill: UI.panel, rivet: RIVET },
+  plate: { outline: UI.ink, lit: [UI.panelHi, UI.panelLit], shade: [UI.ink, UI.panelShade], fill: UI.panel, rivet: RIVET },
+  dialog: { outline: UI.ink, lit: [UI.panelHi, UI.panelLit], shade: [UI.ink, UI.panelShade], fill: UI.panel, rivet: RIVET },
+  hot: { outline: UI.ink, lit: [UI.cyanHi, UI.cyan], shade: [UI.ink, UI.cyanShade], fill: UI.cyanShade, rivet: RIVET },
 };
 
 /** Grid size of the frame bitmap and its slice (in art pixels). */
-export const FRAME_GRID = 12;
-export const FRAME_SLICE = 4;
+export const FRAME_GRID = 16;
+export const FRAME_SLICE = 6;
 
 /**
- * A 12×12 panel bitmap: rounded (1-px chamfer) outline, then a 1-px rim that
- * is warm-lit on the top/left and cool-shaded on the bottom/right, a 1-px lit
- * band under the top edge, and the fill. Centre = fill (border-image `fill`).
+ * A 16×16 panel bitmap (drawn ×2): chamfered 1px outline, a 2px bevel lit on
+ * the top/left and shaded on the bottom/right, a 2×2 gold rivet in each
+ * corner (lit pixel top-left, shaded pixel bottom-right), then the body.
  */
 export function frameSvg(kind: FrameKind): string {
   const ink = FRAMES[kind];
@@ -38,9 +44,14 @@ export function frameSvg(kind: FrameKind): string {
       const L = Math.min(dx, dy, dx + dy - 1);
       if (L < 0) continue;
       let c = ink.fill;
+      const litSide = (y < n / 2 && dy <= dx) || (x < n / 2 && dx < dy);
       if (L === 0) c = ink.outline;
-      else if (L === 1) c = (y < n / 2 && dy <= dx) || (x < n / 2 && dx < dy) ? ink.hi : ink.shade;
-      else if (y === 2 && L === 2) c = ink.lit;
+      else if (L <= 2) c = (litSide ? ink.lit : ink.shade)[L - 1];
+      else if (dx >= 3 && dx <= 4 && dy >= 3 && dy <= 4) {
+        const tl = (x < n / 2 ? dx : 7 - dx) === 3 && (y < n / 2 ? dy : 7 - dy) === 3;
+        const br = (x < n / 2 ? dx : 7 - dx) === 4 && (y < n / 2 ? dy : 7 - dy) === 4;
+        c = tl ? ink.rivet[0] : br ? ink.rivet[2] : ink.rivet[1];
+      }
       rects += `<rect x="${x}" y="${y}" width="1" height="1" fill="${c}"/>`;
     }
   }

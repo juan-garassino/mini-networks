@@ -53,12 +53,19 @@ function GateMeter({ card, version }: { card: CardModel; version: string | null 
         Quality bar: {words(e.gate_metric)} {e.higher_is_better ? "at least" : "at most"}{" "}
         <span className={s.gold}><PixelNum value={fmt(thr)} /></span>
       </p>
-      <div className={`${s.meter} mt-2`} role="img"
-        aria-label={champ ? `Passed the M-tier bar ${fmt(thr)}` : best == null ? `Bar ${fmt(thr)}; no M-tier score locally` : `M-tier score ${fmt(best)} against bar ${fmt(thr)}`}>
-        {fillPct > 0 && <div className={s.meterFill} style={{ width: `calc(${fillPct}% - 4px)`, background: pass ? UI.good : UI.dim }} />}
-        <div className={`${s.meterTick} ${champ ? s.meterTickGold : ""}`} style={{ left: `${BAR_AT}%` }} />
-        {champ && <PixelSprite sprite={CHECK} scale={2} className={s.meterCheck} style={{ left: `calc(${BAR_AT}% + 6px)` }} />}
-      </div>
+      {best != null ? (
+        <div className={`${s.meter} mt-2`} role="img" aria-label={`M-tier score ${fmt(best)} against bar ${fmt(thr)}`}>
+          {fillPct > 0 && <div className={s.meterFill} style={{ width: `calc(${fillPct}% - 4px)`, background: pass ? UI.good : UI.dim }} />}
+          <div className={`${s.meterTick} ${champ ? s.meterTickGold : ""}`} style={{ left: `${BAR_AT}%` }} />
+          {champ && <PixelSprite sprite={CHECK} scale={2} className={s.meterCheck} style={{ left: `calc(${BAR_AT}% + 6px)` }} />}
+        </div>
+      ) : (
+        // no M-tier score on this machine: no empty track pretending to be data
+        <p className={`${s.t14} mt-2 flex items-center gap-2`}>
+          {champ && <PixelSprite sprite={CHECK} scale={2} />}
+          <span className={s.dim}>No M-tier score recorded on this machine.</span>
+        </p>
+      )}
       <p className={`${s.t16} mt-2`}>
         {champ
           ? <span className={s.lime}>Passed the M-tier gate in the cloud sweep ({version ?? "champion"}).</span>
@@ -144,6 +151,7 @@ export const LessonCard = memo(function LessonCard({
   };
   return (
     <PixelWindow as="aside" label={`${displayName(card.name)} lesson`} lifted
+      ribbon={{ text: <>{familyLabel(card.family)}<span style={{ marginLeft: "auto" }}>LV <PixelNum value={card.depth + 1} /></span></>, color: chromeSwatch(card.family) }}
       className={mobile ? "absolute inset-x-2 bottom-2 z-20 flex max-h-[55%]" : "absolute right-4 top-4 z-20 flex w-[380px] max-h-[calc(100%-32px)]"}
       bodyClassName={`${s.scroll} min-h-0 flex-1`}>
       <div className={`${s.pad} flex flex-col gap-4`}>
@@ -152,10 +160,6 @@ export const LessonCard = memo(function LessonCard({
           <span className={s.portrait}><PixelEmblem name={card.name} scale={3} color={UI.gold} /></span>
           <div className="min-w-0 flex-1">
             <h2 className={`${s.t30} break-words`}>{displayName(card.name)}</h2>
-            <p className={`${s.t16} flex flex-wrap items-center gap-x-2`}>
-              <span className={s.gold}>LV <PixelNum value={card.depth + 1} /></span>
-              <span className="flex items-center gap-1.5"><span className={s.swatch} style={{ background: chromeSwatch(card.family) }} />{familyLabel(card.family)}</span>
-            </p>
             <p className={`${s.t14} ${card.state === "champion" ? s.lime : card.state === "provisional" ? s.gold : s.dim}`}>
               {EVIDENCE_COPY[card.state]}
             </p>
@@ -167,8 +171,8 @@ export const LessonCard = memo(function LessonCard({
         {/* 2 · anatomy + the one idea it adds */}
         <section>
           <h3 className={s.h3}>How it thinks</h3>
-          <div className={s.plate} onPointerEnter={() => setPlaying(true)} onPointerLeave={() => setPlaying(false)}>
-            <Anatomy stages={schematicFor(card.name)} animate={!still && playing} size={mobile ? 320 : 324} labelPx={13}
+          <div className={s.plate} style={{ fontFamily: "var(--font-hybrid-round), system-ui" }} onPointerEnter={() => setPlaying(true)} onPointerLeave={() => setPlaying(false)}>
+            <Anatomy stages={schematicFor(card.name)} animate={!still && playing} size={mobile ? 320 : 324} labelPx={14}
               palette={{ node: UI.text, edge: UI.dim, active: UI.gold, text: UI.text, accent: UI.cyan, fill: UI.panel }}
               title={`${displayName(card.name)} — one forward pass`} />
           </div>

@@ -30,15 +30,16 @@ import { GROUND } from "./art.tsx";
 const px = (ramp: keyof typeof PXR, i: number) => PX[PXR[ramp][Math.max(0, Math.min(PXR[ramp].length - 1, i < 0 ? PXR[ramp].length + i : i))]];
 export const UI = {
   ink: px("ocean", 0),        // outlines, deepest panel
-  panelDeep: px("ocean", 1),
-  panelShade: px("ocean", 1),
-  panel: px("ocean", 2),      // window fill
-  panelLit: px("ocean", 3),   // lit band under the top edge
-  panelHi: px("ocean", 4),    // warm-lit rim, top/left
+  panelDeep: px("ocean", 0),
+  panelShade: "#24265c",      // cool inner shade (ocean 0↔1 midpoint)
+  panel: px("ocean", 1),      // deep indigo body
+  panelLit: px("ocean", 3),   // inner lit bevel, top/left
+  panelHi: px("ocean", 4),    // outer lit bevel, top/left
   text: px("ui", 1),          // warm paper white
   dim: px("snow", 3),         // secondary text (≥4.5:1 on panel)
   gold: px("gold", 3),        // headings, atom names, stars
   goldLit: px("gold", 4),
+  goldShade: px("gold", 1),
   cyan: px("shallow", 3),
   cyanHi: px("shallow", 5),
   cyanShade: px("shallow", 1),

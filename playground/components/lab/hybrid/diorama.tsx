@@ -11,8 +11,8 @@ import { samplePolyline, type Box, type Pt, type World, type WorldNode } from "@
 import type { EvidenceState } from "@/components/lab/shared/card-model";
 import { NEXT_ERA, RUINS } from "@/components/lab/shared/eggs";
 import {
-  AtomSpot, BIOME, CapitalSpot, CritterArt, FogIsland, HOUSES, LevelSpot, Mountains, PaperBoat, PaperDragon,
-  PaperTrain, Pier, Ruins, SET_PIECES, SteamBoat, CRITTER_WALK, P, R,
+  AtomSpot, BIOME, CapitalSpot, CloudShadow, CritterArt, FogIsland, HOUSES, LevelSpot, Mountains, PaperBoat, PaperCloud,
+  PaperDragon, PaperTrain, Pier, Ruins, SET_PIECES, SteamBoat, CRITTER_WALK, P, R,
 } from "@/components/lab/paper/art";
 import { CRITTER } from "@/components/lab/shared/critter";
 import { HybridDefs, PaperRoads, SPOT_R, groundOf, spotScale } from "./art.tsx";
@@ -84,7 +84,7 @@ const Bridges = memo(function Bridges({ world }: { world: World }) {
 // ── stand-up props: set-pieces, biome dressing, houses, mountains, harbours ──
 interface Prop { y: number; key: string; node: ReactNode }
 
-function buildProps(world: World, showSecrets: boolean, sailing: string[]): Prop[] {
+function buildProps(world: World, showSecrets: boolean, sailing: string[], steamers: number): Prop[] {
   const out: Prop[] = [];
   const put = (key: string, w: Pt, f: (x: number, y: number) => ReactNode) => {
     const p = proj(w);
@@ -107,7 +107,11 @@ function buildProps(world: World, showSecrets: boolean, sailing: string[]): Prop
     put(`d-${d.tile}`, { x, y }, (px, py) => <b.C x={px} y={py} size={Math.round(b.H * 0.5 * d.scale)} />);
   });
   // cities: one house per model built on the atom
+  // (never inside a spot's clearance disc: spot radius, lifted ×1.3 when focused, + 24px)
+  const clear = world.nodes.map((n) => ({ c: n.center, r: (n.atom ? SPOT_R.atom : SPOT_R.town) * 1.3 + 24 }));
   for (const c of world.cities) c.blocks.forEach((b, i) => {
+    const bx = b.x + b.w / 2, by = b.y + b.h;
+    if (clear.some((q) => Math.hypot(q.c.x - bx, (q.c.y - by) * 1.4) < q.r)) return;
     const h = HOUSES[(i + c.node.length) % HOUSES.length];
     put(`h-${c.node}-${i}`, { x: b.x + b.w / 2, y: b.y + b.h }, (x, y) => <h.C x={x} y={y} size={Math.round(h.H * 0.42)} />);
   });
@@ -122,14 +126,10 @@ function buildProps(world: World, showSecrets: boolean, sailing: string[]): Prop
     for (let i = 0; i < Math.min(3, n); i++) {
       put(`b-${hi}-${i}`, { x: h.pt.x + 28 + i * 34, y: h.pt.y + 34 + (i % 2) * 18 }, (x, y) => <PaperBoat x={x} y={y} size={34} />);
     }
-    if (n > 0) {
-      put(`bn-${hi}`, { x: h.pt.x + 28 + Math.min(3, n) * 34, y: h.pt.y + 20 }, (x, y) => (
-        <g transform={`translate(${x} ${y - 10})`}>
-          <circle r={11} fill={P.die} stroke={P.ink} strokeWidth={1.6} />
-          <text textAnchor="middle" dominantBaseline="central" fontSize={13} fontWeight={700} fill={P.ink}>{n}</text>
-        </g>
-      ));
-    }
+  });
+  // steamboats at sea: one per composition joining three or more models
+  world.seaSlots.slice(0, steamers).forEach((b, i) => {
+    put(`st-${i}`, { x: b.x + b.w * 0.55, y: b.y + b.h * 0.6 }, (x, y) => <SteamBoat x={x} y={y} size={58} trail />);
   });
   // secrets (only once the learner pans or zooms away from the framed view)
   if (showSecrets) {
@@ -162,9 +162,20 @@ function buildProps(world: World, showSecrets: boolean, sailing: string[]): Prop
   return out.sort((a, b) => a.y - b.y);
 }
 
-const Props = memo(function Props({ world, showSecrets, sailing }: { world: World; showSecrets: boolean; sailing: string }) {
-  const items = useMemo(() => buildProps(world, showSecrets, sailing ? sailing.split("|") : []), [world, showSecrets, sailing]);
+const Props = memo(function Props({ world, showSecrets, sailing, steamers }: { world: World; showSecrets: boolean; sailing: string; steamers: number }) {
+  const items = useMemo(() => buildProps(world, showSecrets, sailing ? sailing.split("|") : [], steamers), [world, showSecrets, sailing, steamers]);
   return <g>{items.map((it) => <g key={it.key}>{it.node}</g>)}</g>;
+});
+
+// ── clouds: weather over the sea slots (no data), with their ground shadow ──
+const Clouds = memo(function Clouds({ world }: { world: World }) {
+  const spots = world.seaSlots.slice(0, 3).map((b, i) => proj({ x: b.x + b.w * (i % 2 ? 0.3 : 0.7), y: b.y + b.h * 0.3 }));
+  return (
+    <g aria-hidden pointerEvents="none">
+      {spots.map((p, i) => <CloudShadow key={`s${i}`} x={f1(p.x + 40)} y={f1(p.y + 120)} size={90} variant={i} />)}
+      {spots.map((p, i) => <PaperCloud key={i} x={f1(p.x)} y={f1(p.y)} size={80 - i * 12} variant={i} />)}
+    </g>
+  );
 });
 
 // ── level spots (data) ──────────────────────────────────────────────────────
@@ -271,6 +282,10 @@ export interface DioramaProps {
   atomPx: number;
   /** show the secret islands (the learner panned / zoomed away from the framed view) */
   showSecrets: boolean;
+  /** the camera has landed: heavy focus layers (step-back, lifted roads) mount only then */
+  landed: boolean;
+  /** compositions joining ≥3 models (steamboats at sea) */
+  steamers: number;
   onHover: (name: string | null) => void;
 }
 
@@ -278,8 +293,8 @@ export const Diorama = memo(function Diorama(p: DioramaProps) {
   const { world, states, stations, focus, zoom, lineageNames, lineageRoads, quest, scale, still } = p;
   const outlines = useMemo(() => regionOutlines(world), [world]);
   const capitals = useMemo(() => new Set(world.cities.filter((c) => c.capital).map((c) => c.node)), [world]);
-  const nodeView = zoom === "node" && focus;
-  const regionView = zoom === "region" && focus;
+  const nodeView = zoom === "node" && focus && p.landed;
+  const regionView = zoom === "region" && focus && p.landed;
   const liftKey = nodeView ? [...lineageRoads].sort().join("|") : "";
   const liftedRoads = useMemo(() => world.roads.filter((r) => liftKey.split("|").includes(r.id)), [world, liftKey]);
   const ordered = useMemo(() => [...world.nodes].sort((a, b) => a.center.y - b.center.y), [world]);
@@ -297,7 +312,7 @@ export const Diorama = memo(function Diorama(p: DioramaProps) {
       <Ground world={world} outlines={outlines} showSecrets={p.showSecrets} />
       <BaseRoads world={world} skip={liftKey} />
       <Bridges world={world} />
-      <Props world={world} showSecrets={p.showSecrets} sailing={sailing} />
+      <Props world={world} showSecrets={p.showSecrets} sailing={sailing} steamers={p.steamers} />
       <g>{ordered.filter((n) => !lifted(n) && n.name !== focus?.name).map(spot)}</g>
       {/* value step-back: darken what is out of focus (never a milky veil) */}
       {regionView && (
@@ -331,12 +346,14 @@ export const Diorama = memo(function Diorama(p: DioramaProps) {
         <g key={p.konami.t0} aria-hidden pointerEvents="none">
           {world.nodes.map((n) => {
             const c = proj(n.center);
-            const rr = (n.atom ? SPOT_R.atom : SPOT_R.town) + 8;
-            return <ellipse key={n.name} cx={c.x} cy={c.y} rx={rr} ry={rr * TILT} fill="none" stroke={R.gold[1]} strokeWidth={6}
+            // screen-constant ring (≥ 28px radius, 5px stroke) so the wave reads at whole-map zoom
+            const rr = Math.max((n.atom ? SPOT_R.atom : SPOT_R.town) + 8, 28 / Math.max(scale, 0.05));
+            return <ellipse key={n.name} cx={c.x} cy={c.y} rx={rr} ry={rr * TILT} fill="none" stroke={R.gold[1]} strokeWidth={5 / Math.max(scale, 0.05)}
               className={s.pulse} style={{ animationDelay: `${p.konami!.schedule[n.name] ?? 0}ms` }} />;
           })}
         </g>
       )}
+      <Clouds world={world} />
       {p.critter && focus && zoom !== "overview" && quest.length > 0 && (
         <Critter path={quest} still={still} walkKey={focus.name} training={p.critter.training} />
       )}

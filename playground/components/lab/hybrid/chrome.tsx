@@ -8,8 +8,10 @@ import s from "./hybrid.module.css";
 import { frameUrl, spriteRects, HAND, type FrameKind, type Sprite } from "./pixel-art.ts";
 
 export function PixelWindow({
-  kind = "window", title, lifted, className, style, bodyClassName, children, as = "section", label,
+  kind = "window", title, ribbon, lifted, className, style, bodyClassName, children, as = "section", label,
 }: {
+  /** header ribbon: text on the family's cardstock colour */
+  ribbon?: { text: ReactNode; color: string };
   kind?: FrameKind;
   title?: ReactNode;
   lifted?: boolean;
@@ -24,6 +26,7 @@ export function PixelWindow({
   return (
     <Tag data-chrome="1" aria-label={label} className={`${s.card} ${lifted ? s.cardLifted : ""} ${className ?? ""}`} style={style}>
       <div className={`${s.win} ${bodyClassName ?? ""}`} style={{ borderImageSource: frameUrl(kind) }}>
+        {ribbon && <div className={s.ribbon} style={{ background: ribbon.color }}>{ribbon.text}</div>}
         {title != null && <div className={`${s.t15} ${s.gold} px-2 pt-0.5`}>{title}</div>}
         {children}
       </div>
