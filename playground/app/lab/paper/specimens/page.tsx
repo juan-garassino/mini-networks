@@ -10,16 +10,16 @@
 //   ?view=diorama             only the diorama
 //   ?still=1                  freeze the few animated specimens
 import { useEffect, useMemo, useState, useSyncExternalStore } from "react";
-import { ArtDefs, CATALOG, ArtDiorama, type Specimen } from "@/components/lab/paper/art";
+import { ArtDefs, CATALOG, WORLD_CATALOG, ArtDiorama, WorldDiorama, type Specimen } from "@/components/lab/paper/art";
 
-interface Query { groups: string[] | null; items: string[] | null; scales: number[]; view: "all" | "diorama" | "sheet"; still: boolean }
+interface Query { groups: string[] | null; items: string[] | null; scales: number[]; view: "all" | "diorama" | "sheet" | "world"; still: boolean }
 
 function parse(search: string): Query {
   const p = new URLSearchParams(search);
   const list = (k: string) => (p.get(k) ? p.get(k)!.split(",").map((s) => s.trim()).filter(Boolean) : null);
   const scales = (list("scale") ?? ["1", "2", "4"]).map(Number).filter((n) => n > 0);
   const v = p.get("view");
-  return { groups: list("group"), items: list("item"), scales, view: v === "diorama" || v === "sheet" ? v : "all", still: p.get("still") === "1" };
+  return { groups: list("group"), items: list("item"), scales, view: v === "diorama" || v === "sheet" || v === "world" ? v : "all", still: p.get("still") === "1" };
 }
 
 const subscribe = (cb: () => void) => { window.addEventListener("popstate", cb); return () => window.removeEventListener("popstate", cb); };
@@ -59,7 +59,7 @@ export default function PaperSpecimens() {
 
   const groups = useMemo(() => {
     if (!q) return [];
-    return CATALOG.filter((g) => !q.groups || q.groups.includes(g.id))
+    return [...CATALOG, ...WORLD_CATALOG].filter((g) => !q.groups || q.groups.includes(g.id))
       .map((g) => ({ ...g, items: g.items.filter((it) => !q.items || q.items.includes(it.id)) }))
       .filter((g) => g.items.length);
   }, [q]);
@@ -82,7 +82,7 @@ export default function PaperSpecimens() {
               </p>
             </header>
           )}
-          {q.view !== "diorama" && groups.map((g) => (
+          {q.view !== "diorama" && q.view !== "world" && groups.map((g) => (
             <section key={g.id} className="mb-12">
               <h2 className="text-[28px] leading-tight" style={{ fontFamily: "var(--paper-display), system-ui" }}>{g.title}</h2>
               <p className="mb-5 mt-1 max-w-[80ch] text-[15px] text-[#5A4B3C]">{g.note}</p>
@@ -99,6 +99,15 @@ export default function PaperSpecimens() {
               </div>
             </section>
           ))}
+          {(q.view === "world" || (q.view === "all" && !q.groups && !q.items)) && (
+            <section className="mb-12">
+              <h2 className="text-[28px] leading-tight" style={{ fontFamily: "var(--paper-display), system-ui" }}>Storybook world</h2>
+              <p className="mb-5 mt-1 max-w-[80ch] text-[15px] text-[#5A4B3C]">
+                The six lands staged from the library, after the owner&apos;s storybook map: raised slabs with layered cliffs, forests, the Wild West, the lava forge, the neon city and the dome city.
+              </p>
+              <WorldDiorama still={q.still} />
+            </section>
+          )}
           {(q.view === "diorama" || (q.view === "all" && !q.groups && !q.items)) && (
             <section className="mb-12">
               <h2 className="text-[28px] leading-tight" style={{ fontFamily: "var(--paper-display), system-ui" }}>Diorama</h2>

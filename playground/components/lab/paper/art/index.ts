@@ -6,6 +6,10 @@
 //   state: "champion" | "trained" | "untrained" | "provisional"
 // Set-pieces by family: SET_PIECES[family].C; biome props: BIOME[family][i].C.
 // Atom landmarks: <AtomLandmark name state size x y /> — 16 distinct metaphors (LANDMARKS[name]).
+// Storybook world (paper-map reference): LandSlab/Waterfall/LavaRiver/Rails take parent-unit paths;
+//   FloatingIsland, SeaStack, Mesa, Conifer, Broadleaf, ForestCluster, Deer, CrystalSpire, Coral, Jellyfish,
+//   StoryCastle, WaterwheelHouse, Storefront, Windpump, Chessboard, HedgeMaze, LavaCastle, NeonTower, GlassDome,
+//   SailingShip, SeaSerpent are <Art> props; TitleCartouche, FamilySign, ModelTag, CompassRose, ScaleBar are centred furniture.
 // Critter: <CritterArt pose="idle|walk0..3|train" facing={±1} />, <CritterWalk still />.
 // Materials: <Cutout d material="paper|card|felt|sticker" shadow="drop|ground|none" />, <StandUp foot />.
 export * from "./palette";
@@ -22,5 +26,12 @@ export * from "./critter";
 export * from "./secrets";
 export * from "./landmarks";
 export { Plaque } from "./landmark-kit";
+export * from "./world-terrain";
+export * from "./world-flora";
+export * from "./world-built";
+export * from "./world-sea";
+export * from "./world-furniture";
+export * from "./world-diorama";
+export { STORY_FONT } from "./storyfont";
 export * from "./catalog";
 export * from "./diorama";

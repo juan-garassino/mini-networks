@@ -76,3 +76,24 @@ heights are the catalogue's `map` field (`catalog.tsx` is the machine-readable l
 4. Cast shadows extend ≈0.5·H to the right and 0.18·H below the base — leave room or let
    them overlap roads (they're translucent).
 5. `still=1`: nothing in the library animates on its own except `CritterWalk` (pass `still`).
+
+## Storybook world (paper-map reference, 2026-09-29)
+
+Warm, less saturated `S.*` ramps + `INK` (palette.ts); `STORY_FONT` (Alegreya via next/font,
+applied inline). `Cutout`/`StandUp` take `ink={w}` for the storybook outline.
+Surfaces in ArtDefs: `pa-sea-paint` (painted wave strokes), `pa-s-grass|autumn|snow|desert|lavarock|night|reef`, `pa-cliff`, `pa-parch`.
+
+| API | Units | What |
+|---|---|---|
+| `landPath(points, seed, amp)` | parent | organic coastline path from control points |
+| `<LandSlab d depth top layers foam lip>` | parent | raised land: stacked cliff bands, foam, grass lip, ink; `top` = grass·autumn·snow·desert·lava·night·reef. Nest a smaller one for a terrace |
+| `<Waterfall x y h w>` · `<LavaRiver d w>` · `<Rails d ground>` | parent | falls off a cliff lip; glowing lava path; railway |
+| `FloatingIsland {top trees children}` · `SeaStack` · `Mesa {wide}` · `SnowPeaks` · `LavaCone` | Art | terrain props (children of FloatingIsland sit on its plate, design units) |
+| `Conifer {snow}` · `Broadleaf {autumn}` · `ForestCluster {x y w h n seed mix tree snow}` · `Deer` · `CrystalSpire` · `Coral` · `Jellyfish` | Art / parent (cluster) | vegetation + creatures |
+| `StoryCastle` · `WaterwheelHouse` · `Storefront {variant 0–3}` · `Windpump` · `Chessboard` · `HedgeMaze` · `LavaCastle` · `NeonTower {variant 0–3}` · `GlassDome` | Art | the lands' buildings |
+| `SailingShip {facing}` · `SeaSerpent` | Art | sea |
+| `TitleCartouche {x y title lines}` · `FamilySign {x y family scale}` (+`FAMILY_SIGN`) · `ModelTag {x y text}` · `CompassRose {x y r}` · `ScaleBar {x y w label}` | parent, centred | furniture |
+| `WorldDiorama` | — | the six lands staged after the reference (specimen `?view=world`) |
+
+Perf: a ForestCluster is ~15 nodes per tree — the diorama's ~700 trees are a showcase; on the
+live map keep clusters to 20–40 trees and memoise the layer.

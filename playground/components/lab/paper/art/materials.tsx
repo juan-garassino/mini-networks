@@ -179,6 +179,60 @@ export function ArtDefs() {
         <stop offset={0.55} stopColor="#E9EEF8" />
         <stop offset={1} stopColor="#B9C4DE" />
       </linearGradient>
+
+      {/* ── storybook surfaces (the painted world map) ── */}
+      <pattern id="pa-sea-paint" width={200} height={120} patternUnits="userSpaceOnUse">
+        <rect width={200} height={120} fill="#4C8FB9" />
+        <g fill="#72B2D0" fillOpacity={0.32}><ellipse cx="41.7" cy="38.9" rx="17.8" ry="7.7" /><ellipse cx="101.5" cy="0.1" rx="35.8" ry="11.8" /><ellipse cx="43.6" cy="88.0" rx="37.7" ry="6.0" /><ellipse cx="17.0" cy="36.0" rx="31.9" ry="7.6" /><ellipse cx="112.0" cy="96.7" rx="41.9" ry="9.8" /><ellipse cx="178.9" cy="67.1" rx="19.9" ry="7.9" /><ellipse cx="99.8" cy="45.2" rx="36.1" ry="6.9" /><ellipse cx="141.7" cy="62.3" rx="21.0" ry="7.3" /><ellipse cx="11.1" cy="69.3" rx="33.5" ry="11.5" /></g>
+        <g fill="#356F9B" fillOpacity={0.22}><ellipse cx="150" cy="30" rx="40" ry="9" /><ellipse cx="40" cy="95" rx="36" ry="8" /></g>
+        <path d="M98.8 32.1q7.0 -8.4 13.9 0q4.2 5.8 7.7 -1.7M124.3 100.7q3.1 -3.5 6.2 0q1.9 2.5 3.4 -0.7M55.5 17.2q4.7 -4.9 9.4 0q2.8 3.4 5.2 -1.0M22.5 0.7q3.4 -3.4 6.8 0q2.0 2.4 3.8 -0.7M86.0 95.4q3.8 -2.9 7.6 0q2.3 2.0 4.2 -0.6M53.0 97.3q4.0 -4.3 8.1 0q2.4 3.0 4.5 -0.9M183.0 54.1q6.8 -6.2 13.7 0q4.1 4.3 7.5 -1.2M15.1 28.1q6.8 -6.5 13.6 0q4.1 4.6 7.5 -1.3M137.6 79.8q5.3 -4.6 10.7 0q3.2 3.2 5.9 -0.9M81.8 109.2q6.8 -5.3 13.6 0q4.1 3.7 7.5 -1.1M75.1 51.8q3.1 -3.2 6.2 0q1.8 2.2 3.4 -0.6M71.7 12.9q4.1 -4.2 8.2 0q2.5 3.0 4.5 -0.8M57.8 16.4q5.7 -5.2 11.5 0q3.4 3.7 6.3 -1.0M116.2 110.4q4.5 -3.4 9.1 0q2.7 2.4 5.0 -0.7M19.6 27.7q7.0 -5.5 14.1 0q4.2 3.8 7.7 -1.1M95.5 95.3q4.7 -4.4 9.5 0q2.8 3.1 5.2 -0.9M117.3 115.8q3.4 -3.0 6.8 0q2.0 2.1 3.7 -0.6M61.5 13.2q6.2 -4.8 12.3 0q3.7 3.3 6.8 -1.0M154.1 86.7q3.8 -3.7 7.6 0q2.3 2.6 4.2 -0.7M121.5 9.3q3.7 -2.9 7.4 0q2.2 2.0 4.0 -0.6M89.1 111.6q5.7 -5.6 11.3 0q3.4 3.9 6.2 -1.1M31.6 77.4q4.8 -4.8 9.6 0q2.9 3.4 5.3 -1.0" fill="none" stroke="#FFFFFF" strokeOpacity={0.72} strokeWidth={1.3} strokeLinecap="round" />
+        <path d="M116.6 33.5q2.8 -1.2 5.7 0M36.7 48.6q4.4 -1.2 8.7 0M25.7 89.5q3.4 -1.2 6.8 0M40.5 34.4q5.2 -1.2 10.4 0M29.0 13.2q5.2 -1.2 10.4 0M54.2 62.0q5.8 -1.2 11.6 0M150.9 48.0q2.2 -1.2 4.5 0M193.0 35.6q3.5 -1.2 7.0 0M139.5 58.0q2.8 -1.2 5.7 0M181.5 78.2q6.0 -1.2 12.0 0M190.9 104.7q4.6 -1.2 9.1 0M33.1 7.8q3.0 -1.2 6.1 0M144.6 51.7q2.4 -1.2 4.7 0M18.8 93.6q5.7 -1.2 11.4 0M35.8 65.0q3.6 -1.2 7.1 0M34.9 38.4q4.4 -1.2 8.7 0M71.8 96.3q2.0 -1.2 4.0 0M75.8 12.7q5.1 -1.2 10.3 0" fill="none" stroke="#AED7E6" strokeOpacity={0.8} strokeWidth={1.1} strokeLinecap="round" />
+      </pattern>
+      <pattern id="pa-s-grass" width={60} height={60} patternUnits="userSpaceOnUse">
+        <rect width={60} height={60} fill="#8AAE50" />
+        <g fill="#7A9E45" fillOpacity={0.7}><ellipse cx="26.8" cy="54.4" rx="10.8" ry="4.1" /><ellipse cx="2.5" cy="31.8" rx="10.5" ry="4.3" /><ellipse cx="29.3" cy="49.9" rx="6.4" ry="4.2" /><ellipse cx="20.2" cy="4.8" rx="8.1" ry="3.0" /><ellipse cx="14.3" cy="30.7" rx="8.4" ry="5.1" /><ellipse cx="27.8" cy="13.2" rx="5.9" ry="5.8" /><ellipse cx="9.2" cy="45.1" rx="10.5" ry="4.8" /></g>
+        <path d="M39.9 1.7l0.9 -3M25.9 17.4l0.6 -3M28.2 9.9l-0.2 -3M17.2 59.8l-0.6 -3M29.3 4.5l0.1 -3M48.7 2.4l-0.3 -3M52.1 48.8l-0.1 -3M1.7 29.9l-0.4 -3M30.6 49.5l-0.8 -3M55.9 59.0l0.4 -3M7.2 40.0l0.3 -3M59.6 46.0l0.8 -3M40.4 13.8l-0.4 -3M56.9 52.2l-0.1 -3M37.5 6.8l0.9 -3M30.4 19.0l0.8 -3M36.0 57.6l0.6 -3M49.6 31.8l1.0 -3M37.4 20.3l-0.6 -3M51.4 4.9l0.3 -3M43.3 1.1l0.5 -3M45.3 44.8l-1.0 -3M5.9 34.9l0.8 -3M20.2 29.7l-0.1 -3M29.0 46.5l-0.2 -3M41.4 44.3l0.5 -3" stroke="#557A38" strokeOpacity={0.7} strokeWidth={0.9} strokeLinecap="round" />
+      </pattern>
+      <pattern id="pa-s-autumn" width={60} height={60} patternUnits="userSpaceOnUse">
+        <rect width={60} height={60} fill="#A3A64E" />
+        <g fill="#C9A24A" fillOpacity={0.55}><ellipse cx="26.8" cy="54.4" rx="10.8" ry="4.1" /><ellipse cx="2.5" cy="31.8" rx="10.5" ry="4.3" /><ellipse cx="29.3" cy="49.9" rx="6.4" ry="4.2" /><ellipse cx="20.2" cy="4.8" rx="8.1" ry="3.0" /><ellipse cx="14.3" cy="30.7" rx="8.4" ry="5.1" /><ellipse cx="27.8" cy="13.2" rx="5.9" ry="5.8" /><ellipse cx="9.2" cy="45.1" rx="10.5" ry="4.8" /></g>
+        <path d="M39.9 1.7l0.9 -3M25.9 17.4l0.6 -3M28.2 9.9l-0.2 -3M17.2 59.8l-0.6 -3M29.3 4.5l0.1 -3M48.7 2.4l-0.3 -3M52.1 48.8l-0.1 -3M1.7 29.9l-0.4 -3M30.6 49.5l-0.8 -3M55.9 59.0l0.4 -3M7.2 40.0l0.3 -3M59.6 46.0l0.8 -3M40.4 13.8l-0.4 -3M56.9 52.2l-0.1 -3M37.5 6.8l0.9 -3M30.4 19.0l0.8 -3M36.0 57.6l0.6 -3M49.6 31.8l1.0 -3M37.4 20.3l-0.6 -3M51.4 4.9l0.3 -3M43.3 1.1l0.5 -3M45.3 44.8l-1.0 -3M5.9 34.9l0.8 -3M20.2 29.7l-0.1 -3M29.0 46.5l-0.2 -3M41.4 44.3l0.5 -3" stroke="#6E7A36" strokeOpacity={0.7} strokeWidth={0.9} strokeLinecap="round" />
+      </pattern>
+      <pattern id="pa-s-snow" width={60} height={60} patternUnits="userSpaceOnUse">
+        <rect width={60} height={60} fill="#EEF3F8" />
+        <g fill="#D3DFEA" fillOpacity={0.8}><ellipse cx="26.8" cy="54.4" rx="10.8" ry="4.1" /><ellipse cx="2.5" cy="31.8" rx="10.5" ry="4.3" /><ellipse cx="29.3" cy="49.9" rx="6.4" ry="4.2" /><ellipse cx="20.2" cy="4.8" rx="8.1" ry="3.0" /><ellipse cx="14.3" cy="30.7" rx="8.4" ry="5.1" /><ellipse cx="27.8" cy="13.2" rx="5.9" ry="5.8" /><ellipse cx="9.2" cy="45.1" rx="10.5" ry="4.8" /></g>
+      </pattern>
+      <pattern id="pa-s-desert" width={60} height={60} patternUnits="userSpaceOnUse">
+        <rect width={60} height={60} fill="#DDA560" />
+        <g fill="#E8B46C" fillOpacity={0.6}><ellipse cx="26.8" cy="54.4" rx="10.8" ry="4.1" /><ellipse cx="2.5" cy="31.8" rx="10.5" ry="4.3" /><ellipse cx="29.3" cy="49.9" rx="6.4" ry="4.2" /><ellipse cx="20.2" cy="4.8" rx="8.1" ry="3.0" /><ellipse cx="14.3" cy="30.7" rx="8.4" ry="5.1" /><ellipse cx="27.8" cy="13.2" rx="5.9" ry="5.8" /><ellipse cx="9.2" cy="45.1" rx="10.5" ry="4.8" /></g>
+        <path d="M39.9 1.7l0.9 -3M25.9 17.4l0.6 -3M28.2 9.9l-0.2 -3M17.2 59.8l-0.6 -3M29.3 4.5l0.1 -3M48.7 2.4l-0.3 -3M52.1 48.8l-0.1 -3M1.7 29.9l-0.4 -3M30.6 49.5l-0.8 -3M55.9 59.0l0.4 -3M7.2 40.0l0.3 -3M59.6 46.0l0.8 -3M40.4 13.8l-0.4 -3M56.9 52.2l-0.1 -3M37.5 6.8l0.9 -3M30.4 19.0l0.8 -3M36.0 57.6l0.6 -3M49.6 31.8l1.0 -3M37.4 20.3l-0.6 -3M51.4 4.9l0.3 -3M43.3 1.1l0.5 -3M45.3 44.8l-1.0 -3M5.9 34.9l0.8 -3M20.2 29.7l-0.1 -3M29.0 46.5l-0.2 -3M41.4 44.3l0.5 -3" stroke="#A86B39" strokeOpacity={0.35} strokeWidth={0.8} strokeLinecap="round" />
+      </pattern>
+      <pattern id="pa-s-lavarock" width={80} height={80} patternUnits="userSpaceOnUse">
+        <rect width={80} height={80} fill="#3A3038" />
+        <path d="M66.9 12.8Q58.6 18.8 70.4 12.7Q71.0 10.2 73.2 19.4Q68.7 9.6 85.5 28.1M66.6 0.7Q64.9 3.2 67.0 1.1Q67.0 -2.4 78.4 -9.7Q75.4 0.3 76.1 3.1M34.9 48.0Q30.2 41.9 33.3 43.6Q30.4 33.7 41.8 40.6Q43.2 38.1 29.8 43.7" fill="none" stroke="#F0672B" strokeOpacity={0.3} strokeWidth={2.6} strokeLinejoin="round" />
+        <path d="M66.9 12.8Q58.6 18.8 70.4 12.7Q71.0 10.2 73.2 19.4Q68.7 9.6 85.5 28.1M66.6 0.7Q64.9 3.2 67.0 1.1Q67.0 -2.4 78.4 -9.7Q75.4 0.3 76.1 3.1M34.9 48.0Q30.2 41.9 33.3 43.6Q30.4 33.7 41.8 40.6Q43.2 38.1 29.8 43.7" fill="none" stroke="#FFA63E" strokeOpacity={0.8} strokeWidth={0.8} strokeLinejoin="round" />
+        <g fill="#FFA63E" fillOpacity={0.7}><circle cx="25.2" cy="69.2" r="1.4" /><circle cx="63.6" cy="51.2" r="0.7" /><circle cx="37.7" cy="4.8" r="0.7" /><circle cx="57.9" cy="31.4" r="1.3" /><circle cx="22.4" cy="17.2" r="1.2" /><circle cx="67.3" cy="2.8" r="0.6" /><circle cx="9.7" cy="16.8" r="1.1" /><circle cx="60.1" cy="21.8" r="1.5" /></g>
+      </pattern>
+      <pattern id="pa-s-night" width={60} height={60} patternUnits="userSpaceOnUse">
+        <rect width={60} height={60} fill="#3E4270" />
+        <g fill="#2D3058" fillOpacity={0.7}><ellipse cx="26.8" cy="54.4" rx="10.8" ry="4.1" /><ellipse cx="2.5" cy="31.8" rx="10.5" ry="4.3" /><ellipse cx="29.3" cy="49.9" rx="6.4" ry="4.2" /><ellipse cx="20.2" cy="4.8" rx="8.1" ry="3.0" /><ellipse cx="14.3" cy="30.7" rx="8.4" ry="5.1" /><ellipse cx="27.8" cy="13.2" rx="5.9" ry="5.8" /><ellipse cx="9.2" cy="45.1" rx="10.5" ry="4.8" /></g>
+        <path d="M0 30 H60 M30 0 V60" stroke="#66E9F6" strokeOpacity={0.25} strokeWidth={0.8} />
+      </pattern>
+      <pattern id="pa-s-reef" width={60} height={60} patternUnits="userSpaceOnUse">
+        <rect width={60} height={60} fill="#3C9CA0" />
+        <g fill="#2B7480" fillOpacity={0.5}><ellipse cx="26.8" cy="54.4" rx="10.8" ry="4.1" /><ellipse cx="2.5" cy="31.8" rx="10.5" ry="4.3" /><ellipse cx="29.3" cy="49.9" rx="6.4" ry="4.2" /><ellipse cx="20.2" cy="4.8" rx="8.1" ry="3.0" /><ellipse cx="14.3" cy="30.7" rx="8.4" ry="5.1" /><ellipse cx="27.8" cy="13.2" rx="5.9" ry="5.8" /><ellipse cx="9.2" cy="45.1" rx="10.5" ry="4.8" /></g>
+        <path d="M51.1 3.0q5.3 -4.8 10.6 0q3.2 3.2 5.8 -1.1M58.3 8.3q5.8 -5.2 11.6 0q3.5 3.5 6.4 -1.2M106.0 56.4q2.7 -2.5 5.4 0q1.6 1.6 3.0 -0.5M21.7 65.5q4.8 -4.4 9.7 0q2.9 2.9 5.3 -1.0M59.5 49.6q4.2 -3.8 8.4 0q2.5 2" fill="none" stroke="#A2E2DA" strokeOpacity={0.5} strokeWidth={0.9} />
+      </pattern>
+      <pattern id="pa-cliff" width={64} height={44} patternUnits="userSpaceOnUse">
+        <path d="M44.1 -2L43.0 13.7L41.4 26.0L42.2 37.9L43.9 48.5M42.3 -2L42.1 6.1L43.7 15.1L44.7 24.0L43.8 37.3L44.9 43.4L44.0 51.5M15.7 -2L17.1 6.8L16.7 16.0L15.8 31.8L14.7 41.7L15.6 56.4M41.5 -2L42.1 7.4L41.4 19.2L41.8 33.0L43.5 39.0L42.9 48.5M53.4 -2L55.3 8.8L54.8 14.9L54.0 28.5L52.3 41.1L53.3 47.9M3.2 -2L5.0 13.3L5.1 22.2L6.5 36.8L8.3 48.6M18.8 -2L17.4 11.3L18.5 19.8L16.8 27.2L18.0 36.5L17.7 48.9M20.9 -2L21.9 13.0L23.0 20.0L23.4 35.4L22.9 42.5L21.1 52.5" fill="none" stroke="#2A1B14" strokeOpacity={0.22} strokeWidth={1} strokeLinejoin="round" />
+        <path d="M45.5 4.6l0.6 11.9M43.7 2.5l-0.1 13.9M17.1 17.6l0.0 12.4M42.9 17.5l-0.5 7.4M54.8 10.5l-0.5 13.4M4.6 14.0l0.1 6.9M20.2 2.0l-0.4 13.7M22.3 8.4l0.8 8.5" fill="none" stroke="#FFFFFF" strokeOpacity={0.22} strokeWidth={0.9} strokeLinecap="round" />
+        <path d="M38.3 2.3h14.2M5.0 22.5h14.3M10.5 26.2h7.0M18.2 29.2h8.5" fill="none" stroke="#2A1B14" strokeOpacity={0.2} strokeWidth={1} strokeLinecap="round" />
+      </pattern>
+      {/* parchment for signs and the cartouche */}
+      <pattern id="pa-parch" width={80} height={80} patternUnits="userSpaceOnUse">
+        <rect width={80} height={80} fill="#F2E2C0" />
+        <g fill="#E1CA9C" fillOpacity={0.45}><ellipse cx="26.8" cy="54.4" rx="10.8" ry="4.1" /><ellipse cx="2.5" cy="31.8" rx="10.5" ry="4.3" /><ellipse cx="29.3" cy="49.9" rx="6.4" ry="4.2" /><ellipse cx="20.2" cy="4.8" rx="8.1" ry="3.0" /><ellipse cx="14.3" cy="30.7" rx="8.4" ry="5.1" /><ellipse cx="27.8" cy="13.2" rx="5.9" ry="5.8" /><ellipse cx="9.2" cy="45.1" rx="10.5" ry="4.8" /></g>
+      </pattern>
     </defs>
   );
 }
@@ -257,10 +311,12 @@ export interface CutoutProps {
   grain?: boolean;
   /** felt edge colour (material="felt") */
   fuzz?: string;
+  /** storybook ink outline width (0 = none): a warm brown line on every silhouette piece */
+  ink?: number;
   children?: ReactNode;
 }
 
-export function Cutout({ d, rim = 3, depth = 2.5, material = "paper", shadow = "drop", lift = 1, grain = true, fuzz, children }: CutoutProps) {
+export function Cutout({ d, rim = 3, depth = 2.5, material = "paper", shadow = "drop", lift = 1, grain = true, fuzz, ink = 0, children }: CutoutProps) {
   const ds = Array.isArray(d) ? d : [d];
   const all = ds.join("");
   const side = material === "card" ? P.card : P.dieShade;
@@ -281,6 +337,7 @@ export function Cutout({ d, rim = 3, depth = 2.5, material = "paper", shadow = "
         <path d={all} fill="none" stroke={fuzz} strokeWidth={rim * 1.2 + 1} strokeDasharray="0.1 1.9" strokeLinecap="round" />
       )}
       {children}
+      {ink > 0 && each({ fill: "none", stroke: "#3B2A20", strokeOpacity: 0.85, strokeWidth: ink, strokeLinejoin: "round" })}
       {material === "felt" && <path d={all} fill="url(#pa-knit)" pointerEvents="none" />}
       {grain && <path d={all} fill="url(#pa-fibre)" pointerEvents="none" />}
       {material === "sticker" && <path d={all} fill="url(#pa-gloss)" pointerEvents="none" />}

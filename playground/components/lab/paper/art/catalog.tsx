@@ -15,6 +15,11 @@ import { PaperCloud } from "./sky";
 import { CritterArt, CritterWalk, type CritterPose } from "./critter";
 import { FogIsland, PaperDragon, Ruins, SignBoard } from "./secrets";
 import { Tuft } from "./bits";
+import { FloatingIsland, LandSlab, LavaRiver, Mesa, Rails, SeaStack, Waterfall } from "./world-terrain";
+import { Broadleaf, Conifer, Coral, CrystalSpire, Deer, ForestCluster, Jellyfish } from "./world-flora";
+import { Chessboard, GlassDome, HedgeMaze, LavaCastle, NeonTower, Storefront, StoryCastle, WaterwheelHouse, Windpump } from "./world-built";
+import { SailingShip, SeaSerpent } from "./world-sea";
+import { CompassRose, FamilySign, ModelTag, ScaleBar, TitleCartouche } from "./world-furniture";
 
 export interface Specimen {
   id: string;
@@ -204,3 +209,82 @@ export const CATALOG: SpecimenGroup[] = [
   },
 ];
 
+const art = (id: string, name: string, encodes: string, W: number, H: number, map: number, node: (size: number) => ReactNode): Specimen => ({ id, name, encodes, W, H, map, draw: node });
+/** Flat/parent-unit things drawn in a fixed box, scaled to the cell. */
+const boxed = (id: string, name: string, encodes: string, W: number, H: number, map: number, node: ReactNode): Specimen =>
+  ({ id, name, encodes, W, H, map, draw: (size) => <g transform={`scale(${size / H})`}>{node}</g> });
+const SLAB = "M-60 -40 C-40 -62 20 -66 52 -52 C70 -42 66 -20 44 -12 C10 -2 -40 -4 -58 -16 C-66 -24 -66 -32 -60 -40Z";
+const slab = (top: "grass" | "autumn" | "snow" | "desert" | "lava" | "night" | "reef") => <g transform="translate(0 -32)"><LandSlab d={SLAB} depth={28} top={top} /></g>;
+const seaTile = (node: ReactNode) => <g><rect x={-80} y={-86} width={160} height={96} fill="url(#pa-sea-paint)" rx={6} />{node}</g>;
+
+export const WORLD_CATALOG: SpecimenGroup[] = [
+  {
+    id: "world-terrain",
+    title: "Storybook terrain",
+    note: "Raised land slabs with layered cliff walls (a stack of paper bands), waterfalls, floating islands, sea stacks, mesas, lava rivers and rails.",
+    items: [
+      ...(["grass", "autumn", "snow", "desert", "lava", "night"] as const).map((t) => boxed(`slab-${t}`, `Land slab, ${t}`, "a family's land (LandSlab d={regionPath} top=…)", 160, 96, 96, seaTile(slab(t)))),
+      boxed("waterfall", "Waterfall", "a river leaving the land over the cliff", 160, 96, 96, seaTile(<g>{slab("grass")}<path d="M-20 -60 C-10 -50 0 -46 8 -36" stroke="#72B2D0" strokeWidth={6} fill="none" /><Waterfall x={8} y={-36} h={30} w={12} /></g>)),
+      boxed("lava-river", "Lava river", "the lava forge's flow (ground layer)", 160, 96, 96, <g><rect x={-80} y={-86} width={160} height={96} fill="url(#pa-s-lavarock)" rx={6} /><LavaRiver d="M-70 -70 C-30 -60 -20 -20 20 -30 C50 -38 60 -10 70 0" w={9} /></g>),
+      boxed("rails", "Rails", "the railway the steam train runs on", 160, 96, 96, <g><rect x={-80} y={-86} width={160} height={96} fill="url(#pa-s-desert)" rx={6} /><Rails d="M-70 -20 C-30 -60 30 -10 70 -50" ground="#DDA560" /></g>),
+      art("floating", "Floating island", "a structure island, rock hanging beneath", 110, 120, 110, (s) => <FloatingIsland size={s} />),
+      art("seastack", "Sea stack", "rocky pillar in the sea", 50, 70, 50, (s) => <SeaStack size={s} />),
+      art("mesa", "Mesa", "Wild West butte", 110, 64, 56, (s) => <Mesa size={s} wide />),
+    ],
+  },
+  {
+    id: "world-flora",
+    title: "Storybook forests and creatures",
+    note: "Ink-lined trees in dark forest greens and autumn tones; ForestCluster scatters a lush, depth-sorted patch.",
+    items: [
+      art("conifer", "Conifer", "forest tree", 30, 40, 30, (s) => <Conifer size={s} />),
+      art("snowpine", "Snowy pine", "snow plateau tree", 30, 40, 30, (s) => <Conifer size={s} snow />),
+      art("broadleaf", "Broadleaf", "meadow tree", 30, 40, 28, (s) => <Broadleaf size={s} />),
+      art("autumn", "Autumn tree", "the Sequence heartland's trees", 30, 40, 28, (s) => <Broadleaf size={s} autumn />),
+      boxed("forest", "Forest cluster", "a lush forest patch (mix conifer|broadleaf|autumn|mixed|fall)", 180, 90, 90, <ForestCluster x={0} y={-30} w={150} h={50} n={22} seed={2} mix="mixed" />),
+      boxed("forest-fall", "Forest cluster, fall", "the heartland's autumn wood", 180, 90, 90, <ForestCluster x={0} y={-30} w={150} h={50} n={20} seed={9} mix="fall" />),
+      art("deer", "Deer", "the snow plateau's resident", 40, 36, 28, (s) => <Deer size={s} />),
+      art("spire", "Crystal spire", "representation's ice crystal", 60, 96, 80, (s) => <CrystalSpire size={s} />),
+      art("coral", "Coral", "dome-city reef", 30, 30, 24, (s) => <Coral size={s} />),
+      art("jelly", "Jellyfish", "dome-city drifter", 30, 40, 30, (s) => <Jellyfish size={s} />),
+    ],
+  },
+  {
+    id: "world-built",
+    title: "Storybook buildings",
+    note: "The heartland's red castle and waterwheel houses; the Wild West; the lava forge, the neon city and the underwater domes.",
+    items: [
+      art("castle", "Red-roofed castle", "the transformer's castle (heartland)", 130, 156, 120, (s) => <StoryCastle size={s} />),
+      art("wheelhouse", "Waterwheel house", "heartland mill", 70, 60, 50, (s) => <WaterwheelHouse size={s} />),
+      ...[0, 1, 2, 3].map((v) => art(`store-${v}`, `Storefront ${v + 1}`, "Wild West main street", 56, 56, 46, (s) => <Storefront size={s} variant={v} />)),
+      art("windpump", "Windpump", "Wild West windmill", 60, 92, 70, (s) => <Windpump size={s} />),
+      art("chess", "Giant chessboard", "alphazero's board", 130, 60, 50, (s) => <Chessboard size={s} />),
+      art("maze", "Hedge maze", "rl_maze's maze", 130, 50, 44, (s) => <HedgeMaze size={s} />),
+      art("lavacastle", "Lava castle", "the lava forge's black castle", 100, 134, 100, (s) => <LavaCastle size={s} />),
+      ...[0, 1, 2, 3].map((v) => art(`neon-${v}`, `Neon tower ${v + 1}`, "the neon city (pink/cyan signs)", 44, 124, 90, (s) => <NeonTower size={s} variant={v} />)),
+      art("dome", "Glass dome", "the underwater dome city", 90, 84, 70, (s) => <GlassDome size={s} />),
+    ],
+  },
+  {
+    id: "world-sea",
+    title: "Storybook sea",
+    note: "Painted-wave water (pa-sea-paint), a sailing ship and a friendly sea serpent.",
+    items: [
+      boxed("sea", "Painted sea", "url(#pa-sea-paint) — the ocean surface", 160, 96, 96, seaTile(null)),
+      art("ship", "Sailing ship", "a composition under sail", 100, 84, 60, (s) => <SailingShip size={s} />),
+      art("serpent", "Sea serpent", "here be serpents (sea decor)", 130, 62, 56, (s) => <SeaSerpent size={s} />),
+    ],
+  },
+  {
+    id: "world-furniture",
+    title: "Map furniture",
+    note: "Parchment and ink in the storybook serif: title cartouche, family signboards with a subtitle, model tags, compass, scale bar.",
+    items: [
+      boxed("cartouche", "Title cartouche", "the map's title and blurb", 330, 130, 130, <TitleCartouche x={0} y={-65} />),
+      ...["perception", "representation", "structure", "sequence", "decision", "generative"].map((f) => boxed(`fsign-${f}`, `Family sign, ${f}`, "family name + taxonomy subtitle", 240, 60, 60, <FamilySign x={0} y={-30} family={f} />)),
+      boxed("tag", "Model tag", "a model's name on the map", 120, 30, 30, <ModelTag x={0} y={-15} text="transformer" />),
+      boxed("compass", "Compass rose", "orientation", 100, 100, 90, <CompassRose x={0} y={-50} r={32} />),
+      boxed("scalebar", "Scale bar", "22 pipelines", 150, 40, 40, <ScaleBar x={-60} y={-26} w={120} />),
+    ],
+  },
+];
