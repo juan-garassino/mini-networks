@@ -3,6 +3,7 @@
 // Left-hand chrome: the title plate and the region menu. In the overview the
 // menu lists families (jump to a region); inside a region it lists that
 // family's models, atoms first, so any model is two keypresses away.
+import { memo } from "react";
 import type { EvidenceState } from "@/components/lab/shared/card-model";
 import { displayName } from "@/components/lab/shared/card-model";
 import { PixelSprite, PixelWindow } from "./chrome.tsx";
@@ -28,7 +29,7 @@ export interface MenuRow {
  * The slim title: one pixel plate line — the zoo, its size, and a breadcrumb
  * (All families › Sequence › transformer) that doubles as navigation.
  */
-export function SlimTitle({ models, families, crumbs, onMenu, menuOpen, toast }: {
+export const SlimTitle = memo(function SlimTitle({ models, families, crumbs, onMenu, menuOpen, toast }: {
   models: number; families: number;
   crumbs: { label: string; onClick?: () => void }[];
   onMenu?: () => void; menuOpen?: boolean;
@@ -61,9 +62,9 @@ export function SlimTitle({ models, families, crumbs, onMenu, menuOpen, toast }:
       </div>
     </PixelWindow>
   );
-}
+});
 
-export function RegionMenu({ title, rows, cursor, onPick, onHover, className, touch, footer, style }: {
+export const RegionMenu = memo(function RegionMenu({ title, rows, cursor, onPick, onHover, className, touch, footer, style, compact }: {
   title: string;
   rows: MenuRow[];
   cursor: number;
@@ -75,24 +76,26 @@ export function RegionMenu({ title, rows, cursor, onPick, onHover, className, to
   /** one or two lines of help under the list (keyboard on desktop, map key on phone) */
   footer?: string;
   style?: React.CSSProperties;
+  /** phone overview: families as a two-column grid (the map gets the height) */
+  compact?: boolean;
 }) {
   const hasAtoms = rows.some((r) => r.atom);
   return (
     <PixelWindow as="nav" label="Jump to" title={title} className={className} style={style} bodyClassName={`${s.scroll} min-h-0 flex-1`}>
-      <ul className="py-1" role="menu">
+      <ul className={compact ? "grid grid-cols-2 py-1" : "py-1"} role="menu">
         {rows.map((r, i) => {
           return (
             <li key={r.key} role="none">
               <button type="button" role="menuitem"
-                className={`${s.row} ${touch ? s.rowTouch : ""} ${i === cursor ? s.rowHot : ""} ${r.kind === "family" ? s.t18 : s.t15}`}
+                className={`${s.row} ${touch ? s.rowTouch : ""} ${i === cursor ? s.rowHot : ""} ${compact ? s.t14 : r.kind === "family" ? s.t18 : s.t15} ${compact ? s.rowCompact : ""}`}
                 onClick={() => onPick(r)} onMouseEnter={() => onHover(i)} onFocus={() => onHover(i)}>
                 {r.kind === "family" && <span className={s.swatch} style={{ background: chromeSwatch(r.family) }} />}
                 {r.kind === "model" && <PixelEmblem name={r.key} scale={1} color={r.atom ? UI.gold : UI.text} />}
-                <span className={`flex-1 min-w-0 break-words ${r.atom ? s.gold : ""} ${r.kind === "back" ? s.dim : ""}`}>
+                <span className={`flex-1 min-w-0 ${s.wordwrap} ${r.atom ? s.gold : ""} ${r.kind === "back" ? s.dim : ""}`}>
                   {r.kind === "model" ? displayName(r.label) : r.label}
                 </span>
                 {r.state === "champion" && <PixelSprite sprite={STAR} scale={2} className="flex-none" />}
-                <span className={`${s.t13} ${s.dim} whitespace-nowrap`}><NumText text={r.meta} /></span>
+                <span className={`${s.t13} ${s.dim} whitespace-nowrap`}><NumText text={compact ? r.meta.replace(/ models?$/, "") : r.meta} /></span>
               </button>
             </li>
           );
@@ -106,7 +109,7 @@ export function RegionMenu({ title, rows, cursor, onPick, onHover, className, to
       )}
     </PixelWindow>
   );
-}
+});
 
 export function Dialog({ children, className }: { children: React.ReactNode; className?: string }) {
   return (

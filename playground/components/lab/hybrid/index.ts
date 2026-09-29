@@ -3,7 +3,7 @@
 export { PixelWindow, PixelSprite, Typewriter, handCssUrl } from "./chrome.tsx";
 export { SlimTitle, RegionMenu, type MenuRow } from "./menu.tsx";
 export { LessonCard, type PartyMember } from "./card.tsx";
-export { Diorama, Critter, SPOT_R, spotScale, boxOfPoints, type DioramaProps } from "./diorama.tsx";
+export { Diorama, SPOT_R, TILT, proj, projBox, spotScale, boxOfPoints, type DioramaProps } from "./diorama.tsx";
 export { HybridDefs, PaperBoat, PaperRoads, PaperMountains, PaperCities, PaperDressing, StickerSpot, GROUND, groundOf } from "./art.tsx";
 export { PixelEmblem } from "./emblem.tsx";
 export { regionOutlines, chaikin, islandD, octagonD, sampleEvery, starPts, bendRoute } from "./geometry.ts";

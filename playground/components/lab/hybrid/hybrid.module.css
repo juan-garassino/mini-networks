@@ -226,3 +226,12 @@
 .signCount { display: block; font-size: 14px; line-height: 16px; font-weight: 600; opacity: 0.9; text-align: center; }
 
 .signSmall { font-size: 15px; line-height: 18px; padding: 2px 8px 3px; border-radius: 6px; }
+
+/* menu names wrap between words only (never mid-word) */
+.wordwrap { overflow-wrap: normal; word-break: normal; }
+.rowCompact { padding-left: 22px; gap: 6px; }
+
+/* Konami forward pass: one CSS ring per model, delayed by generation */
+.pulse { transform-box: fill-box; transform-origin: center; opacity: 0; animation: pulse 900ms ease-out both; }
+@keyframes pulse { 0% { opacity: 1; transform: scale(1); } 100% { opacity: 0; transform: scale(2.1); } }
+@media (prefers-reduced-motion: reduce) { .pulse { animation: none; } }

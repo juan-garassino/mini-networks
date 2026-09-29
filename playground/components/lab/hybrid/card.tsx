@@ -5,7 +5,7 @@
 // sentence → animated anatomy + the idea → lineage mini-map (the party,
 // arrow-key navigable) → proof (gate, real curve, samples, Try it) →
 // pipelines (select one = its boat sails). Body 16px, ≤60ch.
-import { useEffect, useState } from "react";
+import { memo, useEffect, useState } from "react";
 import type { CardModel } from "@/components/lab/shared/card-model";
 import { displayName, EVIDENCE_COPY } from "@/components/lab/shared/card-model";
 import { Anatomy } from "@/components/lab/shared/lesson/anatomy";
@@ -98,7 +98,7 @@ function TryIt({ name }: { name: string }) {
   );
 }
 
-export function LessonCard({
+export const LessonCard = memo(function LessonCard({
   card, lesson, evidence, party, partyCursor, onParty, onHover, onClose, still, mobile,
   compositions, sailing, onSail,
 }: {
@@ -144,7 +144,7 @@ export function LessonCard({
   };
   return (
     <PixelWindow as="aside" label={`${displayName(card.name)} lesson`} lifted
-      className={mobile ? "absolute inset-x-2 bottom-2 z-20 flex max-h-[55%]" : "absolute right-4 top-4 z-20 flex w-[420px] max-h-[calc(100%-32px)]"}
+      className={mobile ? "absolute inset-x-2 bottom-2 z-20 flex max-h-[55%]" : "absolute right-4 top-4 z-20 flex w-[380px] max-h-[calc(100%-32px)]"}
       bodyClassName={`${s.scroll} min-h-0 flex-1`}>
       <div className={`${s.pad} flex flex-col gap-4`}>
         {/* 1 · portrait + name + one plain sentence */}
@@ -168,7 +168,7 @@ export function LessonCard({
         <section>
           <h3 className={s.h3}>How it thinks</h3>
           <div className={s.plate} onPointerEnter={() => setPlaying(true)} onPointerLeave={() => setPlaying(false)}>
-            <Anatomy stages={schematicFor(card.name)} animate={!still && playing} size={mobile ? 320 : 360} labelPx={13}
+            <Anatomy stages={schematicFor(card.name)} animate={!still && playing} size={mobile ? 320 : 324} labelPx={13}
               palette={{ node: UI.text, edge: UI.dim, active: UI.gold, text: UI.text, accent: UI.cyan, fill: UI.panel }}
               title={`${displayName(card.name)} — one forward pass`} />
           </div>
@@ -202,7 +202,7 @@ export function LessonCard({
           <GateMeter card={card} version={version} />
           {curve && curve.points.length > 1 && (
             <div className={`${s.plate} mt-3`}>
-              <Sparkline points={curve.points} label={words(curve.key)} width={mobile ? 300 : 352} height={64} fontPx={13}
+              <Sparkline points={curve.points} label={words(curve.key)} width={mobile ? 300 : 316} height={64} fontPx={13}
                 palette={{ line: UI.gold, axis: UI.panelHi, text: UI.dim, dot: UI.gold }} />
               {lesson.curveRun && <p className={`${s.t14} ${s.dim}`}>real run {lesson.curveRun.id}</p>}
             </div>
@@ -245,4 +245,4 @@ export function LessonCard({
       </div>
     </PixelWindow>
   );
-}
+});

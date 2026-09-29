@@ -1,86 +1,54 @@
 "use client";
 
-// The hybrid diorama on layout v2 — this skin's own papercraft renderer (it
-// no longer imports the paper skin). Every coordinate comes from lib/world;
-// every mark is declared in ./encoding.ts. Static layers are memoised on the
-// world so a camera tween only changes the viewBox.
+// Round 3: the hybrid map as a TILTED paper diorama, drawn with the paper
+// art library (components/lab/paper/art, read-only). Ground layers (sea
+// excepted) live inside scale(1, TILT); every stand-up prop is placed at its
+// projected base point un-squashed and painted back-to-front by base y.
+// Data marks (level spots) are painted AFTER the props so decoration can
+// never hide a model. Every coordinate comes from lib/world.
 import { memo, useEffect, useMemo, useState, type ReactNode } from "react";
-import { samplePolyline, type Box, type Pt, type Road, type World, type WorldNode } from "@/lib/world";
-import { CRITTER } from "@/components/lab/shared/critter";
+import { samplePolyline, type Box, type Pt, type World, type WorldNode } from "@/lib/world";
 import type { EvidenceState } from "@/components/lab/shared/card-model";
-import { NEXT_ERA, NEXT_ERA_COPY, RUINS } from "@/components/lab/shared/eggs";
-import { iconFor } from "@/lib/icons";
-import { symbolFor } from "@/lib/blueprint";
-import { PAPER } from "./palette.ts";
-import { HybridDefs, PaperBoat, PaperCities, PaperDressing, PaperMountains, PaperRoads, SPOT_R, StickerSpot, groundOf, spotScale } from "./art.tsx";
-import { R, P } from "@/components/lab/paper/art/palette";
-export { SPOT_R, spotScale };
-import { islandD, lineD, octagonD, regionOutlines } from "./geometry.ts";
+import { NEXT_ERA, RUINS } from "@/components/lab/shared/eggs";
+import {
+  AtomSpot, BIOME, CapitalSpot, CritterArt, FogIsland, HOUSES, LevelSpot, Mountains, PaperBoat, PaperDragon,
+  PaperTrain, Pier, Ruins, SET_PIECES, SteamBoat, CRITTER_WALK, P, R,
+} from "@/components/lab/paper/art";
+import { CRITTER } from "@/components/lab/shared/critter";
+import { HybridDefs, PaperRoads, SPOT_R, groundOf, spotScale } from "./art.tsx";
+import { islandD, lineD, regionOutlines, sampleEvery } from "./geometry.ts";
 import s from "./hybrid.module.css";
 
-const f1 = (n: number) => Math.round(n * 10) / 10;
+export { SPOT_R, spotScale };
 
-// ── land ─────────────────────────────────────────────────────────────────
-const Land = memo(function Land({ world, outlines }: { world: World; outlines: string[] }) {
-  const A = world.camera.all;
+/** Ground tilt: matches the paper library's flat level spots (0.68). */
+export const TILT = 0.68;
+/** world px → projected px (the SVG's coordinate space). */
+export const proj = (p: Pt): Pt => ({ x: p.x, y: p.y * TILT });
+export const projBox = (b: Box): Box => ({ x: b.x, y: b.y * TILT, w: b.w, h: b.h * TILT });
+
+const f1 = (n: number) => Math.round(n * 10) / 10;
+const TG = `scale(1 ${TILT})`;
+
+// ── ground: printed land, foam, rim, thickness ──────────────────────────────
+const Ground = memo(function Ground({ world, outlines, showSecrets }: { world: World; outlines: string[]; showSecrets: boolean }) {
   const hidden = islandD(world.hiddenIsland.box, 1.7);
   const ruins = islandD(world.ruinsIsland.box, 4.1);
-  // each outline is defined ONCE and reused (<use>) by every paper layer
-  const ids = [...world.regions.map((r) => `hy-r${r.id}`), "hy-hidden", "hy-ruins"];
-  const faces = [...world.regions.map((r) => groundOf(r.family).fill), "url(#pa-sand)", "url(#pa-stone)"];
-  const edges = [...world.regions.map((r) => groundOf(r.family).ramp[3]), R.sand[3], R.rock[3]];
+  const ids = [...world.regions.map((r) => `hy-r${r.id}`), ...(showSecrets ? ["hy-hidden", "hy-ruins"] : [])];
+  const faces = [...world.regions.map((r) => groundOf(r.family).fill), "url(#pa-meadow)", "url(#pa-sand)"];
   const ds = [...outlines, hidden, ruins];
   return (
-    <g aria-hidden>
-      <defs>{ds.map((d, i) => <path key={ids[i]} id={ids[i]} d={d} />)}</defs>
-      <rect x={A.x - A.w} y={A.y - A.h} width={A.w * 3} height={A.h * 3} fill="url(#pa-sea)" />
-      {/* foam band where land meets sea */}
-      <g fill="none" stroke="#9CCBFF" strokeOpacity={0.7} strokeWidth={26} strokeLinejoin="round">{ids.map((id) => <use key={id} href={`#${id}`} />)}</g>
-      <g fill="none" stroke="#FFFFFF" strokeOpacity={0.55} strokeWidth={16} strokeLinejoin="round" strokeDasharray="2 10" strokeLinecap="round">{ids.map((id) => <use key={id} href={`#${id}`} />)}</g>
-      {/* cast shadow → card thickness (ramp shade) → die-cut rim → printed ground → fibre */}
-      <g fill={P.shadow} fillOpacity={0.35} transform="translate(7 11)">{ids.map((id) => <use key={id} href={`#${id}`} />)}</g>
-      <g stroke={P.die} strokeWidth={8} strokeLinejoin="round" transform="translate(0 7)">
-        {ids.map((id, i) => <use key={id} href={`#${id}`} fill={edges[i]} />)}
-      </g>
-      <g fill={P.die} stroke={P.die} strokeWidth={8} strokeLinejoin="round">{ids.map((id) => <use key={id} href={`#${id}`} />)}</g>
+    <g aria-hidden transform={TG}>
+      <defs>{ds.map((d, i) => <path key={i} id={i < outlines.length ? `hy-r${i}` : i === outlines.length ? "hy-hidden" : "hy-ruins"} d={d} />)}</defs>
+      {/* foam: a wide soft band + a crisp white line where land meets sea */}
+      <g fill="none" stroke="#FFFFFF" strokeOpacity={0.3} strokeWidth={58} strokeLinejoin="round">{ids.map((id) => <use key={id} href={`#${id}`} />)}</g>
+      <g fill="none" stroke="#FFFFFF" strokeOpacity={0.5} strokeWidth={32} strokeLinejoin="round">{ids.map((id) => <use key={id} href={`#${id}`} />)}</g>
+      {/* drop shadow onto the water, card thickness, die-cut rim, printed ground, fibre */}
+      <g fill="#0F3A8A" opacity={0.35} transform="translate(10 30)">{ids.map((id) => <use key={id} href={`#${id}`} />)}</g>
+      <g fill={P.dieShade} stroke={P.dieShade} strokeWidth={12} strokeLinejoin="round" transform="translate(0 18)">{ids.map((id) => <use key={id} href={`#${id}`} />)}</g>
+      <g fill={P.die} stroke={P.die} strokeWidth={12} strokeLinejoin="round">{ids.map((id) => <use key={id} href={`#${id}`} />)}</g>
       {ids.map((id, i) => <use key={`f${id}`} href={`#${id}`} fill={faces[i]} />)}
       <g fill="url(#pa-fibre)">{ids.map((id) => <use key={`x${id}`} href={`#${id}`} />)}</g>
-    </g>
-  );
-});
-
-/** Harbours: a dock + one moored boat per composition touching the family. */
-const Harbours = memo(function Harbours({ world, sailing, scale }: { world: World; sailing: string[]; scale: number }) {
-  const fs = 13 / Math.min(1, Math.max(scale, 0.3));
-  return (
-    <g aria-hidden>
-      {world.harbours.map((h, hi) => {
-        const cx = (h.tile % world.cols) * world.tile + world.tile / 2;
-        const cy = Math.floor(h.tile / world.cols) * world.tile + world.tile / 2;
-        let dx = h.pt.x - cx, dy = h.pt.y - cy;
-        const L = Math.hypot(dx, dy) || 1;
-        dx /= L; dy /= L;
-        const px = -dy, py = dx;
-        const n = Math.max(0, h.boats - (sailing.includes(h.family) ? 1 : 0));
-        const shown = Math.min(3, n);
-        return (
-          <g key={hi}>
-            <line x1={cx} y1={cy} x2={h.pt.x + dx * 18} y2={h.pt.y + dy * 18} stroke={PAPER.rim} strokeWidth={11} strokeLinecap="round" />
-            <line x1={cx} y1={cy} x2={h.pt.x + dx * 18} y2={h.pt.y + dy * 18} stroke={PAPER.plank} strokeWidth={7} strokeLinecap="round" />
-            {Array.from({ length: shown }, (_, i) => {
-              const k = (i - (shown - 1) / 2) * 46;
-              return <PaperBoat key={i} x={h.pt.x + dx * 40 + px * k} y={h.pt.y + dy * 40 + py * k} scale={1.7} />;
-            })}
-            {n > 0 && (
-              // how many pipelines dock here (boats beyond three are counted, not drawn)
-              <g transform={`translate(${f1(h.pt.x + dx * 40 + px * ((shown - 1) / 2 * 46 + 36))} ${f1(h.pt.y + dy * 40 + py * ((shown - 1) / 2 * 46 + 36) - 14)})`}>
-                <circle r={fs * 0.85} fill={PAPER.rim} stroke={PAPER.ink} strokeWidth={1.5} />
-                <text textAnchor="middle" dominantBaseline="central" fontSize={fs} fontWeight={700} fill={PAPER.ink}>{n}</text>
-              </g>
-            )}
-          </g>
-        );
-      })}
     </g>
   );
 });
@@ -90,21 +58,22 @@ const BaseRoads = memo(function BaseRoads({ world, skip }: { world: World; skip:
     const out = new Set(skip ? skip.split("|") : []);
     return world.roads.filter((r) => !out.has(r.id));
   }, [world, skip]);
-  return <PaperRoads roads={keep} lifted={false} />;
+  return <g transform={TG}><PaperRoads roads={keep} lifted={false} /></g>;
 });
 
 const Bridges = memo(function Bridges({ world }: { world: World }) {
   return (
-    <g aria-hidden>
+    <g aria-hidden transform={TG}>
       {world.bridges.map((b) => {
         const xs = b.tiles.map((i) => i % world.cols), ys = b.tiles.map((i) => Math.floor(i / world.cols));
         const T = world.tile;
         const x0 = Math.min(...xs) * T, x1 = (Math.max(...xs) + 1) * T, y0 = Math.min(...ys) * T, y1 = (Math.max(...ys) + 1) * T;
-        const r = b.axis === "h" ? { x: x0 - 5, y: y0 + 3, w: x1 - x0 + 10, h: y1 - y0 - 6 } : { x: x0 + 3, y: y0 - 5, w: x1 - x0 - 6, h: y1 - y0 + 10 };
+        const r = b.axis === "h" ? { x: x0 - 6, y: y0 + 1, w: x1 - x0 + 12, h: y1 - y0 - 2 } : { x: x0 + 1, y: y0 - 6, w: x1 - x0 - 2, h: y1 - y0 + 12 };
         return (
           <g key={b.roadId}>
-            <rect x={r.x + 2} y={r.y + 4} width={r.w} height={r.h} rx={2} fill={PAPER.shadow} opacity={0.3} />
-            <rect x={r.x} y={r.y} width={r.w} height={r.h} rx={2} fill={PAPER.plank} stroke={PAPER.rim} strokeWidth={2} />
+            <rect x={r.x + 3} y={r.y + 6} width={r.w} height={r.h} rx={2} fill={P.shadow} opacity={0.3} />
+            <rect x={r.x} y={r.y} width={r.w} height={r.h} rx={2} fill={R.wood[1]} stroke={P.die} strokeWidth={3} />
+            <rect x={r.x} y={r.y} width={r.w} height={r.h} rx={2} fill="url(#pa-planks)" />
           </g>
         );
       })}
@@ -112,75 +81,149 @@ const Bridges = memo(function Bridges({ world }: { world: World }) {
   );
 });
 
-/** Konami forward pass: a gold ring expands from each spot at its delay. */
-function Pulses({ world, t, schedule }: { world: World; t: number; schedule: Record<string, number> }) {
-  return (
-    <g aria-hidden pointerEvents="none">
-      {world.nodes.map((n) => {
-        const u = (t - (schedule[n.name] ?? 1e9)) / 700;
-        if (u < 0 || u > 1) return null;
-        const R = (n.atom ? SPOT_R.atom : SPOT_R.town) + 6 + u * 26;
-        return <circle key={n.name} cx={n.center.x} cy={n.center.y} r={R} fill="none" stroke={PAPER.gold} strokeWidth={5 * (1 - u) + 1} opacity={1 - u} />;
-      })}
-    </g>
-  );
+// ── stand-up props: set-pieces, biome dressing, houses, mountains, harbours ──
+interface Prop { y: number; key: string; node: ReactNode }
+
+function buildProps(world: World, showSecrets: boolean, sailing: string[]): Prop[] {
+  const out: Prop[] = [];
+  const put = (key: string, w: Pt, f: (x: number, y: number) => ReactNode) => {
+    const p = proj(w);
+    out.push({ y: p.y, key, node: f(f1(p.x), f1(p.y)) });
+  };
+  const T = world.tile;
+  // set-pieces: the family's signature mechanism, standing on its box
+  for (const r of world.regions) {
+    const sp = r.setPiece, C = SET_PIECES[r.family]?.C;
+    if (!sp || !C) continue;
+    put(`sp-${r.id}`, { x: (sp.x + sp.w / 2) * T, y: (sp.y + sp.h) * T - 6 }, (x, y) => <C x={x} y={y} size={112} />);
+  }
+  // biome dressing on decor cells (thinned: one in five, stable by tile)
+  world.decor.forEach((d) => {
+    if (d.tile % 5 !== 0) return;
+    const kit = BIOME[d.region];
+    if (!kit) return;
+    const b = kit[d.variant % kit.length];
+    const x = (d.tile % world.cols) * T + T / 2, y = Math.floor(d.tile / world.cols) * T + T;
+    put(`d-${d.tile}`, { x, y }, (px, py) => <b.C x={px} y={py} size={Math.round(b.H * 0.5 * d.scale)} />);
+  });
+  // cities: one house per model built on the atom
+  for (const c of world.cities) c.blocks.forEach((b, i) => {
+    const h = HOUSES[(i + c.node.length) % HOUSES.length];
+    put(`h-${c.node}-${i}`, { x: b.x + b.w / 2, y: b.y + b.h }, (x, y) => <h.C x={x} y={y} size={Math.round(h.H * 0.42)} />);
+  });
+  // mountain ranges along borders no road crosses
+  world.mountains.forEach((line, li) => sampleEvery(line, 76).forEach((p, i) => {
+    put(`m-${li}-${i}`, p, (x, y) => <Mountains x={x} y={y + 6} size={42 + ((i + li) % 3) * 6} snow={(i + li) % 2 === 0} />);
+  }));
+  // harbours: a pier + up to 3 moored boats + a count badge (all compositions touching the family)
+  world.harbours.forEach((h, hi) => {
+    const n = Math.max(0, h.boats - (sailing.includes(h.family) ? 1 : 0));
+    put(`p-${hi}`, h.pt, (x, y) => <Pier x={x - 6} y={y} size={16} length={70} />);
+    for (let i = 0; i < Math.min(3, n); i++) {
+      put(`b-${hi}-${i}`, { x: h.pt.x + 28 + i * 34, y: h.pt.y + 34 + (i % 2) * 18 }, (x, y) => <PaperBoat x={x} y={y} size={34} />);
+    }
+    if (n > 0) {
+      put(`bn-${hi}`, { x: h.pt.x + 28 + Math.min(3, n) * 34, y: h.pt.y + 20 }, (x, y) => (
+        <g transform={`translate(${x} ${y - 10})`}>
+          <circle r={11} fill={P.die} stroke={P.ink} strokeWidth={1.6} />
+          <text textAnchor="middle" dominantBaseline="central" fontSize={13} fontWeight={700} fill={P.ink}>{n}</text>
+        </g>
+      ));
+    }
+  });
+  // secrets (only once the learner pans or zooms away from the framed view)
+  if (showSecrets) {
+    const H = world.hiddenIsland, Ru = world.ruinsIsland;
+    put("fog", { x: H.box.x + H.box.w / 2, y: H.box.y + H.box.h * 0.75 }, (x, y) => <FogIsland x={x} y={y} size={86} />);
+    put("dragon", H.dragons, (x, y) => <PaperDragon x={x} y={y} size={46} silhouette />);
+    Ru.names.forEach((id, i) => {
+      const p = Ru.slots[i];
+      const r = RUINS.find((q) => q.id === id);
+      if (!p || !r) return;
+      put(`ru-${id}`, p, (x, y) => (
+        <g data-secret={`ruin:${id}`} className={s.node} role="button" tabIndex={0} aria-label={`Ruin: ${r.name}`}>
+          <Ruins x={x} y={y} size={34} />
+          <title>{`${r.name} — ${r.epitaph}`}</title>
+        </g>
+      ));
+    });
+    H.names.forEach((id, i) => {
+      const p = H.slots[i];
+      const m = NEXT_ERA.find((q) => q.id === id);
+      if (!p) return;
+      put(`era-${id}`, p, (x, y) => (
+        <g data-secret={`era:${id}`} className={s.node} role="button" tabIndex={0} aria-label={`Uncharted: ${m?.name ?? id}`}>
+          <LevelSpot x={x} y={y} r={16} state="provisional" />
+          <text x={x} y={y + 1} textAnchor="middle" dominantBaseline="central" fontSize={16} fontWeight={700} fill={P.pencil}>?</text>
+        </g>
+      ));
+    });
+  }
+  return out.sort((a, b) => a.y - b.y);
 }
 
-// ── secret islands ──────────────────────────────────────────────────────
-function Secrets({ world, scale }: { world: World; scale: number }) {
-  const px = (v: number) => v / Math.max(scale, 0.05);          // screen-constant sizes
-  const H = world.hiddenIsland, R = world.ruinsIsland;
-  const eraById = new Map(NEXT_ERA.map((m) => [m.id, m]));
-  const ruinById = new Map(RUINS.map((r) => [r.id, r]));
-  const legible = scale >= 0.45;
-  return (
-    <g style={{ fontFamily: "var(--font-hybrid-round), system-ui" }}>
-      {H.names.map((id, i) => {
-        const p = H.slots[i];
-        if (!p) return null;
-        const m = eraById.get(id);
-        return (
-          <g key={id} data-secret={`era:${id}`} className={s.node} role="button" tabIndex={0} aria-label={`Uncharted: ${m?.name ?? id}`}>
-            <path d={octagonD(p.x, p.y, 22)} fill={PAPER.rim} stroke={PAPER.pencil} strokeWidth={2} strokeDasharray="5 4" />
-            <text x={p.x} y={p.y + 1} textAnchor="middle" dominantBaseline="central" fontSize={24} fontWeight={700} fill={PAPER.pencil}>?</text>
-            {legible && (
-              <text x={p.x} y={p.y + 38} textAnchor="middle" fontSize={px(13)} fontWeight={600} fill={PAPER.ink}>{m?.name ?? id}</text>
-            )}
-          </g>
-        );
-      })}
-      {/* here be dragons: a paper sea-serpent off the uncharted island */}
-      <g transform={`translate(${H.dragons.x} ${H.dragons.y})`} aria-hidden>
-        <path d="M-40 10q8-18 16 0t16 0t16 0" fill="none" stroke={PAPER.rim} strokeWidth={9} strokeLinecap="round" />
-        <path d="M-40 10q8-18 16 0t16 0t16 0" fill="none" stroke="#5f7f6a" strokeWidth={5} strokeLinecap="round" />
-        <path d="M8 10q6-2 10-12l8 4l-6 8z" fill="#5f7f6a" stroke={PAPER.rim} strokeWidth={2} strokeLinejoin="round" />
-        <text x={-16} y={36} textAnchor="middle" fontSize={px(13)} fontStyle="italic" fill={PAPER.rim}>{NEXT_ERA_COPY.warning}</text>
+const Props = memo(function Props({ world, showSecrets, sailing }: { world: World; showSecrets: boolean; sailing: string }) {
+  const items = useMemo(() => buildProps(world, showSecrets, sailing ? sailing.split("|") : []), [world, showSecrets, sailing]);
+  return <g>{items.map((it) => <g key={it.key}>{it.node}</g>)}</g>;
+});
+
+// ── level spots (data) ──────────────────────────────────────────────────────
+const Spot = memo(function Spot({ n, state, focused, capital, stations, scale, atomPx, onHover }: {
+  n: WorldNode; state: EvidenceState; focused: boolean; capital: boolean; stations: number; scale: number; atomPx: number;
+  onHover: (name: string | null) => void;
+}) {
+  const r = n.atom ? SPOT_R.atom : SPOT_R.town;
+  const sz = spotScale(n.atom, scale, atomPx);
+  const k = (focused ? 1.3 : 1) * sz.k;
+  const c = proj(n.center);
+  const label = `${n.name.replace(/_/g, " ")}${n.atom ? ", atom" : ""}, ${state === "untrained" ? "not trained yet" : state}`;
+  const common = {
+    "data-node": n.name, className: s.node, role: "button", tabIndex: 0, "aria-label": label,
+    onPointerEnter: () => onHover(n.name), onPointerLeave: () => onHover(null),
+    onFocus: () => onHover(n.name), onBlur: () => onHover(null),
+  } as const;
+  const fam = groundOf(n.family);
+  if (sz.dot && !focused) {
+    return (
+      <g {...common} transform={`translate(${f1(c.x)} ${f1(c.y)})`}>
+        <ellipse cx={1.5} cy={3} rx={r * 0.62 + 3} ry={(r * 0.62 + 3) * TILT} fill={P.shadow} fillOpacity={0.3} />
+        <ellipse rx={r * 0.62 + 3} ry={(r * 0.62 + 3) * TILT} fill={P.die} />
+        <ellipse rx={r * 0.62} ry={r * 0.62 * TILT} fill={state === "untrained" ? P.die : fam.face[2]} stroke={R.gold[2]} strokeWidth={3} className={s.ring} />
+        {state === "champion" && <circle cx={r * 0.55} cy={-r * 0.5} r={4} fill={R.gold[1]} stroke={P.die} strokeWidth={1.5} />}
+        <title>{label}</title>
       </g>
-      {R.names.map((id, i) => {
-        const p = R.slots[i];
-        const r = ruinById.get(id);
-        if (!p || !r) return null;
-        return (
-          <g key={id} data-secret={`ruin:${id}`} className={s.node} role="button" tabIndex={0} aria-label={`Ruin: ${r.name}`}>
-            {/* a broken column: shaft + tilted capital fallen beside it */}
-            <rect x={p.x - 6} y={p.y - 16} width={12} height={20} fill={PAPER.rim} stroke={PAPER.ink} strokeWidth={1.2} />
-            <path d={`M${p.x - 6} ${p.y - 16}l4 -5l4 4l4 -3v4z`} fill={PAPER.rim} stroke={PAPER.ink} strokeWidth={1.2} strokeLinejoin="round" />
-            <rect x={p.x + 8} y={p.y} width={10} height={5} fill={PAPER.rim} stroke={PAPER.ink} strokeWidth={1} transform={`rotate(18 ${p.x + 13} ${p.y + 2})`} />
-            <title>{`${r.name} — ${r.epitaph}`}</title>
-          </g>
-        );
-      })}
+    );
+  }
+  return (
+    <g {...common} transform={`translate(${f1(c.x)} ${f1(c.y - (focused ? 6 : 0))}) scale(${f1(k * 100) / 100})`}>
+      {focused && (
+        <ellipse rx={r + 14} ry={(r + 14) * TILT} fill="none" stroke={R.red[2]} strokeWidth={5} strokeDasharray="10 7" className={s.ring} />
+      )}
+      {n.atom
+        ? capital
+          ? <CapitalSpot name={n.name} state={state} r={r} family={n.family} />
+          : <AtomSpot name={n.name} state={state} r={r} family={n.family} />
+        : <LevelSpot name={n.name} state={state} r={r} />}
+      {stations > 0 && (
+        // station notches: one per recorded run (max 6)
+        <g transform={`translate(0 ${r * TILT + 12})`}>
+          <rect x={-3.5 * Math.min(6, stations) - 3} y={-3} width={7 * Math.min(6, stations) + 6} height={7} rx={2} fill={P.die} />
+          {Array.from({ length: Math.min(6, stations) }, (_, i) => (
+            <rect key={i} x={-3.5 * Math.min(6, stations) + i * 7} y={-1.5} width={4} height={4} fill={fam.face[3]} />
+          ))}
+        </g>
+      )}
+      <title>{label}</title>
     </g>
   );
-}
+});
 
-// ── critter (paper cutout) ──────────────────────────────────────────────
-export function Critter({ path, still, walkKey, training }: { path: Pt[]; still: boolean; walkKey: string; training: boolean }) {
+// ── critter: the library cutout, walking the quest route ──────────────────
+function Critter({ path, still, walkKey, training }: { path: Pt[]; still: boolean; walkKey: string; training: boolean }) {
   const line = useMemo(() => samplePolyline(path), [path]);
   const [t, setT] = useState(1);
   useEffect(() => {
-    if (still || line.length < 1) { setT(1); return; }
-    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) { setT(1); return; }
+    if (still || line.length < 1 || window.matchMedia("(prefers-reduced-motion: reduce)").matches) { setT(1); return; }
     const dur = Math.max(500, (line.length / CRITTER.walkSpeed) * 1000);
     const t0 = performance.now() + 200;
     let raf = 0;
@@ -196,60 +239,45 @@ export function Critter({ path, still, walkKey, training }: { path: Pt[]; still:
   if (!path.length) return null;
   const p = line.at(t);
   const walking = t < 1;
-  const hop = walking ? -Math.abs(Math.sin((t * line.length) / 10)) * 5 : 0;
-  const dir = walking && Math.cos(p.angle) < -0.2 ? -1 : 1;
-  const K = 38 / 140;
+  const c = proj(p);
+  const pose = training ? "train" : walking ? CRITTER_WALK[Math.floor((t * line.length) / 14) % 4] : "idle";
+  const facing = walking && Math.cos(p.angle) < -0.2 ? -1 : 1;
   return (
-    <g data-critter="1" className={s.node} role="button" tabIndex={0} aria-label="The critter (you)"
-      transform={`translate(${f1(p.x)} ${f1(p.y)})`}>
-      <ellipse cx={2} cy={2} rx={12} ry={4} fill={PAPER.shadow} opacity={0.3} />
-      <g transform={`translate(0 ${hop}) scale(${dir * K} ${K}) translate(-60 -126)`}>
-        <g stroke={PAPER.rim} strokeWidth={20} strokeLinecap="round" strokeLinejoin="round" fill={PAPER.rim}>
-          <path d={CRITTER.body} />
-          <path d={CRITTER.antenna} fill="none" />
-          <circle {...CRITTER.antennaTip} />
-        </g>
-        {CRITTER.feet.map((ft, i) => <ellipse key={i} cx={ft.cx} cy={ft.cy} rx={12} ry={8} fill={PAPER.ink} />)}
-        <path d={CRITTER.body} fill={training ? PAPER.gold : "#f1e7cf"} stroke={PAPER.ink} strokeWidth={7} />
-        <path d={CRITTER.antenna} fill="none" stroke={PAPER.ink} strokeWidth={7} strokeLinecap="round" />
-        <circle {...CRITTER.antennaTip} fill={PAPER.gold} stroke={PAPER.ink} strokeWidth={5} />
-        <circle {...CRITTER.eye} fill="#fff" stroke={PAPER.ink} strokeWidth={6} />
-        <circle {...CRITTER.pupil} fill={PAPER.ink} />
-        <path d={CRITTER.smile} fill="none" stroke={PAPER.ink} strokeWidth={6} strokeLinecap="round" />
-      </g>
+    <g data-critter="1" className={s.node} role="button" tabIndex={0} aria-label="The critter (you)">
+      <CritterArt x={f1(c.x)} y={f1(c.y)} size={42} pose={pose} facing={facing} />
       <title>The critter — that is you</title>
     </g>
   );
 }
 
-// ── the whole diorama ─────────────────────────────────────────────────────
+// ── the whole diorama ───────────────────────────────────────────────────
 export interface DioramaProps {
   world: World;
   states: Record<string, EvidenceState>;
   stations: Record<string, number>;
   focus: WorldNode | null;
   zoom: "overview" | "region" | "node";
-  /** names + roads lifted above the value step-back (node view) */
   lineageNames: Set<string>;
   lineageRoads: Set<string>;
-  /** quest route: root atom → parking spot */
+  /** quest route (world px): root atom → parking spot */
   quest: Pt[];
   scale: number;
   still: boolean;
   critter: { training: boolean } | null;
-  /** selected composition's ferry (points already bent for double descent) + boat progress 0..1 */
   ferry: { points: Pt[]; t: number; families: string[] } | null;
   trains: { points: Pt[]; t: number }[];
-  konami: { t: number; schedule: Record<string, number> } | null;
-  /** semantic zoom: atoms never smaller than this screen radius */
+  /** Konami wave: start stamp + per-model delay (ms); rings run on CSS, no per-frame React */
+  konami: { t0: number; schedule: Record<string, number> } | null;
   atomPx: number;
+  /** show the secret islands (the learner panned / zoomed away from the framed view) */
+  showSecrets: boolean;
   onHover: (name: string | null) => void;
-  children?: ReactNode;
 }
 
-export function Diorama(p: DioramaProps) {
+export const Diorama = memo(function Diorama(p: DioramaProps) {
   const { world, states, stations, focus, zoom, lineageNames, lineageRoads, quest, scale, still } = p;
   const outlines = useMemo(() => regionOutlines(world), [world]);
+  const capitals = useMemo(() => new Set(world.cities.filter((c) => c.capital).map((c) => c.node)), [world]);
   const nodeView = zoom === "node" && focus;
   const regionView = zoom === "region" && focus;
   const liftKey = nodeView ? [...lineageRoads].sort().join("|") : "";
@@ -257,61 +285,64 @@ export function Diorama(p: DioramaProps) {
   const ordered = useMemo(() => [...world.nodes].sort((a, b) => a.center.y - b.center.y), [world]);
   const A = world.camera.all;
   const spot = (n: WorldNode) => (
-    <StickerSpot key={n.name} n={n} state={states[n.name] ?? "untrained"} focused={focus?.name === n.name && zoom !== "overview"}
-      stations={zoom === "overview" ? 0 : stations[n.name] ?? 0} scale={scale} atomPx={p.atomPx} onHover={p.onHover} />
+    <Spot key={n.name} n={n} state={states[n.name] ?? "untrained"} focused={focus?.name === n.name && zoom !== "overview"}
+      capital={capitals.has(n.name)} stations={zoom === "overview" ? 0 : stations[n.name] ?? 0} scale={scale} atomPx={p.atomPx} onHover={p.onHover} />
   );
-  const liftedNode = (n: WorldNode) => Boolean(nodeView && lineageNames.has(n.name));
+  const lifted = (n: WorldNode) => Boolean(nodeView && lineageNames.has(n.name));
+  const sailing = p.ferry ? p.ferry.families.join("|") : "";
   return (
     <>
       <HybridDefs />
-      <Land world={world} outlines={outlines} />
-      {/* semantic zoom: biome dressing only once props are big enough to read (the printed ground carries the biome below that) */}
-      {scale >= 0.6 && <PaperDressing world={world} />}
-      <PaperMountains world={world} />
-      <Harbours world={world} sailing={p.ferry ? p.ferry.families : []} scale={Math.round(scale * 20) / 20} />
+      <rect x={A.x - A.w} y={A.y * TILT - A.h} width={A.w * 3} height={A.h * 3} fill="url(#pa-sea)" />
+      <Ground world={world} outlines={outlines} showSecrets={p.showSecrets} />
       <BaseRoads world={world} skip={liftKey} />
       <Bridges world={world} />
-      <PaperCities world={world} />
-      <Secrets world={world} scale={scale} />
-      <g>{ordered.filter((n) => !liftedNode(n) && n.name !== focus?.name).map(spot)}</g>
+      <Props world={world} showSecrets={p.showSecrets} sailing={sailing} />
+      <g>{ordered.filter((n) => !lifted(n) && n.name !== focus?.name).map(spot)}</g>
       {/* value step-back: darken what is out of focus (never a milky veil) */}
       {regionView && (
-        <g fill={PAPER.dim} stroke={PAPER.dim} strokeWidth={8} opacity={0.26}>
+        <g transform={TG} fill={P.shadow} stroke={P.shadow} strokeWidth={10} opacity={0.3}>
           {world.regions.filter((r) => r.family !== focus.family).map((r) => <use key={`d${r.id}`} href={`#hy-r${r.id}`} />)}
         </g>
       )}
-      {nodeView && <rect x={A.x - A.w} y={A.y - A.h} width={A.w * 3} height={A.h * 3} fill={PAPER.dim} opacity={0.3} />}
-      {nodeView && <PaperRoads roads={liftedRoads} lifted />}
-      {quest.length > 1 && focus && zoom !== "overview" && (
-        // the quest route: the critter's walk from the root atom, dotted in gold ink
-        <path d={lineD(quest)} fill="none" stroke={R.red[2]} strokeWidth={4} strokeDasharray="0.1 10" strokeLinecap="round" />
-      )}
-      <g>{ordered.filter((n) => liftedNode(n) && n.name !== focus?.name).map(spot)}</g>
+      {nodeView && <rect x={A.x - A.w} y={A.y * TILT - A.h} width={A.w * 3} height={A.h * 3} fill={P.shadow} opacity={0.32} />}
+      <g transform={TG}>
+        {nodeView && <PaperRoads roads={liftedRoads} lifted />}
+        {quest.length > 1 && focus && zoom !== "overview" && (
+          // the quest route: the critter's walk from the root atom, dotted in red ink
+          <path d={lineD(quest)} fill="none" stroke={R.red[2]} strokeWidth={5} strokeDasharray="0.1 11" strokeLinecap="round" />
+        )}
+        {p.ferry && p.ferry.points.length > 1 && (
+          <path d={lineD(p.ferry.points)} fill="none" stroke="#FFFFFF" strokeWidth={4} strokeDasharray="8 8" strokeLinecap="round" />
+        )}
+      </g>
+      <g>{ordered.filter((n) => lifted(n) && n.name !== focus?.name).map(spot)}</g>
       {focus && ordered.filter((n) => n.name === focus.name).map(spot)}
-      {p.ferry && p.ferry.points.length > 1 && (
-        <g>
-          <path d={lineD(p.ferry.points)} fill="none" stroke={PAPER.rim} strokeWidth={3} strokeDasharray="7 7" strokeLinecap="round" />
-          {(() => { const q = samplePolyline(p.ferry.points).at(p.ferry.t); return <PaperBoat x={q.x} y={q.y} scale={2} sel />; })()}
-        </g>
-      )}
+      {p.ferry && p.ferry.points.length > 1 && (() => {
+        const q = proj(samplePolyline(p.ferry.points).at(p.ferry.t));
+        return <SteamBoat x={f1(q.x)} y={f1(q.y)} size={56} />;
+      })()}
       {p.trains.map((tr, i) => {
         const q = samplePolyline(tr.points).at(tr.t);
-        return (
-          <g key={i} transform={`translate(${f1(q.x)} ${f1(q.y)}) rotate(${f1((q.angle * 180) / Math.PI)})`} aria-hidden>
-            {[0, -13, -26].map((dx, j) => (
-              <rect key={j} x={dx - 6} y={-4.5} width={11} height={9} rx={2} fill={j === 0 ? PAPER.gold : PAPER.rim} stroke={PAPER.ink} strokeWidth={1.2} />
-            ))}
-          </g>
-        );
+        const c = proj(q);
+        return <g key={i} aria-hidden><PaperTrain x={f1(c.x)} y={f1(c.y)} size={26} smoke={!still} /></g>;
       })}
-      {p.konami && <Pulses world={world} t={p.konami.t} schedule={p.konami.schedule} />}
+      {p.konami && (
+        <g key={p.konami.t0} aria-hidden pointerEvents="none">
+          {world.nodes.map((n) => {
+            const c = proj(n.center);
+            const rr = (n.atom ? SPOT_R.atom : SPOT_R.town) + 8;
+            return <ellipse key={n.name} cx={c.x} cy={c.y} rx={rr} ry={rr * TILT} fill="none" stroke={R.gold[1]} strokeWidth={6}
+              className={s.pulse} style={{ animationDelay: `${p.konami!.schedule[n.name] ?? 0}ms` }} />;
+          })}
+        </g>
+      )}
       {p.critter && focus && zoom !== "overview" && quest.length > 0 && (
         <Critter path={quest} still={still} walkKey={focus.name} training={p.critter.training} />
       )}
-      {p.children}
     </>
   );
-}
+});
 
 export function boxOfPoints(pts: Pt[], pad: number): Box {
   const xs = pts.map((q) => q.x), ys = pts.map((q) => q.y);

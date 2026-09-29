@@ -20,7 +20,7 @@ import {
   DOUBLE_DESCENT_EGG, GROKKING_EGG, NEXT_ERA, NEXT_ERA_COPY, RUINS, dipDepth, forwardPassOrder, forwardPassSchedule,
   stationCounts, useKonami, useLiveTraining, useLongFocus, useRealLossCurve,
 } from "@/components/lab/shared/eggs";
-import { Diorama, SPOT_R, boxOfPoints, spotScale } from "@/components/lab/hybrid/diorama";
+import { Diorama, SPOT_R, TILT, boxOfPoints, proj, projBox, spotScale } from "@/components/lab/hybrid/diorama";
 import { groundOf } from "@/components/lab/hybrid/art";
 import { LessonCard, type PartyMember } from "@/components/lab/hybrid/card";
 import { PixelSprite, PixelWindow, handCssUrl } from "@/components/lab/hybrid/chrome";
@@ -31,8 +31,19 @@ import { UI, familyLabel } from "@/components/lab/hybrid/palette";
 import s from "@/components/lab/hybrid/hybrid.module.css";
 
 const GAP = 16;
-const MENU_W = 300;
-const CARD_W = 420;
+
+/** Points every `step` px along a polyline (sign placement obstacles). */
+function samplePts(pts: Pt[], step: number): Pt[] {
+  const out: Pt[] = [];
+  for (let i = 1; i < pts.length; i++) {
+    const a = pts[i - 1], b = pts[i], L = Math.hypot(b.x - a.x, b.y - a.y);
+    for (let d = 0; d < L; d += step) out.push({ x: a.x + ((b.x - a.x) * d) / L, y: a.y + ((b.y - a.y) * d) / L });
+  }
+  if (pts.length) out.push(pts[pts.length - 1]);
+  return out;
+}
+const MENU_W = 276;
+const CARD_W = 380;
 const TITLE_H = 56;         // slim title plate incl. its card rim
 
 type Secret = { kind: "era"; id: string } | { kind: "ruin"; id: string };
@@ -49,6 +60,8 @@ export default function HybridPage() {
   const [hovered, setHovered] = useState<string | null>(null);
   const [sailing, setSailing] = useState<string | null>(null);
   const [secret, setSecret] = useState<Secret | null>(null);
+  // the learner panned or zoomed away from the framed view → secrets can surface
+  const [roamed, setRoamed] = useState(false);
 
   useEffect(() => {
     const on = () => setVp({ w: window.innerWidth, h: window.innerHeight });
@@ -197,24 +210,20 @@ export default function HybridPage() {
   })).filter((t) => t.points.length > 1) : []), [world, live, byName, clock, still]);
 
   // ── eggs ────────────────────────────────────────────────────────────────
-  const [konami, setKonami] = useState<{ t0: number; t: number } | null>(null);
+  const [konami, setKonami] = useState<{ t0: number; gen: number } | null>(null);
   const schedule = useMemo(() => (world ? forwardPassSchedule(forwardPassOrder(world), 450) : {}), [world]);
   const waveLen = useMemo(() => Math.max(0, ...Object.values(schedule)) + 900, [schedule]);
-  useKonami(() => setKonami({ t0: performance.now(), t: 0 }), !still && drawn);
+  useKonami(() => setKonami({ t0: performance.now(), gen: 0 }), !still && drawn);
+  const konamiT0 = konami?.t0;
   useEffect(() => {
-    if (!konami) return;
-    let raf = 0;
-    const step = (now: number) => {
-      const t = now - konami.t0;
-      if (t > waveLen) { setKonami(null); return; }
-      setKonami((k) => (k ? { ...k, t } : k));
-      raf = requestAnimationFrame(step);
-    };
-    raf = requestAnimationFrame(step);
-    return () => cancelAnimationFrame(raf);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [konami?.t0, waveLen]);
-  const konamiGen = konami ? Math.min(3, Math.floor(konami.t / 450)) : null;
+    if (konamiT0 == null) return;
+    // the rings run on CSS; React only steps the title toast once per generation
+    const tick = setInterval(() => setKonami((k) => (k ? { ...k, gen: Math.min(3, k.gen + 1) } : k)), 450);
+    const end = setTimeout(() => setKonami(null), waveLen);
+    return () => { clearInterval(tick); clearTimeout(end); };
+  }, [konamiT0, waveLen]);
+  const konamiGen = konami ? konami.gen : null;
+  const konamiProp = useMemo(() => (konamiT0 != null ? { t0: konamiT0, schedule } : null), [konamiT0, schedule]);
 
   const grokked = useLongFocus(still ? null : hovered, GROKKING_EGG.holdMs);
 
@@ -240,10 +249,15 @@ export default function HybridPage() {
   }, [real.curve, trainUnlocked]);
   useEffect(() => { setTrainUnlocked(false); clicks.current = { n: 0, last: 0 }; }, [focus?.name]);
 
-  // ── camera: framed into what the chrome leaves free ─────────────────────
+  const critterProp = useMemo(() => (focus ? { training: trainUnlocked && Boolean(real.curve) } : null), [focus, trainUnlocked, real.curve]);
+  const ferryProp = useMemo(() => (ferry ? { ...ferry, t: sailT } : null), [ferry, sailT]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const lessonM = useMemo(() => lesson, [lesson.lesson, lesson.curve, lesson.curveRun, lesson.samples, lesson.loading, lesson.error, lesson.champion?.label]);
+
+  // ── camera: framed into what the chrome leaves free (in projected px) ─
   const oneWindowLeft = !mobile && zoom !== "node";
   const insets: Insets = mobile
-    ? { l: 8, r: 8, t: TITLE_H + 8, b: zoom === "node" ? Math.round(vp.h * 0.55) + 12 : zoom === "overview" ? 300 : 16 }
+    ? { l: 0, r: 0, t: TITLE_H + 8, b: zoom === "node" ? Math.round(vp.h * 0.55) + 12 : zoom === "overview" ? 200 : 16 }
     : { l: oneWindowLeft ? GAP + MENU_W + GAP : GAP, r: zoom === "node" ? GAP + CARD_W + GAP : GAP, t: GAP + TITLE_H, b: GAP };
   const target: CamBox = useMemo(() => {
     if (!world) return { x: 0, y: 0, w: 1, h: 1 };
@@ -255,15 +269,42 @@ export default function HybridPage() {
       const isl = secret.kind === "era" ? world.hiddenIsland : world.ruinsIsland;
       box = { x: isl.box.x - 120, y: isl.box.y - 120, w: isl.box.w + 240, h: isl.box.h + 240 };
     }
+    let pb = projBox(box);
+    // stand-up props rise above the ground: keep room for castles and set-pieces
+    pb = { x: pb.x, y: pb.y - 70, w: pb.w, h: pb.h + 70 };
+    if (mobile && zoom === "overview") {
+      // phone: the land fills the height between title and menu; the sides
+      // (coast and sea margin) may run off-screen — pan to see them
+      const ih = vp.h - insets.t - insets.b;
+      const k = Math.min(ih / pb.h, (vp.w / pb.w) * 2.5);
+      const w = vp.w / k, h = ih / k;
+      pb = { x: pb.x + pb.w / 2 - w / 2, y: pb.y + pb.h / 2 - h / 2, w, h };
+    }
     if (mobile && zoom === "node" && focus && !ferry) {
       const iw = vp.w - insets.l - insets.r, ih = vp.h - insets.t - insets.b;
-      const w = Math.min(box.w, iw), h = Math.min(box.h, ih);
-      box = { x: focus.center.x - w / 2, y: focus.center.y - h / 2, w, h };
+      const w = Math.min(pb.w, iw), h = Math.min(pb.h, ih);
+      const c = proj(focus.center);
+      pb = { x: c.x - w / 2, y: c.y - h / 2, w, h };
     }
-    return frameInto(box, vp.w, vp.h, insets);
+    return frameInto(pb, vp.w, vp.h, insets);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [world, zoom, focus, family, quest, ferry, secret, mobile, vp.w, vp.h, insets.l, insets.r, insets.t, insets.b]);
-  const cam = useCamera({ world: world?.camera.all ?? target, target, still, minWidth: 240 });
+  useEffect(() => { setRoamed(false); }, [target.x, target.y, target.w, target.h]);
+  const cam = useCamera({ world: world ? projBox(world.camera.all) : target, target, still, minWidth: 240 });
+
+  // Heavy work waits for the camera to settle: the map only gets a quantised
+  // scale (spots re-render on zoom steps, not every tween frame) and labels /
+  // signs are placed from a camera snapshot taken once it stops moving.
+  const qScale = Math.round(cam.scale * 20) / 20;
+  const [settled, setSettled] = useState<{ box: CamBox; size: { w: number; h: number }; scale: number } | null>(null);
+  useEffect(() => {
+    const snap = { box: cam.box, size: cam.size, scale: cam.scale };
+    if (still) { setSettled(snap); return; }
+    setSettled(null);
+    const id = setTimeout(() => setSettled(snap), 140);
+    return () => clearTimeout(id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [cam.box.x, cam.box.y, cam.box.w, cam.box.h, cam.size.w, cam.size.h, still]);
 
   useEffect(() => {
     if (!ready || !world) return;
@@ -284,56 +325,80 @@ export default function HybridPage() {
     const key = JSON.stringify(rs);
     setChrome((prev) => (JSON.stringify(prev) === key ? prev : rs));
   });
+  const chromeKey = JSON.stringify(chrome);
 
-  // ── region signs at whole-map zoom (screen space, on each set-piece) ────
+  // ── region signs at whole-map zoom: in free land / sea near the set-piece,
+  // never over a spot, a road, the set-piece itself, another sign or a window
   const signs = useMemo(() => {
-    if (!world || zoom !== "overview" || cam.size.w <= 1) return [];
-    const toS = (p: Pt) => ({ x: (p.x - cam.box.x) * cam.scale, y: (p.y - cam.box.y) * cam.scale });
-    const rAtom = SPOT_R.atom * cam.scale * spotScale(true, cam.scale, ATOM_PX).k + 8;
-    const rTown = SPOT_R.town * cam.scale * 0.7 + 4;
-    const spots = world.nodes.map((n) => ({ ...toS(n.center), r: n.atom ? rAtom : rTown }));
-    const placed: { x: number; y: number; w: number; h: number }[] = [];
+    const C = settled;
+    if (!C || !world || zoom !== "overview" || C.size.w <= 1) return [];
+    const toS = (p: Pt) => { const q = proj(p); return { x: (q.x - C.box.x) * C.scale, y: (q.y - C.box.y) * C.scale }; };
+    const rAtom = SPOT_R.atom * C.scale * spotScale(true, C.scale, ATOM_PX).k + 10;
+    const rTown = SPOT_R.town * C.scale + 6;
+    const spots = world.nodes.map((n) => ({ ...toS(n.center), r: n.atom ? rAtom + 14 : rTown }));
+    const road: Pt[] = [];
+    for (const r of world.roads) for (const q of samplePts(r.lanePoints, 18)) road.push(toS(q));
+    const pieces = world.regions.filter((r) => r.setPiece).map((r) => {
+      const sp = r.setPiece!, base = toS({ x: (sp.x + sp.w / 2) * world.tile, y: (sp.y + sp.h) * world.tile });
+      const hh = 112 * C.scale, ww = hh;
+      return { x: base.x - ww / 2, y: base.y - hh, w: ww, h: hh };
+    });
+    const placed: Box[] = [...chrome];
     const out: { family: string; label: string; n: number; x: number; y: number; w: number; h: number }[] = [];
+    const hit = (a: Box, b: Box, m: number) => a.x < b.x + b.w + m && b.x < a.x + a.w + m && a.y < b.y + b.h + m && b.y < a.y + a.h + m;
     for (const r of world.regions) {
       if (!r.setPiece) continue;
       const sp = r.setPiece;
-      const c = toS({ x: (sp.x + sp.w / 2) * world.tile, y: (sp.y + sp.h / 2) * world.tile });
+      const c = toS({ x: (sp.x + sp.w / 2) * world.tile, y: (sp.y + sp.h + 1) * world.tile });
       const label = familyLabel(r.family);
       const w = label.length * (mobile ? 8.5 : 11) + (mobile ? 22 : 34), h = mobile ? 26 : 50;
-      // the sign is pinned to the family's set-piece; if it would cover a
-      // model, it slides to the nearest free side (never onto a spot)
-      const cands = [[0, 0], [0, -h * 0.8], [0, h * 0.8], [-w * 0.6, 0], [w * 0.6, 0], [0, -h * 1.6], [0, h * 1.6]]
-        .filter(([dx]) => c.x + dx + w / 2 <= cam.size.w - 24 && c.x + dx - w / 2 >= 24);
-      if (!cands.length) cands.push([0, 0]);
-      let best = cands[0];
-      for (const [dx, dy] of cands) {
-        const b = { x: c.x + dx - w / 2, y: c.y + dy - h / 2, w, h };
-        const clash = spots.some((q) => q.x > b.x - q.r && q.x < b.x + b.w + q.r && q.y > b.y - q.r && q.y < b.y + b.h + q.r)
-          || placed.some((o) => b.x < o.x + o.w + 6 && o.x < b.x + b.w + 6 && b.y < o.y + o.h + 6 && o.y < b.y + b.h + 6);
-        if (!clash) { best = [dx, dy]; break; }
+      let best: Box | null = null;
+      search: for (let rad = 0; rad <= (mobile ? 150 : 320); rad += mobile ? 10 : 16) {
+        for (let a = 0; a < 16; a++) {
+          const ang = (a / 16) * Math.PI * 2 + Math.PI / 2;           // start straight below the set-piece
+          const b = { x: c.x + Math.cos(ang) * rad - w / 2, y: c.y + Math.sin(ang) * rad * 0.8 - h / 2, w, h };
+          if (b.x < 24 || b.y < 24 || b.x + w > C.size.w - 24 || b.y + h > C.size.h - 24) continue;
+          if (spots.some((q) => q.x > b.x - q.r && q.x < b.x + w + q.r && q.y > b.y - q.r && q.y < b.y + h + q.r)) continue;
+          if (road.some((q) => q.x > b.x - 5 && q.x < b.x + w + 5 && q.y > b.y - 5 && q.y < b.y + h + 5)) continue;
+          if (pieces.some((q) => hit(b, q, 2)) || placed.some((q) => hit(b, q, 8))) continue;
+          best = b;
+          break search;
+        }
       }
-      const b = { x: c.x + best[0] - w / 2, y: c.y + best[1] - h / 2, w, h };
-      // never cut by the viewport edge (24px margin, like the name tags)
-      b.x = Math.min(Math.max(b.x, 24), cam.size.w - w - 24);
-      b.y = Math.min(Math.max(b.y, 24), cam.size.h - h - 24);
-      placed.push(b);
-      out.push({ family: r.family, label, n: counts[r.family] ?? 0, x: b.x + w / 2, y: b.y + h / 2, w, h });
+      if (!best) continue;                                            // no free place: the menu names the family
+      placed.push(best);
+      out.push({ family: r.family, label, n: counts[r.family] ?? 0, x: best.x + w / 2, y: best.y + h / 2, w, h });
     }
     return out;
-  }, [world, zoom, cam.box.x, cam.box.y, cam.scale, cam.size.w, cam.size.h, counts, mobile, ATOM_PX]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [world, zoom, settled, counts, mobile, ATOM_PX, chromeKey]);
 
   // ── screen-space labels: constant size, priority placed, culled ─────────
   const labels: (ScreenLabel & { dim: boolean })[] = useMemo(() => {
-    if (!world || cam.size.w <= 1) return [];
+    const C = settled;
+    if (!C || !world || C.size.w <= 1) return [];
     // semantic zoom: at whole-map zoom atoms are drawn bigger than their
     // footprint, so their tags keep that much extra clearance
-    const atomScreenR = SPOT_R.atom * cam.scale * spotScale(true, cam.scale, ATOM_PX).k;
-    const gap = Math.max(4, atomScreenR - 2 * world.tile * cam.scale + 6);
-    const placed = placeScreenLabels(world, cam.box, cam.size, {
-      font: { atom: 16, derived: 15 }, focus: focus?.name ?? null, edgeMargin: 24, gap,
+    const atomScreenR = SPOT_R.atom * C.scale * spotScale(true, C.scale, ATOM_PX).k;
+    const gap = Math.max(4, atomScreenR - 2 * world.tile * C.scale + 6);
+    const blocks = [...chrome, ...signs.map((g) => ({ x: g.x - g.w / 2, y: g.y - g.h / 2, w: g.w, h: g.h }))];
+    // stand-up castles rise above an atom's footprint, set-pieces above their box
+    for (const n of world.nodes) if (n.atom) {
+      const R = SPOT_R.atom * C.scale * spotScale(true, C.scale, ATOM_PX).k * (n.name === focus?.name ? 1.3 : 1);
+      const x = (n.center.x - C.box.x) * C.scale, y = (n.center.y * TILT - C.box.y) * C.scale;
+      blocks.push({ x: x - R, y: y - R * 2.1, w: 2 * R, h: R * 1.6 });
+    }
+    for (const r of world.regions) if (r.setPiece) {
+      const sp = r.setPiece, hh = 112 * C.scale;
+      const x = ((sp.x + sp.w / 2) * world.tile - C.box.x) * C.scale, y = ((sp.y + sp.h) * world.tile * TILT - C.box.y) * C.scale;
+      blocks.push({ x: x - hh / 2, y: y - hh, w: hh, h: hh });
+    }
+    // tilted camera: world px → projected (y·TILT) → screen; windows and signs are obstacles
+    const project = (q: Pt) => ({ x: (q.x - C.box.x) * C.scale, y: (q.y * TILT - C.box.y) * C.scale });
+    const placed = placeScreenLabels(world, C.box, C.size, {
+      font: { atom: 16, derived: 15 }, focus: focus?.name ?? null, edgeMargin: 24, gap, project, obstacles: blocks,
       measure: (t, f) => ({ w: 0.56 * f * t.length + 14, h: f + 10 }),
     });
-    const blocks = [...chrome, ...signs.map((g) => ({ x: g.x - g.w / 2, y: g.y - g.h / 2, w: g.w, h: g.h }))];
     const hit = (a: Box, b: Box) => a.x < b.x + b.w + 4 && b.x < a.x + a.w + 4 && a.y < b.y + b.h + 4 && b.y < a.y + a.h + 4;
     return placed
       .filter((l) => zoom !== "overview" || byName.get(l.node)?.atom)
@@ -342,7 +407,7 @@ export default function HybridPage() {
         ...l,
         dim: (zoom === "node" && !lineageNames.has(l.node)) || (zoom === "region" && byName.get(l.node)?.family !== family),
       }));
-  }, [world, cam.box, cam.size, focus, zoom, chrome, signs, lineageNames, byName, family]);
+  }, [world, settled, focus, zoom, chrome, signs, lineageNames, byName, family]);
 
   // ── actions ─────────────────────────────────────────────────────────────
   const entryAtom = useCallback((f: string) => {
@@ -422,23 +487,28 @@ export default function HybridPage() {
     }
     const side = (["left", "right", "down", "up"] as const).find((d) => !taken.has(d)) ?? "left";
     const halo = (n.atom ? SPOT_R.atom : SPOT_R.town) * (focus?.name === n.name ? 1.3 : 1) * spotScale(n.atom, cam.scale, ATOM_PX).k + 12;
-    const cx = (n.center.x - cam.box.x) * cam.scale, cy = (n.center.y - cam.box.y) * cam.scale;
+    const pc = proj(n.center);
+    const cx = (pc.x - cam.box.x) * cam.scale, cy = (pc.y - cam.box.y) * cam.scale;
     const off = halo * cam.scale + 4;
     const pos = side === "left" ? { x: cx - off, y: cy } : side === "right" ? { x: cx + off, y: cy } : side === "down" ? { x: cx, y: cy + off } : { x: cx, y: cy - off };
     return { ...pos, side };
   }, [world, drawn, zoom, focus, menuRows, cursor, byName, entryAtom, labels, park, cam.box.x, cam.box.y, cam.scale]);
 
-  const toScreen = (p: Pt) => ({ x: (p.x - cam.box.x) * cam.scale, y: (p.y - cam.box.y) * cam.scale });
+  const toScreen = (p: Pt) => { const q = proj(p); return { x: (q.x - cam.box.x) * cam.scale, y: (q.y - cam.box.y) * cam.scale }; };
   const handUrl = useMemo(() => handCssUrl(), []);
   const HW = 14 * 3, HH = 11 * 3;
   const showMenu = !secret && (mobile ? menuOpen || zoom === "overview" : zoom !== "node");
   const grokNode = byName.get(GROKKING_EGG.model);
-  const crumbs = [
+  const crumbs = useMemo(() => [
     ...(zoom !== "overview" ? [{ label: "All families", onClick: () => update({ zoom: "overview", focus: null }) }] : []),
     ...(family ? [{ label: familyLabel(family), onClick: zoom === "node" ? () => update({ zoom: "region" }) : undefined }] : []),
     ...(zoom === "node" && focus ? [{ label: displayName(focus.name) }] : []),
-  ];
-  const compositions = card && taxonomy ? taxonomy.compositions.filter((c) => c.composes.includes(card.name)) : [];
+  ], [zoom, family, focus, update]);
+  const crumbsShown = useMemo(() => (mobile ? crumbs.slice(-1) : crumbs), [mobile, crumbs]);
+  const compositions = useMemo(() => (card && taxonomy ? taxonomy.compositions.filter((c) => c.composes.includes(card.name)) : []), [card, taxonomy]);
+  const closeCard = useCallback(() => update({ zoom: "region" }), [update]);
+  const toggleMenu = useCallback(() => setMenuOpen((o) => !o), []);
+  const menuStyle = useMemo(() => (mobile ? undefined : { top: GAP + TITLE_H + 8, width: MENU_W }), [mobile]);
   const secretEra = secret?.kind === "era" ? NEXT_ERA.find((m) => m.id === secret.id) : null;
   const secretRuin = secret?.kind === "ruin" ? RUINS.find((r) => r.id === secret.id) : null;
 
@@ -448,6 +518,8 @@ export default function HybridPage() {
         style={{ ["--hybrid-hand" as string]: handUrl, background: "#1E62D9" }}>
         {/* the diorama */}
         <div ref={cam.ref} {...cam.handlers}
+          onWheel={(e) => { setRoamed(true); cam.handlers.onWheel(e); }}
+          onPointerMove={(e) => { if (e.buttons) setRoamed(true); cam.handlers.onPointerMove(e); }}
           onPointerDown={(e) => { if (!(e.target as Element).closest("[data-node],[data-critter],[data-secret]")) cam.handlers.onPointerDown(e); }}
           onClick={(e) => {
             const el = e.target as Element;
@@ -462,10 +534,10 @@ export default function HybridPage() {
             <svg viewBox={cam.viewBox} className="h-full w-full select-none" role="application" aria-label="Paper map of the model zoo"
               style={{ fontFamily: "var(--font-hybrid-round), system-ui, sans-serif" }}>
               <Diorama world={world} states={states} stations={stations} focus={focus} zoom={zoom}
-                lineageNames={lineageNames} lineageRoads={lineageRoads} quest={quest} scale={cam.scale} still={still}
-                critter={focus ? { training: trainUnlocked && Boolean(real.curve) } : null}
-                ferry={ferry ? { ...ferry, t: sailT } : null} trains={trains}
-                konami={konami ? { t: konami.t, schedule } : null} atomPx={ATOM_PX} onHover={setHovered} />
+                lineageNames={lineageNames} lineageRoads={lineageRoads} quest={quest} scale={qScale} still={still}
+                critter={critterProp}
+                ferry={ferryProp} trains={trains}
+                konami={konamiProp} atomPx={ATOM_PX} showSecrets={roamed || Boolean(secret)} onHover={setHovered} />
             </svg>
           )}
         </div>
@@ -540,25 +612,25 @@ export default function HybridPage() {
         {/* slim title + (at most) one window */}
         {world && (
           <div className={mobile ? "absolute inset-x-2 top-2 z-30" : "absolute left-4 top-4 z-30"} style={mobile ? undefined : { maxWidth: `calc(100% - ${zoom === "node" ? CARD_W + 64 : 32}px)` }}>
-            <SlimTitle models={world.nodes.length} families={families.length} crumbs={mobile ? crumbs.slice(-1) : crumbs}
-              onMenu={mobile && zoom !== "overview" ? () => setMenuOpen((o) => !o) : undefined} menuOpen={menuOpen}
+            <SlimTitle models={world.nodes.length} families={families.length} crumbs={crumbsShown}
+              onMenu={mobile && zoom !== "overview" ? toggleMenu : undefined} menuOpen={menuOpen}
               toast={konamiGen != null ? `Forward pass: generation ${konamiGen + 1}` : null} />
           </div>
         )}
         {world && showMenu && (
           <RegionMenu title={family ? familyLabel(family) : "Jump to a family"} rows={menuRows} cursor={cursor}
-            onPick={pick} onHover={setCursor} touch={mobile}
+            onPick={pick} onHover={setCursor} touch={mobile} compact={mobile && zoom === "overview"}
             footer={mobile
-              ? zoom === "overview" ? "Castles are atoms, where a family starts. A gold star marks a champion." : undefined
+              ? undefined
               : family ? "Arrow keys choose, Enter opens, Esc goes back." : "Arrow keys choose a family, Enter visits it."}
             className={mobile
-              ? zoom === "overview" ? "fixed inset-x-2 bottom-2 z-30 flex max-h-[34%]" : "fixed inset-x-2 bottom-2 z-30 flex max-h-[45%]"
+              ? zoom === "overview" ? "fixed inset-x-2 bottom-2 z-30 flex" : "fixed inset-x-2 bottom-2 z-30 flex max-h-[45%]"
               : "absolute left-4 z-20 flex max-h-[calc(100%-104px)]"}
-            style={mobile ? undefined : { top: GAP + TITLE_H + 8, width: MENU_W }} />
+            style={menuStyle} />
         )}
         {card && !secret && (
-          <LessonCard card={card} lesson={lesson} evidence={evidence} party={party} partyCursor={partyCursor} onParty={open}
-            onHover={setPartyCursor} onClose={() => update({ zoom: "region" })} still={still} mobile={mobile}
+          <LessonCard card={card} lesson={lessonM} evidence={evidence} party={party} partyCursor={partyCursor} onParty={open}
+            onHover={setPartyCursor} onClose={closeCard} still={still} mobile={mobile}
             compositions={compositions} sailing={sailing} onSail={setSailing} />
         )}
         {(secretEra || secretRuin) && (

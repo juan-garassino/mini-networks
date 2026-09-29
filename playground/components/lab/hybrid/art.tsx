@@ -42,7 +42,7 @@ function stripes(id: string, a: string, b: string, hi: string, rot = -35) {
   );
 }
 
-export function HybridDefs() {
+export const HybridDefs = memo(function HybridDefs() {
   return (
     <>
       <ArtDefs />
@@ -54,7 +54,7 @@ export function HybridDefs() {
       </defs>
     </>
   );
-}
+});
 
 // ── roads: fat gold cobble with a darker orange-brown edge, slightly raised ──
 type RoadStyle = "primary" | "path" | "long" | "lineage";
