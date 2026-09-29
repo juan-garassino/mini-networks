@@ -164,7 +164,7 @@ export function islandSlots(island: World["hiddenIsland"]): Pt[] {
 // ————————————————————————————— compose —————————————————————————————
 
 export function buildArtLayers(world: World, looks: Map<string, NodeLook>, emblems: ArtEmblems | null): ArtLayers {
-  const clouds = cloudSprites().map((s) => s.img);
+  const clouds = cloudSprites(4).map((s) => s.img);
   const t = renderTerrain(world, { extent: "all" });
   const img = t.img;
   const A = (p: P): P => ({ x: (p.x - t.origin.x) / t.px, y: (p.y - t.origin.y) / t.px });
@@ -180,13 +180,33 @@ export function buildArtLayers(world: World, looks: Map<string, NodeLook>, emble
     walkPoly(pts, (x, y) => { if (k++ % 3 === 0) { put(img, x + 1, y + 1, RAMPS.wood[2]); put(img, x, y, RAMPS.sand[5]); } });
   }
   const main = polys.filter((p) => p.road.kind !== "bridge" && p.road.primary);
-  for (const { pts } of main) walkPoly(pts, (x, y) => { put(img, x + 1, y + 1, RAMPS.wood[2]); put(img, x + 1, y, RAMPS.wood[2]); put(img, x, y + 1, RAMPS.wood[2]); });
-  for (const { pts } of main) walkPoly(pts, (x, y) => { put(img, x, y, RAMPS.sand[4]); });
-  for (const { pts } of main) walkPoly(pts, (x, y) => { if (get(img, x - 1, y - 1) !== RAMPS.sand[4]) put(img, x, y, RAMPS.sand[5]); });
+  // 3-art-px two-tone road: dark hue-shifted edge, light cobble core, soft cast shadow
+  for (const { pts } of main) walkPoly(pts, (x, y) => { for (let dy = -1; dy <= 2; dy++) for (let dx = -1; dx <= 2; dx++) if (dx === 2 || dy === 2) put(img, x + dx, y + dy, SHADOW[get(img, x + dx, y + dy)] ?? get(img, x + dx, y + dy)); });
+  for (const { pts } of main) walkPoly(pts, (x, y) => { for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) put(img, x + dx, y + dy, RAMPS.wood[1]); });
+  for (const { pts } of main) walkPoly(pts, (x, y) => { put(img, x, y, RAMPS.sand[5]); });
+  // direction arrows (parent → child): a bold dark V across the road
   for (const { road } of polys) if (road.kind !== "bridge") for (const ch of road.chevrons) {
     const c = A(ch);
-    for (const [dx, dy] of chevronOffsets(ch.angle, 1)) put(img, c.x + dx, c.y + dy, RAMPS.wood[1]);
+    for (const [dx, dy] of chevronOffsets(ch.angle, 2)) { put(img, c.x + dx, c.y + dy, RAMPS.wood[0]); put(img, c.x + dx - Math.round(Math.cos(ch.angle)), c.y + dy - Math.round(Math.sin(ch.angle)), RAMPS.wood[0]); }
   }
+
+  // faceted ridges along family borders no lineage crosses (lit / shadow faces, snow caps)
+  const peaks: P[] = [];
+  for (const line of world.mountains) {
+    let carry = 0;
+    for (let i = 1; i < line.length; i++) {
+      const a = A(line[i - 1]), b = A(line[i]);
+      const len = Math.hypot(b.x - a.x, b.y - a.y);
+      for (let d = carry; d < len; d += 11) peaks.push({ x: a.x + ((b.x - a.x) * d) / len, y: a.y + ((b.y - a.y) * d) / len });
+      carry = Math.max(0, carry + Math.ceil((len - carry) / 11) * 11 - len);
+    }
+  }
+  peaks.sort((p, q) => p.y - q.y);
+  peaks.forEach((pk, i) => {
+    const s = props.snowPeak(i % 3 === 1 ? "stone" : "rock");
+    const flip = i % 2 === 1;
+    artBlit(img, s.img, pk.x - (flip ? s.img.w - 1 - s.anchor.x : s.anchor.x), pk.y - s.anchor.y + ((i * 3) % 4), flip);
+  });
 
   // bridges: planks across the river
   const TS = 16;
@@ -233,9 +253,23 @@ export function buildArtLayers(world: World, looks: Map<string, NodeLook>, emble
   for (const s of islandSlots(world.ruinsIsland)) { const c = A(s); artBlit(img, ru.img, c.x - ru.anchor.x, c.y - ru.anchor.y); }
 
   // compass rose in the emptiest sea (north is up)
+  // compass rose: the first open-sea spot scanning from the world's lower-left corner
   const cp = props.compass();
-  const slot = world.seaSlots[world.seaSlots.length - 1];
-  if (slot) { const c = A({ x: slot.x + slot.w / 2, y: slot.y + slot.h / 2 }); artBlit(img, cp.img, c.x - cp.img.w / 2, c.y - cp.img.h / 2); }
+  {
+    const wb = world.camera.world;
+    const tl = A({ x: wb.x, y: wb.y }), br = A({ x: wb.x + wb.w, y: wb.y + wb.h });
+    const clear = (x0: number, y0: number) => {
+      for (let y = y0 - 8; y < y0 + cp.img.h + 8; y += 2) for (let x = x0 - 8; x < x0 + cp.img.w + 8; x += 2) {
+        if (x < 0 || y < 0 || x >= t.img.w || y >= t.img.h || t.land[y * t.img.w + x]) return false;
+      }
+      return true;
+    };
+    let placed = false;
+    for (let dy = 0; dy < 260 && !placed; dy += 8) for (let dx = 0; dx < 360 && !placed; dx += 8) {
+      const x0 = Math.round(tl.x + 70 + dx), y0 = Math.round(br.y - cp.img.h - 24 - dy);
+      if (clear(x0, y0)) { artBlit(img, cp.img, x0, y0); placed = true; }
+    }
+  }
 
   // nodes, back to front
   const nodes = [...world.nodes].sort((a, b) => a.center.y - b.center.y);

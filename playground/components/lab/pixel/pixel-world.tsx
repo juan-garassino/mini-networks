@@ -20,7 +20,7 @@ import { cardModel, displayName, evidenceState } from "@/components/lab/shared/c
 import { CRITTER } from "@/components/lab/shared/critter";
 import {
   DOUBLE_DESCENT_EGG, GROKKING_EGG, NEXT_ERA, NEXT_ERA_COPY, RUINS, dipDepth, forwardPassOrder, forwardPassSchedule,
-  stationCounts, useCritterClicks, useKonami, useLiveTraining, useLongFocus, useRealLossCurve,
+  stationCounts, useKonami, useLiveTraining, useLongFocus, useRealLossCurve,
 } from "@/components/lab/shared/eggs";
 import { Sparkline } from "@/components/lab/shared/lesson/sparkline";
 import type { ModelEvidence, TaxonomyResponse } from "@/lib/types";
@@ -122,7 +122,7 @@ export function PixelWorld() {
   }, [world, zoom, focusNode, stage]);
 
   const cam = useCamera({ world: world?.camera.all ?? target, target, still, minWidth: 180 });
-  const xf: Xform = xformFor(cam.box, stage);
+  const xf: Xform = xformFor(cam.box, stage, 32);
 
   // ——— identity: species emblems (async raster), evidence looks, cached layers ———
   const [emblems, setEmblems] = useState<ArtEmblems | null>(null);
@@ -205,10 +205,14 @@ export function PixelWorld() {
     const pts = [...path.points].reverse();
     if (pts.length > 1) pts[pts.length - 1] = { x: park.x, y: park.y };
     const s = samplePolyline(pts.length > 1 ? pts : [park, park]);
-    walk.current = { at: s.at, len: s.length, t0: performance.now(), speed: Math.max(CRITTER.walkSpeed, s.length / 3.2), park };
+    // the critter sets off once the camera has landed (fly ≈ 700ms) and takes ≥1.6s,
+    // so the walk is the one orchestrated moment after a selection
+    const LAND = 750;
+    const speed = Math.min(Math.max(120, s.length / 3.2), Math.max(60, s.length / 1.6));
+    walk.current = { at: s.at, len: s.length, t0: performance.now() + LAND, speed, park };
     if (!animate || s.length < 1) { walk.current.t0 = -1e9; drawRef.current(); return; }
     startAnim("walk");
-    const done = setTimeout(() => stopAnim("walk"), (s.length / walk.current.speed) * 1000 + 100);
+    const done = setTimeout(() => stopAnim("walk"), LAND + (s.length / speed) * 1000 + 100);
     return () => { clearTimeout(done); stopAnim("walk"); };
   }, [world, focusNode, animate, startAnim, stopAnim]);
 
@@ -247,6 +251,17 @@ export function PixelWorld() {
     const p = pathToAtom(world, m);
     return { model: m, ...samplePolyline([...p.points].reverse()) };
   }).filter((t) => t.length > 0) : []), [world, live]);
+  // no live run right now → one engine waits, parked, at the busiest station (most logged runs)
+  const parked = useMemo(() => {
+    if (!world || live.length) return null;
+    const best = Object.entries(stations).filter(([m]) => world.nodes.some((n) => n.name === m)).sort((a, b) => b[1] - a[1] || (a[0] < b[0] ? -1 : 1))[0];
+    if (!best) return null;
+    const road = world.roads.find((r) => r.to === best[0] && r.lanePoints.length > 1) ?? world.roads.find((r) => r.from === best[0] && r.lanePoints.length > 1);
+    if (!road) return null;
+    const s = samplePolyline(road.lanePoints);
+    const t = road.to === best[0] ? Math.max(0, 1 - 40 / Math.max(s.length, 1)) : Math.min(1, 40 / Math.max(s.length, 1));
+    return { model: best[0], runs: best[1], at: s.at(t) };
+  }, [world, live, stations]);
   useEffect(() => {
     if (!trains.length || !animate) { drawRef.current(); return; }
     startAnim("trains");
@@ -265,17 +280,29 @@ export function PixelWorld() {
   useKonami(onKonami, animate);
 
   // critter egg: 7 clicks → it trains on a REAL loss curve
-  const critterEgg = useCritterClicks(7);
-  const realCurve = useRealLossCurve(runs, critterEgg.unlocked && !still);
+  // counter in refs (no stale closures between rapid clicks); the real curve is
+  // prefetched once per session so the bubble fills within ~1s of the 7th click
+  const clicks = useRef({ n: 0, last: 0 });
+  const [critterUnlocked, setCritterUnlocked] = useState(false);
+  const critterEgg = useMemo(() => ({
+    click: () => {
+      const now = Date.now();
+      clicks.current.n = now - clicks.current.last <= 2500 ? clicks.current.n + 1 : 1;
+      clicks.current.last = now;
+      if (clicks.current.n >= 7) setCritterUnlocked(true);
+    },
+  }), []);
+  const realCurve = useRealLossCurve(runs, !still && ready);
   const [trainT, setTrainT] = useState(0);
   useEffect(() => {
+    if (!critterUnlocked) { setTrainT(0); return; }
     if (!realCurve.curve || !animate) { setTrainT(realCurve.curve ? 1 : 0); return; }
     const t0 = performance.now();
     let raf = 0;
     const step = (now: number) => { const t = Math.min(1, (now - t0) / 2600); setTrainT(t); if (t < 1) raf = requestAnimationFrame(step); };
     raf = requestAnimationFrame(step);
     return () => cancelAnimationFrame(raf);
-  }, [realCurve.curve, animate]);
+  }, [realCurve.curve, animate, critterUnlocked]);
 
   // grokking egg: hold (hover / keyboard focus) the grokking spot 4 s
   const [hovered, setHovered] = useState<string | null>(null);
@@ -295,8 +322,8 @@ export function PixelWorld() {
       return [name, { s: stamp(nodeSprite(m, look, emblems)), node: m }] as const;
     }));
   }, [world, emblems, lin, looks, nodeOf]);
-  const latest = useRef({ xf, layers, spot, focusNode, vp, critter, small, lin, polys, focusSprite, zoom, trains, nodeOf, cardOpen, stage, kinSprites, world });
-  latest.current = { xf, layers, spot, focusNode, vp, critter, small, lin, polys, focusSprite, zoom, trains, nodeOf, cardOpen, stage, kinSprites, world };
+  const latest = useRef({ xf, layers, spot, focusNode, vp, critter, small, lin, polys, focusSprite, zoom, trains, nodeOf, cardOpen, stage, kinSprites, world, parked });
+  latest.current = { xf, layers, spot, focusNode, vp, critter, small, lin, polys, focusSprite, zoom, trains, nodeOf, cardOpen, stage, kinSprites, world, parked };
 
   const draw = useCallback((nowArg?: number) => {
     const c = canvasRef.current;
@@ -424,11 +451,25 @@ export function PixelWorld() {
       const sc = Math.max(u, 2 * dpr);
       ctx.drawImage(st.c, Math.round(s.x - st.ax * sc), Math.round(s.y - st.ay * sc), st.c.width * sc, st.c.height * sc);
     }
+    // no live run: the engine waits, parked, at the busiest station
+    if (L.small && tile >= 8 && L.parked) {
+      const q = L.parked.at, s = S(q);
+      const st = Math.cos(q.angle) < 0 ? L.small.trainL : L.small.train;
+      const sc = Math.max(u, 2 * dpr);
+      ctx.drawImage(st.c, Math.round(s.x - st.ax * sc), Math.round(s.y - st.ay * sc), st.c.width * sc, st.c.height * sc);
+    }
 
     // trains on the rails of models that are training right now
     if (L.small && tile >= 8) for (const tr of L.trains) {
       const t = animate ? ((now / 1000) * 120 / tr.length) % 1 : 0.5;
       const q = tr.at(t), s = S(q);
+      const st = Math.cos(q.angle) < 0 ? L.small.trainL : L.small.train;
+      const sc = Math.max(u, 2 * dpr);
+      ctx.drawImage(st.c, Math.round(s.x - st.ax * sc), Math.round(s.y - st.ay * sc), st.c.width * sc, st.c.height * sc);
+    }
+    // no live run: the engine waits, parked, at the busiest station
+    if (L.small && tile >= 8 && L.parked) {
+      const q = L.parked.at, s = S(q);
       const st = Math.cos(q.angle) < 0 ? L.small.trainL : L.small.train;
       const sc = Math.max(u, 2 * dpr);
       ctx.drawImage(st.c, Math.round(s.x - st.ax * sc), Math.round(s.y - st.ay * sc), st.c.width * sc, st.c.height * sc);
@@ -514,6 +555,14 @@ export function PixelWorld() {
     return () => { delete w.__lab; };
   }, [drawn, ready, go, update, onCritter]);
 
+  // the card opens once the camera has landed (never pops over a moving map)
+  const [landedFor, setLandedFor] = useState<string | null>(null);
+  useEffect(() => {
+    if (!cardOpen || !focusNode) return;
+    if (!animate) { setLandedFor(focusNode.name); return; }
+    const id = setTimeout(() => setLandedFor(focusNode.name), 720);
+    return () => clearTimeout(id);
+  }, [cardOpen, focusNode, animate]);
   const card = useMemo(() => {
     if (!cardOpen || !focusNode || !taxonomy) return null;
     return cardModel(focusNode.name, { taxonomy, evidence, runs, family: focusNode.family, depth: focusNode.depth });
@@ -529,9 +578,8 @@ export function PixelWorld() {
   // ——— overlay geometry (screen space) ———
   const tile = xf.tile;
   const uiRects = useMemo<Rect[]>(() => {
-    const r: Rect[] = mobile ? [{ x: 0, y: 0, w: vp.w, h: MOBILE_TOP }] : [{ x: 0, y: 0, w: 344, h: zoom === "overview" ? 200 : 266 }];
-    if (zoom === "overview" && !mobile) r.push({ x: vp.w - 470, y: vp.h - 360, w: 470, h: 360 }); // map key
-    else r.push(mobile ? { x: 0, y: vp.h - 56, w: 130, h: 56 } : { x: vp.w - 130, y: vp.h - 56, w: 130, h: 56 }); // "Map key" button
+    const r: Rect[] = mobile ? [{ x: 0, y: 0, w: vp.w, h: MOBILE_TOP }] : [{ x: 0, y: 0, w: 344, h: zoom === "overview" ? 200 : 196 }];
+    r.push(mobile ? { x: 0, y: vp.h - 56, w: 130, h: 56 } : { x: vp.w - 130, y: vp.h - 56, w: 130, h: 56 }); // "Map key" button
     return r;
   }, [mobile, vp.w, vp.h, zoom]);
   const labelText = useMemo(() => new Map((world?.labels ?? []).map((l) => [l.text, l.node])), [world]);
@@ -540,18 +588,21 @@ export function PixelWorld() {
     const camBox = { x: -xf.ox / xf.k, y: -xf.oy / xf.k, w: vp.w / xf.k, h: vp.h / xf.k };
     const measure = (t: string, f: number) => {
       const node = labelText.get(t);
-      const badge = node && (stations[node] ?? 0) > 0 ? 20 : 0;
-      return { w: Math.ceil(0.62 * f * displayName(t).length) + 14 + badge, h: f + 10 };
+      void node;
+      return { w: Math.ceil(0.62 * f * displayName(t).length) + 14, h: f + 10 };
     };
     let out = placeScreenLabels(world, camBox, vp, { font: tile <= 4 ? { atom: 14, derived: 13 } : { atom: 16, derived: 14 }, focus: focusNode?.name ?? null, measure, edgeMargin: 24 });
     // node view: the focus plate sits centred under its plinth (never on the critter,
     // which parks beside the model); other plates yield to it and to the critter
     if (focusNode && zoom === "node" && tile >= 16 && world) {
       const fp = out.find((l) => l.node === focusNode.name);
-      if (fp) {
+      if (fp && focusSprite) {
+        // 18px plate ABOVE the enlarged sprite + its brackets, off the lineage rail
         const c = toScreen(xf, { x: focusNode.center.x, y: (focusNode.foot.y + focusNode.foot.h) * TS });
-        const bs = Math.max(2, tile / 8);
-        fp.x = Math.round(c.x - fp.w / 2); fp.y = Math.round(c.y + 4 * bs);
+        const u = Math.max(1, tile / 8), fs = u + 1, bs = Math.max(2, tile / 8);
+        const top = c.y - focusSprite.ay * fs - 3 * bs;
+        fp.font = 18; fp.h = 28; fp.w = Math.ceil(0.62 * 18 * displayName(focusNode.name).length) + 16;
+        fp.x = Math.round(c.x - fp.w / 2); fp.y = Math.round(top - fp.h - 6);
       }
       const park = parkingSpot(world, focusNode.name);
       const ps = toScreen(xf, park);
@@ -564,7 +615,7 @@ export function PixelWorld() {
       .filter((l) => l.node === focusNode?.name || !uiRects.some((u) => hit(l, u)))
       .filter((l) => !cardOpen || (l.x + l.w <= stage.x + stage.w - 8 && l.y + l.h <= stage.y + stage.h - 8));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [world, xf.tile, xf.ox, xf.oy, vp.w, vp.h, focusNode, stations, uiRects, cardOpen, stage, zoom]);
+  }, [world, xf.tile, xf.ox, xf.oy, vp.w, vp.h, focusNode, uiRects, cardOpen, stage, zoom, focusSprite]);
 
   const signs = useMemo(() => {
     if (!world) return [];
@@ -576,7 +627,7 @@ export function PixelWorld() {
       const c = toScreen(xf, { x: (sp.x + sp.w / 2) * TS, y: (sp.y + sp.h / 2) * TS });
       obstacles.push({ x: c.x - g / 2 - 2, y: c.y - g / 2 - 2, w: g + 4, h: g + 4, weight: 50 });
     }
-    for (const l of plates) obstacles.push({ x: l.x - 2, y: l.y - 2, w: l.w + 4, h: l.h + 4, weight: 25 });
+    for (const l of plates) obstacles.push({ x: l.x - 8, y: l.y - 8, w: l.w + 16, h: l.h + 16, weight: 25 });
     for (const n of world.nodes) {
       const a = toScreen(xf, { x: n.foot.x * TS, y: n.foot.y * TS });
       const focus = n.name === focusNode?.name, pad = focus ? 56 : 4; // the focus sprite is drawn one scale step larger + brackets
@@ -598,6 +649,31 @@ export function PixelWorld() {
       .filter((g) => !cardOpen || g.x + g.w <= stage.x + stage.w);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [world, plates, xf.tile, xf.ox, xf.oy, vp.w, vp.h, uiRects, focusNode, cardOpen, stage]);
+
+  // harbour signs: the pipeline count on a small wooden board ≥16px from the boats,
+  // tried right / left / below, dropped when it would touch a name, a sign or a window
+  const harbourSigns = useMemo(() => {
+    if (!world || tile < 8) return [];
+    const taken: Rect[] = [...uiRects, ...plates.map((l) => ({ x: l.x - 4, y: l.y - 4, w: l.w + 8, h: l.h + 8 })),
+      ...signs.map((g) => ({ x: g.x - 4, y: g.y - 4, w: g.w + 8, h: g.h + 8 }))];
+    const out: { key: number; x: number; y: number; w: number; boats: number }[] = [];
+    for (const h of world.harbours) {
+      const shown = Math.min(tile >= 24 ? 3 : 1, h.boats);
+      if (h.boats <= shown) continue;
+      const q = toScreen(xf, h.pt);
+      const bs = Math.max(2, tile / 8), half = (shown * 20 * bs) / 2, w = 74, hh = 22;
+      const cands = [
+        { x: q.x + half + 16, y: q.y - hh }, { x: q.x - half - 16 - w, y: q.y - hh }, { x: q.x - w / 2, y: q.y + 16 },
+      ];
+      const pick = cands.find((c) => c.x > 4 && c.y > 4 && c.x + w < vp.w - 4 && c.y + hh < vp.h - 4
+        && !taken.some((t) => hit({ ...c, w, h: hh }, t)));
+      if (!pick) continue;
+      taken.push({ ...pick, w, h: hh });
+      out.push({ key: h.tile, x: pick.x, y: pick.y, w, boats: h.boats });
+    }
+    return out;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [world, xf.tile, xf.ox, xf.oy, plates, signs, uiRects, vp.w, vp.h]);
 
   useEffect(() => {
     if (!world) return;
@@ -641,7 +717,6 @@ export function PixelWorld() {
           {plates.map((l) => {
             const node = nodeOf.get(l.node);
             const focus = focusNode?.name === l.node;
-            const runsHere = stations[l.node] ?? 0;
             const cls = focus ? styles.plateFocus : kin.has(l.node) ? `${styles.plateKin} ${node?.atom ? styles.plateAtom : ""}` : node?.atom ? styles.plateAtom : "";
             const dim = cardOpen && !focus && !kin.has(l.node);
             return (
@@ -650,7 +725,7 @@ export function PixelWorld() {
                   ...(kinTone.has(l.node) && !focus ? { boxShadow: `inset 0 0 0 2px ${kinTone.get(l.node)}, 0 2px 0 #1e1f4e` } : {}) }}
                 onClick={() => onNode(l.node)}>
                 <span>{displayName(l.node)}</span>
-                {runsHere > 0 && <span className={styles.station} title={`${runsHere} runs logged: its station board`}><PixelNum value={runsHere} scale={1} /></span>}
+
               </div>
             );
           })}
@@ -691,20 +766,12 @@ export function PixelWorld() {
             );
           })}
 
-          {world && tile >= 8 && world.harbours.filter((h) => h.boats > (tile >= 24 ? 3 : 1)).map((h) => {
-            const q = toScreen(xf, h.pt);
-            const bs = Math.max(2, tile / 16);
-            // the count plate yields to name-plates (names matter more than the boat count)
-            const shown = Math.min(tile >= 24 ? 3 : 1, h.boats);
-            const box = { x: q.x + (shown * 9 + 2) * bs, y: q.y - 10 * bs, w: 44, h: 22 };
-            if (plates.some((l) => hit(box, l))) return null;
-            return (
-              <div key={h.tile} className={styles.plate} title={`${h.boats} pipelines use this land`}
-                style={{ left: box.x, top: box.y, height: 22, fontSize: 14, pointerEvents: "none" }}>
-                ×<PixelNum value={h.boats} scale={2} />
-              </div>
-            );
-          })}
+          {harbourSigns.map((h) => (
+            <div key={h.key} className={styles.sign} title={`${h.boats} pipelines use this land`}
+              style={{ left: h.x, top: h.y, width: h.w, fontSize: 14, padding: "1px 6px 2px" }}>
+              <PixelNum value={h.boats} scale={2} /> boats
+            </div>
+          ))}
 
           {critterScreen && (
             <button type="button" aria-label="The critter (click it)" className={styles.hit}
@@ -752,12 +819,20 @@ export function PixelWorld() {
             </PixelWindow>
           );
         })()}
-        {critterEgg.unlocked && realCurve.curve && critterScreen && (
+        {critterUnlocked && critterScreen && (
           <PixelWindow className={styles.bubble} style={{ left: Math.min(vp.w - 320, critterScreen.x + critterScreen.w + 8), top: Math.max(8, critterScreen.y - 40) }}>
             <p className="text-[16px] font-bold text-[#f5c24a]">Training…</p>
-            <Sparkline points={realCurve.curve.points} progress={trainT} label={realCurve.curve.key.replace(/_/g, " ")} width={260} height={60}
-              palette={{ line: GOLD, axis: "#4a60b6", text: "#bccbe8", dot: "#fff6e0" }} title="a real loss curve from a logged run" />
-            <p className="text-[14px] text-[#bccbe8]">A real run: {realCurve.curve.model}, {realCurve.curve.runId.slice(0, 24)}</p>
+            {realCurve.curve ? (
+              <>
+                <Sparkline points={realCurve.curve.points} progress={trainT} label={realCurve.curve.key.replace(/_/g, " ")} width={260} height={60}
+                  palette={{ line: GOLD, axis: "#4a60b6", text: "#bccbe8", dot: "#fff6e0" }} title="a real loss curve from a logged run" />
+                <p className="text-[14px] text-[#bccbe8]">A real run: {realCurve.curve.model}, {realCurve.curve.runId.slice(0, 24)}</p>
+              </>
+            ) : realCurve.loading ? (
+              <p className="text-[15px] text-[#bccbe8]">Finding a real loss curve in the run log…</p>
+            ) : (
+              <p className="text-[15px] text-[#bccbe8]">No logged run has a clearly falling loss yet, so nothing to replay.</p>
+            )}
           </PixelWindow>
         )}
 
@@ -771,8 +846,8 @@ export function PixelWorld() {
           onZoom={(z) => update({ zoom: z })}
           hidden={mobile && cardOpen}
         />
-        {!(mobile && cardOpen) && <Legend mobile={mobile} defaultOpen={zoom === "overview" && !mobile} />}
-        {card && emblems && (
+        {!(mobile && cardOpen) && <Legend mobile={mobile} defaultOpen={false} />}
+        {card && emblems && landedFor === card.name && (
           <StatusCard card={card} looks={looks} atoms={atoms} emblems={emblems} lesson={lesson} evidence={evidence} still={still}
             descendants={stats.desc.get(card.name) ?? 0} maxDescendants={stats.maxDesc} maxRuns={stats.maxRuns}
             sailing={sailing} onSail={setSailing}

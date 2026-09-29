@@ -9,6 +9,7 @@
 //   Pipelines compositions — pick one and its boat sails the ferry route
 // Every number is a 5×7 pixel digit (pixel-num.tsx). Body text ≥16px.
 import { useEffect, useMemo, useRef, useState } from "react";
+import { BookOpen, LineChart, Network, Workflow } from "lucide-react";
 import { displayName, EVIDENCE_COPY, type CardModel } from "@/components/lab/shared/card-model";
 import { Anatomy } from "@/components/lab/shared/lesson/anatomy";
 import { Sparkline } from "@/components/lab/shared/lesson/sparkline";
@@ -33,7 +34,9 @@ import styles from "./pixel.module.css";
 
 const CELLS = 16;
 const SPAN = 1.25; // gate meter spans 0…1.25× the bar, so the bar sits at 80%
-export const PAGES = ["Lesson", "Anatomy", "Lineage", "Proof", "Pipelines"] as const;
+// four pages on one row: the family page holds lineage AND pipelines
+export const PAGES = ["Lesson", "Anatomy", "Family", "Proof"] as const;
+const PAGE_ICON: Record<(typeof PAGES)[number], typeof BookOpen> = { Lesson: BookOpen, Anatomy: Workflow, Family: Network, Proof: LineChart };
 export type Page = (typeof PAGES)[number];
 
 export function gateMeter(card: CardModel) {
@@ -157,17 +160,25 @@ export function StatusCard({
           </div>
           <div className="min-w-0 flex-1">
             <h2 className="text-[28px] font-bold leading-none text-[#fff6e0]">{displayName(card.name)}</h2>
-            <p className="mt-2 text-[18px] font-bold leading-tight text-[#f5c24a]">LV <PixelNum value={card.depth} /></p>
+            <p className="mt-2 text-[18px] font-bold leading-tight text-[#f5c24a]" title="Level: how many steps it sits below its root atom">
+              LV <PixelNum value={card.depth} />
+              <span className="ml-2 text-[14px] font-normal text-[#bccbe8]">{card.depth === 0 ? "an atom, a root" : card.depth === 1 ? "1 step below its atom" : `${card.depth} steps below its atom`}</span>
+            </p>
             <p className="mt-1 text-[16px] leading-tight">{familyLabel(card.family)} {card.atom ? "atom" : "model"}</p>
           </div>
           <button type="button" className={styles.btn} onClick={onClose} aria-label="Close status (Esc)">Close</button>
         </header>
 
-        <div ref={tabs} role="tablist" aria-label="Status pages (arrow up / down)" className="mt-3 flex flex-wrap gap-1">
-          {PAGES.map((p) => (
-            <button key={p} type="button" role="tab" data-page={p} aria-selected={page === p}
-              className={page === p ? styles.tabOn : styles.tab} onClick={() => setPage(p)}>{p}</button>
-          ))}
+        <div ref={tabs} role="tablist" aria-label="Status pages (arrow up / down)" className="mt-3 grid grid-cols-4 gap-1">
+          {PAGES.map((p) => {
+            const Icon = PAGE_ICON[p];
+            return (
+              <button key={p} type="button" role="tab" data-page={p} aria-selected={page === p}
+                className={page === p ? styles.tabOn : styles.tab} onClick={() => setPage(p)}>
+                <Icon size={14} strokeWidth={2.5} aria-hidden /> {p}
+              </button>
+            );
+          })}
         </div>
 
         <div role="tabpanel" className="mt-3 min-h-[280px] max-w-[60ch]">
@@ -182,10 +193,16 @@ export function StatusCard({
                 </>
               ) : <p className="text-[17px] leading-[1.45]">{card.description}</p>}
               <div className="mt-4 space-y-2" aria-label="Stats">
-                <StatBar label="Lineage" value={descendants} max={maxDescendants} tone="#62dcf2"
+                <StatBar label="Built on it" value={descendants} max={maxDescendants} tone="#62dcf2"
                   note={`${descendants} models build on it, directly or further down`} />
                 <StatBar label="Runs" value={runs} max={maxRuns} tone="#cbea5e" note={`${runs} logged runs (local S-tier smoke tests)`} />
               </div>
+              <dl className="mt-3 grid grid-cols-[88px_1fr] gap-x-2 gap-y-1 text-[16px] leading-snug">
+                <dt className={styles.muted}>Parents</dt>
+                <dd>{card.parents.length ? <><PixelNum value={card.parents.length} />: {card.parents.map(displayName).join(" + ")}</> : "none: it is a root"}</dd>
+                <dt className={styles.muted}>Pipelines</dt>
+                <dd>{card.compositions.length ? <><PixelNum value={card.compositions.length} /> {card.compositions.length === 1 ? "uses" : "use"} it</> : "none yet"}</dd>
+              </dl>
               <p className="mt-3 text-[16px] leading-snug">
                 <span className={styles.muted}>Equipped </span>
                 {equipped ? <span className={styles.gold}>Champion v<PixelNum value={equipped.match(/\d+/)?.[0] ?? "1"} /></span> : "no champion yet"}
@@ -214,7 +231,7 @@ export function StatusCard({
             </div>
           )}
 
-          {page === "Lineage" && (
+          {page === "Family" && (
             <div>
               <p className={`${styles.muted} text-[16px]`}>Builds on</p>
               {card.parents.length ? (
@@ -229,6 +246,30 @@ export function StatusCard({
               {card.children.length ? (
                 <ul>{card.children.map((c) => <Row key={c} name={c} emblems={emblems} look={lookOf(c)} atom={atoms.has(c)} onPick={onPick} />)}</ul>
               ) : <p className="text-[16px]">No models build on it yet.</p>}
+              <p className={`${styles.muted} mt-4 text-[16px]`}>Pipelines</p>
+              {card.compositions.length ? (
+                <>
+                  <p className={`${styles.muted} text-[16px]`}>Pick a pipeline and its boat sails between the lands it joins.</p>
+                  <ul className="mt-2 space-y-1">
+                    {card.compositions.map((c) => {
+                      const on = sailing === c.name;
+                      const line = lessonFor(c.name);
+                      return (
+                        <li key={c.name}>
+                          <button type="button" className={`${styles.row} ${on ? styles.rowOn : ""}`} aria-pressed={on}
+                            onClick={() => onSail(on ? null : c.name)}>
+                            <span className="text-[17px] leading-tight">{displayName(c.name)}</span>
+                          </button>
+                          <p className={`${styles.muted} pl-1 text-[15px] leading-snug`}>
+                            with {c.composes.filter((n) => n !== card.name).map(displayName).join(", ")}
+                            {line?.kind === "composition" && on ? `. ${line.line}` : ""}
+                          </p>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                </>
+              ) : <p className="text-[16px]">Not part of any pipeline yet.</p>}
             </div>
           )}
 
@@ -305,33 +346,7 @@ export function StatusCard({
             </div>
           )}
 
-          {page === "Pipelines" && (
-            <div>
-              {card.compositions.length ? (
-                <>
-                  <p className={`${styles.muted} text-[16px]`}>Pick a pipeline and its boat sails between the lands it joins.</p>
-                  <ul className="mt-2 space-y-1">
-                    {card.compositions.map((c) => {
-                      const on = sailing === c.name;
-                      const line = lessonFor(c.name);
-                      return (
-                        <li key={c.name}>
-                          <button type="button" className={`${styles.row} ${on ? styles.rowOn : ""}`} aria-pressed={on}
-                            onClick={() => onSail(on ? null : c.name)}>
-                            <span className="text-[17px] leading-tight">{displayName(c.name)}</span>
-                          </button>
-                          <p className={`${styles.muted} pl-1 text-[15px] leading-snug`}>
-                            with {c.composes.filter((n) => n !== card.name).map(displayName).join(", ")}
-                            {line?.kind === "composition" && on ? `. ${line.line}` : ""}
-                          </p>
-                        </li>
-                      );
-                    })}
-                  </ul>
-                </>
-              ) : <p className="text-[16px]">This model is not part of any pipeline yet.</p>}
-            </div>
-          )}
+
         </div>
       </div>
     </PixelWindow>

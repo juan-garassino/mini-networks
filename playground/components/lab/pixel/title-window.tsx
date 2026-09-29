@@ -50,7 +50,7 @@ export function TitleWindow({ taxonomyNames, zoom, focus, regionCount, mobile, o
     <PixelWindow as="header" className={`absolute left-4 top-4 ${mobile ? "right-4" : "w-[320px]"}`}>
       <div className="px-1">
         <h1 className="text-[24px] font-bold leading-none text-[#f5c24a]">The model zoo</h1>
-        {!mobile && (
+        {!mobile && zoom === "overview" && (
           <p className="mt-2 text-[16px] leading-snug text-[#fff6e0]">
             <PixelNum value={taxonomyNames.length} /> models across six lands. Pick one and the blob walks there from its root.
           </p>

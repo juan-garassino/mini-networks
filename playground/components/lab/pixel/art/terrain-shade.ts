@@ -311,8 +311,9 @@ export function isletBlobs(island: SecretIsland): { cx: number; cy: number; rx: 
     const cy = g.reduce((a, p) => a + p.y, 0) / g.length;
     const j = out.length;
     const wob = ((j * 7) % 3 - 1) * TILE * 1.4;                     // alternate islets up/down: an archipelago, not a bar
-    const rx = (x1 - x0) / 2 + TILE * 1.9;
-    out.push({ cx: (x0 + x1) / 2, cy: cy + wob, rx, ry: Math.max(TILE * 3.2, rx * 0.72) });
+    // no two islets alike: each gets its own width / height ratio
+    const rx = ((x1 - x0) / 2 + TILE * 1.9) * [1, 0.82, 1.14, 0.9, 1.06, 0.86][j % 6];
+    out.push({ cx: (x0 + x1) / 2, cy: cy + wob, rx, ry: Math.max(TILE * 3.0, rx * [0.72, 0.92, 0.64, 0.84, 0.7, 0.98][j % 6]) });
   }
   return out;
 }
@@ -767,14 +768,20 @@ function dressStamp(put: Put, get: (x: number, y: number) => number, x: number, 
       put(x, y - 3, ramp[2]); put(x, y - 2, ramp[2]); put(x + 1, y - 2, ramp[1]); put(x, y - 1, ramp[1]); put(x + 1, y - 1, ramp[0]); put(x - 1, y - 1, ramp[2]); put(x, y, ramp[0]);
       return;
     }
+    // faceted boulder: a ridge line splits a lit (top-left) face from a shadow face,
+    // with a dark shadow-side outline — no round blobs
     const top = ramp.length - 1;
-    for (let dy = -r; dy <= r; dy++) for (let dx = -r - 1; dx <= r + 1; dx++) {
-      const d = (dx * dx) / ((r + 1.2) ** 2) + (dy * dy) / ((r + 0.4) ** 2);
-      if (d > 1) continue;
-      const l = -(dx + dy) / (r + 1);
-      const mid = ramp === R.rock && b.key !== "volcanic" ? top * 0.7 : top * 0.5;
-      put(x + dx, y + dy, ramp[Math.max(1, Math.min(top, Math.round(mid + l * 1.6)))]);
+    const h = r + 2, apex = Math.round(hash2(x, y, seed ^ 0x1d) * 2) - 1;
+    for (let dy = 0; dy <= h; dy++) {
+      const half = Math.round((dy / h) * (r + 1.4)) + (dy === h ? 0 : 0);
+      for (let dx = -half; dx <= half; dx++) {
+        const ridge = apex + Math.round(dy * 0.35);
+        const outline = dx === half || dy === h;
+        const v = outline ? ramp[0] : dx < ridge ? ramp[Math.min(top, Math.round(top * 0.78))] : dx === ridge ? ramp[Math.min(top, Math.round(top * 0.55))] : ramp[Math.max(1, Math.round(top * 0.3))];
+        put(x + dx, y - h + dy + 1, v);
+      }
     }
+    put(x + apex - 1, y - h + 2, ramp[top]);
     put(x + r + 1, y + r, ramp[0]); put(x + r, y + r + 1, ramp[0]);
     return;
   }
@@ -817,15 +824,20 @@ export function stampCanopy(img: ArtImage, cx: number, cy: number, r: number, b:
   };
   const get = (x: number, y: number) => (x >= 0 && y >= 0 && x < img.w && y < img.h ? img.data[y * img.w + x] : CLEAR);
   if (b.forest === "pine") {
-    // pine: stacked triangle, lit left flank, dark right, trunk
-    const hgt = r * 2 + 2;
-    for (let dy = 0; dy <= hgt; dy++) {
-      const half = Math.floor((dy / hgt) * (r + 0.6));
-      for (let dx = -half; dx <= half; dx++) {
-        const edge = dx === half || dy === hgt;
-        put(cx + dx, cy - r - 1 + dy, edge ? ramp[0] : dx < 0 ? ramp[top - (dy % 3 === 0 ? 1 : 0)] : ramp[2]);
+    // pine: three stacked tiers (each wider than the one above), lit left flank,
+    // dark right edge, a light tip — reads as a fir, not a stick
+    const tiers = 3, th = Math.max(2, r);
+    for (let k = 0; k < tiers; k++) {
+      const y0 = cy - r - 1 + k * (th - 1);
+      for (let dy = 0; dy < th + 1; dy++) {
+        const half = Math.round(((dy + 1) / (th + 1)) * (1 + k * 0.9 + r * 0.45));
+        for (let dx = -half; dx <= half; dx++) {
+          const edge = dx === half || (dy === th && dx > -half + 1);
+          put(cx + dx, y0 + dy, edge ? ramp[0] : dx < 0 ? ramp[top - (dx === -half ? 0 : 1)] : ramp[2]);
+        }
       }
     }
+    put(cx, cy - r - 1, ramp[top]);
     put(cx + 1, cy + r + 2, SHADOW[get(cx + 1, cy + r + 2)]);
     put(cx, cy + r + 2, RAMPS.wood[1]);
     return;

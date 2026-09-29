@@ -27,17 +27,14 @@
 
 /* 9-slice window (border-image set inline by PixelWindow) */
 /* contemporary panel: hue-shifted indigo, lit top edge, soft layered depth */
+/* flat deep-indigo panel with a thin hue-shifted rim (round 3 critique) */
 .win {
   padding: 14px 16px;
   color: #fff6e0;
-  background: linear-gradient(180deg, #343f8a 0, #2a2f6c 46px, #262a62 100%);
-  border: 2px solid #1e1f4e;
-  box-shadow:
-    inset 0 2px 0 #4a60b6,
-    inset 2px 0 0 #3f4fa3,
-    inset 0 -3px 0 #22265c,
-    0 4px 0 rgba(30, 31, 78, 0.55),
-    0 12px 28px rgba(20, 18, 50, 0.35);
+  background: #22265c;
+  border: 1px solid #62dcf2;
+  outline: 2px solid #1e1f4e;
+  box-shadow: 0 6px 18px rgba(20, 18, 50, 0.4);
 }
 
 /* map name labels: outlined pixel text, no plate */
@@ -179,8 +176,12 @@
 .tab, .tabOn {
   font: inherit;
   font-size: 14px;
-  padding: 2px 6px 4px;
-  border: 2px solid #1e1f4e;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  padding: 3px 2px 4px;
+  border: 1px solid #343f8a;
   cursor: pointer;
   white-space: nowrap;
 }
