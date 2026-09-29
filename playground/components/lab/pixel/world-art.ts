@@ -18,6 +18,7 @@ import {
 } from "./art";
 import type { NodeLook } from "./terrain";
 import { downsample } from "./raster";
+import { composeAuthored } from "./art/authored";
 
 export type ArtEmblems = Map<string, Map<number, EmblemMask>>;
 
@@ -152,7 +153,7 @@ export function nodeSprite(n: Pick<WorldNode, "name" | "atom">, look: NodeLook, 
 
 /** Secret-island slots nudged onto their islet (art/ isletBlobs staggers islets up/down). */
 export function islandSlots(island: World["hiddenIsland"]): Pt[] {
-  const blobs = isletBlobs(island);
+  const blobs = isletBlobs(island).filter((b) => !b.extra);
   const slots = island.slots;
   if (!slots.length) return [];
   const groups = blobs.length;
@@ -319,22 +320,56 @@ export type Theme = "parchment" | "ocean";
  * At 8 art px per tile a castle (36×46) stands on its 4×4-tile footprint (32 px).
  */
 export function tierFor(apt: number) {
+  // castles never below ÷2 (distinct silhouettes); derived models become clean pips (−1)
   if (apt >= 6) return { castle: 1, marker: 1, house: 1, peak: 1, prop: 1, live: 2, hubsOnly: false };
-  if (apt >= 3) return { castle: 2, marker: 2, house: 2, peak: 2, prop: 2, live: 2, hubsOnly: false };
-  if (apt >= 2) return { castle: 3, marker: 3, house: 3, peak: 3, prop: 3, live: 3, hubsOnly: false };
-  return { castle: 3, marker: 0, house: 0, peak: 0, prop: 0, live: 3, hubsOnly: true };
+  if (apt >= 4) return { castle: 2, marker: 2, house: 2, peak: 2, prop: 2, live: 2, hubsOnly: false };
+  if (apt >= 2) return { castle: 2, marker: -1, house: 3, peak: 3, prop: 3, live: 2, hubsOnly: false };
+  return { castle: 2, marker: 0, house: 0, peak: 0, prop: 0, live: 3, hubsOnly: true };
+}
+
+/** A derived model at the overview: 5×5 evidence-coloured pip, 1px ink outline (7×7). */
+export function pipSprite(state: NodeLook["state"]): ArtImage {
+  const fill = state === "champion" ? RAMPS.gold[3] : state === "trained" ? RAMPS.banner[2] : state === "provisional" ? RAMPS.stone[4] : RAMPS.stone[2];
+  const lite = state === "champion" ? RAMPS.gold[4] : state === "trained" ? RAMPS.banner[3] : RAMPS.stone[5];
+  const rows = [".ooooo.", "oLffffo", "offfffo", "offfffo", "offfffo", "offfffo", ".ooooo."];
+  const img = artBlank(7, 7);
+  rows.forEach((r, y) => { for (let x = 0; x < 7; x++) { const c = r[x]; if (c !== ".") img.data[y * 7 + x] = c === "o" ? RAMPS.ink[0] : c === "L" ? lite : fill; } });
+  if (state === "provisional") { img.data[2 * 7 + 3] = RAMPS.ink[0]; img.data[4 * 7 + 3] = RAMPS.ink[0]; }
+  return img;
 }
 
 export function buildArtLayers(world: World, looks: Map<string, NodeLook>, emblems: ArtEmblems | null, apt = 8, theme: Theme = "parchment"): ArtLayers {
   const ink = theme === "parchment";
   const clouds = cloudSprites(apt >= 8 ? 4 : 3).map((s) => s.img);
-  const t = renderTerrain(world, { extent: "all", artPerTile: apt, ...(ink ? CONTINENT : {}) });
+  // parchment = the illustrator's AUTHORED continent (calm designed fields, heroes,
+  // ranges, clusters, paper sea + coast hatching); ocean keeps the procedural terrain
+  // SYNTHESIS: the authored skeleton (silhouette, coasts, hatching, rivers, heroes,
+  // stamps) with the ground painted by our one-continent elevation shading, calmed
+  // (no speck dots, big coherent patches, slope light kept) + biome patches
+  let shaded: TerrainArt | null = null;
+  if (ink) {
+    shaded = renderTerrain(world, { extent: "all", artPerTile: apt, ...CONTINENT, calm: true, canopies: apt >= 4 });
+    biomeMix(world, shaded, apt);
+  }
+  const sh = shaded;
+  const groundAt = sh ? (wx: number, wy: number) => {
+    const x = Math.floor((wx - sh.origin.x) / sh.px), y = Math.floor((wy - sh.origin.y) / sh.px);
+    if (x < 0 || y < 0 || x >= sh.img.w || y >= sh.img.h) return undefined;
+    const j = y * sh.img.w + x;
+    if (!sh.land[j] || sh.region[j] < 0) return undefined;
+    const v = sh.img.data[j];
+    return RAMPS.shallow.includes(v) || RAMPS.ocean.includes(v) ? undefined : v;
+  } : undefined;
+  const au = ink ? composeAuthored(world, apt, { sea: "paper", ground: groundAt }) : null;
+  const t: TerrainArt = au
+    ? { img: au.img, origin: au.origin, px: au.px, artPerTile: apt, height: new Float32Array(au.w * au.h), land: au.land, region: au.region, timings: au.timings }
+    : renderTerrain(world, { extent: "all", artPerTile: apt, ...(ink ? CONTINENT : {}) });
   let img = t.img;
   const A = (p: P): P => ({ x: (p.x - t.origin.x) / t.px, y: (p.y - t.origin.y) / t.px });
   // parchment has no clouds: the paper is the sky and the sea
   const spots = ink ? [] : cloudSpots(world, t, clouds);
   for (const s of spots) bakeCloudShadow(img, s.img, s.x, s.y);
-  if (ink) biomeMix(world, t, apt);
+  if (ink && !au) biomeMix(world, t, apt);
   // sprite mask: every opaque pixel of a painted landmark (for the ink outline pass)
   const mask = new Uint8Array(img.w * img.h);
   const blitM = (dst: ArtImage, src: ArtImage, x: number, y: number, flip = false) => {
@@ -467,7 +502,13 @@ export function buildArtLayers(world: World, looks: Map<string, NodeLook>, emble
     const qs = props.questionStone(), ru = props.ruins(), dr = props.dragon();
     for (const s2 of islandSlots(world.hiddenIsland)) { const c = A(s2); blitM(img, T_(qs.img, f), c.x - qs.anchor.x / f, c.y - qs.anchor.y / f); }
     { const c = A(world.hiddenIsland.dragons); blitM(img, T_(dr.img, f), c.x - dr.anchor.x / f, c.y - dr.anchor.y / f); }
-    for (const s2 of islandSlots(world.ruinsIsland)) { const c = A(s2); blitM(img, T_(ru.img, f), c.x - ru.anchor.x / f, c.y - ru.anchor.y / f); }
+    // ruins vary per slot: the arch, the mirrored arch, a lone broken column
+    const col = { ...ru.img, w: 12, data: (() => { const d = new Uint8Array(12 * ru.img.h); for (let y = 0; y < ru.img.h; y++) for (let x = 0; x < 12; x++) d[y * 12 + x] = ru.img.data[y * ru.img.w + x]; return d; })() };
+    islandSlots(world.ruinsIsland).forEach((s2, k) => {
+      const c = A(s2);
+      const v = k % 3, im = v === 2 ? col : ru.img;
+      blitM(img, T_(im, f), c.x - (v === 2 ? 6 : ru.anchor.x) / f, c.y - ru.anchor.y / f, v === 1);
+    });
   }
   void outlined; void scale2;
 
@@ -477,6 +518,12 @@ export function buildArtLayers(world: World, looks: Map<string, NodeLook>, emble
     const f = n.atom ? tier.castle : tier.marker;
     if (!f || (tier.hubsOnly && !hubNames.has(n.name))) continue;
     const look = looks.get(n.name) ?? { state: "untrained" as const, filled: false };
+    if (f === -1) {
+      const pip = pipSprite(look.state);
+      const c = A(n.center);
+      blitM(img, pip, c.x - 3, c.y - 3);
+      continue;
+    }
     const sp = nodeSprite(n, look, emblems);
     const im = T_(sp.img, f), ax = sp.anchor.x / f, ay = sp.anchor.y / f;
     const foot = A({ x: n.center.x, y: (n.foot.y + n.foot.h) * TS });
@@ -490,8 +537,9 @@ export function buildArtLayers(world: World, looks: Map<string, NodeLook>, emble
 
   for (const s of spots) artBlit(img, s.img, s.x, s.y);
 
-  if (ink) seaIslets(img, t, apt);
-  if (ink) { img = parchmentize(img, t.land, apt); inkAroundMask(img, mask); }
+  if (ink && !au) seaIslets(img, t, apt);
+  if (ink && !au) img = parchmentize(img, t.land, apt);
+  if (ink) inkAroundMask(img, mask);
   const dimImg: ArtImage = { w: img.w, h: img.h, data: img.data.map((v) => (v === CLEAR ? v : darker(v))) };
   const full = artToCanvas(img), dim = artToCanvas(dimImg);
   return {

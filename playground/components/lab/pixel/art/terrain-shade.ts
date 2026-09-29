@@ -56,6 +56,7 @@ export interface LandSample {
   /** 0..1 proximity to a world.mountains border ridge (1 on the crest); optional */
   ridge?: number;
   seed: number;
+  calm?: boolean;
 }
 
 const rampOf = (name: RampName) => RAMPS[name];
@@ -83,11 +84,11 @@ export function shadeLand(p: LandSample): number {
   const lit = slopeLight(p.gx, p.gy) * (quiet ? 0.4 : 1);
   let band = bandOf(h, x, y);
   if (quiet && band > 1) band = 1;
-  const speck = hash2(x, y, seed ^ 0x51ed);
+  const speck = p.calm ? 0.5 : hash2(x, y, seed ^ 0x51ed);
   const D = 0.035;                                       // narrow seams → crisp clusters
   // cluster warp: shifts every step boundary along an organic contour, so
   // flat ground breaks into hand-placed-looking clusters instead of wide dither
-  const warp = (valueNoise(tx, ty, seed ^ 0xc1, 0.9) - 0.5) * 0.7;
+  const warp = (valueNoise(tx, ty, seed ^ 0xc1, p.calm ? 2.4 : 0.9) - 0.5) * (p.calm ? 0.9 : 0.7);
 
   if (band === 0) {
     // beach / lowland: pale sand, lighter lip on lit (north/west) shores
@@ -276,6 +277,8 @@ export interface TerrainOptions {
   relief?: number;
   /** slope-light contrast multiplier (default 1). */
   lightGain?: number;
+  /** calm ground: no speck dots, gentler cluster warp (big coherent tone patches) */
+  calm?: boolean;
 }
 
 export interface TerrainArt {
@@ -306,11 +309,11 @@ export const toArt = (t: Pick<TerrainArt, "origin" | "px">, p: Pt): Pt => ({ x: 
  * (≤ 3 per islet) and each group gets a lumpy round blob; a long box becomes
  * a short archipelago. World px ellipses {cx, cy, rx, ry}.
  */
-export function isletBlobs(island: SecretIsland): { cx: number; cy: number; rx: number; ry: number }[] {
+export function isletBlobs(island: SecretIsland): { cx: number; cy: number; rx: number; ry: number; extra?: boolean }[] {
   const slots = island.slots.length ? island.slots : [{ x: island.box.x + island.box.w / 2, y: island.box.y + island.box.h / 2 }];
   // ≤ 3 slots per islet, split evenly (16 → 3,2,3,3,2,3 — no sliver islet at the end)
   const groups = slots.length <= 4 ? 1 : Math.ceil(slots.length / 3);
-  const out: { cx: number; cy: number; rx: number; ry: number }[] = [];
+  const out: { cx: number; cy: number; rx: number; ry: number; extra?: boolean }[] = [];
   for (let gi = 0; gi < groups; gi++) {
     const g = slots.slice(Math.round((gi * slots.length) / groups), Math.round(((gi + 1) * slots.length) / groups));
     const x0 = Math.min(...g.map((p) => p.x)), x1 = Math.max(...g.map((p) => p.x));
@@ -321,6 +324,13 @@ export function isletBlobs(island: SecretIsland): { cx: number; cy: number; rx: 
     const rx = ((x1 - x0) / 2 + TILE * 1.9) * [1, 0.82, 1.14, 0.9, 1.06, 0.86][j % 6];
     const scatter = groups > 1 ? -TILE * 5 + [-2.6, 0.6, -1.4, 1.0, -2.0, 0.2][j % 6] * TILE - wob : 0;
     out.push({ cx: (x0 + x1) / 2, cy: cy + wob + scatter, rx, ry: Math.max(TILE * 3.0, rx * [0.72, 0.92, 0.64, 0.84, 0.7, 0.98][j % 6]) });
+  }
+  // shape variety: every other islet grows a satellite lobe / tail (extra blobs carry no slots)
+  const main = out.length;
+  for (let j = 0; j < main; j++) {
+    if (main < 2 || j % 3 === 2) continue;
+    const b = out[j], side = j % 2 ? 1 : -1;
+    out.push({ cx: b.cx + side * b.rx * (0.85 + (j % 3) * 0.2), cy: b.cy + (j % 2 ? -1 : 1) * b.ry * 0.45, rx: b.rx * (0.42 + (j % 3) * 0.12), ry: b.ry * 0.5, extra: true });
   }
   return out;
 }
@@ -546,7 +556,7 @@ export function renderTerrain(world: World, opts: TerrainOptions = {}): TerrainA
         }
         const gx = ((x < W - 1 && land[i + 1] ? height[i + 1] : height[i]) - (x > 0 && land[i - 1] ? height[i - 1] : height[i])) / 2;
         const gy = ((y < H - 1 && land[i + W] ? height[i + W] : height[i]) - (y > 0 && land[i - W] ? height[i - W] : height[i])) / 2;
-        out[i] = shadeLand({ x, y, h: height[i], gx: gx * LG, gy: gy * LG, tx, ty, biome: biomeAt(i), dCoast: dCoast[i], civic: civic[i], ridge: Math.max(0, 1 - dRidge[i] / (apt * 3.2)), seed });
+        out[i] = shadeLand({ x, y, h: height[i], gx: gx * LG, gy: gy * LG, tx, ty, biome: biomeAt(i), dCoast: dCoast[i], civic: civic[i], ridge: Math.max(0, 1 - dRidge[i] / (apt * 3.2)), seed, calm: opts.calm });
         continue;
       }
       // ——— water

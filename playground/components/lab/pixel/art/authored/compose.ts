@@ -65,6 +65,12 @@ export interface ComposeOptions {
   sea?: "paper" | "clear";
   /** stamp decoration (default true) */
   decor?: boolean;
+  /**
+   * Ground painter (builder synthesis): returns a palette index for the family
+   * ground at world px (wx, wy), or undefined to keep the flat authored tone.
+   * Coastal sand band, spine snowfield, rivers, heroes, stamps and coasts stay authored.
+   */
+  ground?: (wx: number, wy: number) => number | undefined;
 }
 
 /** Call f every `gap` px of arc length along a polyline (with the unit normal). */
@@ -156,7 +162,9 @@ export function composeAuthored(world: World, artPerTile: number, opts: ComposeO
       if (distSpine(x, y) < apt * 2.4 * (0.55 + 0.9 * noise(tx, ty, 0x5a0, 3.5))) g = { ramp: "snow", base: 4 };
     }
     const r = RAMPS[g.ramp];
-    out[i] = r[Math.max(0, Math.min(r.length - 1, g.base + tone2[i]))];
+    const own = g === (GROUND[bk] ?? GROUND.meadow) && opts.ground
+      ? opts.ground(L.origin.x + (x + 0.5) * L.px, L.origin.y + (y + 0.5) * L.px) : undefined;
+    out[i] = own ?? r[Math.max(0, Math.min(r.length - 1, g.base + tone2[i]))];
   }
   // rivers: cyan core, darker banks (1 px), natural region borders
   for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {

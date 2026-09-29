@@ -50,8 +50,10 @@ const TS = 16;
 // ADAPTIVE RESOLUTION (owner): ONE fixed on-screen pixel size for the map at every
 // zoom — every art pixel is a Q×Q block — and zoom changes the level of detail
 // (art px per world tile) instead. Levels are rendered natively and cached.
-const Q_DESKTOP = 5, Q_MOBILE = 3;
-const LEVELS_DESKTOP = [2, 3, 4, 6, 8];
+// Q = 3 on desktop so the overview can be 3 art px per tile AND show the whole land
+// (4×3 would crop land); every art pixel is still a visible 3×3 block
+const Q_DESKTOP = 3, Q_MOBILE = 3;
+const LEVELS_DESKTOP = [3, 4, 6, 8];
 const LEVELS_MOBILE = [1, 2, 4, 6];
 const hex = (i: number) => PALETTE[i];
 const GOLD = hex(RAMPS.gold[3]), INK = hex(RAMPS.ui[0]);
@@ -344,7 +346,7 @@ export function PixelWorld() {
     if (!focusNode || !emblems || typeof document === "undefined") return null;
     const look = looks.get(focusNode.name) ?? { state: "untrained" as const, filled: false };
     const sp = nodeSprite(focusNode, look, emblems);
-    const f = focusNode.atom ? tierFor(apt).castle || 3 : tierFor(apt).marker || 3;
+    const f = focusNode.atom ? tierFor(apt).castle || 2 : Math.max(2, tierFor(apt).marker);
     return stampT(sp, f, false, tint);
   }, [focusNode, emblems, looks, tint, apt]);
 
@@ -524,7 +526,7 @@ export function PixelWorld() {
       const m = nodeOf.get(name)!;
       const look = looks.get(name) ?? { state: "untrained" as const, filled: false };
       const sp = nodeSprite(m, look, emblems);
-      const f = m.atom ? tierFor(apt).castle || 3 : tierFor(apt).marker || 3;
+      const f = m.atom ? tierFor(apt).castle || 2 : Math.max(2, tierFor(apt).marker);
       return [name, { s: stampT(sp, f, false, tint), node: m }] as const;
     }));
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -1075,7 +1077,7 @@ export function PixelWorld() {
               <div key={l.node} aria-hidden className={`${styles.plate} ${cls} ${dim ? styles.plateDim : ""}`}
                 style={{ left: l.x, top: l.y, height: l.h, fontSize: l.font,
                   ...(kinTone.has(l.node) && !focus ? (ink
-                    ? { boxShadow: "none", background: "transparent", textDecoration: "underline", textDecorationColor: "#5a1a14", textUnderlineOffset: 3 }
+                    ? (zoom === "node" ? { boxShadow: "none", background: "transparent", textDecoration: "underline", textDecorationColor: "#5a1a14", textUnderlineOffset: 3 } : { boxShadow: "none", background: "transparent" })
                     : { boxShadow: `inset 0 0 0 2px ${kinTone.get(l.node)}, 0 2px 0 #1e1f4e` }) : {}) }}
                 onClick={() => onNode(l.node)}>
                 <span>{displayName(l.node)}</span>
