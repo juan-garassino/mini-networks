@@ -1,10 +1,16 @@
-import { Fredoka, Lilita_One } from "next/font/google";
+import type { CSSProperties } from "react";
+import { Fredoka } from "next/font/google";
+import { STORY_FONT } from "@/components/lab/paper/art";
 
-// Papercraft skin fonts: Lilita One (signs cut from card) + Fredoka (labels,
-// card, UI). Scoped to this route via CSS variables on a wrapper.
-const display = Lilita_One({ subsets: ["latin"], weight: "400", variable: "--paper-display" });
+// Paper skin fonts (two families on this route): Alegreya — the storybook
+// serif for the map's title, signs, tags and display headings (loaded by the
+// art library, exposed here as --paper-display) — and Fredoka for body/UI.
 const body = Fredoka({ subsets: ["latin"], weight: ["400", "500", "600"], variable: "--paper-body" });
 
 export default function PaperLayout({ children }: Readonly<{ children: React.ReactNode }>) {
-  return <div className={`${display.variable} ${body.variable} h-full w-full`}>{children}</div>;
+  return (
+    <div className={`${body.variable} h-full w-full`} style={{ "--paper-display": STORY_FONT } as CSSProperties}>
+      {children}
+    </div>
+  );
 }

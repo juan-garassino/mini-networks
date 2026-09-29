@@ -125,6 +125,8 @@ const TOP: Record<string, SlabTop> = {
 const DEPTH: Record<string, number> = {
   perception: 58, representation: 76, sequence: 62, decision: 54, structure: 90, generative: 46,
 };
+/** Channel half-width per family: Decision and Generative stand apart from Sequence. */
+const INSET: Record<string, number> = { perception: 22, representation: 18, sequence: 20, decision: 36, generative: 34 };
 /** Painter's order: north families first so southern cliffs overlap them. */
 const ORDER = ["representation", "perception", "sequence", "decision", "generative"];   // structure floats (islands)
 
@@ -137,6 +139,7 @@ export interface Story {
   lava: string[];
   roads: { id: string; d: string }[];
   bridges: Pt[][];
+  falls: { x: number; y: number; h: number }[];
   props: { y: number; key: string; node: ReactNode }[];
   islets: { kind: string; at: Pt; size: number }[];
 }
@@ -144,7 +147,7 @@ export interface Story {
 export function buildStory(world: World): Story {
   const shapes = new Map(world.shapes.map((s) => [s.family, s.poly]));
   const lands = ORDER.filter((f) => shapes.has(f)).map((f, i) => {
-    const poly = inset(shapes.get(f)!, 20);
+    const poly = inset(shapes.get(f)!, INSET[f] ?? 20);
     return { family: f, poly, d: organic(poly, 11 + i, 12), depth: DEPTH[f] ?? 50, top: TOP[f] ?? "grass" };
   });
   const zone = (f: string, z: string) => world.zones.find((q) => q.family === f && q.zone === z)?.poly ?? null;
@@ -172,8 +175,8 @@ export function buildStory(world: World): Story {
       const a = seaAt(l[0]) || seaAt(l[1]), z = seaAt(l[l.length - 1]) || seaAt(l[l.length - 2]);
       const line = a && !z ? [...l].reverse() : l;
       rivers.push({ d: curveD(line), w: 16, mouth: a || z ? line[line.length - 1] : null });
-    } else if (b.kind === "range") {
-      const n = Math.max(2, Math.floor(l.length / 6));
+    } else if (b.kind === "range" && b.a === "representation") {
+      const n = 2;
       for (let i = 0; i < n; i++) ranges.push(l[Math.floor((i + 0.5) * (l.length / n))]);
     }
   }
@@ -330,6 +333,33 @@ export function buildStory(world: World): Story {
       if (inside(p, dec.poly) && !busy(p, 60, 22)) put(`ww${i}`, p.y, draw(p));
     });
   }
+  // Decision: a western main street of storefronts (the reference's frontier town)
+  if (dec) {
+    const bb = bbox(dec.poly);
+    let placed = 0;
+    for (let row = 0; row < 3 && placed < 10; row++) for (let i = 0; i < 9 && placed < 10; i++) {
+      const p = { x: bb.x0 + (0.25 + i * 0.07) * (bb.x1 - bb.x0), y: bb.y0 + (0.42 + row * 0.16) * (bb.y1 - bb.y0) };
+      if (!inside(p, dec.poly) || distToPoly(p, dec.poly) < 30 || busy(p, 50, 18)) continue;
+      put(`ws${row},${i}`, p.y, <Storefront x={p.x} y={p.y} size={40 + hash(row, i) * 10} variant={(i + row) % 4} />);
+      placed++;
+    }
+  }
+  // neon city: glowing pink / cyan signboards among the towers
+  if (cyber) {
+    const bb = bbox(cyber);
+    for (let i = 0; i < 12; i++) {
+      const p = { x: bb.x0 + hash(i, 61) * (bb.x1 - bb.x0), y: bb.y0 + hash(i, 62) * (bb.y1 - bb.y0) };
+      if (!inside(p, cyber) || busy(p, 40, 12)) continue;
+      const c = i % 2 ? S.pink[LIT] : S.cyan[LIT], w = 14 + hash(i, 63) * 14;
+      put(`ns${i}`, p.y + 1, (
+        <g>
+          <rect x={p.x - w / 2 - 4} y={p.y - 44} width={w + 8} height={14} rx={3} fill={c} opacity={0.35} />
+          <rect x={p.x - w / 2} y={p.y - 41} width={w} height={8} rx={2} fill={c} stroke="#FFFFFF" strokeOpacity={0.8} strokeWidth={0.8} />
+          <path d={`M${p.x} ${p.y - 33} V${p.y}`} stroke="#2D3058" strokeWidth={1.6} />
+        </g>
+      ));
+    }
+  }
   // sea: ships and a serpent in the open water; sea stacks on rock islets
   world.seaSlots.forEach((b, i) => {
     const c = { x: b.x + b.w / 2, y: b.y + b.h / 2 };
@@ -368,7 +398,23 @@ export function buildStory(world: World): Story {
   put("fog", hi.box.y + hi.box.h, <FogIsland x={hi.box.x + hi.box.w / 2} y={hi.box.y + hi.box.h * 0.9} size={150} />);
   world.ruinsIsland.slots.forEach((p, i) => put(`ru${i}`, p.y, <Ruins x={p.x} y={p.y} size={[40, 50, 34, 46][i % 4]} flip={i % 3 === 1} />));
 
-  return { lands, terraces, reef, rivers, ranges, lava, roads, bridges, props, islets };
+  // waterfalls: where a border opens as a channel, water falls off the northern land's cliff
+  const falls: { x: number; y: number; h: number }[] = [];
+  for (const b of world.borders) {
+    const la = lands.find((l) => l.family === b.a), lb = lands.find((l) => l.family === b.b);
+    if (!la || !lb || b.path.length < 3) continue;
+    const north = centroid(la.poly).y < centroid(lb.poly).y ? la : lb;
+    const tsList = b.kind === "river" || b.kind === "strait" ? [0.35, 0.72] : [0.5];
+    for (const t of tsList) {
+      const bp = b.path[Math.floor(t * (b.path.length - 1))];
+      let best = north.poly[0], bd = Infinity;
+      for (const q of north.poly) { const d = Math.hypot(q.x - bp.x, q.y - bp.y); if (d < bd) { bd = d; best = q; } }
+      if (best.y < centroid(north.poly).y) continue;               // only on a south-facing cliff
+      if (falls.some((f) => Math.hypot(f.x - best.x, f.y - best.y) < 80)) continue;
+      falls.push({ x: best.x, y: best.y - 2, h: north.depth + 14 });
+    }
+  }
+  return { lands, terraces, reef, rivers, ranges, lava, roads, bridges, props, islets, falls };
 }
 
 // ── layers ────────────────────────────────────────────────────────────────
@@ -386,7 +432,9 @@ export const StoryGround = memo(function StoryGround({ world, story }: { world: 
       )}
       {story.lands.map((l) => <LandSlab key={l.family} d={l.d} depth={l.depth} top={l.top} layers={6} />)}
       {story.terraces.map((t, i) => <LandSlab key={i} d={t.d} depth={t.depth} top={t.top} layers={3} foam={false} />)}
-      {story.lava.map((d, i) => <LavaRiver key={i} d={d} w={9 - i} />)}
+      {/* lava stays on the forge's own land */}
+      <clipPath id="story-gen-clip"><path d={story.lands.find((l) => l.family === "generative")?.d ?? ""} /></clipPath>
+      <g clipPath="url(#story-gen-clip)">{story.lava.map((d, i) => <LavaRiver key={i} d={d} w={9 - i} />)}</g>
       {/* rivers: smooth painted water with foam banks and a light stripe; a waterfall at the mouth */}
       {false && story.rivers.map((r, i) => (
         <g key={i} fill="none" strokeLinecap="round" strokeLinejoin="round">
@@ -397,7 +445,7 @@ export const StoryGround = memo(function StoryGround({ world, story }: { world: 
           <path d={r.d} stroke="#FFFFFF" strokeOpacity={0.6} strokeWidth={2} strokeDasharray="8 12" />
         </g>
       ))}
-      {story.rivers.filter((r) => r.mouth).map((r, i) => <Waterfall key={`wf${i}`} x={r.mouth!.x} y={r.mouth!.y} h={52} w={20} />)}
+      {story.falls.map((f, i) => <Waterfall key={`wf${i}`} x={f.x} y={f.y} h={f.h} w={18} />)}
     </g>
   );
 });

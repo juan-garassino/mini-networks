@@ -632,9 +632,9 @@ export function PaperSkin() {
           </svg>
         )}
         {world && !sceneOn && (
-          <PaperTags world={world} place={place} version={restKey} hidden={moving} size={cam.size} focus={focus} kin={kin?.names ?? null}
+          <PaperTags world={world} place={place} version={restKey} hidden={moving} size={cam.size} focus={focus ?? hovered} kin={kin?.names ?? null}
             counts={stableCounts} obstacles={obstacles} spotR={(n) => spotR(n) * (world.nodes.find((x) => x.name === n)?.atom ? zk.atom : zk.derived)}
-            atomsOnly={!desktop} regionSigns={null}
+            atomsOnly={zoom === "overview"} regionSigns={null}
             screenObstacles={chrome} />
         )}
 
