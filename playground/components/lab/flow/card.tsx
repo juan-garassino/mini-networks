@@ -5,6 +5,7 @@
 // (animated anatomy) → family line (parents ↓ me ↓ children) → proof it
 // works (quality bar, real curve, samples, Try it) → pipelines it plays in
 // (each one sails its ferry across the board).
+import { useEffect, useState } from "react";
 import { motion } from "motion/react";
 import { COMPOSITION_LESSONS } from "@/lib/lessons";
 import { iconFor } from "@/lib/icons";
@@ -125,6 +126,19 @@ export function FlowCard({ c, lesson, mobile, still, evidence, familyOf, onPick,
   const initial = still ? false : mobile ? { y: 40, opacity: 0 } : { x: 24, opacity: 0 };
   const curve = lesson.curve?.[0];
   const kids = c.children.slice(0, 10);
+  // header first; the heavy body (anatomy, curve, try-it) mounts on the next idle frame
+  const [full, setFull] = useState(still);
+  useEffect(() => {
+    if (still) { setFull(true); return; }
+    setFull(false);
+    const w = window as unknown as { requestIdleCallback?: (cb: () => void, o?: { timeout: number }) => number; cancelIdleCallback?: (id: number) => void };
+    if (w.requestIdleCallback) {
+      const id = w.requestIdleCallback(() => setFull(true), { timeout: 400 });
+      return () => w.cancelIdleCallback?.(id);
+    }
+    const t = setTimeout(() => setFull(true), 60);
+    return () => clearTimeout(t);
+  }, [c.name, still]);
   return (
     <motion.aside
       key={c.name}
@@ -167,8 +181,9 @@ export function FlowCard({ c, lesson, mobile, still, evidence, familyOf, onPick,
         {EVIDENCE_COPY[c.state]}
       </p>
 
+      {full && (<>
       <Section title="One forward pass">
-        <Anatomy stages={schematicFor(c.name)} animate={!still} size={mobile ? 330 : 380} labelPx={13}
+        <Anatomy className={s.anatomy} stages={schematicFor(c.name)} animate={!still} size={mobile ? 330 : 380} labelPx={13}
           palette={{ node: INK, edge: "#5E4F80", active: ACCENT, text: INK, accent: f.deep, fill: "#fff" }}
           title={`${displayName(c.name)} — one forward pass`} />
         {c.introduces.map((m) => (
@@ -236,6 +251,7 @@ export function FlowCard({ c, lesson, mobile, still, evidence, familyOf, onPick,
           </ul>
         </Section>
       )}
+      </>)}
     </motion.aside>
   );
 }

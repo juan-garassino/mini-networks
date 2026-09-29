@@ -21,7 +21,11 @@ export interface BNode {
   /** world x where this creature's name slot ends (pipes leave from here) */
   slotEnd: number;
 }
-export interface BLane { family: string; index: number; x: number; y: number; w: number; h: number; cols: number[] }
+export interface BLane {
+  family: string; index: number; x: number; y: number; w: number; h: number; cols: number[];
+  /** stepped outline hugging the occupied columns: [x0, x1, y0, y1] per column band (world) */
+  steps: [number, number, number, number][];
+}
 export interface BPipe { id: string; from: string; to: string; pts: Pt[]; crossLane: boolean }
 export interface Board {
   nodes: Map<string, BNode>;
@@ -34,6 +38,10 @@ export interface Board {
   s0: number;
   /** creature radius (world) */
   R: number;
+  /** creature size in px at the overview design */
+  cpx: number;
+  /** leftover cells of the packing (world boxes) — filled with map cartouches */
+  slots: Box[];
   /** column header anchors (world) */
   heads: { lane: number; depth: number; x: number; y: number }[];
   /** the hidden next-era lane and the legacy ruins — outside the overview frame */
@@ -58,6 +66,7 @@ export function layoutBoard(
   children: Map<string, string[]>,
   slotPx: (name: string, atom: boolean) => number,
   columns: 1 | 2 = 2,
+  tagLines: (name: string) => number = () => 1,
 ): Board {
   const byName = new Map(flow.nodes.map((n) => [n.name, n]));
   const cyO = (n: string) => byName.get(n)!.box.y + byName.get(n)!.box.h / 2;
@@ -73,11 +82,17 @@ export function layoutBoard(
     const ay = Math.max(1, u(ROW) / 84);
 
     // ——— one block per lane (local coordinates) ———
-    type Local = { lane: number; w: number; h: number; nodes: BNode[]; pipes: BPipe[]; heads: { depth: number; x: number }[] };
-    const locals: Local[] = flow.lanes.map((lane, li) => {
+    type Local = { lane: number; w: number; h: number; nodes: BNode[]; pipes: BPipe[]; heads: { depth: number; x: number }[]; steps: [number, number, number, number][] };
+    // fit (pass 2): the tray's final size after packing edge to edge — extra width
+    // opens the gutters evenly, extra height spreads the rows (≤1.8×) then centres
+    const buildLocal = (li: number, fit?: { w: number; h: number }): Local => {
+      const lane = flow.lanes[li];
       const ns = flow.nodes.filter((n) => n.lane === li);
       const depths = [...new Set(ns.map((n) => n.depth))].sort((a, b) => a - b);
-      const ly = (y: number) => u(PAD_TOP) + (y - lane.y) * ay;
+      const inner0 = lane.h * ay - 20 * ay;
+      const ayF = fit ? ay * Math.min(1.8, Math.max(1, (fit.h - u(PAD_TOP) - u(PAD_BOTTOM)) / Math.max(1, inner0))) : ay;
+      const dyF = fit ? Math.max(0, (fit.h - (u(PAD_TOP) + lane.h * ayF + u(PAD_BOTTOM) - 20 * ayF)) / 2) : 0;
+      const ly = (y: number) => u(PAD_TOP) + dyF + (y - lane.y) * ayF;
       // trunk intervals per gutter (depth index) → number of tracks
       const trunkIv = new Map<string, { g: number; y0: number; y1: number }>();
       const grow = (key: string, g: number, a: number, b: number) => {
@@ -94,11 +109,11 @@ export function layoutBoard(
           // horizontal nearest the midpoint that stays clear of every name tag
           // (≥ half a two-line tag + a tube) of the columns it crosses
           const mid = (ly(cyO(p.from)) + ly(cyO(p.to))) / 2;
-          const blockers = ns.filter((n) => n.depth > dp && n.depth < dc).map((n) => ly(cyO(n.name)));
-          const clearW = u(22);
+          const blockers = ns.filter((n) => n.depth > dp && n.depth < dc)
+            .map((n) => ({ y: ly(cyO(n.name)), clear: u((tagLines(n.name) * 14.6 + 9) / 2 + 5) }));
           let bestC = mid, bestD = Infinity;
-          for (let yy = ly(lane.y) + u(8); yy <= ly(lane.y + lane.h) - u(8); yy += u(2)) {
-            if (blockers.some((b) => Math.abs(b - yy) < clearW) || usedChans.some((c) => Math.abs(c - yy) < u(9))) continue;
+          for (let yy = ly(lane.y) + u(8); yy <= ly(lane.y + lane.h) - u(8); yy += u(1)) {
+            if (blockers.some((b) => Math.abs(b.y - yy) < b.clear) || usedChans.some((c) => Math.abs(c - yy) < u(7))) continue;
             const d = Math.abs(yy - mid);
             if (d < bestD) { bestD = d; bestC = yy; }
           }
@@ -126,7 +141,8 @@ export function layoutBoard(
       // columns: creature, then the widest name slot of the column, then its trunks
       const colX = new Map<number, number>();
       const trunkX0 = new Map<number, number>();
-      let x = u(PAD_SIDE) + R;
+      const extraX = fit ? Math.max(0, fit.w - natural(li)) / depths.length : 0;
+      let x = u(PAD_SIDE) + R + extraX * 0.35;
       let right = 0;
       const heads: { depth: number; x: number }[] = [];
       for (const d of depths) {
@@ -136,8 +152,8 @@ export function layoutBoard(
         const end = x + R + u(GAP) + slot;
         right = Math.max(right, end);
         const nt = tracksIn.get(d) ?? 0;
-        trunkX0.set(d, end + u(GUTTER_PAD));
-        x = end + u(GUTTER_PAD) + Math.max(0, nt - 1) * u(TRACK) + u(GUTTER_PAD) + R + u(GAP);
+        trunkX0.set(d, end + u(GUTTER_PAD) + extraX * 0.3);
+        x = end + u(GUTTER_PAD) + Math.max(0, nt - 1) * u(TRACK) + u(GUTTER_PAD) + R + u(GAP) + extraX;
       }
       const nodes: BNode[] = ns.map((n) => {
         const cx = colX.get(n.depth)!;
@@ -157,27 +173,39 @@ export function layoutBoard(
             { x: tx(`i:${p.to}`, b.depth - 1), y: b.y }, { x: b.x, y: b.y }];
         return { id, from: p.from, to: p.to, pts, crossLane: false };
       });
-      const w = right + u(PAD_SIDE);
-      const h = u(PAD_TOP) + lane.h * ay + u(PAD_BOTTOM) - 20 * ay;
-      return { lane: li, w, h, nodes, pipes, heads };
-    });
+      const w = fit ? fit.w : right + u(PAD_SIDE);
+      const h = fit ? fit.h : u(PAD_TOP) + lane.h * ay + u(PAD_BOTTOM) - 20 * ay;
+      // full tray: packed edge to edge with its neighbours (no dead corners)
+      const steps: [number, number, number, number][] = depths.map(() => [0, w, 0, h]);
+      return { lane: li, w, h, nodes, pipes, heads, steps };
+    };
+    const naturalW = new Map<number, number>();
+    const natural = (li: number) => naturalW.get(li)!;
+    const locals0: Local[] = flow.lanes.map((_, li) => buildLocal(li));
+    locals0.forEach((l) => naturalW.set(l.lane, l.w));
+    const locals = locals0;
 
     // ——— pack blocks to fit the design screen: 1–2 columns, each a stack of
     // shelves (narrow blocks share a shelf side by side); best scale wins ———
     const gap = u(BLOCK_GAP);
-    let best: { s: number; place: Map<number, Pt>; W: number; H: number } | null = null;
+    type Shelf = { y: number; h: number; ids: number[] };
+    type Col = { x: number; w: number; shelves: Shelf[] };
+    let best: { s: number; place: Map<number, Pt>; W: number; H: number; cols: Col[] } | null = null;
     const n = locals.length;
     const shelfPack = (ids: number[], colW: number) => {
       const place = new Map<number, Pt>();
-      let y = 0, x = 0, shelfH = 0;
+      const shelves: Shelf[] = [];
+      let y = 0, x = 0, shelfH = 0, cur: number[] = [];
       for (const li of ids) {
         const b = locals[li];
-        if (x > 0 && x + b.w > colW + 1e-6) { y += shelfH + gap; x = 0; shelfH = 0; }
+        if (x > 0 && x + b.w > colW + 1e-6) { shelves.push({ y, h: shelfH, ids: cur }); y += shelfH + gap; x = 0; shelfH = 0; cur = []; }
         place.set(li, { x, y });
+        cur.push(li);
         x += b.w + gap;
         shelfH = Math.max(shelfH, b.h);
       }
-      return { place, h: y + shelfH };
+      shelves.push({ y, h: shelfH, ids: cur });
+      return { place, h: y + shelfH, shelves };
     };
     for (let mask = 0; mask < (columns === 1 ? 1 : 1 << n); mask++) {
       const cols = [0, 1].map((c) => locals.map((l) => l.lane).filter((li) => ((mask >> li) & 1) === c));
@@ -185,31 +213,73 @@ export function layoutBoard(
       const used = cols.filter((c) => c.length > 0);
       let x0 = 0, H = 0;
       const place = new Map<number, Pt>();
+      const colsOut: Col[] = [];
       for (const ids of used) {
         const colW = Math.max(...ids.map((li) => locals[li].w));
         // try a few orders inside the column: lane order, tallest first
         const variants = [ids, [...ids].sort((a, b) => locals[b].h - locals[a].h), [...ids].sort((a, b) => locals[b].w - locals[a].w)];
-        let bestV: { place: Map<number, Pt>; h: number } | null = null;
+        let bestV: ReturnType<typeof shelfPack> | null = null;
         for (const v of variants) { const r = shelfPack(v, colW); if (!bestV || r.h < bestV.h) bestV = r; }
         for (const [li, p] of bestV!.place) place.set(li, { x: p.x + x0, y: p.y });
         H = Math.max(H, bestV!.h);
+        colsOut.push({ x: x0, w: colW, shelves: bestV!.shelves });
         x0 += colW + gap;
       }
       const W = x0 - gap;
       const s = Math.min(DESIGN.w / W, DESIGN.h / H);
-      if (!best || s > best.s + 1e-9) best = { s, place, W, H };
+      if (!best || s > best.s + 1e-9) best = { s, place, W, H, cols: colsOut };
     }
-    const place = best!.place;
+    // ——— pass 2: grow the packing to the screen's aspect and every tray to its cell ———
+    const A = DESIGN.w / DESIGN.h;
+    let Wt = best!.W, Ht = best!.H;
+    if (Wt / Ht < A) Wt = Ht * A; else Ht = Wt / A;
+    const cols = best!.cols;
+    const sumColW = cols.reduce((a, c) => a + c.w, 0);
+    const extraW = Wt - best!.W;
+    const place = new Map<number, Pt>();
+    const fits = new Map<number, { w: number; h: number }>();
+    const slots: Box[] = [];
+    let cx0 = 0;
+    for (const c of cols) {
+      const cw = c.w + extraW * (c.w / sumColW);
+      const colH = c.shelves.reduce((a, sh) => a + sh.h, 0) + gap * (c.shelves.length - 1);
+      const sumSh = c.shelves.reduce((a, sh) => a + sh.h, 0);
+      let sy = 0;
+      for (const sh of c.shelves) {
+        const shH = sh.h + (Ht - colH) * (sh.h / sumSh);
+        const sumW = sh.ids.reduce((a, li) => a + locals[li].w, 0);
+        const free = cw - sumW - gap * (sh.ids.length - 1);
+        let sx = cx0;
+        for (const li of sh.ids) {
+          let tw = locals[li].w + free * (locals[li].w / sumW);
+          // a tray that would be mostly empty keeps a snug width; the rest of its
+          // cell becomes a map cartouche (key, compass, sea glimpse)
+          if (tw - locals[li].w > u(230) && tw > locals[li].w * 1.4) {
+            const keep = locals[li].w + u(24);
+            slots.push({ x: sx + keep + gap, y: sy, w: tw - keep - gap, h: shH });
+            tw = keep;
+          }
+          place.set(li, { x: sx, y: sy });
+          fits.set(li, { w: tw, h: shH });
+          sx += tw + gap;
+        }
+        sy += shH + gap;
+      }
+      cx0 += cw + gap;
+    }
+    best!.W = Wt; best!.H = Ht;
+    const fitted = flow.lanes.map((_, li) => buildLocal(li, fits.get(li)));
     const list: BNode[] = [];
     const pipes: BPipe[] = [];
     const lanes: BLane[] = [];
     const heads: Board["heads"] = [];
-    for (const l of locals) {
+    for (const l of fitted) {
       const o = place.get(l.lane)!;
-      lanes.push({ family: flow.lanes[l.lane].family, index: l.lane, x: o.x, y: o.y, w: l.w, h: l.h, cols: l.heads.map((h) => h.depth) });
+      lanes.push({ family: flow.lanes[l.lane].family, index: l.lane, x: o.x, y: o.y, w: l.w, h: l.h, cols: l.heads.map((h) => h.depth),
+        steps: l.steps.map(([a, b, c, d]) => [a + o.x, b + o.x, c + o.y, d + o.y]) });
       for (const n of l.nodes) list.push({ ...n, x: n.x + o.x, y: n.y + o.y, slotStart: n.slotStart + o.x, slotEnd: n.slotEnd + o.x });
       for (const p of l.pipes) pipes.push({ ...p, pts: p.pts.map((q) => ({ x: q.x + o.x, y: q.y + o.y })) });
-      for (const h of l.heads) heads.push({ lane: l.lane, depth: h.depth, x: h.x + o.x, y: o.y + u(PAD_TOP) * 0.42 });
+      l.heads.forEach((h, i) => heads.push({ lane: l.lane, depth: h.depth, x: h.x + o.x, y: l.steps[i][2] + o.y + u(PAD_TOP) * 0.42 }));
     }
     // cross-family edges: drawn only when lit — a smooth arc between the two creatures
     const nodes = new Map(list.map((n) => [n.name, n]));
@@ -231,11 +301,104 @@ export function layoutBoard(
     }
     const width = best!.W, height = best!.H;
     out = {
-      nodes, list, lanes, pipes, width, height, s0, R, heads,
-      next: { x: width + u(220), y: height / 2 - u(150), w: u(560), h: u(300) },
-      ruins: { x: -u(220) - u(640), y: height / 2 - u(230), w: u(640), h: u(460) },
+      nodes, list, lanes, pipes, width, height, s0, R, heads, cpx: CREATURE, slots,
+      next: { x: width + u(90), y: height / 2 - u(150), w: u(320), h: u(300) },
+      ruins: { x: -u(90) - u(340), y: height / 2 - u(230), w: u(340), h: u(460) },
     };
   }
   void children;
   return out!;
+}
+
+// ——— phone layout: a vertical scroll of trays, each exactly the screen's width.
+// Inside a tray the generations stack top → bottom (Atoms band, Gen 1 band, …);
+// a band is a grid of creature + name cells (two per row, one when a name is
+// long). Same-family pipes leave a creature on its left, drop down the column
+// margin to the corridor under the band and run across to the child's margin.
+const M = { W: 374, CRE: 40, GAP: 6, MARGIN: 22, ROW: 50, BAND_HEAD: 20, CORRIDOR: 16, PAD_TOP: 30, PAD_BOTTOM: 30, TRAY_GAP: 34 };
+export function layoutMobile(
+  flow: FlowLayout,
+  slotPx: (name: string, atom: boolean) => number,
+): Board {
+  const s0 = 0.535;
+  const u = (px: number) => px / s0;
+  const R = u(M.CRE / 2);
+  const byName = new Map(flow.nodes.map((n) => [n.name, n]));
+  const cyO = (n: string) => byName.get(n)!.box.y;
+  const trayW = u(M.W);
+  const cellW = (trayW - u(8)) / 2;               // two cells per row
+  const slotMax = cellW - u(M.MARGIN + M.CRE + M.GAP + 6);
+  const list: BNode[] = [];
+  const lanes: BLane[] = [];
+  const heads: Board["heads"] = [];
+  const pipes: BPipe[] = [];
+  let y = 0;
+  flow.lanes.forEach((lane, li) => {
+    const ns = flow.nodes.filter((n) => n.lane === li);
+    const depths = [...new Set(ns.map((n) => n.depth))].sort((a, b) => a - b);
+    const top = y;
+    let cy = y + u(M.PAD_TOP);
+    const bandBottom = new Map<number, number>();
+    const steps: [number, number, number, number][] = [];
+    for (const d of depths) {
+      const inBand = ns.filter((n) => n.depth === d).sort((a, b) => cyO(a.name) - cyO(b.name));
+      heads.push({ lane: li, depth: d, x: u(M.MARGIN + 30), y: cy + u(8) });
+      cy += u(M.BAND_HEAD);
+      let col = 0;
+      let rowY = cy + u(M.ROW / 2);
+      for (const n of inBand) {
+        const slot = u(slotPx(n.name, d === 0));
+        const wide = slot > slotMax;
+        if (col === 1 && wide) { col = 0; rowY += u(M.ROW); }
+        const cellX = u(4) + col * cellW;
+        const x = cellX + u(M.MARGIN) + R;
+        list.push({ name: n.name, family: n.family, depth: d, lane: li, col: n.col, x, y: rowY,
+          slotStart: x + R + u(M.GAP), slotEnd: x + R + u(M.GAP) + slot });
+        if (wide || col === 1) { col = 0; rowY += u(M.ROW); } else col = 1;
+      }
+      const bottom = (col === 0 ? rowY - u(M.ROW / 2) : rowY + u(M.ROW / 2));
+      bandBottom.set(d, bottom);
+      cy = bottom + u(M.CORRIDOR);
+    }
+    const h = cy - top + u(M.PAD_BOTTOM) - u(M.CORRIDOR);
+    steps.push([0, trayW, top, top + h]);
+    lanes.push({ family: lane.family, index: li, x: 0, y: top, w: trayW, h, cols: depths, steps });
+    y = top + h + u(M.TRAY_GAP);
+  });
+  const nodes = new Map(list.map((n) => [n.name, n]));
+  // same-family pipes: left margin → corridor under the parent's band → child's margin → child
+  const laneOf = (n: string) => byName.get(n)!.lane;
+  const lanesBy = new Map(lanes.map((l) => [l.index, l]));
+  const corridorY = (li: number, d: number) => {
+    const l = lanesBy.get(li)!;
+    const lower = list.filter((n) => n.lane === li && n.depth === d).map((n) => n.y);
+    return Math.max(...lower) + R + u(M.CORRIDOR * 0.45) + (l ? 0 : 0);
+  };
+  for (const p of flow.pipes) {
+    const a = nodes.get(p.from)!, b = nodes.get(p.to)!;
+    if (laneOf(p.from) !== laneOf(p.to)) {
+      const A = { x: a.x - R, y: a.y }, B = { x: b.x - R, y: b.y };
+      const dx = Math.max(u(60), Math.abs(B.y - A.y) * 0.25);
+      const pts: Pt[] = [];
+      for (let i = 0; i <= 24; i++) {
+        const t = i / 24, m = 1 - t;
+        const c1 = { x: A.x - dx, y: A.y }, c2 = { x: B.x - dx, y: B.y };
+        pts.push({ x: m * m * m * A.x + 3 * m * m * t * c1.x + 3 * m * t * t * c2.x + t * t * t * B.x,
+          y: m * m * m * A.y + 3 * m * m * t * c1.y + 3 * m * t * t * c2.y + t * t * t * B.y });
+      }
+      pts.push({ x: b.x, y: b.y });
+      pipes.push({ id: `${p.from}->${p.to}`, from: p.from, to: p.to, pts, crossLane: true });
+      continue;
+    }
+    const mA = a.x - R - u(9), mB = b.x - R - u(9);
+    const cy = corridorY(a.lane, a.depth);
+    pipes.push({ id: `${p.from}->${p.to}`, from: p.from, to: p.to, crossLane: false,
+      pts: [{ x: a.x, y: a.y }, { x: mA, y: a.y }, { x: mA, y: cy }, { x: mB, y: cy }, { x: mB, y: b.y }, { x: b.x, y: b.y }] });
+  }
+  const width = trayW, height = y - u(M.TRAY_GAP);
+  return {
+    nodes, list, lanes, pipes, width, height, s0, R, heads, cpx: M.CRE, slots: [],
+    next: { x: 0, y: height + u(60), w: trayW, h: u(300) },
+    ruins: { x: 0, y: height + u(400), w: trayW, h: u(460) },
+  };
 }

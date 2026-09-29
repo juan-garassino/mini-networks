@@ -80,3 +80,23 @@
     animation: none;
   }
 }
+
+/* the card's forward-pass diagram: stronger ink than the shared hairline default */
+.anatomy line {
+  stroke-width: 1.6px;
+}
+.anatomy circle,
+.anatomy rect {
+  stroke-width: 2px;
+}
+
+/* in flight: skip pattern fills (dot grid, tray prints) so each frame repaints fast */
+.board[data-moving] .printed {
+  display: none;
+}
+.board {
+  display: block;
+}
+.printed {
+  pointer-events: none;
+}

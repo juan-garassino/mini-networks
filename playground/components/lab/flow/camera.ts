@@ -50,7 +50,9 @@ export function useStageSize() {
  * settles (one React render: labels are placed for the new frame) and the
  * matrix resets to identity in the same layout pass (no flash).
  */
-export function useFlowCamera(target: View | null, still: boolean) {
+export function useFlowCamera(target: View | null, still: boolean, limits: { min: number; max: number } = { min: 0.05, max: 5 }) {
+  const lim = useRef(limits);
+  lim.current = limits;
   const gRef = useRef<SVGGElement | null>(null);
   const cur = useRef<View | null>(null);
   const settledRef = useRef<View | null>(null);
@@ -58,9 +60,14 @@ export function useFlowCamera(target: View | null, still: boolean) {
   // elements that must hide while the camera moves (e.g. the card's speech tail) —
   // toggled on the DOM directly so a flight never re-renders the board
   const hideWhileMoving = useRef<HTMLElement | SVGElement | null>(null);
+  // the board svg gets data-moving while in flight: CSS drops the costly pattern
+  // fills for those frames (software-rendered repaints stay cheap)
+  const boardRef = useRef<SVGSVGElement | null>(null);
   const setMoving = useCallback((m: boolean) => {
     const el = hideWhileMoving.current;
     if (el) el.style.visibility = m ? "hidden" : "";
+    const b = boardRef.current;
+    if (b) { if (m) b.setAttribute("data-moving", ""); else b.removeAttribute("data-moving"); }
   }, []);
 
   const apply = useCallback(() => {
@@ -120,6 +127,7 @@ export function useFlowCamera(target: View | null, still: boolean) {
     d.x = e.clientX;
     d.y = e.clientY;
     cur.current = { ...cur.current, tx: cur.current.tx + dx, ty: cur.current.ty + dy };
+    setMoving(true);
     apply();
   }, [apply]);
   const onPointerUp = useCallback(() => {
@@ -137,8 +145,9 @@ export function useFlowCamera(target: View | null, still: boolean) {
     const mx = e.clientX - rect.left;
     const my = e.clientY - rect.top;
     const f = Math.exp(-e.deltaY * 0.0015);
-    const g = Math.min(Math.max(f, 0.12 / v.sx), 3 / v.sx);
+    const g = Math.min(Math.max(f, lim.current.min / v.sx), lim.current.max / v.sx);
     cur.current = { sx: v.sx * g, sy: v.sy * g, tx: mx - (mx - v.tx) * g, ty: my - (my - v.ty) * g };
+    setMoving(true);
     apply();
     clearTimeout(wheelT.current);
     wheelT.current = setTimeout(settle, 180);
@@ -148,6 +157,7 @@ export function useFlowCamera(target: View | null, still: boolean) {
     view: settled,
     gRef,
     hideWhileMoving,
+    boardRef,
     handlers: { onPointerDown, onPointerMove, onPointerUp, onPointerCancel: onPointerUp, onClickCapture, onWheel },
   };
 }

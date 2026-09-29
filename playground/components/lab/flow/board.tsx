@@ -12,6 +12,7 @@ import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { chevronsAlong, roundedD, type Pt } from "@/lib/world";
 import type { ModelEvidence, TaxonomyResponse } from "@/lib/types";
 import { iconFor } from "@/lib/icons";
+import { COMPOSITION_LESSONS } from "@/lib/lessons";
 import { useWorld } from "@/hooks/use-world";
 import { useLesson } from "@/hooks/use-lesson";
 import { useLabView } from "@/components/lab/shared/url-state";
@@ -26,8 +27,8 @@ import { fitView, useFlowCamera, useStageSize, type CamBox, type View } from "./
 import { Creature, CreatureDefs, EvidenceGlyph, traitFor, type Trait } from "./creature";
 import { FlowCard } from "./card";
 import { Parade, STEP, type ParadePipe } from "./parade";
-import { Dock, Ferry, ferryPath, GrokBubble, Mascot, NextEraLane, RuinsLane, Trains } from "./extras";
-import { layoutBoard, type Board, type BNode } from "./geometry";
+import { Boat, Dock, Ferry, ferryPath, GrokBubble, Mascot, NextEraPanel, RuinsPanel, Trains, type DockBoat } from "./extras";
+import { layoutBoard, layoutMobile, type Board, type BNode } from "./geometry";
 import { ACCENT, DOT, fam, hexMix, INK, INK_SOFT, PAPER } from "./palette";
 import s from "./flow.module.css";
 
@@ -87,6 +88,61 @@ function KeyItem({ state, label }: { state: EvidenceState; label: string }) {
     </span>
   );
 }
+
+function Compass({ size }: { size: number }) {
+  return (
+    <svg viewBox="-30 -30 60 60" width={size} height={size} aria-label="compass: generations run east">
+      <circle r={24} fill="#fff" stroke={INK} strokeWidth={2} />
+      <circle r={19} fill="none" stroke={INK} strokeWidth={1} strokeDasharray="2 3" />
+      <path d="M0 -21 L4 0 L0 21 L-4 0 Z" fill={INK} opacity={0.25} />
+      <path d="M-21 0 L0 -4 L23 0 L0 4 Z" fill={ACCENT} stroke={INK} strokeWidth={1.2} strokeLinejoin="round" />
+      <circle r={2.6} fill="#fff" stroke={INK} strokeWidth={1.2} />
+    </svg>
+  );
+}
+
+/** The map key, drawn as a cartouche in the packing's leftover cell. */
+const MapKey = memo(function MapKey({ w, h }: { w: number; h: number }) {
+  const row = "flex items-center gap-1.5 whitespace-nowrap text-[13px] font-bold leading-[22px]";
+  const face = (st: EvidenceState) => (
+    <svg viewBox="-24 -30 48 54" className="h-[22px] w-[22px] shrink-0" aria-hidden><Creature family="perception" atom={false} state={st} /></svg>
+  );
+  return (
+    <div className="flex h-full w-full items-stretch gap-3 overflow-hidden rounded-[22px] border-2 px-4 py-2.5"
+      style={{ borderColor: INK, background: "#FFFDF6", boxShadow: `0 5px 0 ${INK}`, color: INK, maxWidth: w, maxHeight: h }}>
+      <div className="min-w-0 flex-1">
+        <p className={`${s.display} text-[15px] leading-tight`}>Map key</p>
+        <div className="mt-1 grid grid-cols-2 gap-x-3">
+          <span className={row}>{face("champion")}champion</span>
+          <span className={row}>
+            <svg viewBox="-12 -16 24 20" className="h-[18px] w-[22px] shrink-0" aria-hidden>
+              <rect x={-10} y={-2} width={20} height={4} rx={2} fill={INK} /><rect x={-6.5} y={-13} width={13} height={12} rx={2} fill={INK} />
+            </svg>atom</span>
+          <span className={row}>{face("trained")}trained</span>
+          <span className={row}>
+            <svg viewBox="-6 -16 18 18" className="h-[18px] w-[18px] shrink-0" aria-hidden>
+              <path d="M0 0 V-12" stroke={INK} strokeWidth={1.6} /><path d="M0 -12 L10 -9 L0 -6 Z" fill={ACCENT} stroke={INK} strokeWidth={1.2} />
+            </svg>capital, 5+ heirs</span>
+          <span className={row}>{face("provisional")}provisional bar</span>
+          <span className={row}>
+            <svg viewBox="-10 -10 20 20" className="h-[18px] w-[18px] shrink-0" aria-hidden>
+              <circle r={8} fill="#9CC9FF" stroke={INK} strokeWidth={1.8} />
+            </svg>other-family parent</span>
+          <span className={row}>{face("untrained")}not trained</span>
+          <span className={row}>
+            <svg viewBox="-13 -18 26 28" className="h-[20px] w-[20px] shrink-0" aria-hidden><Boat x={0} y={0} hull={["#9CC9FF", "#FFB38A"]} /></svg>
+            pipeline, tap to sail</span>
+        </div>
+      </div>
+      {w > 330 && (
+        <div className="flex shrink-0 flex-col items-center justify-center text-center text-[12px] font-bold leading-tight">
+          <Compass size={Math.min(64, h - 44)} />
+          <span className="mt-1">later<br />generations →</span>
+        </div>
+      )}
+    </div>
+  );
+});
 
 /** One creature, memoised: camera frames never touch it. */
 const CreatureNode = memo(function CreatureNode({ name, family, depth, cx, cy, kk, capital, st, trait, sel, dim, bounce, bounceKey, bounceDelay, eureka, onSelect, onHover }: {
@@ -155,10 +211,12 @@ function useGraph(flow: ReturnType<typeof useWorld>["flow"], taxonomy: TaxonomyR
       if (n.depth === 0 && (!cur || children.get(n.name)!.length > children.get(cur)!.length)) laneAtom.set(n.family, n.name);
     }
     const famOf = new Map(flow.nodes.map((n) => [n.name, n.family]));
-    const docks = new Map<string, { name: string; label: string }[]>();
+    const docks = new Map<string, DockBoat[]>();
     for (const c of taxonomy.compositions) {
-      const fams = new Set(c.composes.filter((m) => names.has(m)).map((m) => famOf.get(m)!));
-      for (const f of fams) docks.set(f, [...(docks.get(f) ?? []), { name: c.name, label: `${displayName(c.name)}: ${c.description}` }]);
+      const members = c.composes.filter((m) => names.has(m));
+      const fams = new Set(members.map((m) => famOf.get(m)!));
+      const hull = members.map((m) => fam(famOf.get(m)!).fill);
+      for (const f of fams) docks.set(f, [...(docks.get(f) ?? []), { name: c.name, label: `${displayName(c.name)}: ${c.description}`, hull }]);
     }
     const traits = new Map(taxonomy.models.map((m) => [m.name, traitFor(m.introduces)]));
     return { parents, children, laneAtom, laneCount, docks, traits };
@@ -197,8 +255,9 @@ export function FlowBoard() {
   const graph = useGraph(flow, taxonomy);
   const board: Board | null = useMemo(() => {
     if (!flow || !graph || !fontsReady || size.w === 0) return null;
-    return layoutBoard(flow, graph.children,
-      (name, atom) => lineW(wrapName(displayName(name)), atom ? 14 : 13) + TAG_OVER + 2, mobile ? 1 : 2);
+    const slot = (name: string, atom: boolean) => lineW(wrapName(displayName(name)), atom ? 14 : 13) + TAG_OVER + 2;
+    return mobile ? layoutMobile(flow, slot)
+      : layoutBoard(flow, graph.children, slot, 2, (name) => wrapName(displayName(name)).length);
   }, [flow, graph, fontsReady, mobile, size.w > 0, lineW]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const evBy = useMemo(() => new Map<string, ModelEvidence>(evidence.map((e) => [e.name, e])), [evidence]);
@@ -249,7 +308,11 @@ export function FlowBoard() {
     return { sx: sc, sy: sc, tx: (size.w - board.width * sc) / 2, ty: headerH + 10 + Math.max(0, (size.h - headerH - 20 - board.height * sc) / 2) };
   }, [board, graph, size.w, size.h, zoom, focusNode, mobile, headerH, EDGE]);
 
-  const cam = useFlowCamera(target, still);
+  const fitScale = useMemo(() => {
+    if (!board || size.w === 0) return 1;
+    return mobile ? (size.w - 2 * EDGE) / board.width : Math.min((size.w - 2 * EDGE) / board.width, (size.h - headerH - 20) / board.height);
+  }, [board, size.w, size.h, mobile, headerH, EDGE]);
+  const cam = useFlowCamera(target, still, { min: fitScale * 0.75, max: fitScale * 4 });
   const v = cam.view;
   // the card and the parade wait for the camera to land: one orchestrated
   // moment per interaction, and the heavy card never mounts mid-flight
@@ -265,7 +328,10 @@ export function FlowBoard() {
     setRun((r) => r + 1);
     update({ zoom: "node", focus: name });
   }, [update]);
-  const selected = zoom === "node" && focusNode ? focusNode.name : null;
+  const selectedUrl = zoom === "node" && focusNode ? focusNode.name : null;
+  // selection visuals (spotlight, dimming, lit routes, tag re-layout) apply once the
+  // camera has landed — the flight itself never re-renders the board
+  const selected = selectedUrl && cardOn === selectedUrl ? selectedUrl : null;
   const lit = selected ?? hover;
   const runKey = `${selected}:${run}`;
   const hops = useMemo(() => (graph && selected ? lineageHops(graph.parents, selected) : null), [graph, selected]);
@@ -285,6 +351,7 @@ export function FlowBoard() {
   // ——— ferries (compositions) ———
   const [ferry, setFerry] = useState<{ name: string; key: number } | null>(null);
   const sail = useCallback((name: string) => setFerry((f) => (f?.name === name ? null : { name, key: (f?.key ?? 0) + 1 })), []);
+  const [harbour, setHarbour] = useState<string | null>(null);
 
   // ——— eggs ———
   // Konami: ONE render starts the wave; CSS animation-delays carry it through the generations.
@@ -347,9 +414,9 @@ export function FlowBoard() {
     return () => { delete w.__lab; };
   }, [drawn, select, update, mascotClick]);
 
-  useEffect(() => { if (landedCam && selected) setCardOn(selected); else if (!selected) setCardOn(null); }, [landedCam, selected]);
+  useEffect(() => { if (landedCam && selectedUrl) setCardOn(selectedUrl); else if (!selectedUrl) setCardOn(null); }, [landedCam, selectedUrl]);
   const card = useMemo(() => {
-    if (!selected || !taxonomy || !focusNode || cardOn !== selected) return null;
+    if (!selected || !taxonomy || !focusNode) return null;
     return cardModel(selected, { taxonomy, evidence, runs, family: focusNode.family, depth: focusNode.depth });
   }, [selected, taxonomy, focusNode, evidence, runs, cardOn]);
   const lesson = useLesson(card ? selected : null, { runs, evidence, still: view ? view.still : null });
@@ -363,7 +430,9 @@ export function FlowBoard() {
     const z = sc / board.s0;                         // 1 at the overview design
     // creature scale: 1 at the overview design; when zoomed in, as big as the row pitch allows
     const pitch = 84 * sc;
-    const k = z <= 1 ? clamp(z, 0.3, 1) : Math.max(1, Math.min(z, pitch / 58, 1.6));
+    // creature scale follows the camera (no size pump when a flight settles); capped when close up
+    const k = clamp(z * board.cpx / 44, 0.3, 1.9);
+    void pitch;
     const font = Math.round(clamp(13 * Math.sqrt(Math.max(1, z)), 13, 16));
     const tube = clamp(5.2 * Math.sqrt(k), 2.4, 8);
 
@@ -400,13 +469,23 @@ export function FlowBoard() {
 
     // trays, tabs, generation headers, harbours
     const showChrome = z > 0.55;
-    const trays = board.lanes.map((l) => ({ l, x: X(l.x), y: Y(l.y), w: l.w * sc, h: l.h * sc }));
-    const tabs = showChrome ? trays.map(({ l, x, y, w }) => {
+    const trays = board.lanes.map((l) => {
+      // stepped outline: along the band tops left → right, then the band bottoms back
+      const st = l.steps.map(([a, b, c, d]) => [X(a), X(b), Y(c), Y(d)] as const);
+      const pts: Pt[] = [];
+      st.forEach(([a, b, c]) => { pts.push({ x: a, y: c }, { x: b, y: c }); });
+      [...st].reverse().forEach(([a, b, , d]) => { pts.push({ x: b, y: d }, { x: a, y: d }); });
+      pts.push(pts[0], pts[1]);
+      const d = roundedD(pts, clamp(16 * Math.sqrt(z), 8, 22)) + " Z";
+      const top = st.reduce((m, q) => (q[2] < m[2] ? q : m), st[0]);
+      return { l, x: X(l.x), y: Y(l.y), w: l.w * sc, h: l.h * sc, d, st, top };
+    });
+    const tabs = showChrome ? trays.map(({ l, top }) => {
       const f = fam(l.family);
       const t1 = f.label, t2 = `${graph.laneCount.get(l.family) ?? 0} ${f.kind}`;
       const w1 = measure.current(t1, 14), w2 = measure.current(t2, 13) * 0.82;
       const tw = w1 + w2 + 30;
-      return { family: l.family, t1, t2, w1, r: { x: Math.max(x + 6, x + w - 14 - tw), y: y - 12, w: tw, h: 24 } };
+      return { family: l.family, t1, t2, w1, r: { x: Math.max(top[0] + 6, top[1] - 14 - tw), y: top[2] - 12, w: tw, h: 24 } };
     }) : [];
     const heads = showChrome && z > 0.75 ? board.heads.flatMap((h) => {
       const text = h.depth === 0 ? "Atoms" : `Gen ${h.depth}`;
@@ -415,11 +494,12 @@ export function FlowBoard() {
       if (tabs.some((t) => hit(r, t.r, 4))) return [];
       return [{ key: `${h.lane}:${h.depth}`, x, y, text }];
     }) : [];
-    const docks = showChrome ? trays.map(({ l, x, y, w, h }) => {
+    const docks = showChrome ? trays.map(({ l, st }) => {
       const all = graph.docks.get(l.family) ?? [];
       const boats = all.slice(0, 3);
       const more = all.length - boats.length;
-      const dx = x + w - 14, dy = y + h + 4;
+      const last = st[st.length - 1];
+      const dx = last[1] - 14, dy = last[3] + 4;
       const dw = boats.length * 34 + (more > 0 ? 34 : 0) + 12;
       return { family: l.family, x: dx, y: dy, boats, all, more, r: { x: dx - dw, y: dy - 30, w: dw + 4, h: 38 } };
     }) : [];
@@ -456,15 +536,17 @@ export function FlowBoard() {
       const w = w0 + (w0 + chipW <= slotW + 2 ? chipW : 0);
       const h = lines.length * lineH + 9;
       const slot: R = { x: slotX, y: q.cy - h / 2, w, h };
-      const clear = (r: R) => inside(r) && !nodes.some((o) => o !== q && hit(shrink(r, 1), o.body)) && !placed.some((o) => hit(r, o, 2));
+      const tr = trays.find((t) => t.l.index === q.n.lane)!;
+      const inTray = (r: R) => r.x >= tr.x + 4 && r.x + r.w <= tr.x + tr.w - 4 && r.y >= tr.y + 2 && r.y + r.h <= tr.y + tr.h - 2;
+      const clear = (r: R) => inside(r) && inTray(r) && !nodes.some((o) => o !== q && hit(shrink(r, 1), o.body)) && !placed.some((o) => hit(r, o, 2));
       let pick: R | undefined;
-      if (w <= slotW + 3 && inside(slot)) pick = slot;
+      if (w <= slotW + 3 && inside(slot) && inTray(slot)) pick = slot;
       if (!pick) {
         const under: R = { x: q.cx - w / 2, y: q.cy + 24 * q.kk + 2, w, h };
         const left: R = { x: q.cx - 26 * q.kk - w, y: q.cy - h / 2, w, h };
         const cands = q.atom ? [slot, left, under] : [slot, under, left];
         // atoms keep their name even over a pipe; everyone else never sits on a foreign pipe
-        pick = cands.find((r) => clear(r) && (q.atom || !segs.some((sg) => sg.from !== q.n.name && hit(shrink(r, 2), sg))));
+        pick = cands.find((r) => clear(r) && !segs.some((sg) => sg.from !== q.n.name && hit(shrink(r, 2), sg)));
         if (!pick && q.sel) pick = cands.find(clear) ?? slot;
       }
       if (!pick) continue;
@@ -479,7 +561,8 @@ export function FlowBoard() {
       const x0 = t && Math.abs(t.y + t.h / 2 - q.cy) < 2 && t.x > q.cx ? t.x + t.w : q.cx + 24 * q.kk;
       if (x0 < p.spts[1].x - 2) p.spts[0] = { x: x0, y: p.spts[0].y };
     }
-    return { X, Y, sc, z, k, tube, font, lineH, nodes, pipes, tags, tabs, heads, docks, trays, portals };
+    const slots = board.slots.map((b) => ({ x: X(b.x), y: Y(b.y), w: b.w * sc, h: b.h * sc }));
+    return { X, Y, sc, z, k, tube, font, lineH, nodes, pipes, tags, tabs, heads, docks, trays, portals, slots };
   }, [v, board, graph, size.w, size.h, mobile, zoom, selected, headerH, EDGE, live, stations, lineW]);
 
   // overview invariant: at the 1440×900 design every creature is named
@@ -513,9 +596,14 @@ export function FlowBoard() {
     const dock = scene.docks.find((d) => d.family === home);
     const bi = dock ? dock.boats.findIndex((b) => b.name === comp.name) : -1;
     const start = dock ? { x: dock.x - (dock.boats.length + (dock.more > 0 ? 1 : 0)) * 34 - 12 + 20 + Math.max(0, bi) * 34, y: dock.y - 6 } : null;
-    const stops = members.map((m) => { const q = scene.nodes.find((n) => n.n.name === m)!; return { x: q.cx, y: q.cy }; });
-    const all = start ? [start, ...stops, start] : stops.length > 1 ? stops : [stops[0], { x: stops[0].x + 60, y: stops[0].y - 50 }, stops[0]];
-    return { path: ferryPath(all, comp.name === "double_descent"), label: displayName(comp.name) };
+    // the ferry calls at each member's "quay" (just below-left of the creature), never over it
+    const stops = members.map((m) => { const q = scene.nodes.find((n) => n.n.name === m)!; return { x: q.cx - 26 * q.kk, y: q.cy + 24 * q.kk }; });
+    const all = start ? [start, ...stops, start] : stops.length > 1 ? stops : [stops[0], { x: stops[0].x - 70, y: stops[0].y + 40 }, stops[0]];
+    return {
+      path: ferryPath(all, comp.name === "double_descent"), label: displayName(comp.name),
+      line: COMPOSITION_LESSONS[comp.name] ?? comp.description,
+      hull: members.map((m) => fam(board.nodes.get(m)!.family).fill),
+    };
   }, [ferry, scene, taxonomy, board]);
 
   const trainRoutes = useMemo(() => (scene ? scene.pipes.filter((p) => live.includes(p.to) && !p.crossLane).map((p) => ({ id: p.id, pts: p.spts })) : []), [scene, live]);
@@ -588,7 +676,7 @@ export function FlowBoard() {
 
         <div ref={ref} {...cam.handlers} className="absolute inset-0 touch-none select-none">
           {scene && v && board && graph && (
-            <svg className="h-full w-full" role="application" aria-label="Dataflow board of the model zoo">
+            <svg ref={cam.boardRef} className={`${s.board} h-full w-full`} role="application" aria-label="Dataflow board of the model zoo">
               <defs>
                 <pattern id="flow-dots" patternUnits="userSpaceOnUse" x={v.tx} y={v.ty} width={42 * scene.sc} height={42 * scene.sc}>
                   <circle cx={1.5} cy={1.5} r={1.5} fill={DOT} />
@@ -602,32 +690,41 @@ export function FlowBoard() {
               </defs>
               <rect width="100%" height="100%" fill={PAPER} />
               <g ref={cam.gRef}>
-                <rect x={-4000} y={-4000} width={12000} height={12000} fill="url(#flow-dots)" />
+                <rect className={s.printed} x={-4000} y={-4000} width={12000} height={12000} fill="url(#flow-dots)" />
 
-                {/* off-chart lanes: drawn only when fully in view — never a clipped tease */}
-                {[board.ruins, board.next].map((b, i) => {
-                  const x = scene.X(b.x), y = scene.Y(b.y), w = b.w * scene.sc, h = b.h * scene.sc;
-                  if (x < 8 || y < headerH + 8 || x + w > size.w - 8 || y + h > size.h - 8) return null;
-                  return i === 0
-                    ? <RuinsLane key="ruins" x={x} y={y} w={w} h={h} sc={scene.z * 0.6} />
-                    : <NextEraLane key="next" x={x} y={y} w={w} h={h} sc={scene.z * 0.6} />;
-                })}
+                {/* off-chart lanes: constant-size lists anchored beside the chart (reached by panning) */}
+                {mobile
+                  ? <><NextEraPanel x={scene.X(board.next.x) + 8} y={scene.Y(board.next.y)} /><RuinsPanel x={scene.X(board.ruins.x) + 8} y={scene.Y(board.ruins.y)} /></>
+                  : <><RuinsPanel x={scene.X(board.ruins.x + board.ruins.w) - 320} y={scene.Y(board.ruins.y)} /><NextEraPanel x={scene.X(board.next.x)} y={scene.Y(board.next.y)} /></>}
 
                 {/* lane trays: felt with thickness, printed with the family's motif */}
-                {scene.trays.map(({ l, x, y, w, h }) => {
+                {scene.trays.map(({ l, d }) => {
                   const f = fam(l.family);
-                  const rx = clamp(18 * scene.k, 8, 24);
                   return (
                     <g key={l.family}>
-                      <rect x={x + 3} y={y + 10} width={w} height={h} rx={rx} fill={INK} fillOpacity={0.1} />
-                      <rect x={x} y={y + 6} width={w} height={h} rx={rx} fill={f.deep} fillOpacity={0.55} />
-                      <rect x={x} y={y} width={w} height={h} rx={rx} fill={PAPER} />
-                      <rect x={x} y={y} width={w} height={h} rx={rx} fill={f.fill} fillOpacity={0.3} />
-                      <rect x={x} y={y} width={w} height={h} rx={rx} fill={`url(#fp-${l.family})`} />
-                      <rect x={x} y={y} width={w} height={h} rx={rx} fill="none" stroke={f.deep} strokeOpacity={0.5} strokeWidth={1.5} />
+                      <path d={d} fill={INK} fillOpacity={0.1} transform="translate(3 10)" />
+                      <path d={d} fill={f.deep} fillOpacity={0.55} transform="translate(0 6)" />
+                      <path d={d} fill={PAPER} />
+                      <path d={d} fill={f.fill} fillOpacity={0.3} />
+                      <path className={s.printed} d={d} fill={`url(#fp-${l.family})`} />
+                      <path d={d} fill="none" stroke={f.deep} strokeOpacity={0.5} strokeWidth={1.5} />
+                      {/* stitched hem, inset from the edge */}
+                      {(() => {
+                        const [x0, x1, y0, y1] = scene.trays.find((t) => t.l.index === l.index)!.st[0];
+                        const i = clamp(7 * Math.sqrt(scene.z), 4, 10);
+                        return <rect x={x0 + i} y={y0 + i} width={x1 - x0 - 2 * i} height={y1 - y0 - 2 * i} rx={clamp(12 * Math.sqrt(scene.z), 5, 16)}
+                          fill="none" stroke={f.deep} strokeOpacity={0.55} strokeWidth={1.4} strokeDasharray="6 5" strokeLinecap="round" />;
+                      })()}
                     </g>
                   );
                 })}
+
+                {/* leftover packing cells: the map key cartouche (with a compass: generations run east) */}
+                {scene.slots.map((b, i) => (
+                  <foreignObject key={i} x={b.x} y={b.y} width={b.w} height={b.h}>
+                    <MapKey w={b.w} h={b.h} />
+                  </foreignObject>
+                ))}
 
                 {/* generation headers, inside each tray above its columns */}
                 {scene.heads.map((h) => (
@@ -639,7 +736,8 @@ export function FlowBoard() {
 
                 {/* harbours: up to three moored ferries per family (+ how many more) */}
                 {scene.docks.map((d) => d.boats.length > 0 && (
-                  <Dock key={d.family} x={d.x} y={d.y} boats={d.boats} more={d.more} all={d.all} sailing={ferry?.name ?? null} onSail={sail} />
+                  <Dock key={d.family} x={d.x} y={d.y} boats={d.boats} more={d.more} sailing={ferry?.name ?? null} onSail={sail}
+                    onMore={() => setHarbour((h) => (h === d.family ? null : d.family))} />
                 ))}
 
                 {/* creatures */}
@@ -718,11 +816,11 @@ export function FlowBoard() {
                 {/* … and the full route, above everything, once either end is lit */}
                 {pipeD.filter((p) => p.cross && p.shown).map(renderPipe)}
 
-                {selected && cardOn === selected && (
+                {selected && (
                   <Parade pipes={paradePipes} view={v} size={clamp(scene.tube * 2.6, 11, 22)} still={still} runKey={runKey}
                     onLanded={() => setLanded(runKey)} />
                 )}
-                {ferryDraw && <Ferry path={ferryDraw.path} still={still} runKey={`${ferry?.name}:${ferry?.key}`} label={ferryDraw.label} />}
+                {ferryDraw && <Ferry path={ferryDraw.path} still={still} runKey={`${ferry?.name}:${ferry?.key}`} hull={ferryDraw.hull} />}
                 {grok && hover === GROKKING_EGG.model && !still && <GrokBubble x={grok.cx} y={grok.cy - 30 * grok.kk} held={grokHeld} />}
               </g>
             </svg>
@@ -766,7 +864,7 @@ export function FlowBoard() {
             </nav>
           )}
           <div className="flex-1" />
-          {size.w >= 1240 && (
+          {size.w >= 1240 && board && board.slots.length === 0 && (
             <div className="flex items-center gap-3" aria-label="What the faces mean">
               <KeyItem state="champion" label="champion" />
               <KeyItem state="trained" label="trained" />
@@ -788,6 +886,42 @@ export function FlowBoard() {
             {board?.list.map((n: BNode) => <option key={n.name} value={displayName(n.name)} />)}
           </datalist>
         </header>
+
+        {/* a harbour's full list of pipelines: every ferry is sailable from the board */}
+        {harbour && scene && (() => {
+          const d = scene.docks.find((q) => q.family === harbour);
+          if (!d) return null;
+          const left = clamp(d.x - 300, 8, size.w - 316), top = clamp(d.y - 12 - Math.min(360, d.all.length * 30 + 52), headerH + 8, size.h - 80);
+          return (
+            <div className="absolute z-40 w-[300px] rounded-2xl border-2 bg-white p-3" style={{ left, top, borderColor: INK, boxShadow: `0 4px 0 ${INK}`, color: INK }}>
+              <div className="flex items-center justify-between">
+                <p className={`${s.display} text-[15px]`}>{fam(harbour).label} harbour</p>
+                <button type="button" className={`${s.btn} rounded-full border-2 px-2 text-[13px] font-bold`} style={{ borderColor: INK }} onClick={() => setHarbour(null)}>Close</button>
+              </div>
+              <ul className="mt-2 max-h-[300px] space-y-1 overflow-y-auto">
+                {d.all.map((b) => (
+                  <li key={b.name}>
+                    <button type="button" onClick={() => { sail(b.name); setHarbour(null); }}
+                      className={`${s.chip} flex w-full items-center gap-2 rounded-xl px-2 py-1 text-left text-[14px] font-bold`}>
+                      <svg viewBox="-13 -18 26 28" className="h-6 w-6 shrink-0" aria-hidden><Boat x={0} y={0} hull={b.hull} /></svg>
+                      {displayName(b.name)}
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          );
+        })()}
+
+        {/* the sailing ferry's caption lives under the header — it never covers a name */}
+        {ferryDraw && (
+          <div className="absolute left-1/2 z-40 flex max-w-[92%] -translate-x-1/2 items-center gap-2 rounded-full border-2 bg-white py-1 pl-3 pr-1 text-[14px]"
+            style={{ top: headerH + 6, borderColor: INK, boxShadow: `0 3px 0 ${INK}`, color: INK }}>
+            <svg viewBox="-13 -18 26 28" className="h-6 w-6 shrink-0" aria-hidden><Boat x={0} y={0} sail={ACCENT} hull={ferryDraw.hull} /></svg>
+            <span className="truncate"><b>Sailing {ferryDraw.label}</b>: {ferryDraw.line}</span>
+            <button type="button" className={`${s.btn} shrink-0 rounded-full border-2 px-2 text-[13px] font-bold`} style={{ borderColor: INK }} onClick={() => setFerry(null)}>Stop</button>
+          </div>
+        )}
 
         {/* egg: the keeper trains on a REAL run's loss after 7 pokes */}
         {training && realCurve && <KeeperTrains curve={realCurve} still={still} />}

@@ -8,7 +8,7 @@
 import { memo } from "react";
 import type { LucideIcon } from "lucide-react";
 import type { EvidenceState } from "@/components/lab/shared/card-model";
-import { fam, FAMILY, GOLD, hexMix, INK, SWEAT } from "./palette";
+import { ACCENT, fam, FAMILY, GOLD, hexMix, INK, SWEAT } from "./palette";
 
 export interface CreatureProps {
   family: string;
@@ -253,8 +253,10 @@ export function traitFor(mechs: string[]): Trait {
 function TraitMark({ t, x, y, deep }: { t: Trait; x: number; y: number; deep: string }) {
   if (!t) return null;
   const ink = { fill: "none", stroke: INK, strokeWidth: 1.5, strokeLinecap: "round" as const, strokeLinejoin: "round" as const };
+  // drawn at 1.7× on an accent sticker disc so siblings differ at overview scale
   return (
-    <g transform={`translate(${x} ${y})`}>
+    <g transform={`translate(${x - 5} ${y - 5}) scale(1.3)`}>
+      <circle r={5.8} fill="#fff" stroke={ACCENT} strokeWidth={1.4} />
       {t === "eye" && (<><circle r={3.4} fill="#fff" stroke={INK} strokeWidth={1.4} /><circle cx={0.6} cy={0.4} r={1.5} fill={INK} /></>)}
       {t === "stripes" && <path d="M-2 -4 q3 1 2.5 4 M1.5 -5 q3 1 2.5 4 M-4.5 -1 q3 1 2.5 4" {...ink} stroke={deep} strokeWidth={2} />}
       {t === "curl" && <path d="M0 0 a1.6 1.6 0 1 1 1.6 1.8 a3.2 3.2 0 1 1 -3.4 -3.8" {...ink} />}

@@ -7,24 +7,38 @@
 import { useEffect, useMemo, useState } from "react";
 import { samplePolyline, type Pt } from "@/lib/world";
 import { dipDepth, NEXT_ERA, NEXT_ERA_COPY, RUINS, GROKKING_EGG } from "@/components/lab/shared/eggs";
-import { ACCENT, fam, INK, INK_SOFT, PAPER } from "./palette";
+import { ACCENT, fam, INK, INK_SOFT } from "./palette";
 import { Creature } from "./creature";
 import s from "./flow.module.css";
 
 // ——— boats ———
-export function Boat({ x, y, k = 1, sail = "#fff", angle = 0 }: { x: number; y: number; k?: number; sail?: string; angle?: number }) {
-  // a glossy sticker ferry: white die-cut rim, lit hull, coloured sail, shine
-  const hull = "M-10 0 H10 Q9 6 5 7 H-5 Q-9 6 -10 0 Z";
+export function Boat({ x, y, k = 1, sail = "#fff", angle = 0, hull = [] }: {
+  x: number; y: number; k?: number; sail?: string; angle?: number;
+  /** member families of the composition, painted as hull stripes (fore → aft) */
+  hull?: string[];
+}) {
+  // a glossy sticker ferry: white die-cut rim, lit hull striped by its members' families, sail, shine
+  const hullD = "M-10 0 H10 Q9 6 5 7 H-5 Q-9 6 -10 0 Z";
   const sailD = "M1 -14 Q8 -8 9 -1 H1 Z";
   const jib = "M-1 -12 L-7 -1 H-1 Z";
+  const cols = hull.length ? hull : ["#7C6AA8"];
+  const id = `hull-${cols.join("-").replace(/#/g, "")}`;
   return (
     <g transform={`translate(${x} ${y}) rotate(${angle}) scale(${k})`}>
+      <defs>
+        <clipPath id={id}><path d={hullD} /></clipPath>
+      </defs>
       <ellipse cx={1.5} cy={8.5} rx={10} ry={2} fill={INK} opacity={0.18} />
       <g stroke="#fff" strokeWidth={4.5} strokeLinejoin="round" fill="#fff">
-        <path d={hull} /><path d={sailD} /><path d={jib} /><path d="M0 0 V-15" />
+        <path d={hullD} /><path d={sailD} /><path d={jib} /><path d="M0 0 V-15" />
       </g>
-      <path d={hull} fill="#7C6AA8" stroke={INK} strokeWidth={1.4} strokeLinejoin="round" />
-      <path d="M-8 1.5 H8" stroke="#fff" strokeWidth={1.2} opacity={0.6} />
+      <g clipPath={`url(#${id})`}>
+        {cols.map((c, i) => <rect key={i} x={-10 + (20 * i) / cols.length} y={0} width={20 / cols.length + 0.3} height={8} fill={c} />)}
+      </g>
+      <path d={hullD} fill="none" stroke={INK} strokeWidth={1.4} strokeLinejoin="round" />
+      <path d="M-8 1.5 H8" stroke="#fff" strokeWidth={1.2} opacity={0.7} />
+      {/* one porthole per member model */}
+      {cols.slice(0, 4).map((_, i, a) => <circle key={i} cx={(i - (a.length - 1) / 2) * 4.2} cy={3.8} r={1.1} fill="#fff" stroke={INK} strokeWidth={0.6} />)}
       <path d="M0 0 V-15" stroke={INK} strokeWidth={1.4} />
       <path d={sailD} fill={sail} stroke={INK} strokeWidth={1.3} strokeLinejoin="round" />
       <path d={jib} fill="#fff" stroke={INK} strokeWidth={1.3} strokeLinejoin="round" />
@@ -34,9 +48,10 @@ export function Boat({ x, y, k = 1, sail = "#fff", angle = 0 }: { x: number; y: 
 }
 
 /** A lane's harbour: up to three moored ferries (compositions touching the family) + how many more. */
-export function Dock({ x, y, boats, more, all, sailing, onSail }: {
-  x: number; y: number; boats: { name: string; label: string }[]; more: number; all: { name: string; label: string }[];
-  sailing: string | null; onSail: (n: string) => void;
+export interface DockBoat { name: string; label: string; hull: string[] }
+export function Dock({ x, y, boats, more, sailing, onSail, onMore }: {
+  x: number; y: number; boats: DockBoat[]; more: number;
+  sailing: string | null; onSail: (n: string) => void; onMore: () => void;
 }) {
   const step = 34;
   const w = boats.length * step + (more > 0 ? step : 0) + 12;
@@ -47,13 +62,13 @@ export function Dock({ x, y, boats, more, all, sailing, onSail }: {
         <g key={b.name} className="cursor-pointer" onClick={(e) => { e.stopPropagation(); onSail(b.name); }}>
           <title>{`${b.label} — click to sail`}</title>
           <rect x={x - w + 4 + i * step} y={y - 30} width={step} height={34} fill="transparent" />
-          {sailing !== b.name && <Boat x={x - w + 20 + i * step} y={y - 6} k={1.15} />}
+          {sailing !== b.name && <Boat x={x - w + 20 + i * step} y={y - 6} k={1.15} hull={b.hull} />}
         </g>
       ))}
       {more > 0 && (
-        <g>
-          <title>{all.slice(3).map((b) => b.label).join("\n")}</title>
-          <circle cx={x - step / 2 - 4} cy={y - 12} r={11} fill="#fff" stroke={INK} strokeWidth={1.8} />
+        <g className="cursor-pointer" role="button" tabIndex={0} aria-label={`${more} more pipelines — open the list`}
+          onClick={(e) => { e.stopPropagation(); onMore(); }} onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onMore(); } }}>
+          <circle cx={x - step / 2 - 4} cy={y - 12} r={13} fill="#fff" stroke={INK} strokeWidth={1.8} />
           <text x={x - step / 2 - 4} y={y - 11.5} textAnchor="middle" dominantBaseline="central" fontSize={12} fontWeight={800} fill={INK}>+{more}</text>
         </g>
       )}
@@ -84,7 +99,7 @@ export function ferryPath(stops: Pt[], dips: boolean): Pt[] {
   });
 }
 
-export function Ferry({ path, still, runKey, label }: { path: Pt[]; still: boolean; runKey: string; label: string }) {
+export function Ferry({ path, still, runKey, hull }: { path: Pt[]; still: boolean; runKey: string; hull: string[] }) {
   const sp = useMemo(() => samplePolyline(path), [path]);
   const [t, setT] = useState(still ? 0.55 : 0);
   useEffect(() => {
@@ -109,70 +124,55 @@ export function Ferry({ path, still, runKey, label }: { path: Pt[]; still: boole
       <path d={d} fill="none" stroke="#fff" strokeWidth={7} strokeLinecap="round" strokeLinejoin="round" opacity={0.9} />
       <path d={d} fill="none" stroke={ACCENT} strokeWidth={2.4} strokeDasharray="7 6" strokeLinecap="round" />
       <g transform={deg ? `translate(${a.x} ${a.y}) scale(-1 1) translate(${-a.x} ${-a.y})` : undefined}>
-        <Boat x={a.x} y={a.y} k={1.5} sail={ACCENT} />
+        <Boat x={a.x} y={a.y} k={1.5} sail={ACCENT} hull={hull} />
       </g>
-      <text x={a.x} y={a.y - 30} textAnchor="middle" fontSize={14} fontWeight={800} fill={INK} stroke={PAPER} strokeWidth={4} paintOrder="stroke">{label}</text>
     </g>
   );
 }
 
 // ——— the hidden "?" lane (next era) and the ruins lane (legacy) ———
-export function NextEraLane({ x, y, w, h, sc }: { x: number; y: number; w: number; h: number; sc: number }) {
-  const k = Math.max(0.5, Math.min(1.3, sc * 1.4));
+// Constant-size screen panels (a list, one row each) anchored to their spot
+// off the chart: legible at every zoom they are visible, never overprinted.
+export function NextEraPanel({ x, y }: { x: number; y: number }) {
   return (
-    <g>
-      <rect x={x} y={y} width={w} height={h} rx={26} fill="none" stroke={INK} strokeWidth={2} strokeDasharray="10 8" opacity={0.6} />
-      <text x={x + 22} y={y + 38} className={s.display} fontSize={Math.max(15, 34 * sc)} fill={INK}>{NEXT_ERA_COPY.island}</text>
-      <text x={x + 22 + Math.max(15, 34 * sc)} y={y + 36} fontSize={14} fontWeight={700} fill={INK_SOFT}>{NEXT_ERA_COPY.caption}</text>
-      {NEXT_ERA.map((m, i) => {
-        const cx = x + (w * (i + 0.5)) / NEXT_ERA.length;
-        const cy = y + h * 0.55;
-        return (
-          <g key={m.id}>
-            <title>{`${m.name} — would grow from ${m.buildsOn.replace(/_/g, " ")}. ${m.teaser}`}</title>
-            <g transform={`translate(${cx} ${cy}) scale(${k})`} opacity={0.35}>
-              <circle r={18} fill={INK} />
-              <path d="M-4 -4 Q0 -10 4 -4 Q4 0 0 2 V5 M0 9 V9.5" fill="none" stroke="#fff" strokeWidth={2.4} strokeLinecap="round" />
-            </g>
-            <text x={cx} y={cy + 30 * k + 16} textAnchor="middle" className={s.display} fontSize={14} fill={INK}>{m.name}</text>
-            <text x={cx} y={cy + 30 * k + 34} textAnchor="middle" fontSize={13} fontWeight={700} fill={INK_SOFT}>from {m.buildsOn.replace(/_/g, " ")}</text>
-          </g>
-        );
-      })}
-      {/* here be dragons: a sea-serpent at the edge of the chart */}
-      <g transform={`translate(${x + w - 70} ${y + h - 30})`}>
-        <path d="M-60 0 q10 -16 20 0 t20 0 t20 0 q6 -8 14 -10 l6 4 l-8 2" fill="none" stroke={INK} strokeWidth={2.2} strokeLinecap="round" strokeLinejoin="round" />
-        <text x={-60} y={22} fontSize={14} fontStyle="italic" fontWeight={700} fill={INK}>{NEXT_ERA_COPY.warning}</text>
-      </g>
-    </g>
+    <foreignObject x={x} y={y} width={300} height={250}>
+      <div className="rounded-3xl border-2 border-dashed px-4 py-3" style={{ borderColor: INK, background: "rgba(255,255,255,0.86)", color: INK }}>
+        <p className={`${s.display} text-[20px] leading-none`}>{NEXT_ERA_COPY.island}</p>
+        <p className="mt-1 text-[13px] font-bold" style={{ color: INK_SOFT }}>{NEXT_ERA_COPY.caption}</p>
+        <ul className="mt-2 space-y-1.5">
+          {NEXT_ERA.map((m) => (
+            <li key={m.id} className="flex items-baseline gap-2 text-[13px] leading-snug" title={m.teaser}>
+              <span className="inline-block h-3 w-3 shrink-0 rounded-full" style={{ background: INK, opacity: 0.35 }} />
+              <span><b className={s.display}>{m.name}</b> <span style={{ color: INK_SOFT }}>from {m.buildsOn.replace(/_/g, " ")}</span></span>
+            </li>
+          ))}
+        </ul>
+        <p className="mt-2 flex items-center gap-2 text-[13px] font-bold italic">
+          <svg viewBox="-62 -14 84 22" className="h-4 w-14" aria-hidden>
+            <path d="M-60 0 q10 -12 20 0 t20 0 t20 0 q6 -8 14 -10 l6 4 l-8 2" fill="none" stroke={INK} strokeWidth={2.2} strokeLinecap="round" strokeLinejoin="round" />
+          </svg>
+          {NEXT_ERA_COPY.warning}
+        </p>
+      </div>
+    </foreignObject>
   );
 }
 
-export function RuinsLane({ x, y, w, h, sc }: { x: number; y: number; w: number; h: number; sc: number }) {
-  const cols = 5;
-  const rows = Math.ceil(RUINS.length / cols);
-  const k = Math.max(0.45, Math.min(1.1, sc * 1.2));
+export function RuinsPanel({ x, y }: { x: number; y: number }) {
   return (
-    <g>
-      <rect x={x} y={y} width={w} height={h} rx={26} fill="#ECE8F2" stroke="#8B80A8" strokeWidth={2} />
-      <text x={x + 22} y={y + 36} className={s.display} fontSize={Math.max(15, 26 * sc)} fill={INK}>Ruins of the old zoo</text>
-      <text x={x + 22} y={y + 58} fontSize={13} fontWeight={700} fill={INK_SOFT}>retired projects in legacy/, each with the model that replaced it</text>
-      {RUINS.map((r, i) => {
-        const cx = x + (w * ((i % cols) + 0.5)) / cols;
-        const cy = y + 70 + ((h - 90) * (Math.floor(i / cols) + 0.45)) / rows;
-        return (
-          <g key={r.id}>
-            <title>{`${r.name} (${r.path}): ${r.epitaph}${r.successor ? ` Lives on as ${r.successor.replace(/_/g, " ")}.` : ""}`}</title>
-            <g transform={`translate(${cx} ${cy}) scale(${k})`}>
-              <path d="M-16 14 V-8 Q-16 -18 0 -18 Q16 -18 16 -8 V14 Z" fill="#D9D3E3" stroke="#6E6590" strokeWidth={2} />
-              <path d="M-4 -18 L1 -8 L-3 0 L3 8" fill="none" stroke="#6E6590" strokeWidth={1.6} />
-              <path d="M-20 14 H20" stroke="#6E6590" strokeWidth={3} strokeLinecap="round" />
-            </g>
-            <text x={cx} y={cy + 22 * k + 14} textAnchor="middle" fontSize={13} fontWeight={800} fill={INK}>{r.name.length > 22 ? r.name.slice(0, 21) + "…" : r.name}</text>
-          </g>
-        );
-      })}
-    </g>
+    <foreignObject x={x} y={y} width={320} height={430}>
+      <div className="rounded-3xl border-2 px-4 py-3" style={{ borderColor: "#8B80A8", background: "#ECE8F2", color: INK }}>
+        <p className={`${s.display} text-[16px] leading-tight`}>Ruins of the old zoo</p>
+        <p className="text-[13px] font-bold" style={{ color: INK_SOFT }}>retired projects in legacy/ and what replaced them</p>
+        <ul className="mt-2 space-y-0.5">
+          {RUINS.map((r) => (
+            <li key={r.id} className="truncate text-[13px] leading-5" title={`${r.path}: ${r.epitaph}`}>
+              <b>{r.name}</b>{r.successor ? <span style={{ color: INK_SOFT }}> → {r.successor.replace(/_/g, " ")}</span> : null}
+            </li>
+          ))}
+        </ul>
+      </div>
+    </foreignObject>
   );
 }
 
