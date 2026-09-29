@@ -5,7 +5,8 @@
 // 132×99-tile world painted by the terrain look-dev kernels. Review surface
 // for the illustrator's vision loop; the builder integrates components/lab/pixel/art.
 //   ?still=1                 freeze (no animation; the sheet has none anyway)
-//   ?part=palette|sprites|castles|terrain|crops   one section only (screenshots)
+//   ?part=palette|sprites|castles|terrain|crops|biomes   one section only (screenshots)
+//   ?part=biomes[&zone=forest|wildwest|…|sea][&scenes=0|only|<scene>]   the round-4 zone library
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useWorld } from "@/hooks/use-world";
 import {
@@ -15,6 +16,7 @@ import {
 import { PixelNum } from "@/components/lab/pixel/pixel-num";
 import type { EvidenceState } from "@/components/lab/shared/card-model";
 import { AuthoredLevel, AuthoredStamps } from "./authored";
+import { BIOME_EMBLEMS, BiomeSpecimens } from "./biomes";
 
 const GROUND = "#9c98a6";      // neutral grey-violet ground for sprites
 const SHEET_BG = "#24223a";
@@ -86,7 +88,7 @@ export default function PixelSpecimens() {
 
   useEffect(() => {
     if (!view) return;
-    emblemMasks([...Object.keys(CASTLES), ...Object.values(MARKER_DEMO)], [7, 9]).then(setEmblems);
+    emblemMasks([...new Set([...Object.keys(CASTLES), ...Object.values(MARKER_DEMO), ...BIOME_EMBLEMS])], [7, 9]).then(setEmblems);
   }, [view]);
 
   useEffect(() => {
@@ -235,6 +237,7 @@ export default function PixelSpecimens() {
           ]} />
         </Section>
       )}
+      {show("biomes") && <BiomeSpecimens emblems={emblems} zone={view ? new URLSearchParams(window.location.search).get("zone") : null} scenes={view ? new URLSearchParams(window.location.search).get("scenes") : null} />}
       {show("crops") && (
         <Section title="Terrain crops at 3× (interiors · a family seam · the secret islets)">
           <div ref={cropRef} style={{ display: "flex", flexWrap: "wrap", gap: 12 }} />
