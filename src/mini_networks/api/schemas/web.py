@@ -73,3 +73,29 @@ class ModelEvidence(BaseModel):
 
 class EvidenceResponse(BaseModel):
     models: list[ModelEvidence] = Field(default_factory=list)
+
+
+class FeedbackIn(BaseModel):
+    """A note from the owner on a /lab page: text + pasted pictures + where they were."""
+
+    skin: str
+    url: str
+    text: str = ""
+    viewport: tuple[int, int] | None = None
+    images: list[str] = Field(default_factory=list)  # data URLs (image/png|jpeg|webp|gif)
+
+
+class FeedbackNote(BaseModel):
+    id: str
+    created_at: str
+    skin: str
+    url: str
+    text: str
+    viewport: tuple[int, int] | None = None
+    images: list[str] = Field(default_factory=list)   # file names inside the note folder
+    status: str = "new"                               # new | relayed | addressed
+    reply: str | None = None
+
+
+class FeedbackList(BaseModel):
+    notes: list[FeedbackNote] = Field(default_factory=list)

@@ -59,3 +59,16 @@ export interface ModelEvidence {
   best_metric: number | null;
 }
 export interface EvidenceResponse { models: ModelEvidence[]; }
+
+// /web/feedback — the owner's lab notes (web/feedback.py)
+export interface FeedbackNote {
+  id: string;
+  created_at: string;
+  skin: string;
+  url: string;
+  text: string;
+  viewport: [number, number] | null;
+  images: string[];
+  status: "new" | "relayed" | "addressed" | string;
+  reply: string | null;
+}

@@ -14,12 +14,16 @@ from fastapi.responses import FileResponse
 from mini_networks.api.schemas.web import (
     ConfigResponse,
     EvidenceResponse,
+    FeedbackIn,
+    FeedbackList,
+    FeedbackNote,
     MetricsResponse,
     ModelInfo,
     RunListResponse,
     SummaryResponse,
 )
 from mini_networks.web.evidence import build_evidence
+from mini_networks.web.feedback import list_notes, save_note
 from mini_networks.web.lessons import list_lessons, read_lesson
 from mini_networks.web.model_catalog import list_model_infos
 from mini_networks.web.sources import RunNotFound, RunSource, get_run_source
@@ -86,6 +90,23 @@ async def evidence(source: RunSource = Depends(get_run_source)):
         return "S" if cfg.get("fast_demo") else cfg.get("training_tier")
 
     return EvidenceResponse(models=build_evidence(source.list_runs(), champions_root, tier_of))
+
+
+@router.post("/feedback", response_model=FeedbackNote)
+async def post_feedback(payload: FeedbackIn):
+    """The owner's lab feedback (text + pictures) → playground/.lab-shots/feedback/."""
+    # Public showcase deployments set MN_DISABLE_TRAIN=1: no anonymous writes.
+    if os.environ.get("MN_DISABLE_TRAIN") == "1":
+        raise HTTPException(status_code=403, detail="forbidden")
+    try:
+        return save_note(payload)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@router.get("/feedback", response_model=FeedbackList)
+async def get_feedback():
+    return FeedbackList(notes=list_notes())
 
 
 @router.get("/taxonomy")

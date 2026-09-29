@@ -2,7 +2,7 @@
 // the static export at /), configurable for dev via NEXT_PUBLIC_API_BASE.
 import type {
   RunSummary, MetricsResponse, ConfigResponse, SummaryResponse,
-  ModelInfo, TaxonomyResponse, TrainResponse, InferResponse, EvidenceResponse,
+  ModelInfo, TaxonomyResponse, TrainResponse, InferResponse, EvidenceResponse, FeedbackNote,
 } from "./types";
 
 const BASE = process.env.NEXT_PUBLIC_API_BASE ?? "";
@@ -31,6 +31,9 @@ export const getSummary = (id: string) => getJSON<SummaryResponse>(`/web/runs/${
 export const listModels = () => getJSON<ModelInfo[]>("/web/models");
 export const getTaxonomy = () => getJSON<TaxonomyResponse>("/web/taxonomy");
 export const getEvidence = () => getJSON<EvidenceResponse>("/web/evidence");
+export const listFeedback = () => getJSON<{ notes: FeedbackNote[] }>("/web/feedback");
+export const postFeedback = (body: { skin: string; url: string; text: string; viewport: [number, number]; images: string[] }) =>
+  postJSON<FeedbackNote>("/web/feedback", body);
 export const artifactUrl = (id: string, name: string) => `${BASE}/web/runs/${id}/artifacts/${name}`;
 
 export const startTrain = (model: string, body: unknown) => postJSON<TrainResponse>(`/train/${model}`, body);
