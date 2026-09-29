@@ -3,55 +3,46 @@
 // One creature per model, drawn in a local ±24 box centred on the node.
 // Every part is data (see encoding.ts):
 //   silhouette (incl. lashes, antennae, facets, tail) ← family ·
-//   top hat ← atom · eyes / mouth / medal / sweat / zzz ← evidence state ·
-//   blush ← has local runs.
+//   top hat ← atom · pennant ← capital (hub) · badge glyph ← species ·
+//   eyes / mouth / medal / sweat / zzz ← evidence state.
 import { memo } from "react";
+import type { LucideIcon } from "lucide-react";
 import type { EvidenceState } from "@/components/lab/shared/card-model";
-import { fam, GOLD, INK, SWEAT } from "./palette";
-import s from "./flow.module.css";
+import { fam, FAMILY, GOLD, hexMix, INK, SWEAT } from "./palette";
 
 export interface CreatureProps {
   family: string;
   atom: boolean;
   state: EvidenceState;
-  runs: number;
-  /** stable per-model phase for the rare blink (hash of the name). */
-  phase: number;
-  still: boolean;
+  /** hub atom (≥5 models build on it): a pennant on the elder's hat */
+  capital?: boolean;
+  /** the model's species glyph (lib/icons), worn as a badge */
+  emblem?: LucideIcon | null;
+  /** grokking egg: the idea has "clicked" */
+  eureka?: boolean;
 }
 
 const W = 2; // outline width in local units (scales with the creature)
 
-function Face({ x, y, k, state, runs, phase, still }: {
-  x: number; y: number; k: number; state: EvidenceState; runs: number; phase: number; still: boolean;
-}) {
+function Face({ x, y, k, state }: { x: number; y: number; k: number; state: EvidenceState }) {
   const open = state !== "untrained";
-  const blink = open && !still ? s.blink : undefined;
   return (
     <g transform={`translate(${x} ${y}) scale(${k})`}>
-      {runs > 0 && (
-        <g fill="#FF7FA8" opacity={0.55}>
-          <ellipse cx={-10} cy={4} rx={3.2} ry={2} />
-          <ellipse cx={10} cy={4} rx={3.2} ry={2} />
-        </g>
-      )}
       {open ? (
-        <g className={blink} style={blink ? { animationDelay: `${-phase * 14}s` } : undefined}>
-          {state === "champion" ? (
-            <>
-              <circle cx={-6} cy={-1} r={3.6} fill={INK} />
-              <circle cx={6} cy={-1} r={3.6} fill={INK} />
-              <path d="M-5 -3.6 l.7 1.6 1.6 .7 -1.6 .7 -.7 1.6 -.7 -1.6 -1.6 -.7 1.6 -.7z M7 -3.6 l.7 1.6 1.6 .7 -1.6 .7 -.7 1.6 -.7 -1.6 -1.6 -.7 1.6 -.7z" fill="#fff" />
-            </>
-          ) : (
-            <>
-              <circle cx={-6} cy={-1} r={2.5} fill={INK} />
-              <circle cx={6} cy={-1} r={2.5} fill={INK} />
-              <circle cx={-5.2} cy={-1.9} r={0.9} fill="#fff" />
-              <circle cx={6.8} cy={-1.9} r={0.9} fill="#fff" />
-            </>
-          )}
-        </g>
+        state === "champion" ? (
+          <>
+            <circle cx={-6} cy={-1} r={3.6} fill={INK} />
+            <circle cx={6} cy={-1} r={3.6} fill={INK} />
+            <path d="M-5 -3.6 l.7 1.6 1.6 .7 -1.6 .7 -.7 1.6 -.7 -1.6 -1.6 -.7 1.6 -.7z M7 -3.6 l.7 1.6 1.6 .7 -1.6 .7 -.7 1.6 -.7 -1.6 -1.6 -.7 1.6 -.7z" fill="#fff" />
+          </>
+        ) : (
+          <>
+            <circle cx={-6} cy={-1} r={2.5} fill={INK} />
+            <circle cx={6} cy={-1} r={2.5} fill={INK} />
+            <circle cx={-5.2} cy={-1.9} r={0.9} fill="#fff" />
+            <circle cx={6.8} cy={-1.9} r={0.9} fill="#fff" />
+          </>
+        )
       ) : (
         <path d="M-9 -1 Q-6 2 -3 -1 M3 -1 Q6 2 9 -1" fill="none" stroke={INK} strokeWidth={1.6} strokeLinecap="round" />
       )}
@@ -87,70 +78,115 @@ function Hat({ x, y, band }: { x: number; y: number; band: string }) {
   // Top hat of an elder (atom): brim + crown, band in the family's deep tone.
   return (
     <g transform={`translate(${x} ${y}) rotate(-8)`}>
+      <path d="M-10 0 H10 M-6.5 -12 H6.5 V-1 H-6.5 Z" fill="#fff" stroke="#fff" strokeWidth={6} strokeLinejoin="round" strokeLinecap="round" />
       <rect x={-10} y={-2} width={20} height={4} rx={2} fill={INK} />
       <rect x={-6.5} y={-13} width={13} height={12} rx={2} fill={INK} />
+      <rect x={-4.5} y={-11.5} width={2.2} height={6} rx={1} fill="#fff" opacity={0.35} />
       <rect x={-6.5} y={-5} width={13} height={3} fill={band} />
     </g>
   );
 }
 
-function Body({ family, fill, deep }: { family: string; fill: string; deep: string }) {
-  const line = { stroke: INK, strokeWidth: W, strokeLinejoin: "round" as const };
+type Mode = "shadow" | "rim" | "paint";
+
+// One key light, top-left, for every creature: a cast shadow down-right, a
+// white die-cut sticker rim, a volume gradient (lit top-left → shade bottom-
+// right, CreatureDefs) and a glossy sticker highlight. Light is a rendering
+// system, not data (encoding.ts "light").
+function Body({ family, fill, deep, mode }: { family: string; fill: string; deep: string; mode: Mode }) {
+  const main = mode === "paint"
+    ? { fill: `url(#fg-${family})`, stroke: INK, strokeWidth: W, strokeLinejoin: "round" as const }
+    : mode === "rim" ? { fill: "#fff", stroke: "#fff", strokeWidth: W + 6, strokeLinejoin: "round" as const }
+      : { fill: INK, stroke: INK, strokeWidth: W + 1, strokeLinejoin: "round" as const };
+  const face = (c: string) => (mode === "paint" ? { ...main, fill: c } : main);
+  const line = (w: number) => (mode === "paint" ? { stroke: INK, strokeWidth: w } : mode === "rim" ? { stroke: "#fff", strokeWidth: w + 6 } : { stroke: INK, strokeWidth: w + 1 });
+  const knob = (c: string) => (mode === "paint" ? { fill: c, stroke: INK, strokeWidth: 1.2 } : main);
   switch (family) {
     case "perception":
       // eyeball: a round ball with three lashes on its lid
       return (
         <>
-          <path d="M-9 -15 L-12 -21 M0 -18 V-24.5 M9 -15 L12 -21" stroke={INK} strokeWidth={2} strokeLinecap="round" />
-          <circle r={18} fill={fill} {...line} />
+          <path d="M-9 -15 L-12 -21 M0 -18 V-24.5 M9 -15 L12 -21" fill="none" {...line(2)} strokeLinecap="round" />
+          <circle r={18} {...main} />
         </>
       );
     case "sequence":
       // token caterpillar: two tail segments curled up behind the head, antennae on top
       return (
         <>
-          <circle cx={-19} cy={1} r={6.5} fill={fill} {...line} />
-          <circle cx={-12} cy={10} r={8} fill={fill} {...line} />
-          <path d="M-5 -15 Q-8 -22 -11 -23 M5 -15 Q8 -22 11 -23" fill="none" stroke={INK} strokeWidth={1.6} strokeLinecap="round" />
-          <circle cx={-11} cy={-23} r={2} fill={deep} stroke={INK} strokeWidth={1.2} />
-          <circle cx={11} cy={-23} r={2} fill={deep} stroke={INK} strokeWidth={1.2} />
-          <circle r={16} fill={fill} {...line} />
+          <circle cx={-19} cy={1} r={6.5} {...main} />
+          <circle cx={-12} cy={10} r={8} {...main} />
+          <path d="M-5 -15 Q-8 -22 -11 -23 M5 -15 Q8 -22 11 -23" fill="none" {...line(1.6)} strokeLinecap="round" />
+          <circle cx={-11} cy={-23} r={2} {...knob(deep)} />
+          <circle cx={11} cy={-23} r={2} {...knob(deep)} />
+          <circle r={16} {...main} />
         </>
       );
     case "generative":
       // egg-cloud: an egg whose lower rim is a cloud of samples
-      return <path d="M-16 5 C-16 -13 -8 -21 0 -21 C8 -21 16 -13 16 5 Q17 14 9 13 Q5 19 0 15 Q-5 19 -9 13 Q-17 14 -16 5 Z" fill={fill} {...line} />;
+      return <path d="M-16 5 C-16 -13 -8 -21 0 -21 C8 -21 16 -13 16 5 Q17 14 9 13 Q5 19 0 15 Q-5 19 -9 13 Q-17 14 -16 5 Z" {...main} />;
     case "representation":
       // mirror twins: two views of one thing across a mirror line
       return (
         <>
-          <path d="M0 -17 V17" stroke={deep} strokeWidth={1.4} strokeDasharray="2 2.5" />
-          <circle cx={-11} cy={2} r={11.5} fill={fill} {...line} />
-          <circle cx={11} cy={2} r={11.5} fill={fill} {...line} />
+          {mode === "paint" && <path d="M0 -17 V17" stroke={deep} strokeWidth={1.4} strokeDasharray="2 2.5" />}
+          <circle cx={-11} cy={2} r={11.5} {...main} />
+          <circle cx={11} cy={2} r={11.5} {...main} />
         </>
       );
     case "structure":
       // crystal: a cut gem (its facet lines are part of the silhouette)
       return (
         <>
-          <path d="M-10 -17 H10 L18 -5 L0 19 L-18 -5 Z" fill={fill} {...line} />
-          <path d="M-18 -5 H18 M-10 -17 L-5 -5 L0 19 L5 -5 L10 -17" fill="none" stroke={deep} strokeWidth={1.1} opacity={0.7} />
+          <path d="M-10 -17 H10 L18 -5 L0 19 L-18 -5 Z" {...main} />
+          {mode === "paint" && <path d="M-18 -5 H18 M-10 -17 L-5 -5 L0 19 L5 -5 L10 -17" fill="none" stroke={deep} strokeWidth={1.1} opacity={0.7} />}
         </>
       );
     case "decision":
-      // dice bot: a cube with an antenna
+      // dice bot: a cube with an antenna (top face lit, side face in shade)
       return (
         <>
-          <path d="M1 -19 V-26" stroke={INK} strokeWidth={1.6} strokeLinecap="round" />
-          <circle cx={1} cy={-27} r={2.2} fill={deep} stroke={INK} strokeWidth={1.2} />
-          <path d="M-15 -12 L-8 -19 H20 L13 -12 Z" fill="#FFD3E7" {...line} />
-          <path d="M13 -12 L20 -19 V11 L13 18 Z" fill={deep} {...line} />
-          <rect x={-15} y={-12} width={28} height={30} rx={4} fill={fill} {...line} />
+          <path d="M1 -19 V-26" fill="none" {...line(1.6)} strokeLinecap="round" />
+          <circle cx={1} cy={-27} r={2.2} {...knob(deep)} />
+          <path d="M-15 -12 L-8 -19 H20 L13 -12 Z" {...face("#FFD9EA")} />
+          <path d="M13 -12 L20 -19 V11 L13 18 Z" {...face(deep)} />
+          <rect x={-15} y={-12} width={28} height={30} rx={4} {...main} />
         </>
       );
     default:
-      return <circle r={16} fill={fill} {...line} />;
+      return <circle r={16} {...main} />;
   }
+}
+
+const GLOSS: Record<string, [number, number, number, number][]> = {
+  perception: [[-8, -9, 5.5, 3], [-2.5, -13, 1.4, 1.4]],
+  sequence: [[-7, -8, 4.8, 2.6], [-2, -11.5, 1.3, 1.3], [-22, -2, 2, 1.2]],
+  generative: [[-7, -11, 4.5, 2.6], [-2, -15, 1.3, 1.3]],
+  representation: [[-16, -4, 3.2, 1.8], [6, -4, 3.2, 1.8]],
+  structure: [[-8, -11, 4, 1.6]],
+  decision: [[-9, -7, 4, 2.2]],
+};
+
+/** Paint servers for the light system — render once per document (ids are global). */
+export function CreatureDefs() {
+  return (
+    <defs>
+      {Object.entries(FAMILY).map(([k, f]) => (
+        <radialGradient key={k} id={`fg-${k}`} cx="0.34" cy="0.3" r="0.85">
+          <stop offset="0" stopColor={hexMix(f.fill, "#ffffff", 0.6)} />
+          <stop offset="0.45" stopColor={f.fill} />
+          <stop offset="1" stopColor={hexMix(f.fill, f.deep, 0.62)} />
+        </radialGradient>
+      ))}
+      <radialGradient id="fg-" cx="0.34" cy="0.3" r="0.85">
+        <stop offset="0" stopColor="#fff" /><stop offset="1" stopColor="#CFC6EA" />
+      </radialGradient>
+      <radialGradient id="f-contact" cx="0.5" cy="0.5" r="0.5">
+        <stop offset="0" stopColor={INK} stopOpacity="0.32" />
+        <stop offset="1" stopColor={INK} stopOpacity="0" />
+      </radialGradient>
+    </defs>
+  );
 }
 
 /** The evidence glyph worn on every name tag (screen px, centred on 0,0, ≥12px). */
@@ -195,31 +231,64 @@ const ANCHORS: Record<string, { face: [number, number, number]; hat: [number, nu
   decision: { face: [-1, 3, 0.95], hat: [-4, -20], medal: [10, 17] },
 };
 
+function Pennant({ x, y, fill }: { x: number; y: number; fill: string }) {
+  return (
+    <g transform={`translate(${x} ${y}) rotate(-8)`}>
+      <path d="M0 0 V-12" stroke={INK} strokeWidth={1.6} strokeLinecap="round" />
+      <path d="M0 -12 L10 -9 L0 -6 Z" fill={fill} stroke={INK} strokeWidth={1.2} strokeLinejoin="round" />
+    </g>
+  );
+}
+
+function Bulb({ y }: { y: number }) {
+  return (
+    <g transform={`translate(14 ${y})`}>
+      <path d="M-4 -12 L-6.5 -15 M4 -12 L6.5 -15 M0 -13.5 V-17" stroke={INK} strokeWidth={1.4} strokeLinecap="round" />
+      <circle cx={0} cy={-5} r={6} fill="#FFE27A" stroke={INK} strokeWidth={1.5} />
+      <rect x={-2.6} y={0.5} width={5.2} height={3.4} rx={1} fill="#fff" stroke={INK} strokeWidth={1.2} />
+    </g>
+  );
+}
+
+function Badge({ x, y, Icon }: { x: number; y: number; Icon: LucideIcon }) {
+  return (
+    <g transform={`translate(${x} ${y})`}>
+      <circle r={8.5} fill="#fff" stroke={INK} strokeWidth={1.6} />
+      <Icon x={-5.5} y={-5.5} width={11} height={11} strokeWidth={2.4} color={INK} />
+    </g>
+  );
+}
+
 export const Creature = memo(function Creature(p: CreatureProps) {
   const f = fam(p.family);
   const a = ANCHORS[p.family] ?? ANCHORS.perception;
   const twins = p.family === "representation";
   return (
     <g>
-      <Body family={p.family} fill={f.fill} deep={f.deep} />
+      <ellipse cx={3} cy={21} rx={20} ry={5} fill="url(#f-contact)" />
+      <g transform="translate(2.4 3.2)" opacity={0.16}>
+        <Body family={p.family} fill={f.fill} deep={f.deep} mode="shadow" />
+      </g>
+      <Body family={p.family} fill={f.fill} deep={f.deep} mode="rim" />
+      <Body family={p.family} fill={f.fill} deep={f.deep} mode="paint" />
+      {(GLOSS[p.family] ?? []).map(([x, y, rx, ry], i) => (
+        <ellipse key={i} cx={x} cy={y} rx={rx} ry={ry} transform={`rotate(-28 ${x} ${y})`} fill="#fff" opacity={i ? 0.95 : 0.8} />
+      ))}
       {twins ? (
         <>
-          <Face x={-11} y={a.face[1]} k={a.face[2]} state={p.state} runs={0} phase={p.phase} still={p.still} />
+          <Face x={-11} y={a.face[1]} k={a.face[2]} state={p.state} />
           <g transform={`translate(${11} ${a.face[1]}) scale(-${a.face[2]} ${a.face[2]})`}>
-            <Face x={0} y={0} k={1} state={p.state} runs={0} phase={p.phase} still={p.still} />
+            <Face x={0} y={0} k={1} state={p.state} />
           </g>
-          {p.runs > 0 && (
-            <g fill="#FF7FA8" opacity={0.55}>
-              <ellipse cx={-17} cy={6} rx={2.4} ry={1.5} />
-              <ellipse cx={17} cy={6} rx={2.4} ry={1.5} />
-            </g>
-          )}
         </>
       ) : (
-        <Face x={a.face[0]} y={a.face[1]} k={a.face[2]} state={p.state} runs={p.runs} phase={p.phase} still={p.still} />
+        <Face x={a.face[0]} y={a.face[1]} k={a.face[2]} state={p.state} />
       )}
       {p.atom && <Hat x={a.hat[0]} y={a.hat[1]} band={f.deep} />}
+      {p.atom && p.capital && <Pennant x={a.hat[0] + 3} y={a.hat[1] - 12} fill={f.deep} />}
       {p.state === "champion" && <Medal x={a.medal[0]} y={a.medal[1]} />}
+      {p.emblem && <Badge x={twins ? -14 : -a.medal[0] - 1} y={a.medal[1] + (twins ? -2 : 0)} Icon={p.emblem} />}
+      {p.eureka && <Bulb y={a.hat[1] - 4} />}
     </g>
   );
 });

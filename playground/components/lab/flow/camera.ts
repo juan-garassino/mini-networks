@@ -110,7 +110,7 @@ export function useFlowCamera(target: View | null, still: boolean) {
     const f = Math.exp(-e.deltaY * 0.0015);
     setView((v) => {
       if (!v) return v;
-      const g = Math.min(Math.max(f, 0.3 / Math.min(v.sx, v.sy)), 4 / Math.max(v.sx, v.sy));
+      const g = Math.min(Math.max(f, 0.18 / Math.min(v.sx, v.sy)), 4 / Math.max(v.sx, v.sy));
       return { sx: v.sx * g, sy: v.sy * g, tx: mx - (mx - v.tx) * g, ty: my - (my - v.ty) * g };
     });
   }, []);

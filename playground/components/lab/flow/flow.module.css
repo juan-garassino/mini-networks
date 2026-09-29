@@ -10,17 +10,6 @@
   font-family: var(--flow-display), var(--flow-body), system-ui, sans-serif;
 }
 
-/* the rare blink: eyes squash for ~0.18s once every 14s, phase per model */
-.blink {
-  transform-box: fill-box;
-  transform-origin: center;
-  animation: blink 14s infinite;
-}
-@keyframes blink {
-  0%, 97.5%, 100% { transform: scaleY(1); }
-  98.7% { transform: scaleY(0.1); }
-}
-
 /* the single happy bounce of the selected creature when the parade lands */
 .bounce {
   transform-box: fill-box;
@@ -64,8 +53,17 @@
   outline-offset: 2px;
 }
 
+/* the header keeper hops once per poke */
+.hop {
+  animation: hop 380ms cubic-bezier(0.3, 0.7, 0.4, 1) 1;
+}
+@keyframes hop {
+  0%, 100% { transform: translateY(0); }
+  45% { transform: translateY(-6px); }
+}
+
 @media (prefers-reduced-motion: reduce) {
-  .blink,
+  .hop,
   .bounce {
     animation: none;
   }

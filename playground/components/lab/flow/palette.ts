@@ -19,3 +19,13 @@ export const FAMILY: Record<string, { fill: string; deep: string; label: string;
 };
 export const UNKNOWN_FAMILY = { fill: "#E4DEF7", deep: "#8B80A8", label: "Other", kind: "newcomers" };
 export const fam = (f: string) => FAMILY[f] ?? UNKNOWN_FAMILY;
+
+// The one accent: focus, the lineage route, the ferry sail, Try it.
+export const ACCENT = "#D6336C";
+
+/** Opaque mix of two #rrggbb colours (t = 0 → a, 1 → b). */
+export function hexMix(a: string, b: string, t: number) {
+  const p = (h: string) => [1, 3, 5].map((i) => parseInt(h.slice(i, i + 2), 16));
+  const x = p(a), y = p(b);
+  return `#${x.map((v, i) => Math.round(v + (y[i] - v) * t).toString(16).padStart(2, "0")).join("")}`;
+}

@@ -52,7 +52,7 @@ export function Parade({ pipes, view, size, still, runKey, onLanded }: {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [runKey, still, samplers, total]);
 
-  const blobs: { key: string; x: number; y: number; fill: string; k: number }[] = [];
+  const blobs: { key: string; x: number; y: number; fill: string; fam: string; k: number }[] = [];
   for (const { p, s } of samplers) {
     for (let i = 0; i < BLOBS; i++) {
       let u: number;
@@ -64,7 +64,7 @@ export function Parade({ pipes, view, size, still, runKey, onLanded }: {
       const a = s.at(u);
       // swell out of the parent, shrink into the child
       const k = still ? 1 : Math.min(1, u * 6, (1 - u) * 5);
-      blobs.push({ key: `${p.id}:${i}`, x: a.x * view.sx + view.tx, y: a.y * view.sy + view.ty, fill: fam(p.fromFamily).fill, k });
+      blobs.push({ key: `${p.id}:${i}`, x: a.x * view.sx + view.tx, y: a.y * view.sy + view.ty, fill: fam(p.fromFamily).fill, fam: p.fromFamily, k });
     }
   }
   const r = size / 2;
@@ -72,10 +72,12 @@ export function Parade({ pipes, view, size, still, runKey, onLanded }: {
     <g pointerEvents="none" aria-hidden>
       {blobs.map((b) => (
         <g key={b.key} transform={`translate(${b.x} ${b.y}) scale(${b.k})`}>
-          <circle r={r * 1.75} fill="#fff" opacity={0.55} />
-          <circle r={r * 1.3} fill="#fff" opacity={0.8} />
-          <rect x={-r} y={-r} width={size} height={size} rx={r * 0.55} fill={b.fill} stroke={INK} strokeWidth={1.8} />
-          <rect x={-r * 0.6} y={-r * 0.62} width={r * 0.75} height={r * 0.38} rx={r * 0.19} fill="#fff" opacity={0.95} />
+          <circle r={r * 1.75} fill="#fff" opacity={0.5} />
+          <ellipse cx={r * 0.25} cy={r * 1.05} rx={r * 1.1} ry={r * 0.35} fill={INK} opacity={0.18} />
+          <rect x={-r} y={-r} width={size} height={size} rx={r * 0.6} fill="#fff" stroke="#fff" strokeWidth={4} />
+          <rect x={-r} y={-r} width={size} height={size} rx={r * 0.6} fill={`url(#fg-${b.fam})`} stroke={INK} strokeWidth={1.8} fillOpacity={0.92} />
+          <ellipse cx={-r * 0.3} cy={-r * 0.42} rx={r * 0.42} ry={r * 0.22} transform={`rotate(-25 ${-r * 0.3} ${-r * 0.42})`} fill="#fff" opacity={0.95} />
+          <circle cx={r * 0.38} cy={r * 0.35} r={r * 0.12} fill="#fff" opacity={0.7} />
         </g>
       ))}
     </g>
