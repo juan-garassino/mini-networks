@@ -49,9 +49,9 @@ export function TitleWindow({ taxonomyNames, zoom, focus, regionCount, mobile, o
   return (
     <PixelWindow as="header" className={`absolute left-4 top-4 ${mobile ? "right-4" : "w-[320px]"}`}>
       <div className="px-1">
-        <h1 className="text-[24px] font-bold leading-none text-[#ffcd75]">The model zoo</h1>
+        <h1 className="text-[24px] font-bold leading-none text-[#f5c24a]">The model zoo</h1>
         {!mobile && (
-          <p className="mt-2 text-[16px] leading-snug text-[#f4f4f4]">
+          <p className="mt-2 text-[16px] leading-snug text-[#fff6e0]">
             <PixelNum value={taxonomyNames.length} /> models across six lands. Pick one and the blob walks there from its root.
           </p>
         )}
@@ -81,11 +81,11 @@ export function TitleWindow({ taxonomyNames, zoom, focus, regionCount, mobile, o
             ))}
           </ul>
         )}
-        {q.trim() && hits.length === 0 && <p className="mt-1 text-[15px] text-[#94b0c2]">No model by that name.</p>}
+        {q.trim() && hits.length === 0 && <p className="mt-1 text-[15px] text-[#bccbe8]">No model by that name.</p>}
         {zoom !== "overview" && focus && (
           <p className="mt-3 text-[17px] leading-tight">
-            <span className="text-[#73eff7]">{familyLabel(focus.family)} land</span>
-            <span className="text-[#94b0c2]">, <PixelNum value={regionCount} /> models</span>
+            <span className="text-[#62dcf2]">{familyLabel(focus.family)} land</span>
+            <span className="text-[#bccbe8]">, <PixelNum value={regionCount} /> models</span>
           </p>
         )}
         {zoom !== "overview" && (

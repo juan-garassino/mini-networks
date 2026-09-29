@@ -20,8 +20,9 @@ import {
   blank, blit, CLEAR, downsample, fillRect, flipX, recolor, sprite, toCanvas, type IndexImage,
 } from "./raster";
 import {
-  BANNER, CACTUS, CASTLE, CRYSTAL, DOT, GLINTS, GLYPHS, GROUND, GROUND_OF, MECH_GLYPHS, MUSHROOM, PINE, QSIGN, STAR, TREE,
+  CACTUS, CASTLE, CRYSTAL, GLINTS, GLYPHS, GROUND, GROUND_OF, HOUSE, MOUNTAIN, MUSHROOM, PIER, PINE, QSIGN, STAR, TREE,
 } from "./sprites";
+import { emblemSprite, type EmblemMask } from "./emblems";
 
 export const TS = 16;
 
@@ -33,8 +34,12 @@ export interface NodeLook {
 }
 
 export interface Layers {
-  /** ts16: [water frame 0, water frame 1] */
-  full: [HTMLCanvasElement, HTMLCanvasElement];
+  /** ts16 (static: no idle water animation in round 2) */
+  full: HTMLCanvasElement;
+  /** the same layers one palette step darker (SNES colour-math "step back") */
+  dim: { full: HTMLCanvasElement; mid: HTMLCanvasElement; far: HTMLCanvasElement };
+  /** raw index buffers, kept to cut per-region layers on demand */
+  raw: IndexImage;
   mid: HTMLCanvasElement;   // ts8 (one art pixel per 2 world px)
   far: HTMLCanvasElement;   // ts4
   /** land owner per ts16 pixel (region id, -1 water) — for the region spotlight. */
@@ -213,77 +218,6 @@ function stroke(img: IndexImage, a: { x: number; y: number }, b: { x: number; y:
   }
 }
 
-interface Seg { a: { x: number; y: number }; b: { x: number; y: number }; primary: boolean }
-
-/** Road connection masks → segments (tile-centre to tile-centre, plus footprint stubs), in world px. */
-export function roadSegments(world: World): Seg[] {
-  const { cols } = world;
-  const centre = (t: number) => ({ x: (t % cols) * TS + TS / 2, y: Math.floor(t / cols) * TS + TS / 2 });
-  const byName = new Map(world.nodes.map((n) => [n.name, n]));
-  const segs = new Map<string, Seg>();
-  const add = (key: string, a: { x: number; y: number }, b: { x: number; y: number }, primary: boolean) => {
-    const s = segs.get(key);
-    if (s) s.primary ||= primary;
-    else segs.set(key, { a, b, primary });
-  };
-  const stubInto = (n: WorldNode, from: { x: number; y: number }) => {
-    const fx = n.foot.x * TS, fy = n.foot.y * TS, fw = n.foot.w * TS, fh = n.foot.h * TS;
-    if (!n.atom) return { ...n.center };
-    const x = Math.min(Math.max(from.x, fx), fx + fw), y = Math.min(Math.max(from.y, fy), fy + fh);
-    const dx = Math.sign(n.center.x - x), dy = Math.sign(n.center.y - y);
-    return { x: x + dx * 6, y: y + dy * 6 };
-  };
-  for (const r of world.roads) {
-    if (!r.tiles.length) continue;
-    for (let k = 0; k + 1 < r.tiles.length; k++) {
-      const [p, q] = [r.tiles[k], r.tiles[k + 1]].sort((m, n) => m - n);
-      add(`${p}-${q}`, centre(p), centre(q), r.primary);
-    }
-    const from = byName.get(r.from), to = byName.get(r.to);
-    const first = centre(r.tiles[0]), last = centre(r.tiles[r.tiles.length - 1]);
-    if (from) add(`${r.from}@${r.tiles[0]}`, first, stubInto(from, first), r.primary);
-    if (to) add(`${r.to}@${r.tiles[r.tiles.length - 1]}`, last, stubInto(to, last), r.primary);
-  }
-  return [...segs.values()];
-}
-
-function paintRoads(img: IndexImage, segs: Seg[], f: number) {
-  // f = world px per art px (1 at ts16, 2 at ts8, 4 at ts4)
-  const P = (p: { x: number; y: number }) => ({ x: p.x / f, y: p.y / f });
-  const outline = f === 1 ? 8 : f === 2 ? 4 : 0;
-  const fill = f === 1 ? 5 : f === 2 ? 2 : 1;
-  // secondary (second-parent) roads: stepping-stone dots
-  for (const s of segs) {
-    if (s.primary) continue;
-    const a = P(s.a), b = P(s.b);
-    const len = Math.hypot(b.x - a.x, b.y - a.y);
-    const gap = f === 1 ? 6 : 3;
-    for (let d = 0; d <= len; d += gap) {
-      const x = a.x + ((b.x - a.x) * d) / Math.max(len, 1e-6), y = a.y + ((b.y - a.y) * d) / Math.max(len, 1e-6);
-      if (f === 1) { disc(img, x, y, 4, C_IDX.charcoal); disc(img, x, y, 2, C_IDX.silver); }
-      else disc(img, x, y, 1, f === 2 ? C_IDX.silver : C_IDX.charcoal);
-    }
-  }
-  if (outline) for (const s of segs) if (s.primary) stroke(img, P(s.a), P(s.b), outline, C_IDX.charcoal);
-  if (f === 1) {
-    // bevelled cobble road: slate bed, silver top shifted up-left, sparse slate setts
-    for (const s of segs) if (s.primary) stroke(img, P(s.a), P(s.b), fill + 1, C_IDX.slate);
-    const off = (p: { x: number; y: number }) => ({ x: p.x - 0.5, y: p.y - 0.5 });
-    for (const s of segs) if (s.primary) stroke(img, off(P(s.a)), off(P(s.b)), fill, C_IDX.silver);
-    for (const s of segs) {
-      if (!s.primary) continue;
-      const a = P(s.a), b = P(s.b);
-      const x0 = Math.floor(Math.min(a.x, b.x) - 4), x1 = Math.ceil(Math.max(a.x, b.x) + 4);
-      const y0 = Math.floor(Math.min(a.y, b.y) - 4), y1 = Math.ceil(Math.max(a.y, b.y) + 4);
-      for (let y = Math.max(0, y0); y < Math.min(img.h, y1); y++) for (let x = Math.max(0, x0); x < Math.min(img.w, x1); x++) {
-        const i = y * img.w + x;
-        if (img.data[i] === C_IDX.silver && (x * 3 + y * 5) % 11 === 0) img.data[i] = C_IDX.slate;
-      }
-    }
-  } else {
-    for (const s of segs) if (s.primary) stroke(img, P(s.a), P(s.b), fill, f === 4 ? C_IDX.charcoal : C_IDX.silver);
-  }
-}
 
 const C_IDX = { ink: 0, plum: 1, red: 2, orange: 3, gold: 4, lime: 5, green: 6, teal: 7, navy: 8, blue: 9, sky: 10, cyan: 11, white: 12, silver: 13, slate: 14, charcoal: 15 } as const;
 
@@ -373,61 +307,200 @@ function paintDecor(img: IndexImage, world: World, f: number) {
   }
 }
 
+
+// ———————————————————— roads on their lanes ————————————————————
+type P = { x: number; y: number };
+
+/** Every road as the polyline to draw: its lane (v2), plus stubs into derived towns' centres. */
+export function roadPolys(world: World): { road: World["roads"][number]; pts: P[] }[] {
+  const byName = new Map(world.nodes.map((n) => [n.name, n]));
+  return world.roads.map((road) => {
+    const base = road.lanePoints.length ? road.lanePoints : road.points;
+    const pts: P[] = [...base];
+    const a = byName.get(road.from), b = byName.get(road.to);
+    if (a && !a.atom && pts.length) pts.unshift({ ...a.center });
+    if (b && !b.atom && pts.length) pts.push({ ...b.center });
+    return { road, pts };
+  });
+}
+
+function strokePoly(img: IndexImage, pts: P[], f: number, size: number, v: number) {
+  for (let i = 1; i < pts.length; i++) stroke(img, { x: pts[i - 1].x / f, y: pts[i - 1].y / f }, { x: pts[i].x / f, y: pts[i].y / f }, size, v);
+}
+
+/** A 2px-thick "V" pointing along `angle` (parent → child), stamped pixel by pixel. */
+export function chevronPixels(x: number, y: number, angle: number, arm = 2): [number, number][] {
+  const out: [number, number][] = [];
+  const c = Math.cos(angle), s = Math.sin(angle);
+  for (let p = -arm; p <= arm; p++) for (const back of [0, 1]) {
+    const u = -Math.abs(p) - back, w = p;
+    out.push([Math.round(x + u * c - w * s), Math.round(y + u * s + w * c)]);
+  }
+  return out;
+}
+
+function paintRoads(img: IndexImage, world: World, f: number) {
+  const polys = roadPolys(world);
+  const quiet = polys.filter((p) => p.road.kind === "bridge");
+  const second = polys.filter((p) => p.road.kind !== "bridge" && !p.road.primary);
+  const main = polys.filter((p) => p.road.kind !== "bridge" && p.road.primary);
+  // cross-family lineage: long and loud → a thin low-value track until focused (live layer raises it)
+  for (const { pts } of quiet) strokePoly(img, pts, f, f === 1 ? 2 : 1, C_IDX.charcoal);
+  // second parents: stepping stones
+  for (const { pts } of second) {
+    for (let i = 1; i < pts.length; i++) {
+      const a = { x: pts[i - 1].x / f, y: pts[i - 1].y / f }, b = { x: pts[i].x / f, y: pts[i].y / f };
+      const len = Math.hypot(b.x - a.x, b.y - a.y), gap = f === 1 ? 6 : 3;
+      for (let d = 0; d <= len; d += gap) {
+        const x = a.x + ((b.x - a.x) * d) / Math.max(len, 1e-6), y = a.y + ((b.y - a.y) * d) / Math.max(len, 1e-6);
+        if (f === 1) { disc(img, x, y, 4, C_IDX.charcoal); disc(img, x, y, 2, C_IDX.white); }
+        else disc(img, x, y, 1, C_IDX.charcoal);
+      }
+    }
+  }
+  if (f === 4) { for (const { pts } of main) strokePoly(img, pts, f, 1, C_IDX.charcoal); return; }
+  for (const { pts } of main) strokePoly(img, pts, f, f === 1 ? 7 : 4, C_IDX.charcoal);
+  for (const { pts } of main) strokePoly(img, pts, f, f === 1 ? 4 : 2, f === 1 ? C_IDX.silver : C_IDX.white);
+  if (f === 1) {
+    const off = (pts: P[]) => pts.map((p) => ({ x: p.x - 0.5, y: p.y - 0.5 }));
+    for (const { pts } of main) strokePoly(img, off(pts), f, 3, C_IDX.white);
+    // direction chevrons (parent → child) in ink on every drawn road
+    for (const { road } of [...main, ...second]) for (const ch of road.chevrons) {
+      for (const [x, y] of chevronPixels(ch.x, ch.y, ch.angle)) {
+        if (x >= 0 && y >= 0 && x < img.w && y < img.h) img.data[y * img.w + x] = C_IDX.charcoal;
+      }
+    }
+  }
+}
+
+// ———————————————————— flavour: mountains, cities, harbours ————————————————————
+
+function paintMountains(img: IndexImage, world: World, f: number) {
+  const m = f === 1 ? sprite(MOUNTAIN) : downsample(sprite(MOUNTAIN), f, (v) => (v === 0 ? 0.7 : 1));
+  for (const line of world.mountains) {
+    let carry = 0;
+    for (let i = 1; i < line.length; i++) {
+      const a = line[i - 1], b = line[i];
+      const len = Math.hypot(b.x - a.x, b.y - a.y);
+      for (let d = carry; d < len; d += 13) {
+        const x = (a.x + ((b.x - a.x) * d) / len) / f, y = (a.y + ((b.y - a.y) * d) / len) / f;
+        blit(img, m, Math.round(x - m.w / 2), Math.round(y - m.h + 3 / f));
+        carry = d + 13 - len;
+      }
+    }
+  }
+}
+
+function paintCities(img: IndexImage, world: World, f: number) {
+  if (f === 4) return;
+  const h = f === 1 ? sprite(HOUSE) : downsample(sprite(HOUSE), 2, (v) => (v === 0 ? 0.7 : 1));
+  for (const c of world.cities) for (const b of c.blocks) {
+    blit(img, h, Math.round((b.x + b.w / 2) / f - h.w / 2), Math.round((b.y + b.h / 2) / f - h.h / 2));
+  }
+}
+
+function paintHarbours(img: IndexImage, world: World, f: number) {
+  if (f === 4) return;
+  const pier = sprite(PIER);
+  for (const h of world.harbours) {
+    if (h.boats <= 0) continue;
+    const gap = f === 1 ? 12 : 6;
+    const x0 = h.pt.x / f - ((h.boats - 1) * gap) / 2, y = h.pt.y / f;
+    if (f === 1) { const t = h.tile, cx = (t % world.cols) * TS + TS / 2, cy = Math.floor(t / world.cols) * TS + TS / 2;
+      for (let d = 0; d <= 1; d += 0.25) blit(img, pier, Math.round(cx + (h.pt.x - cx) * d - 2), Math.round(cy + (h.pt.y - cy) * d - 2)); }
+    void x0; void y; // boats themselves are drawn on the live layer (big, ≤3 + a count)
+  }
+}
+
+// ———————————————————— nodes ————————————————————
+
+export type Emblems = Map<string, Map<number, EmblemMask>>;
+
 // Node sprites per evidence look.
 export function castleFor(look: NodeLook): IndexImage {
   const base = sprite(CASTLE, { R: C_IDX.blue, r: C_IDX.navy });
-  const c = look.filled ? base : recolor(base, { [C_IDX.silver]: C_IDX.slate, [C_IDX.slate]: C_IDX.charcoal, [C_IDX.blue]: C_IDX.slate, [C_IDX.navy]: C_IDX.charcoal });
-  const glyph = look.mech ? MECH_GLYPHS[look.mech] : undefined;
-  if (glyph) {
-    // banner on the keep: red pennant with the mechanism glyph in gold
-    blit(c, sprite(BANNER, { R: C_IDX.red }), 11, 10);
-    blit(c, sprite(glyph, { x: C_IDX.gold }), 13, 12);
-  }
-  return c;
+  return look.filled ? base : recolor(base, { [C_IDX.silver]: C_IDX.slate, [C_IDX.slate]: C_IDX.charcoal, [C_IDX.blue]: C_IDX.slate, [C_IDX.navy]: C_IDX.charcoal });
 }
-export function dotFor(look: NodeLook): IndexImage {
-  return look.filled
-    ? sprite(DOT, { F: C_IDX.gold, D: C_IDX.orange, H: C_IDX.white })
-    : sprite(DOT, { F: C_IDX.slate, D: C_IDX.charcoal, H: C_IDX.silver });
+
+/** Round medallion of diameter d: ink rim, face, lower-right shade, upper-left light. */
+function medallion(d: number, face: number, shade: number, light: number): IndexImage {
+  const img = blank(d, d + 1);
+  const r = d / 2, c = d / 2;
+  for (let y = 0; y < d + 1; y++) for (let x = 0; x < d; x++) {
+    const dx = x + 0.5 - c, dy = y + 0.5 - c, dd = Math.hypot(dx, dy);
+    const dRim = Math.hypot(dx, dy - 1);             // 1px drop rim below
+    if (dd <= r - 1) img.data[y * d + x] = dx + dy > r * 0.9 ? shade : dx + dy < -r * 1.05 ? light : face;
+    else if (dd <= r) img.data[y * d + x] = 0;
+    else if (dRim <= r) img.data[y * d + x] = 0;
+  }
+  return img;
+}
+
+export function dotFor(look: NodeLook, emblems?: Emblems, name?: string, size = 22): IndexImage {
+  const on = look.filled;
+  const m = medallion(size, on ? C_IDX.gold : C_IDX.slate, on ? C_IDX.orange : C_IDX.charcoal, on ? C_IDX.white : C_IDX.silver);
+  const mask = name ? emblems?.get(name)?.get(size === 22 ? 12 : 9) : undefined;
+  if (mask) {
+    const e = emblemSprite(mask, on ? C_IDX.ink : C_IDX.silver);
+    blit(m, e, Math.round((size - e.w) / 2), Math.round((size - e.h) / 2));
+  }
+  return m;
+}
+
+/** Atom banner: red pennant with the species emblem in gold (native pixels, hung on the keep). */
+function banner(mask: EmblemMask | undefined, w: number, h: number): IndexImage {
+  const img = blank(w, h + 2);
+  for (let y = 0; y < h + 2; y++) for (let x = 0; x < w; x++) {
+    const tip = y >= h ? Math.abs(x + 0.5 - w / 2) <= (h + 2 - y) * 1.5 : true;
+    if (!tip) continue;
+    const edge = x === 0 || x === w - 1 || y === 0 || (y >= h && Math.abs(x + 0.5 - w / 2) > (h + 1 - y) * 1.5);
+    img.data[y * w + x] = edge ? C_IDX.ink : C_IDX.red;
+  }
+  if (mask) { const e = emblemSprite(mask, C_IDX.gold); blit(img, e, Math.round((w - e.w) / 2), 2); }
+  return img;
 }
 
 /** Margin (world px) around a composed node so markers can overhang the footprint. */
 export const NODE_PAD = 8;
 
 /**
- * One node as it appears on the map at ts16 (castle ×2 + banner + ground
- * shadow, or level dot), with its evidence marker anchored ON the sprite:
- * the star/sign overlaps the dot's upper-right rim or sits on the right
- * tower's spire. Used by the map and by the status-card portrait.
+ * One node as it appears on the map (f = world px per art px: 1 near, 2 overview):
+ * atom = castle + emblem banner + ground shadow; derived = emblem medallion.
+ * The evidence marker is anchored ON the sprite. Also the card portrait.
  */
-export function composeNode(atom: boolean, look: NodeLook, shade: number, frame: 0 | 1 = 0): IndexImage {
-  const fw = atom ? 64 : 32;
-  const img = blank(fw + 2 * NODE_PAD, fw + 2 * NODE_PAD);
-  const o = NODE_PAD;
+export function composeNode(atom: boolean, look: NodeLook, shade: number, emblems?: Emblems, name?: string, f: 1 | 2 = 1): IndexImage {
+  const fw = (atom ? 64 : 32) / f, o = NODE_PAD / f;
+  const img = blank(fw + 2 * o, fw + 2 * o);
   if (atom) {
-    fillRect(img, o + 6, o + 58, fw - 10, 3, shade);
-    fillRect(img, o + 10, o + 61, fw - 18, 1, shade);
-    blit(img, castleFor(look), o, o, 2);
+    fillRect(img, o + 6 / f, o + 58 / f, fw - 10 / f, 3 / f, shade);
+    blit(img, castleFor(look), o, o, f === 1 ? 2 : 1);
+    const mask = name ? emblems?.get(name)?.get(f === 1 ? 12 : 9) : undefined;
+    const b = f === 1 ? banner(mask, 16, 18) : banner(mask, 11, 12);
+    blit(img, b, Math.round(o + (fw - b.w) / 2), Math.round(o + (f === 1 ? 20 : 9)));
   } else {
-    const d = dotFor(look);
-    blit(img, d, o + (fw - d.w) / 2, o + Math.floor((fw - d.h) / 2));
+    const d = dotFor(look, emblems, name, f === 1 ? 22 : 16);
+    blit(img, d, Math.round(o + (fw - d.w) / 2), Math.round(o + (fw - d.h) / 2));
   }
-  const mk = look.state === "champion" ? sprite(STAR) : look.state === "provisional" && frame === 0 ? sprite(QSIGN) : null;
-  if (mk) {
-    if (atom) blit(img, mk, o + fw - 12 - Math.floor(mk.w / 2), o - 6);
-    else blit(img, mk, o + 26 - Math.floor(mk.w / 2), o + 1);
+  const mk0 = look.state === "champion" ? sprite(STAR) : look.state === "provisional" ? sprite(QSIGN) : null;
+  if (mk0) {
+    const mk = f === 1 ? mk0 : downsample(mk0, 2, (v) => (v === 0 ? 0.6 : 1.3));
+    if (atom) blit(img, mk, Math.round(o + fw - 12 / f - mk.w / 2), Math.round(o - 6 / f));
+    else blit(img, mk, Math.round(o + fw * 0.78 - mk.w / 2), Math.round(o + 1 / f));
   }
   return img;
 }
 
-function paintNodes(img: IndexImage, world: World, looks: Map<string, NodeLook>, f: number, frame: 0 | 1) {
+function paintNodes(img: IndexImage, world: World, looks: Map<string, NodeLook>, emblems: Emblems, f: number) {
   for (const n of world.nodes) {
     const look = looks.get(n.name) ?? { state: "untrained", filled: false };
     const t = Math.floor(n.center.y / TS) * world.cols + Math.floor(n.center.x / TS);
     const shade = biomeOf(world.regions[world.regionOf[t]]?.family ?? n.family).shade;
-    let comp = composeNode(n.atom, f === 4 ? { ...look, state: "trained" } : look, shade, frame);
-    if (f > 1) comp = downsample(comp, f, (v) => (v === 0 ? 0.8 : v === C_IDX.gold || v === C_IDX.red ? 1.3 : 1));
-    blit(img, comp, (n.foot.x * TS - NODE_PAD) / f, (n.foot.y * TS - NODE_PAD) / f);
+    // semantic zoom: castles keep a constant 32px (1× art) at the far zooms; derived dots shrink
+    const farAtom = f === 4 && n.atom;
+    let comp = composeNode(n.atom, f === 4 && !n.atom ? { ...look, state: "trained" } : look, shade, emblems, n.name, f === 1 ? 1 : 2);
+    if (f === 4 && !n.atom) comp = downsample(comp, 2, (v) => (v === 0 ? 0.8 : v === C_IDX.gold || v === C_IDX.red ? 1.3 : 1));
+    if (farAtom) blit(img, comp, Math.round(n.center.x / f - comp.w / 2), Math.round(n.center.y / f - comp.h / 2));
+    else blit(img, comp, Math.round((n.foot.x * TS - NODE_PAD) / f), Math.round((n.foot.y * TS - NODE_PAD) / f));
   }
 }
 
@@ -437,42 +510,48 @@ function glyphImages(): Record<string, IndexImage> {
   return Object.fromEntries(Object.entries(GLYPHS).map(([k, rows]) => [k, sprite(rows)]));
 }
 
-export function buildLayers(world: World, looks: Map<string, NodeLook>): Layers {
+export function buildLayers(world: World, looks: Map<string, NodeLook>, emblems: Emblems): Layers {
   const g = shapeGround(world);
-  const segs = roadSegments(world);
   const glyphs = glyphImages();
   const W = world.cols * TS, H = world.rows * TS;
-
-  const overlay = (img: IndexImage, f: number, frame: 0 | 1) => {
+  const overlay = (img: IndexImage, f: number) => {
     paintPlazas(img, world, f, glyphs);
-    paintRoads(img, segs, f);
+    paintMountains(img, world, f);
+    paintRoads(img, world, f);
     paintBridges(img, world, f);
     paintDecor(img, world, f);
-    paintNodes(img, world, looks, f, frame);
+    paintCities(img, world, f);
+    paintHarbours(img, world, f);
+    paintNodes(img, world, looks, emblems, f);
     return img;
   };
-
   const g0 = paintGround(world, g, 0);
-  const g1 = paintGround(world, g, 1);
   const mid = downsample(g0, 2, (v) => (v === C_IDX.charcoal ? 0.8 : 1));
   const far = downsample(g0, 4);
+  const full = overlay(g0, 1), m = overlay(mid, 2), fa = overlay(far, 4);
   return {
-    full: [toCanvas(overlay(g0, 1, 0)), toCanvas(overlay(g1, 1, 1))],
-    mid: toCanvas(overlay(mid, 2, 0)),
-    far: toCanvas(overlay(far, 4, 0)),
+    full: toCanvas(full),
+    mid: toCanvas(m),
+    far: toCanvas(fa),
+    dim: { full: toCanvas(darken(full)), mid: toCanvas(darken(m)), far: toCanvas(darken(fa)) },
+    raw: full,
     owner: g.owner,
     w: W,
     h: H,
   };
 }
 
-/** 50% ink dither over everything outside one region (region spotlight), at ts16. */
-export function spotlight(layers: Layers, regionId: number): HTMLCanvasElement {
-  const img = blank(layers.w, layers.h, CLEAR);
-  for (let y = 0; y < layers.h; y++) for (let x = 0; x < layers.w; x++) {
-    const i = y * layers.w + x;
-    if (layers.owner[i] !== regionId && ((x + y) & 1) === 0) img.data[i] = C_IDX.ink;
-  }
-  return toCanvas(img);
+// One value step darker inside Sweetie-16 (each colour → its darker neighbour on its ramp).
+const DARKER: Record<number, number> = {
+  0: 0, 1: 0, 2: 1, 3: 2, 4: 3, 5: 6, 6: 7, 7: 8, 8: 0, 9: 8, 10: 9, 11: 10, 12: 13, 13: 14, 14: 15, 15: 0,
+};
+export function darken(img: IndexImage): IndexImage {
+  return recolor(img, DARKER);
 }
 
+/** The full-detail layer cut to one region's land (pixel-exact coast), for the region spotlight. */
+export function spotlight(layers: Layers, regionId: number): HTMLCanvasElement {
+  const img = blank(layers.w, layers.h, CLEAR);
+  for (let i = 0; i < img.data.length; i++) if (layers.owner[i] === regionId) img.data[i] = layers.raw.data[i];
+  return toCanvas(img);
+}

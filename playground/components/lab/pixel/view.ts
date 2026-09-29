@@ -5,7 +5,8 @@
 //   8 / 4 px tiles → pre-downsampled far-zoom layers (terrain.ts mid / far)
 import type { CamBox } from "@/components/lab/shared/camera";
 
-export const TILE_STEPS = [4, 8, 16, 32, 48, 64] as const;
+// art is 8 px per tile (art/ ART_PER_TILE): 1 art px on screen = tile/8 → integer for 8·n
+export const TILE_STEPS = [4, 8, 16, 24, 32, 40, 48] as const;
 export type TileStep = (typeof TILE_STEPS)[number];
 
 /** On-screen px per 16px world tile for camera scale k (screen px / world px). */
@@ -31,7 +32,9 @@ export function xformFor(box: CamBox, stage: Stage): Xform {
   if (![box.x, box.y, box.w, box.h].every(Number.isFinite) || stage.w <= 1 || stage.h <= 1) {
     return { tile: 16, k: 1, ox: 0, oy: 0 };
   }
-  const k0 = stage.w / Math.max(box.w, 1);
+  // max of both axes: while the camera re-fits to a new stage aspect (card opening)
+  // the zoom must not drop a whole snap step for one frame
+  const k0 = Math.max(stage.w / Math.max(box.w, 1), stage.h / Math.max(box.h, 1));
   const tile = snapTile(k0);
   const k = tile / 16;
   const cx = box.x + box.w / 2, cy = box.y + box.h / 2;

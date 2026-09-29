@@ -1,24 +1,12 @@
 // Sweetie-16 — the ONLY colours the pixel skin paints with (map, sprites,
 // windows, text). Sprites index it by one hex-digit key so every sprite string
 // reads like a paint-by-number sheet.
-export const SWEETIE = [
-  "#1a1c2c", // 0 ink
-  "#5d275d", // 1 plum
-  "#b13e53", // 2 red
-  "#ef7d57", // 3 orange
-  "#ffcd75", // 4 gold
-  "#a7f070", // 5 lime
-  "#38b764", // 6 green
-  "#257179", // 7 teal
-  "#29366f", // 8 navy
-  "#3b5dc9", // 9 blue
-  "#41a6f6", // a sky
-  "#73eff7", // b cyan
-  "#f4f4f4", // c white
-  "#94b0c2", // d silver
-  "#566c86", // e slate
-  "#333c57", // f charcoal
-] as const;
+// Round 3: the legacy 16 slots map to their hue-shifted contemporary roles via
+// the illustrator's LEGACY_MAP (art/palette.ts) — used only by the few UI
+// sprites still drawn from sprites.ts (menu pointer, meter star). The map is
+// drawn entirely from art/.
+import { LEGACY_HEX } from "./art/palette";
+export const SWEETIE: readonly string[] = LEGACY_HEX;
 
 export const C = {
   ink: SWEETIE[0], plum: SWEETIE[1], red: SWEETIE[2], orange: SWEETIE[3],
@@ -43,13 +31,15 @@ export interface Biome {
   shade: number;
 }
 
+// Round 2 colour discipline: grounds sit at low chroma so saturation is left
+// for evidence (gold) and focus; the central, busiest land is slate stone.
 export const BIOMES: Record<string, Biome> = {
   perception:     { name: "green meadow", base: 6, light: 5, shade: 7 },
-  sequence:       { name: "sand dunes",   base: 4, light: 12, shade: 3 },
+  sequence:       { name: "slate plateau", base: 14, light: 13, shade: 15 },
   generative:     { name: "autumn woods", base: 3, light: 4, shade: 2 },
   representation: { name: "snowfield",    base: 12, light: 11, shade: 13 },
   decision:       { name: "violet moor",  base: 1, light: 2, shade: 15 },
-  structure:      { name: "slate islet",  base: 14, light: 13, shade: 15 },
+  structure:      { name: "teal reef",    base: 7, light: 6, shade: 8 },
 };
 // Families the world may grow later (world.ts falls back to spare slots).
 export const FALLBACK_BIOME: Biome = { name: "open plain", base: 5, light: 12, shade: 6 };

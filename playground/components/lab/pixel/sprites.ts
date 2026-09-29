@@ -434,7 +434,7 @@ export const GROUND: Record<string, SpriteRows> = {
 };
 export const GROUND_OF: Record<string, keyof typeof GROUND> = {
   perception: "tufts", generative: "tufts", decision: "tufts",
-  sequence: "ripples", representation: "sparkle", structure: "cracks",
+  sequence: "cracks", representation: "sparkle", structure: "ripples",
 };
 
 // Focus cursor corner (top-left; mirrored for the other three).
@@ -530,3 +530,101 @@ export const MECH_GLYPHS: Record<string, SpriteRows> = {
   "neural-field-rendering": ["....x", "...x.", "xxx..", "xxx..", "xxx.."],    // ray into a volume
   "tree-search-self-play": ["..x..", "..x..", ".x.x.", "x...x", "x.x.x"],     // search tree
 };
+
+
+// ——— Round 2: world flavour (each encodes data — see encoding.ts) ———
+// Mountain peak for border ranges (S = land shade, L = snow/light).
+export const MOUNTAIN: SpriteRows = [
+  ".......00.......",
+  "......0cc0......",
+  ".....0cccd0.....",
+  "....0ccdde00....",
+  "....0cddee0f0...",
+  "...0edeeeef0f0..",
+  "..0eeeeeeff0ff0.",
+  "..0eeeefeeff0ff0",
+  ".0eeeeffeeefff00",
+  ".0eeeffeeeefff0.",
+  "0eeeffeeeeefff0.",
+  "0000000000000000",
+];
+// City house (block = one building on an atom's city blocks).
+export const HOUSE: SpriteRows = [
+  "...0000...",
+  "..022220..",
+  ".02222220.",
+  "0222222220",
+  "0000000000",
+  ".0cccccc0.",
+  ".0c00cdc0.",
+  ".0c00cdc0.",
+  ".00000000.",
+];
+// Boat = one composition docked at this family's harbour.
+export const BOAT: SpriteRows = [
+  "....0.....",
+  "...0c0....",
+  "...0cc0...",
+  "...0ccc0..",
+  "...0cccc0.",
+  "....0000..",
+  "0000000000",
+  "0333333330",
+  ".03222230.",
+  "..000000..",
+];
+// Pier plank from the coast out to the harbour.
+export const PIER: SpriteRows = [
+  "0000",
+  "3323",
+  "3323",
+  "0000",
+];
+// Ruined column (legacy models on the ruins islet).
+export const RUIN: SpriteRows = [
+  "..0000....",
+  ".0dddd0...",
+  ".0dde00...",
+  "..0de0....",
+  "..0dd0....",
+  "..0de0.00.",
+  "..0dd00d0.",
+  "..0de0.0..",
+  ".0dddd0...",
+  "0eeeeee000",
+  "0000000000",
+];
+// Next-era silhouette: an uncharted model (dark monolith with a "?").
+export const QSTONE: SpriteRows = [
+  "..000000..",
+  ".0ffffff0.",
+  ".0ff44ff0.",
+  ".0f4ff4f0.",
+  ".0ffff4f0.",
+  ".0fff4ff0.",
+  ".0ffffff0.",
+  ".0fff4ff0.",
+  ".0ffffff0.",
+  "0000000000",
+];
+// Sea serpent off the hidden island ("here be dragons").
+export const DRAGON: SpriteRows = [
+  "..........00....",
+  ".........0660...",
+  "........06600...",
+  "..00....0660....",
+  ".0660..06600....",
+  "066660066000....",
+  "0660066660......",
+  ".00..0000.......",
+];
+// Train: engine running a lineage while its model has a live run.
+export const TRAIN: SpriteRows = [
+  "..00......",
+  ".0220000..",
+  ".02222220.",
+  "0222c2220.",
+  "022222222.",
+  "000000000.",
+  ".0f0..0f0.",
+];
