@@ -9,6 +9,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 export interface CamBox { x: number; y: number; w: number; h: number }
 
 const FLY_MS = 700;
+const MAX_STEP = 32; // ms of animation per frame, at most
 const ease = (t: number) => (t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2);
 
 // Grow the target to the viewport's aspect ratio, centred, so nothing is cropped.
@@ -46,10 +47,16 @@ export function useCamera({ world, target, still, minWidth = 240 }: {
     const to = fitBox({ x: tx, y: ty, w: tw, h: th }, size.w, size.h);
     if (still || size.w <= 1) { setBox(to); return; }
     const from = boxRef.current;
-    const t0 = performance.now();
+    // Progress advances by at most MAX_STEP per frame: when a skin blocks the
+    // main thread (e.g. mounting the card), the flight is delayed rather than
+    // skipped — wall-clock progress turned every fly-to into a cut.
+    let elapsed = 0;
+    let last = performance.now();
     let raf = 0;
     const step = (now: number) => {
-      const k = ease(Math.min(1, (now - t0) / FLY_MS));
+      elapsed += Math.min(now - last, MAX_STEP);
+      last = now;
+      const k = ease(Math.min(1, elapsed / FLY_MS));
       setBox({
         x: from.x + (to.x - from.x) * k, y: from.y + (to.y - from.y) * k,
         w: from.w + (to.w - from.w) * k, h: from.h + (to.h - from.h) * k,
