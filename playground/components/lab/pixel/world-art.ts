@@ -200,7 +200,7 @@ export function familyHubs(world: World): Map<string, WorldNode> {
  * px — plus thin primary roads and one 12×15 micro-castle per family hub.
  */
 export function buildMiniLayer(world: World, emblems: ArtEmblems | null, theme: Theme = "parchment"): { origin: Pt; px: number; canvas: HTMLCanvasElement } {
-  const t = renderTerrain(world, { artPerTile: 3, extent: "all", canopies: true });
+  const t = renderTerrain(world, { artPerTile: 3, extent: "all", canopies: true, ...(theme === "parchment" ? CONTINENT : {}) });
   const img = t.img;
   const A = (p: P): P => ({ x: (p.x - t.origin.x) / t.px, y: (p.y - t.origin.y) / t.px });
   for (const { road, pts } of roadPolys(world)) {
@@ -215,6 +215,23 @@ export function buildMiniLayer(world: World, emblems: ArtEmblems | null, theme: 
   }
   return { origin: t.origin, px: t.px, canvas: artToCanvas(theme === "parchment" ? parchmentize(img, t.land, 3) : img) };
 }
+
+/**
+ * ONE CONTINENT (parchment): elevation drives colour across family borders —
+ * coast sand → lowland green → forest → rock → snow, as in the T4 reference.
+ * Each family keeps its biome KEY (dune crests, savanna shrubs, lava cracks,
+ * crystal glints, frost, its own canopy species) as the accent; stronger
+ * relief + slope-light contrast so hills and ranges read at overview zoom.
+ */
+const CONTINENT = {
+  biomeFor: (family: string) => {
+    const b = artBiomeOf(family);
+    const forest: RampName = b.key === "ice" || b.key === "crystal" ? "pine" : b.key === "savanna" || b.key === "dunes" ? "olive" : "forest";
+    return { ...b, low: "sand" as RampName, mid: "meadow" as RampName, high: "rock" as RampName, peak: "snow" as RampName, forest, canopy: Math.max(b.canopy, 0.4) };
+  },
+  relief: 1.35,
+  lightGain: 1.8,
+};
 
 /**
  * Tiny islets scattered on the parchment sea (cartographic atmosphere, like the
@@ -255,12 +272,12 @@ function biomeMix(world: World, t: TerrainArt, apt: number) {
   const img = t.img, W = img.w, H = img.h;
   type Mix = { to: RampName; seed: number; lo: number; hi: number; hMin: number; hMax: number };
   const MIX: Record<string, Mix[]> = {
-    meadow:  [{ to: "sand", seed: 11, lo: 0.66, hi: 2, hMin: 0, hMax: 0.34 }, { to: "savanna", seed: 12, lo: 0, hi: 0.3, hMin: 0.1, hMax: 0.5 }],
-    savanna: [{ to: "meadow", seed: 13, lo: 0.62, hi: 2, hMin: 0, hMax: 0.6 }, { to: "sand", seed: 14, lo: 0, hi: 0.28, hMin: 0, hMax: 0.4 }],
-    dunes:   [{ to: "savanna", seed: 15, lo: 0.64, hi: 2, hMin: 0.1, hMax: 0.55 }, { to: "rock", seed: 16, lo: 0, hi: 0.26, hMin: 0.25, hMax: 1 }],
-    volcanic:[{ to: "sand", seed: 17, lo: 0.64, hi: 2, hMin: 0, hMax: 0.35 }],
-    ice:     [{ to: "meadow", seed: 18, lo: 0.6, hi: 2, hMin: 0, hMax: 0.3 }, { to: "stone", seed: 19, lo: 0, hi: 0.25, hMin: 0.3, hMax: 1 }],
-    crystal: [{ to: "meadow", seed: 20, lo: 0.66, hi: 2, hMin: 0, hMax: 0.3 }, { to: "rock", seed: 21, lo: 0, hi: 0.22, hMin: 0.2, hMax: 1 }],
+    meadow:  [{ to: "sand", seed: 11, lo: 0.7, hi: 2, hMin: 0, hMax: 0.3 }, { to: "savanna", seed: 12, lo: 0, hi: 0.24, hMin: 0.1, hMax: 0.45 }],
+    savanna: [{ to: "savanna", seed: 13, lo: 0.46, hi: 2, hMin: 0, hMax: 0.6 }, { to: "sand", seed: 14, lo: 0, hi: 0.26, hMin: 0, hMax: 0.4 }],
+    dunes:   [{ to: "sand", seed: 15, lo: 0.44, hi: 2, hMin: 0, hMax: 0.6 }, { to: "savanna", seed: 16, lo: 0, hi: 0.34, hMin: 0, hMax: 0.6 }],
+    volcanic:[{ to: "rock", seed: 17, lo: 0.42, hi: 2, hMin: 0, hMax: 0.7 }, { to: "sand", seed: 22, lo: 0, hi: 0.24, hMin: 0, hMax: 0.35 }],
+    ice:     [{ to: "frost", seed: 18, lo: 0.44, hi: 2, hMin: 0.15, hMax: 0.7 }, { to: "snow", seed: 19, lo: 0, hi: 0.22, hMin: 0.35, hMax: 1 }],
+    crystal: [{ to: "stone", seed: 20, lo: 0.4, hi: 2, hMin: 0.1, hMax: 1 }, { to: "magic", seed: 21, lo: 0, hi: 0.12, hMin: 0.3, hMax: 1 }],
   };
   const stepIn = new Map<number, { ramp: number[]; k: number }>();
   const TS = 16, px = t.px;
@@ -269,12 +286,12 @@ function biomeMix(world: World, t: TerrainArt, apt: number) {
     if (!t.land[i] || t.region[i] < 0) continue;
     const reg = world.regions[t.region[i]];
     if (!reg) continue;
-    const b = artBiomeOf(reg.family);
+    const b = CONTINENT.biomeFor(reg.family);
     const mixes = MIX[b.key];
     if (!mixes) continue;
     const tx = Math.floor((t.origin.x + (x + 0.5) * px) / TS), ty = Math.floor((t.origin.y + (y + 0.5) * px) / TS);
     const code = tx >= 0 && ty >= 0 && tx < world.cols && ty < world.rows ? world.terrain[ty * world.cols + tx] : T.SEA;
-    if (code === T.ROAD || code === T.FOOT || code === T.SETPIECE || code === T.BRIDGE) continue;
+    void code; // colour patches cross roads too (only relief is kept calm there) — no tile-shaped squares
     const v = img.data[i];
     const mid = RAMPS[b.mid];
     const k = mid.indexOf(v);
@@ -296,10 +313,22 @@ function biomeMix(world: World, t: TerrainArt, apt: number) {
 
 export type Theme = "parchment" | "ocean";
 
+/**
+ * Sprite detail tier per art resolution (art px per tile). Each value is the
+ * integer downsample factor of the full sprite (1 = full detail), 0 = not drawn.
+ * At 8 art px per tile a castle (36×46) stands on its 4×4-tile footprint (32 px).
+ */
+export function tierFor(apt: number) {
+  if (apt >= 6) return { castle: 1, marker: 1, house: 1, peak: 1, prop: 1, live: 2, hubsOnly: false };
+  if (apt >= 3) return { castle: 2, marker: 2, house: 2, peak: 2, prop: 2, live: 2, hubsOnly: false };
+  if (apt >= 2) return { castle: 3, marker: 3, house: 3, peak: 3, prop: 3, live: 3, hubsOnly: false };
+  return { castle: 3, marker: 0, house: 0, peak: 0, prop: 0, live: 3, hubsOnly: true };
+}
+
 export function buildArtLayers(world: World, looks: Map<string, NodeLook>, emblems: ArtEmblems | null, apt = 8, theme: Theme = "parchment"): ArtLayers {
   const ink = theme === "parchment";
   const clouds = cloudSprites(apt >= 8 ? 4 : 3).map((s) => s.img);
-  const t = renderTerrain(world, { extent: "all", artPerTile: apt });
+  const t = renderTerrain(world, { extent: "all", artPerTile: apt, ...(ink ? CONTINENT : {}) });
   let img = t.img;
   const A = (p: P): P => ({ x: (p.x - t.origin.x) / t.px, y: (p.y - t.origin.y) / t.px });
   // parchment has no clouds: the paper is the sky and the sea
@@ -336,7 +365,7 @@ export function buildArtLayers(world: World, looks: Map<string, NodeLook>, emble
     }
     for (const { road } of polys) if (road.kind !== "bridge") for (const ch of road.chevrons) {
       const c = A(ch);
-      for (const [dx, dy] of chevronOffsets(ch.angle, 2)) put(img, c.x + dx, c.y + dy, RAMPS.ink[0]);
+      for (const [dx, dy] of chevronOffsets(ch.angle, apt >= 4 ? 2 : 1)) put(img, c.x + dx, c.y + dy, RAMPS.ink[0]);
     }
   }
   if (!ink) {
@@ -358,84 +387,105 @@ export function buildArtLayers(world: World, looks: Map<string, NodeLook>, emble
 
   }
 
+  // ——— landmarks, drawn in DETAIL TIERS so they sit on the same art grid as the
+  // terrain at every level (adaptive resolution: the grid is fixed, detail changes)
+  const tier = tierFor(apt);
+  const T_ = (img0: ArtImage, f: number) => (f <= 1 ? img0 : downsample(img0, f, (v) => (v === RAMPS.ui[0] || v === CLEAR ? 0.8 : 1)));
+  const TS = 16;
+  const hubs = familyHubs(world);
+  const hubNames = new Set([...hubs.values()].map((n) => n.name));
+
   // faceted ridges along family borders no lineage crosses (lit / shadow faces, snow caps)
-  const peaks: P[] = [];
-  for (const line of world.mountains) {
-    let carry = 0;
-    for (let i = 1; i < line.length; i++) {
-      const a = A(line[i - 1]), b = A(line[i]);
-      const len = Math.hypot(b.x - a.x, b.y - a.y);
-      for (let d = carry; d < len; d += 11) peaks.push({ x: a.x + ((b.x - a.x) * d) / len, y: a.y + ((b.y - a.y) * d) / len });
-      carry = Math.max(0, carry + Math.ceil((len - carry) / 11) * 11 - len);
+  if (tier.peak) {
+    const peaks: P[] = [];
+    const gap = 11 * (apt / 8) * tier.peak + 2;
+    for (const line of world.mountains) {
+      let carry = 0;
+      for (let i = 1; i < line.length; i++) {
+        const a = A(line[i - 1]), b = A(line[i]);
+        const len = Math.hypot(b.x - a.x, b.y - a.y);
+        for (let d = carry; d < len; d += gap) peaks.push({ x: a.x + ((b.x - a.x) * d) / len, y: a.y + ((b.y - a.y) * d) / len });
+        carry = Math.max(0, carry + Math.ceil((len - carry) / gap) * gap - len);
+      }
     }
+    peaks.sort((p, q) => p.y - q.y);
+    peaks.forEach((pk, i) => {
+      const sp = props.snowPeak(i % 3 === 1 ? "stone" : "rock");
+      const im = T_(sp.img, tier.peak), ax = sp.anchor.x / tier.peak, ay = sp.anchor.y / tier.peak;
+      const flip = i % 2 === 1;
+      blitM(img, im, pk.x - (flip ? im.w - 1 - ax : ax), pk.y - ay + ((i * 3) % 4) / tier.peak, flip);
+    });
   }
-  peaks.sort((p, q) => p.y - q.y);
-  peaks.forEach((pk, i) => {
-    const s = props.snowPeak(i % 3 === 1 ? "stone" : "rock");
-    const flip = i % 2 === 1;
-    blitM(img, s.img, pk.x - (flip ? s.img.w - 1 - s.anchor.x : s.anchor.x), pk.y - s.anchor.y + ((i * 3) % 4), flip);
-  });
 
   // bridges: planks across the river
-  const TS = 16;
-  const bh = props.bridge("h"), bv = props.bridge("v");
-  for (const br of world.bridges) for (const tile of br.tiles) {
-    const c = A({ x: (tile % world.cols) * TS + TS / 2, y: Math.floor(tile / world.cols) * TS + TS / 2 });
-    const s = br.axis === "h" ? bh : bv;
-    blitM(img, s.img, c.x - s.img.w / 2, c.y - s.img.h / 2);
+  if (tier.prop) {
+    const bh = T_(props.bridge("h").img, tier.prop), bv = T_(props.bridge("v").img, tier.prop);
+    for (const br of world.bridges) for (const tile of br.tiles) {
+      const c = A({ x: (tile % world.cols) * TS + TS / 2, y: Math.floor(tile / world.cols) * TS + TS / 2 });
+      const im = br.axis === "h" ? bh : bv;
+      blitM(img, im, c.x - im.w / 2, c.y - im.h / 2);
+    }
   }
 
   // cities: one house per block, lit when the atom has runs or a champion;
   // capitals (hub atoms) get the domed hall at the heart of their blocks
-  for (const city of world.cities) {
+  if (tier.house) for (const city of world.cities) {
     const lit = looks.get(city.node)?.filled ?? false;
     let hall: { x0: number; y0: number; x1: number; y1: number } | null = null;
     if (city.capital && city.blocks.length) {
       const cap = capital(0);
+      const im = T_(cap.img, tier.house);
       const cx = city.blocks.reduce((a, b) => a + b.x + b.w / 2, 0) / city.blocks.length;
       const cy = city.blocks.reduce((a, b) => a + b.y + b.h, 0) / city.blocks.length;
       const c = A({ x: cx, y: cy });
-      const x0 = c.x - cap.anchor.x, y0 = c.y - cap.anchor.y;
-      blitM(img, cap.img, x0, y0);
-      hall = { x0, y0, x1: x0 + cap.img.w, y1: y0 + cap.img.h };
+      const x0 = c.x - cap.anchor.x / tier.house, y0 = c.y - cap.anchor.y / tier.house;
+      blitM(img, im, x0, y0);
+      hall = { x0, y0, x1: x0 + im.w, y1: y0 + im.h };
     }
     city.blocks.forEach((b, i) => {
-      const s = props.house(i % 4, lit);
+      const hs = props.house(i % 4, lit);
+      const im = T_(hs.img, tier.house);
       const c = A({ x: b.x + b.w / 2, y: b.y + b.h });
-      if (hall && c.x > hall.x0 - 4 && c.x < hall.x1 + 4 && c.y > hall.y0 && c.y < hall.y1 + 8) return;
-      blitM(img, s.img, c.x - s.anchor.x, c.y - s.anchor.y);
+      if (hall && c.x > hall.x0 - 2 && c.x < hall.x1 + 2 && c.y > hall.y0 && c.y < hall.y1 + 4) return;
+      blitM(img, im, c.x - hs.anchor.x / tier.house, c.y - hs.anchor.y / tier.house);
     });
   }
 
   // harbour piers (boats are live sprites)
-  const pier = props.pier();
-  for (const h of world.harbours) if (h.boats > 0) {
-    const c = A(h.pt);
-    blitM(img, pier.img, c.x - pier.anchor.x, c.y - pier.anchor.y);
+  if (tier.prop) {
+    const pier = props.pier();
+    const im = T_(pier.img, tier.prop);
+    for (const h of world.harbours) if (h.boats > 0) {
+      const c = A(h.pt);
+      blitM(img, im, c.x - pier.anchor.x / tier.prop, c.y - pier.anchor.y / tier.prop);
+    }
   }
 
   // secret islands: next-era stones + a dragon; ruins
-  const qs = props.questionStone(), ru = props.ruins(), dr = props.dragon();
-  for (const s of islandSlots(world.hiddenIsland)) { const c = A(s); blitM(img, qs.img, c.x - qs.anchor.x, c.y - qs.anchor.y); }
-  { const c = A(world.hiddenIsland.dragons); blitM(img, dr.img, c.x - dr.anchor.x, c.y - dr.anchor.y); }
-  for (const s of islandSlots(world.ruinsIsland)) { const c = A(s); blitM(img, ru.img, c.x - ru.anchor.x, c.y - ru.anchor.y); }
-
-  // compass rose in the emptiest sea (north is up)
-  // (the compass rose is screen furniture now: pixel-world pins it to a corner)
+  if (tier.prop) {
+    const f = tier.prop;
+    const qs = props.questionStone(), ru = props.ruins(), dr = props.dragon();
+    for (const s2 of islandSlots(world.hiddenIsland)) { const c = A(s2); blitM(img, T_(qs.img, f), c.x - qs.anchor.x / f, c.y - qs.anchor.y / f); }
+    { const c = A(world.hiddenIsland.dragons); blitM(img, T_(dr.img, f), c.x - dr.anchor.x / f, c.y - dr.anchor.y / f); }
+    for (const s2 of islandSlots(world.ruinsIsland)) { const c = A(s2); blitM(img, T_(ru.img, f), c.x - ru.anchor.x / f, c.y - ru.anchor.y / f); }
+  }
   void outlined; void scale2;
 
-  // nodes, back to front
+  // nodes, back to front (far tier: only each family's hub castle, as a micro-sprite)
   const nodes = [...world.nodes].sort((a, b) => a.center.y - b.center.y);
   for (const n of nodes) {
+    const f = n.atom ? tier.castle : tier.marker;
+    if (!f || (tier.hubsOnly && !hubNames.has(n.name))) continue;
     const look = looks.get(n.name) ?? { state: "untrained" as const, filled: false };
-    const s = nodeSprite(n, look, emblems);
+    const sp = nodeSprite(n, look, emblems);
+    const im = T_(sp.img, f), ax = sp.anchor.x / f, ay = sp.anchor.y / f;
     const foot = A({ x: n.center.x, y: (n.foot.y + n.foot.h) * TS });
-    if (s.shadow) for (let y = 0; y < s.shadow.h; y++) for (let x = 0; x < s.shadow.w; x++) {
-      if (s.shadow.data[y * s.shadow.w + x] === CLEAR) continue;
-      const px = Math.round(foot.x - s.anchor.x + x), py = Math.round(foot.y - s.anchor.y + y);
-      put(img, px, py, SHADOW[get(img, px, py)] ?? get(img, px, py));
+    if (sp.shadow && f === 1) for (let y = 0; y < sp.shadow.h; y++) for (let x = 0; x < sp.shadow.w; x++) {
+      if (sp.shadow.data[y * sp.shadow.w + x] === CLEAR) continue;
+      const px2 = Math.round(foot.x - sp.anchor.x + x), py = Math.round(foot.y - sp.anchor.y + y);
+      put(img, px2, py, SHADOW[get(img, px2, py)] ?? get(img, px2, py));
     }
-    blitM(img, s.img, foot.x - s.anchor.x, foot.y - s.anchor.y);
+    blitM(img, im, foot.x - ax, foot.y - ay);
   }
 
   for (const s of spots) artBlit(img, s.img, s.x, s.y);
@@ -443,11 +493,10 @@ export function buildArtLayers(world: World, looks: Map<string, NodeLook>, emble
   if (ink) seaIslets(img, t, apt);
   if (ink) { img = parchmentize(img, t.land, apt); inkAroundMask(img, mask); }
   const dimImg: ArtImage = { w: img.w, h: img.h, data: img.data.map((v) => (v === CLEAR ? v : darker(v))) };
-  const farImg = downsample(img, 2, (v) => (v === RAMPS.ui[0] ? 0.8 : 1));
-  const farDim = { w: farImg.w, h: farImg.h, data: farImg.data.map((v) => (v === CLEAR ? v : darker(v))) };
+  const full = artToCanvas(img), dim = artToCanvas(dimImg);
   return {
     origin: t.origin, px: t.px, w: img.w, h: img.h,
-    full: artToCanvas(img), dim: artToCanvas(dimImg), far: artToCanvas(farImg), farDim: artToCanvas(farDim),
+    full, dim, far: full, farDim: dim,
     raw: img, region: t.region,
   };
 }

@@ -12,6 +12,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { BookOpen, LineChart, Network, Workflow } from "lucide-react";
 import { displayName, EVIDENCE_COPY, type CardModel } from "@/components/lab/shared/card-model";
 import { Anatomy } from "@/components/lab/shared/lesson/anatomy";
+import { MechanismDiagram, hasDiagram } from "@/components/lab/shared/anatomy2";
 import { Sparkline } from "@/components/lab/shared/lesson/sparkline";
 import { TRY_COPY, tryAvailable, useTryIt } from "@/components/lab/shared/lesson/try-it";
 import type { LessonData } from "@/hooks/use-lesson";
@@ -219,11 +220,15 @@ export function StatusCard({
           {page === "Anatomy" && (
             <div>
               <p className={`${styles.muted} mb-2 text-[16px]`}>One forward pass, left to right.</p>
-              <div className="bg-[#1e1f4e] p-2 outline outline-2 outline-[#4a60b6]">
-                <Anatomy stages={schematicFor(card.name)} animate={!still} size={340} labelPx={14}
-                  title={`${displayName(card.name)}: one forward pass`}
-                  palette={{ node: "#bccbe8", edge: "#4a60b6", active: "#f5c24a", text: "#fff6e0", accent: "#62dcf2", fill: "#2a2f6c" }} />
-              </div>
+              {hasDiagram(card.name) ? (
+                <MechanismDiagram name={card.name} theme="pixel" variant="card" still={still} width={352} />
+              ) : (
+                <div className="bg-[#1e1f4e] p-2 outline outline-2 outline-[#4a60b6]">
+                  <Anatomy stages={schematicFor(card.name)} animate={!still} size={340} labelPx={14}
+                    title={`${displayName(card.name)}: one forward pass`}
+                    palette={{ node: "#bccbe8", edge: "#4a60b6", active: "#f5c24a", text: "#fff6e0", accent: "#62dcf2", fill: "#2a2f6c" }} />
+                </div>
+              )}
               {card.introduces.length > 0 && (
                 <ul className="mt-3 space-y-1">
                   {card.introduces.map((m) => (

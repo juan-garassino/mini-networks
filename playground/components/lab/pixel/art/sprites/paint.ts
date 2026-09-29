@@ -30,7 +30,9 @@ const R = (ramp: RampName, i: number) => {
 
 export class Painter {
   img: ArtImage;
-  constructor(public w: number, public h: number) { this.img = artBlank(w, h); }
+  w: number;
+  h: number;
+  constructor(w: number, h: number) { this.w = w; this.h = h; this.img = artBlank(w, h); }
 
   get(x: number, y: number) {
     return x >= 0 && y >= 0 && x < this.w && y < this.h ? this.img.data[y * this.w + x] : CLEAR;

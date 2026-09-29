@@ -270,6 +270,12 @@ export interface TerrainOptions {
   clouds?: { x: number; y: number; img: ArtImage }[];
   /** procedural canopy clumps on forest-able ground (default true). */
   canopies?: boolean;
+  /** override a family's biome (the parchment "one continent" palette). */
+  biomeFor?: (family: string) => Biome;
+  /** relief multiplier on hills + massifs (default 1). */
+  relief?: number;
+  /** slope-light contrast multiplier (default 1). */
+  lightGain?: number;
 }
 
 export interface TerrainArt {
@@ -365,7 +371,7 @@ export function renderTerrain(world: World, opts: TerrainOptions = {}): TerrainA
     const v = terrain[ty * cols + tx], k = (ty + 1) * PC + tx + 1;
     fLand[k] = v !== T.SEA ? 1 : 0;
     fRiver[k] = v === T.RIVER || v === T.BRIDGE ? 1 : 0;
-    fCivic[k] = v === T.ROAD || v === T.FOOT || v === T.SETPIECE || v === T.BRIDGE ? 1 : 0;
+    fCivic[k] = v === T.ROAD || v === T.FOOT || v === T.BRIDGE ? 1 : 0; // set-pieces keep their relief (no flat squares)
   }
   const bilerp = (f: Float32Array, u: number, v: number) => {
     u += 1; v += 1;
@@ -472,7 +478,8 @@ export function renderTerrain(world: World, opts: TerrainOptions = {}): TerrainA
 
   // ——— elevation
   const height = new Float32Array(N);
-  const biomes: Biome[] = world.regions.map((r) => biomeOf(r.family));
+  const biomes: Biome[] = world.regions.map((r) => (opts.biomeFor ?? biomeOf)(r.family));
+  const RELIEF = opts.relief ?? 1, LG = opts.lightGain ?? 1;
   const biomeAt = (i: number): Biome => (region[i] === -2 ? HIDDEN_BIOME : region[i] === -3 ? RUINS_BIOME : biomes[region[i]] ?? biomes[0]);
   for (let y = 0; y < H; y++) {
     const ty = TY[y];
@@ -487,7 +494,7 @@ export function renderTerrain(world: World, opts: TerrainOptions = {}): TerrainA
       const lift = b.key === "ice" ? 0.1 : b.key === "crystal" ? 0.05 : 0;
       // low rolling hills everywhere (roads included — only their slope light is muted)
       const roll = fbm3(tx, ty, seed ^ 0x4242, 3.4) - 0.5;
-      let h = 0.09 + 0.38 * base + 0.42 * hills * base + lift * base + 0.3 * roll * base;
+      let h = 0.09 + 0.38 * base + (0.42 * hills * base + 0.3 * roll * base) * RELIEF + lift * base;
       // mountain ranges along family borders: a sharp ridged crest
       const dr = dRidge[i] / apt;
       if (dr < 3.2) {
@@ -502,7 +509,7 @@ export function renderTerrain(world: World, opts: TerrainOptions = {}): TerrainA
       if (wild > 0) {
         const m = Math.max(0, fbm3(tx, ty, seed ^ 0x5151, 9) - 0.4) * 2.6;
         const facet = ridged(tx, ty, seed ^ 0x5152, 3.2) - 0.5;
-        h += wild * base * (m * 0.62 + m * facet * 0.35);
+        h += wild * base * (m * 0.62 + m * facet * 0.35) * RELIEF;
       }
       height[i] = Math.max(0, Math.min(1, h));
     }
@@ -539,7 +546,7 @@ export function renderTerrain(world: World, opts: TerrainOptions = {}): TerrainA
         }
         const gx = ((x < W - 1 && land[i + 1] ? height[i + 1] : height[i]) - (x > 0 && land[i - 1] ? height[i - 1] : height[i])) / 2;
         const gy = ((y < H - 1 && land[i + W] ? height[i + W] : height[i]) - (y > 0 && land[i - W] ? height[i - W] : height[i])) / 2;
-        out[i] = shadeLand({ x, y, h: height[i], gx, gy, tx, ty, biome: biomeAt(i), dCoast: dCoast[i], civic: civic[i], ridge: Math.max(0, 1 - dRidge[i] / (apt * 3.2)), seed });
+        out[i] = shadeLand({ x, y, h: height[i], gx: gx * LG, gy: gy * LG, tx, ty, biome: biomeAt(i), dCoast: dCoast[i], civic: civic[i], ridge: Math.max(0, 1 - dRidge[i] / (apt * 3.2)), seed });
         continue;
       }
       // ——— water

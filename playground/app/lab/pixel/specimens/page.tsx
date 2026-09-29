@@ -14,6 +14,7 @@ import {
 } from "@/components/lab/pixel/art";
 import { PixelNum } from "@/components/lab/pixel/pixel-num";
 import type { EvidenceState } from "@/components/lab/shared/card-model";
+import { AuthoredLevel, AuthoredStamps } from "./authored";
 
 const GROUND = "#9c98a6";      // neutral grey-violet ground for sprites
 const SHEET_BG = "#24223a";
@@ -79,6 +80,9 @@ export default function PixelSpecimens() {
   const part = view?.part ?? null;
   const show = (k: string) => !part || part === k;
   const wantTerrain = show("terrain") || show("crops");
+  const [authoredDone, setAuthoredDone] = useState(0);
+  const markAuthored = useMemo(() => () => setAuthoredDone((n) => n + 1), []);
+  const authoredWanted = (show("authored") ? 1 : 0) + (show("authored-lod") ? 2 : 0);
 
   useEffect(() => {
     if (!view) return;
@@ -144,7 +148,7 @@ export default function PixelSpecimens() {
   }, [terrain, world]);
 
   const cat = useMemo(() => (view ? catalogue() : []), [view]);
-  const ready = view && emblems && (!wantTerrain || terrain);
+  const ready = view && emblems && (!wantTerrain || terrain) && authoredDone >= authoredWanted;
 
   return (
     <div
@@ -206,6 +210,29 @@ export default function PixelSpecimens() {
               : <>{terrain.art.img.w}×{terrain.art.img.h} art px · timings frozen under headless virtual time</>) : "painting…"}
           </p>
           <div ref={termRef} />
+        </Section>
+      )}
+      {show("authored") && (
+        <Section title="Authored map — hand-drawn stamps">
+          <AuthoredStamps />
+        </Section>
+      )}
+      {show("authored") && world && (
+        <Section title="Authored map — overview (2 art px per tile)">
+          <AuthoredLevel world={world} apt={2} onDone={markAuthored} />
+        </Section>
+      )}
+      {show("authored-lod") && world && (
+        <Section title="Authored map — mid (4 art px per tile) and near (8 art px per tile) crops">
+          <AuthoredLevel world={world} apt={4} onDone={markAuthored} crops={[
+            { name: "representation spine", tx: 60, ty: 18, w: 170, h: 110 },
+            { name: "generative volcano", tx: 60, ty: 80, w: 170, h: 110 },
+          ]} />
+          <div style={{ height: 12 }} />
+          <AuthoredLevel world={world} apt={8} onDone={markAuthored} crops={[
+            { name: "perception lake", tx: 16, ty: 41, w: 170, h: 110 },
+            { name: "decision mesa", tx: 102, ty: 57, w: 170, h: 110 },
+          ]} />
         </Section>
       )}
       {show("crops") && (

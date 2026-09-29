@@ -109,3 +109,37 @@ prop for the specimen sheet.
    blocks, piers + boats at `world.harbours`, trees on `world.decor`, critter.
 4. **Clouds** (overview only) over the sea slots.
 5. **Name-plates / numerals** as DOM overlay in screen space (never in the art).
+
+## Authored map — `art/authored/` (round 4, "human designed")
+The overview is no longer grown from noise: one authored source rendered at any
+level of detail, at ONE fixed on-screen pixel size (the builder's adaptive
+resolution; the specimens show 4 screen px per art px).
+
+- `authoredLand(world, artPerTile)` → `{ w, h, origin, px, land, region, river, civic, frame }`
+  - world land smoothed at tile scale (no staircase, no noise) + hand-placed
+    `GESTURES` (capes, bays/fjords, islet tails, tile coords) + a ≤1-px hand wobble;
+  - every road / footprint / set-piece / bridge / river / harbour / city block /
+    label tile is PROTECTED (1-tile margin): the mask is nudged, never a node;
+  - `region` = world regions (nearest-region fill for added land; rivers stay the
+    border: river + region share one meander displacement); −2 "?" island, −3 ruins.
+  - `civic` (rivers excluded) = where decoration must not go (< 0.3 is free).
+- `composeAuthored(world, artPerTile, { sea: "paper" | "clear", decor })` → `AuthoredMap`
+  (= AuthoredLand + `img` palette indices + `heroes` (world px) + `timings`). Layers:
+  flat family ground with a few large clean tone zones · coastal ochre lowland band
+  (meadow/savanna) · meandering river strokes · heroes · border ranges · clusters near
+  models · sparse calm hills · N/W sand lip · S/E cliff lip + ink coast stroke ·
+  paper sea with hatching ONLY in a band along the coast.
+- `HEROES` (tile coords, nudged into free land): snowy spine (Representation),
+  volcano (Generative), lake (Perception), oasis (Sequence), mesa (Decision),
+  crystal spires ×2 (Structure).
+- Stamps (`stamps.ts`, literal pixel art): forest S/M/L, peak S/M/L, hill, hill L,
+  dune, pond, lake, volcano, mesa, palm, acacia, pine, snowy pine, crystal spires,
+  rocks, tuft; `stampImage`, `paintStamp`, `recolour`. Drawn-to-size glyphs for
+  near LODs (`gen.ts`): `cone` (peak / volcano), `mesa`, `lake`, `spires`, `forest`.
+- LOD: 2 art px/tile = overview (≈ 340×246 art px for camera.all), 3–4 = region,
+  8 = node. Stamps keep their pixel size; heroes/ranges switch hand stamp → drawn
+  glyph as the footprint (in tiles) grows. Perf (node, load ≈ 300): apt 2 ≈ 1 s,
+  apt 4 ≈ 3 s, apt 8 ≈ 11 s → compose per level once, cache, never per frame.
+- Builder composes: `composeAuthored` image → roads/lanes → sprites (castles,
+  markers, cities, boats) → labels (DOM). Boats/ferries: `land` is authoritative
+  for "is this pixel water" (capes may cover a little former sea).

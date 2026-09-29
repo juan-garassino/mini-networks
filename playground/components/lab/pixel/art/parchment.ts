@@ -67,8 +67,10 @@ export function parchmentize(img: ArtImage, land: Uint8Array | null, apt: number
   const notWater = new Uint8Array(w * h);
   for (let i = 0; i < notWater.length; i++) notWater[i] = water[i] ? 0 : 1;
   const d = chamfer(notWater, w, h, 64);
-  const P = RAMPS.paper, s = Math.max(0.6, apt / 8);           // hatch spacing scales with art resolution
-  const gap = Math.max(2, Math.round(3 * s));
+  // hatching is laid on the art grid: at coarse levels fewer, shorter lines so the
+  // chunky pixels read as a calm band, not noise
+  const P = RAMPS.paper, s = apt < 4 ? 0.4 : Math.max(0.6, apt / 8);
+  const gap = apt < 4 ? 3 : Math.max(2, Math.round(3 * s));
   for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
     const i = y * w + x;
     const v = img.data[i];
@@ -84,7 +86,7 @@ export function parchmentize(img: ArtImage, land: Uint8Array | null, apt: number
       // dashes further out (dash length shrinks with distance)
       const fade = dd / (18 * s);
       const dash = Math.max(2, Math.round((1 - fade) * 9));
-      if (((x + (y * 5) % 7) % (dash + 3)) < dash && hash(x >> 2, y) > fade * 0.6) o = P[fade < 0.5 ? 0 : 1];
+      if (((x + (y * 5) % 7) % (dash + 3)) < dash && hash(x >> 2, y) > fade * 0.6) o = apt < 8 ? (fade < 0.5 ? RAMPS.ink[2] : P[0]) : P[fade < 0.5 ? 0 : 1];
     } else if (hash(x, y) < 0.012) o = P[1];                          // paper grain
     else if (hash(x + 7, y + 3) < 0.006) o = P[3];
     out.data[i] = o;
