@@ -9,7 +9,9 @@ import { useCallback, useEffect, useRef, useState } from "react";
 export interface CamBox { x: number; y: number; w: number; h: number }
 
 const FLY_MS = 700;
-const MAX_STEP = 32; // ms of animation per frame, at most
+// ms of animation per frame, at most: one long block (mounting a card) can't
+// skip the flight, yet a slow machine's steady ~0.5s frames still land in ~3s.
+const MAX_STEP = 120;
 const ease = (t: number) => (t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2);
 
 // Grow the target to the viewport's aspect ratio, centred, so nothing is cropped.
@@ -45,8 +47,10 @@ export function useCamera({ world, target, still, minWidth = 240 }: {
   const tx = target.x, ty = target.y, tw = target.w, th = target.h;
   useEffect(() => {
     const to = fitBox({ x: tx, y: ty, w: tw, h: th }, size.w, size.h);
-    if (still || size.w <= 1) { setBox(to); return; }
     const from = boxRef.current;
+    // Jump (no flight) under still=1, before the viewport is measured, or when
+    // the previous box is only the pre-data placeholder.
+    if (still || size.w <= 1 || from.w <= 1 || from.h <= 1) { setBox(to); return; }
     // Progress advances by at most MAX_STEP per frame: when a skin blocks the
     // main thread (e.g. mounting the card), the flight is delayed rather than
     // skipped — wall-clock progress turned every fly-to into a cut.
