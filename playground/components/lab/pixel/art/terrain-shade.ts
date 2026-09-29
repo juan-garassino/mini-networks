@@ -19,7 +19,7 @@ import { T, type Box, type Pt, type SecretIsland, type World } from "@/lib/world
 import { biomeOf, CLEAR, RAMPS, SHADOW, type Biome, type RampName } from "./palette";
 import { bayer4, ditherStep, fbm3f as fbm3, hash2, mulberry32, noise as valueNoise, ridgedf as ridged } from "./noise";
 import { artBlank, artBlit, artToCanvas, type ArtImage } from "./raster";
-import { questionStone, ruins } from "./sprites/props";
+import { palm, questionStone, ruins, treeClump } from "./sprites/props";
 
 export const ART_PER_TILE = 8;
 const TILE = 16;
@@ -311,9 +311,10 @@ export function isletBlobs(island: SecretIsland): { cx: number; cy: number; rx: 
     const cy = g.reduce((a, p) => a + p.y, 0) / g.length;
     const j = out.length;
     const wob = ((j * 7) % 3 - 1) * TILE * 1.4;                     // alternate islets up/down: an archipelago, not a bar
-    // no two islets alike: each gets its own width / height ratio
+    // no two islets alike; an archipelago is lifted into open sea and scattered, not a row
     const rx = ((x1 - x0) / 2 + TILE * 1.9) * [1, 0.82, 1.14, 0.9, 1.06, 0.86][j % 6];
-    out.push({ cx: (x0 + x1) / 2, cy: cy + wob, rx, ry: Math.max(TILE * 3.0, rx * [0.72, 0.92, 0.64, 0.84, 0.7, 0.98][j % 6]) });
+    const scatter = groups > 1 ? -TILE * 5 + [-2.6, 0.6, -1.4, 1.0, -2.0, 0.2][j % 6] * TILE - wob : 0;
+    out.push({ cx: (x0 + x1) / 2, cy: cy + wob + scatter, rx, ry: Math.max(TILE * 3.0, rx * [0.72, 0.92, 0.64, 0.84, 0.7, 0.98][j % 6]) });
   }
   return out;
 }
@@ -696,6 +697,10 @@ export function renderTerrain(world: World, opts: TerrainOptions = {}): TerrainA
       // a clump of 2–3 flat acacias
       const n = 2 + (hash2(st.x, st.y, seed ^ 0xac) < 0.5 ? 1 : 0);
       for (let k = 0; k < n; k++) stampCanopy(img, st.x + (k === 1 ? 5 : k === 2 ? 2 : 0), st.y + (k === 2 ? 3 : k === 1 ? 1 : 0), 2, st.b);
+    } else if (st.b.key === "dunes" && st.kind === "outcrop" && hash2(st.x, st.y, seed ^ 0x9a) < 0.55) {
+      // half the dune outcrops are palms / acacia groves instead of rock bumps
+      const sp = hash2(st.x, st.y, seed ^ 0x9b) < 0.6 ? palm() : treeClump("olive");
+      artBlit(img, sp.img, st.x - sp.anchor.x, st.y - sp.anchor.y);
     } else dressStamp(put, (x, y) => out[y * W + x], st.x, st.y, st.kind, st.b, seed);
   }
   // (c) ponds: 1–2 small lakes in the largest free interiors, with a sparkle

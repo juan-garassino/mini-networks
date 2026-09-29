@@ -21,7 +21,7 @@ export const ENCODING: Mark[] = [
   { mark: "river (water band)", encodes: "border between two families", source: "world.terrain = RIVER" },
   { mark: "canopy clumps", encodes: "the forest-able band of that land's biome", source: "art/ stampCanopy by biome" },
   { mark: "clouds with cast shadows", encodes: "atmosphere only, over the empty sea slots (no data); one veils the hidden island", source: "world.seaSlots, world.hiddenIsland" },
-  { mark: "compass rose (first open sea from the lower-left)", encodes: "north is up", source: "art terrain land mask (placement)" },
+  { mark: "compass rose at ×2, chunky gold N/W/E/S with ink outline (first open sea from the lower-left)", encodes: "north is up", source: "art terrain land mask (placement)" },
   { mark: "faceted snow-capped peaks (lit / shadow faces)", encodes: "a family border that no lineage crosses", source: "world.mountains" },
   // lineage
   { mark: "3-art-px two-tone road on its own lane (dark edge, light cobble core, cast shadow)", encodes: "builds_on edge to the model's primary parent; parallel roads never merge", source: "world.roads[].lanePoints (primary=true)" },
@@ -38,10 +38,12 @@ export const ENCODING: Mark[] = [
   { mark: "pedestal medallion with the species emblem", encodes: "derived model and which one", source: "world.nodes[].atom = false; iconFor(name)" },
   { mark: "medallion dress: gold + star (champion), royal blue + pennant (trained), grey in scaffold with '?' (provisional), dim cracked stone (untrained)", encodes: "evidence state", source: "evidenceState() → art markerSprite" },
   { mark: "castle one ramp step darker", encodes: "atom with no champion and no runs", source: "evidence" },
-  { mark: "pier + boats (1 at overview, up to 3 zoomed in); wooden 'N boats' board when more", encodes: "pipelines (compositions) that use a model of this land", source: "world.harbours[].boats" },
+  { mark: "pier + boats (1 at overview, up to 3 zoomed in)", encodes: "pipelines (compositions) that use a model of this land", source: "world.harbours[].boats" },
   { mark: "boat sailing a foam-dotted course", encodes: "the selected pipeline's ferry route", source: "ferryRoute(world, composition.composes)" },
   { mark: "engine running a lineage line", encodes: "a model with a live running run", source: "useLiveTraining(runs) + pathToAtom" },
-  { mark: "engine parked beside a station (only when no run is live)", encodes: "the model with the most logged runs (the busiest station)", source: "stationCounts(runs), useLiveTraining(runs) = []" },
+  { mark: "engine parked on the rails beside a station (only when no run is live)", encodes: "each land's busiest station: the model with the most logged runs in that family", source: "stationCounts(runs), useLiveTraining(runs) = []" },
+  { mark: "navy pier tag with a boat icon ×N (zoomed in only)", encodes: "N pipelines dock at this harbour (more than the 3 boats drawn)", source: "world.harbours[].boats" },
+  { mark: "far overview (mobile): native 3-art-px-per-tile map, one micro-castle per land, 6 land signs at the land centroid", encodes: "the six families, each land's hub atom; tap a land to open it", source: "renderTerrain(artPerTile 3), familyHubs(world), region centroids" },
   // regions
   { mark: "wooden region signboard", encodes: "family name + model count (count in 5×7 pixel digits, asserted against the node count)", source: "world.regions[].setPiece, world.nodes" },
   // focus & avatar

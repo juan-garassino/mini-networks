@@ -227,3 +227,23 @@
   pointer-events: none;
   text-shadow: 1px 0 0 #1e1f4e, -1px 0 0 #1e1f4e, 0 1px 0 #1e1f4e, 0 -1px 0 #1e1f4e, 0 2px 0 #1e1f4e;
 }
+
+.pierTag {
+  position: absolute;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  height: 20px;
+  font-size: 13px;
+  color: #62dcf2;
+  background: #1e1f4e;
+  border: 1px solid #4a60b6;
+  pointer-events: none;
+}
+
+@keyframes slideIn {
+  0% { transform: translateX(28px); opacity: 0; }
+  100% { transform: translateX(0); opacity: 1; }
+}
+.slideIn { animation: slideIn 160ms steps(4, end) both; }

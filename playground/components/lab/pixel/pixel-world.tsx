@@ -6,6 +6,7 @@
 // a plinth at +1 scale, the quest route, the critter, sailing ferries,
 // running trains and the Konami wave. DOM overlays carry every word on pixel
 // name-plates placed in SCREEN space (placeScreenLabels, constant size).
+import { Sailboat } from "lucide-react";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import {
   ferryRoute, lineage, parkingSpot, pathToAtom, placeScreenLabels, samplePolyline,
@@ -15,7 +16,7 @@ import { useWorld } from "@/hooks/use-world";
 import { useLesson } from "@/hooks/use-lesson";
 import { useLabView, type Zoom } from "@/components/lab/shared/url-state";
 import { LabMotion } from "@/components/lab/shared/still";
-import { useCamera, type CamBox } from "@/components/lab/shared/camera";
+import { fitBox, useCamera, type CamBox } from "@/components/lab/shared/camera";
 import { cardModel, displayName, evidenceState } from "@/components/lab/shared/card-model";
 import { CRITTER } from "@/components/lab/shared/critter";
 import {
@@ -26,8 +27,8 @@ import { Sparkline } from "@/components/lab/shared/lesson/sparkline";
 import type { ModelEvidence, TaxonomyResponse } from "@/lib/types";
 import { familyLabel } from "./palette";
 import type { NodeLook } from "./terrain";
-import { artFlipX, artToCanvas, critterSheet, emblemMasks, props, RAMPS, PALETTE, type Sprite } from "./art";
-import { buildArtLayers, chevronOffsets, islandSlots, nodeSprite, regionCut, roadPolys, type ArtEmblems, type ArtLayers } from "./world-art";
+import { artFlipX, artToCanvas, critterSheet, emblemMasks, isletBlobs, props, RAMPS, PALETTE, type Sprite } from "./art";
+import { buildArtLayers, buildMiniLayer, chevronOffsets, familyHubs, islandSlots, nodeSprite, regionCut, roadPolys, type ArtEmblems, type ArtLayers } from "./world-art";
 import { snapTile, toScreen, xformFor, type Stage, type Xform } from "./view";
 import { StatusCard } from "./status-card";
 import { placeSigns, type Rect } from "./signs";
@@ -39,7 +40,7 @@ import styles from "./pixel.module.css";
 
 const CARD_W = 400 + 16 + 8;
 const SHEET = 0.52;
-const MOBILE_TOP = 112;
+const MOBILE_TOP = 84;
 const MOBILE_KEY = 60;
 const TITLE_GUTTER = 120;
 const TS = 16;
@@ -83,6 +84,20 @@ function regionTarget(world: World, focus: WorldNode, stage: Stage): CamBox {
   return { x: cx - w / 2, y: cy - h / 2, w, h };
 }
 
+/**
+ * Overview frame: land + its halo, plus both secret islands on desktop (the
+ * "?" isle and the ruins archipelago sit fully in frame); on mobile land + ruins.
+ */
+function overviewBox(world: World, mobile: boolean): CamBox {
+  let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+  const grow = (x: number, y: number, w: number, h: number) => { x0 = Math.min(x0, x); y0 = Math.min(y0, y); x1 = Math.max(x1, x + w); y1 = Math.max(y1, y + h); };
+  for (const r of world.regions) grow(r.bbox.x * TS, r.bbox.y * TS, r.bbox.w * TS, r.bbox.h * TS);
+  const isles = mobile ? [world.ruinsIsland] : [world.ruinsIsland, world.hiddenIsland];
+  for (const isl of isles) for (const b of isletBlobs(isl)) grow(b.cx - b.rx - 10, b.cy - b.ry - 10, 2 * b.rx + 20, 2 * b.ry + 20);
+  const pad = mobile ? 8 : 12;
+  return { x: x0 - pad, y: y0 - pad, w: x1 - x0 + 2 * pad, h: y1 - y0 + 2 * pad };
+}
+
 const hit = (a: Rect, b: Rect) => a.x < b.x + b.w && b.x < a.x + a.w && a.y < b.y + b.h && b.y < a.y + a.h;
 
 export function PixelWorld() {
@@ -118,11 +133,24 @@ export function PixelWorld() {
     if (!world) return { x: 0, y: 0, w: 1, h: 1 };
     if (zoom === "node" && focusNode) return padBox(world.camera.nodes[focusNode.name].box, 2.2, focusNode.center);
     if (zoom === "region" && focusNode) return regionTarget(world, focusNode, stage);
-    return world.camera.world;
-  }, [world, zoom, focusNode, stage]);
+    return overviewBox(world, mobile);
+  }, [world, zoom, focusNode, stage, mobile]);
 
   const cam = useCamera({ world: world?.camera.all ?? target, target, still, minWidth: 180 });
-  const xf: Xform = xformFor(cam.box, stage, 32);
+  const miniMode = mobile && zoom === "overview";
+  // front-load the zoom step: once a flight is a quarter done, draw at the target's
+  // integer scale (the pan finishes at that scale) instead of snapping at the very end
+  const flight = useRef<{ key: string; w0: number } | null>(null);
+  const tKey = `${target.x}|${target.y}|${target.w}|${target.h}`;
+  if (!flight.current || flight.current.key !== tKey) flight.current = { key: tKey, w0: cam.box.w };
+  const fitT = xformFor(fitBox(target, stage.w, stage.h), stage, 32, { fit: zoom === "overview" ? "contain" : "cover" });
+  const fitted = fitBox(target, stage.w, stage.h);
+  const atTarget = Math.abs(cam.box.w - fitted.w) < 1 && Math.abs(cam.box.x - fitted.x) < 1 && Math.abs(cam.box.y - fitted.y) < 1;
+  const prog = Math.abs(flight.current.w0 - fitBox(target, stage.w, stage.h).w) < 1 ? 1
+    : 1 - Math.abs(cam.box.w - fitBox(target, stage.w, stage.h).w) / Math.abs(flight.current.w0 - fitBox(target, stage.w, stage.h).w);
+  const xf: Xform = miniMode
+    ? xformFor(cam.box, stage, 32, { tile: 3 })
+    : xformFor(cam.box, stage, 32, prog > 0.25 ? { tile: fitT.tile } : { fit: zoom === "overview" ? "contain" : "cover" });
 
   // ——— identity: species emblems (async raster), evidence looks, cached layers ———
   const [emblems, setEmblems] = useState<ArtEmblems | null>(null);
@@ -142,6 +170,8 @@ export function PixelWorld() {
     setLayers(buildArtLayers(world, looks, emblems));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [world, ready, lookSig, emblems]);
+
+  const mini = useMemo(() => (world && emblems && typeof document !== "undefined" && mobile ? buildMiniLayer(world, emblems) : null), [world, emblems, mobile]);
 
   const regionId = zoom === "region" && focusNode ? world?.regions.find((r) => r.family === focusNode.family)?.id ?? -1 : -1;
   const spot = useMemo(() => (layers && regionId >= 0 ? regionCut(layers, regionId) : null), [layers, regionId]);
@@ -251,16 +281,23 @@ export function PixelWorld() {
     const p = pathToAtom(world, m);
     return { model: m, ...samplePolyline([...p.points].reverse()) };
   }).filter((t) => t.length > 0) : []), [world, live]);
-  // no live run right now → one engine waits, parked, at the busiest station (most logged runs)
+  // no live run right now → in every land one engine waits, parked on the rails
+  // beside that land's busiest station (the model with the most logged runs)
   const parked = useMemo(() => {
     if (!world || live.length) return null;
-    const best = Object.entries(stations).filter(([m]) => world.nodes.some((n) => n.name === m)).sort((a, b) => b[1] - a[1] || (a[0] < b[0] ? -1 : 1))[0];
-    if (!best) return null;
-    const road = world.roads.find((r) => r.to === best[0] && r.lanePoints.length > 1) ?? world.roads.find((r) => r.from === best[0] && r.lanePoints.length > 1);
-    if (!road) return null;
-    const s = samplePolyline(road.lanePoints);
-    const t = road.to === best[0] ? Math.max(0, 1 - 40 / Math.max(s.length, 1)) : Math.min(1, 40 / Math.max(s.length, 1));
-    return { model: best[0], runs: best[1], at: s.at(t) };
+    const out: { model: string; runs: number; at: Pt & { angle: number } }[] = [];
+    for (const r of world.regions) {
+      const best = world.nodes.filter((n) => n.family === r.family && (stations[n.name] ?? 0) > 0)
+        .sort((a, b) => (stations[b.name] ?? 0) - (stations[a.name] ?? 0) || (a.name < b.name ? -1 : 1))[0];
+      if (!best) continue;
+      const road = world.roads.find((x) => x.to === best.name && x.lanePoints.length > 1) ?? world.roads.find((x) => x.from === best.name && x.lanePoints.length > 1);
+      if (!road) continue;
+      const sp = samplePolyline(road.lanePoints);
+      // stand clear of the castle / marker: ~110 world px along the rails
+      const t = road.to === best.name ? Math.max(0, 1 - 110 / Math.max(sp.length, 1)) : Math.min(1, 110 / Math.max(sp.length, 1));
+      out.push({ model: best.name, runs: stations[best.name] ?? 0, at: sp.at(t) });
+    }
+    return out;
   }, [world, live, stations]);
   useEffect(() => {
     if (!trains.length || !animate) { drawRef.current(); return; }
@@ -312,6 +349,8 @@ export function PixelWorld() {
 
   // ——— canvas painting ———
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const prevTile = useRef<number | null>(null);
+  const dissolve = useRef<{ snap: HTMLCanvasElement | null; t0: number }>({ snap: null, t0: 0 });
   const [drawn, setDrawn] = useState(false);
   const kinSprites = useMemo(() => {
     if (!world || !emblems || !lin || typeof document === "undefined") return null;
@@ -322,8 +361,8 @@ export function PixelWorld() {
       return [name, { s: stamp(nodeSprite(m, look, emblems)), node: m }] as const;
     }));
   }, [world, emblems, lin, looks, nodeOf]);
-  const latest = useRef({ xf, layers, spot, focusNode, vp, critter, small, lin, polys, focusSprite, zoom, trains, nodeOf, cardOpen, stage, kinSprites, world, parked });
-  latest.current = { xf, layers, spot, focusNode, vp, critter, small, lin, polys, focusSprite, zoom, trains, nodeOf, cardOpen, stage, kinSprites, world, parked };
+  const latest = useRef({ xf, layers, spot, focusNode, vp, critter, small, lin, polys, focusSprite, zoom, trains, nodeOf, cardOpen, stage, kinSprites, world, parked, mini });
+  latest.current = { xf, layers, spot, focusNode, vp, critter, small, lin, polys, focusSprite, zoom, trains, nodeOf, cardOpen, stage, kinSprites, world, parked, mini };
 
   const draw = useCallback((nowArg?: number) => {
     const c = canvasRef.current;
@@ -336,6 +375,16 @@ export function PixelWorld() {
     const ctx = c.getContext("2d")!;
     ctx.imageSmoothingEnabled = false;
     ctx.setTransform(1, 0, 0, 1, 0, 0);
+    // zoom-step change: keep the last frame and dissolve it away in 4×4 cells (100ms)
+    if (animate && prevTile.current !== null && prevTile.current !== L.xf.tile && c.width === W) {
+      const snap = dissolve.current.snap ?? document.createElement("canvas");
+      snap.width = W; snap.height = H;
+      snap.getContext("2d")!.drawImage(c, 0, 0);
+      dissolve.current = { snap, t0: now };
+      startAnim("dissolve");
+      setTimeout(() => stopAnim("dissolve"), 140);
+    }
+    prevTile.current = L.xf.tile;
     const dimAll = (L.zoom === "node" && !!L.focusNode) || (!!L.spot && L.zoom === "region");
     ctx.fillStyle = hex(dimAll ? RAMPS.ocean[2] : RAMPS.ocean[3]); // sea beyond the art extent matches the (dimmed) layer
     ctx.fillRect(0, 0, W, H);
@@ -351,6 +400,14 @@ export function PixelWorld() {
     const Ly = L.layers;
     const layer = far ? (stepBack ? Ly.farDim : Ly.far) : (stepBack ? Ly.dim : Ly.full);
     const o = S(Ly.origin);
+    if (tile === 3 && L.mini) {
+      // far overview: the native 3-art-px-per-tile map at 1 CSS px per art px
+      const mo = S(L.mini.origin);
+      ctx.drawImage(L.mini.canvas, Math.round(mo.x), Math.round(mo.y), L.mini.canvas.width * dpr, L.mini.canvas.height * dpr);
+      prevTile.current = tile;
+      if (!drawn) setDrawn(true);
+      return;
+    }
     ctx.drawImage(layer, Math.round(o.x), Math.round(o.y), layer.width * ap, layer.height * ap);
     if (L.spot && L.zoom === "region" && !far) ctx.drawImage(L.spot, Math.round(o.x), Math.round(o.y), L.spot.width * ap, L.spot.height * ap);
     const u = Math.max(1, tile / 8) * dpr;   // one art px on screen (≥1)
@@ -451,13 +508,6 @@ export function PixelWorld() {
       const sc = Math.max(u, 2 * dpr);
       ctx.drawImage(st.c, Math.round(s.x - st.ax * sc), Math.round(s.y - st.ay * sc), st.c.width * sc, st.c.height * sc);
     }
-    // no live run: the engine waits, parked, at the busiest station
-    if (L.small && tile >= 8 && L.parked) {
-      const q = L.parked.at, s = S(q);
-      const st = Math.cos(q.angle) < 0 ? L.small.trainL : L.small.train;
-      const sc = Math.max(u, 2 * dpr);
-      ctx.drawImage(st.c, Math.round(s.x - st.ax * sc), Math.round(s.y - st.ay * sc), st.c.width * sc, st.c.height * sc);
-    }
 
     // trains on the rails of models that are training right now
     if (L.small && tile >= 8) for (const tr of L.trains) {
@@ -467,9 +517,9 @@ export function PixelWorld() {
       const sc = Math.max(u, 2 * dpr);
       ctx.drawImage(st.c, Math.round(s.x - st.ax * sc), Math.round(s.y - st.ay * sc), st.c.width * sc, st.c.height * sc);
     }
-    // no live run: the engine waits, parked, at the busiest station
-    if (L.small && tile >= 8 && L.parked) {
-      const q = L.parked.at, s = S(q);
+    // no live run: one engine waits, parked, at each land's busiest station
+    if (L.small && tile >= 8 && L.parked) for (const pk of L.parked) {
+      const q = pk.at, s = S(q);
       const st = Math.cos(q.angle) < 0 ? L.small.trainL : L.small.train;
       const sc = Math.max(u, 2 * dpr);
       ctx.drawImage(st.c, Math.round(s.x - st.ax * sc), Math.round(s.y - st.ay * sc), st.c.width * sc, st.c.height * sc);
@@ -502,8 +552,30 @@ export function PixelWorld() {
       const hopY = now - hop.current < 200 ? -3 * cu : 0;
       ctx.drawImage(st.c, Math.round(s.x - st.ax * cu), Math.round(s.y - st.ay * cu + hopY), st.c.width * cu, st.c.height * cu);
     }
+    const dz = dissolve.current;
+    if (dz.snap && dz.t0 > 0 && now - dz.t0 < 100) {
+      const tt = (now - dz.t0) / 100;
+      const cw = Math.ceil(W / 4), ch = Math.ceil(H / 4);
+      const mask = document.createElement("canvas");
+      mask.width = cw; mask.height = ch;
+      const mctx = mask.getContext("2d")!;
+      const id = mctx.createImageData(cw, ch);
+      for (let y = 0; y < ch; y++) for (let x = 0; x < cw; x++) {
+        const B = [0, 8, 2, 10, 12, 4, 14, 6, 3, 11, 1, 9, 15, 7, 13, 5][(y & 3) * 4 + (x & 3)] / 16;
+        if (B >= tt) id.data[(y * cw + x) * 4 + 3] = 255;
+      }
+      mctx.putImageData(id, 0, 0);
+      const tmp = document.createElement("canvas");
+      tmp.width = W; tmp.height = H;
+      const tctx = tmp.getContext("2d")!;
+      tctx.imageSmoothingEnabled = false;
+      tctx.drawImage(dz.snap, 0, 0);
+      tctx.globalCompositeOperation = "destination-in";
+      tctx.drawImage(mask, 0, 0, cw * 4, ch * 4);
+      ctx.drawImage(tmp, 0, 0);
+    }
     if (!drawn) setDrawn(true);
-  }, [drawn, animate]);
+  }, [drawn, animate, startAnim, stopAnim]);
   drawRef.current = draw;
   useLayoutEffect(() => { draw(); });
 
@@ -529,6 +601,22 @@ export function PixelWorld() {
   };
   const onPointerUp = () => { press.current = null; cam.handlers.onPointerUp(); };
   const onNode = (name: string) => { if (!moved.current) go(name); };
+  // far overview: tap a land → its region (centred on the land's hub atom)
+  const hubs = useMemo(() => (world ? familyHubs(world) : new Map<string, WorldNode>()), [world]);
+  const openLand = (regionId: number) => {
+    const r = world?.regions[regionId];
+    const hub = r ? hubs.get(r.family) : undefined;
+    if (hub) update({ zoom: "region", focus: hub.name });
+  };
+  const onStageClick = (e: React.MouseEvent) => {
+    if (!miniMode || moved.current || !world) return;
+    const rect = (e.currentTarget as Element).getBoundingClientRect();
+    const wx = (e.clientX - rect.left - xf.ox) / xf.k, wy = (e.clientY - rect.top - xf.oy) / xf.k;
+    const tx = Math.floor(wx / TS), ty = Math.floor(wy / TS);
+    if (tx < 0 || ty < 0 || tx >= world.cols || ty >= world.rows) return;
+    const rid = world.regionOf[ty * world.cols + tx];
+    if (rid >= 0) openLand(rid);
+  };
 
   // test hook for scripts/shoot.mjs --motion (real interaction paths only)
   const critterClickRef = useRef(critterEgg.click);
@@ -555,14 +643,18 @@ export function PixelWorld() {
     return () => { delete w.__lab; };
   }, [drawn, ready, go, update, onCritter]);
 
-  // the card opens once the camera has landed (never pops over a moving map)
+  // the card mounts only once the camera has SETTLED (no box change for 120ms),
+  // then slides in; under still=1 it is there immediately
   const [landedFor, setLandedFor] = useState<string | null>(null);
+  const bx = Math.round(cam.box.x), by = Math.round(cam.box.y), bw = Math.round(cam.box.w);
   useEffect(() => {
-    if (!cardOpen || !focusNode) return;
+    if (!cardOpen || !focusNode) { setLandedFor(null); return; }
     if (!animate) { setLandedFor(focusNode.name); return; }
-    const id = setTimeout(() => setLandedFor(focusNode.name), 720);
+    // not there yet: hide a card for another model; keep this one's card once shown (drag-pan)
+    if (!atTarget) { setLandedFor((prev) => (prev === focusNode.name ? prev : null)); return; }
+    const id = setTimeout(() => setLandedFor(focusNode.name), 120);
     return () => clearTimeout(id);
-  }, [cardOpen, focusNode, animate]);
+  }, [cardOpen, focusNode, animate, bx, by, bw, atTarget]);
   const card = useMemo(() => {
     if (!cardOpen || !focusNode || !taxonomy) return null;
     return cardModel(focusNode.name, { taxonomy, evidence, runs, family: focusNode.family, depth: focusNode.depth });
@@ -584,7 +676,7 @@ export function PixelWorld() {
   }, [mobile, vp.w, vp.h, zoom]);
   const labelText = useMemo(() => new Map((world?.labels ?? []).map((l) => [l.text, l.node])), [world]);
   const plates = useMemo(() => {
-    if (!world || vp.w === 0) return [];
+    if (!world || vp.w === 0 || miniMode) return [];
     const camBox = { x: -xf.ox / xf.k, y: -xf.oy / xf.k, w: vp.w / xf.k, h: vp.h / xf.k };
     const measure = (t: string, f: number) => {
       const node = labelText.get(t);
@@ -615,10 +707,40 @@ export function PixelWorld() {
       .filter((l) => l.node === focusNode?.name || !uiRects.some((u) => hit(l, u)))
       .filter((l) => !cardOpen || (l.x + l.w <= stage.x + stage.w - 8 && l.y + l.h <= stage.y + stage.h - 8));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [world, xf.tile, xf.ox, xf.oy, vp.w, vp.h, focusNode, uiRects, cardOpen, stage, zoom, focusSprite]);
+  }, [world, xf.tile, xf.ox, xf.oy, vp.w, vp.h, focusNode, uiRects, cardOpen, stage, zoom, focusSprite, miniMode]);
+
+  // far overview: land centroids (clamped to a tile of that land) for the 6 family signs
+  const centroids = useMemo(() => {
+    if (!world) return new Map<number, Pt>();
+    const m = new Map<number, Pt>();
+    for (const r of world.regions) {
+      let sx = 0, sy = 0, n = 0;
+      for (let i = 0; i < world.regionOf.length; i++) if (world.regionOf[i] === r.id) { sx += i % world.cols; sy += Math.floor(i / world.cols); n++; }
+      if (!n) continue;
+      let cx = sx / n, cy = sy / n;
+      if (world.regionOf[Math.round(cy) * world.cols + Math.round(cx)] !== r.id) {
+        let best = Infinity, bx = cx, by = cy;
+        for (let i = 0; i < world.regionOf.length; i++) if (world.regionOf[i] === r.id) {
+          const d = (i % world.cols - cx) ** 2 + (Math.floor(i / world.cols) - cy) ** 2;
+          if (d < best) { best = d; bx = i % world.cols; by = Math.floor(i / world.cols); }
+        }
+        cx = bx; cy = by;
+      }
+      m.set(r.id, { x: (cx + 0.5) * TS, y: (cy + 0.5) * TS });
+    }
+    return m;
+  }, [world]);
 
   const signs = useMemo(() => {
     if (!world) return [];
+    if (miniMode) {
+      return world.regions.filter((r) => centroids.has(r.id)).map((r) => {
+        const c = toScreen(xf, centroids.get(r.id)!);
+        const name = familyLabel(r.family), font = 14, w = Math.ceil(0.62 * font * name.length + 20), h = 24;
+        return { id: r.id, name, font, count: null as number | null, anchor: { x: c.x, y: c.y, w: 0, h: 0 }, w, h,
+          x: Math.round(Math.min(vp.w - w - 4, Math.max(4, c.x - w / 2))), y: Math.round(c.y - h / 2) };
+      });
+    }
     const twoLine = tile >= 16;
     const font = twoLine ? 16 : 14;
     const obstacles: Rect[] = [...uiRects];
@@ -648,22 +770,22 @@ export function PixelWorld() {
     return items.map((it) => ({ ...it, ...(at.get(it.id) ?? { x: it.anchor.x, y: it.anchor.y }) }))
       .filter((g) => !cardOpen || g.x + g.w <= stage.x + stage.w);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [world, plates, xf.tile, xf.ox, xf.oy, vp.w, vp.h, uiRects, focusNode, cardOpen, stage]);
+  }, [world, plates, xf.tile, xf.ox, xf.oy, vp.w, vp.h, uiRects, focusNode, cardOpen, stage, miniMode, centroids]);
 
-  // harbour signs: the pipeline count on a small wooden board ≥16px from the boats,
-  // tried right / left / below, dropped when it would touch a name, a sign or a window
+  // harbour tags: a small navy pier tag (boat icon ×N) attached to the pier, only
+  // when zoomed in (hidden at overview), kept ≥16px from every sign and name
   const harbourSigns = useMemo(() => {
-    if (!world || tile < 8) return [];
-    const taken: Rect[] = [...uiRects, ...plates.map((l) => ({ x: l.x - 4, y: l.y - 4, w: l.w + 8, h: l.h + 8 })),
-      ...signs.map((g) => ({ x: g.x - 4, y: g.y - 4, w: g.w + 8, h: g.h + 8 }))];
+    if (!world || tile < 16) return [];
+    const taken: Rect[] = [...uiRects, ...plates.map((l) => ({ x: l.x - 16, y: l.y - 16, w: l.w + 32, h: l.h + 32 })),
+      ...signs.map((g) => ({ x: g.x - 16, y: g.y - 16, w: g.w + 32, h: g.h + 32 }))];
     const out: { key: number; x: number; y: number; w: number; boats: number }[] = [];
     for (const h of world.harbours) {
-      const shown = Math.min(tile >= 24 ? 3 : 1, h.boats);
+      const shown = Math.min(3, h.boats);
       if (h.boats <= shown) continue;
       const q = toScreen(xf, h.pt);
-      const bs = Math.max(2, tile / 8), half = (shown * 20 * bs) / 2, w = 74, hh = 22;
+      const bs = Math.max(2, tile / 8), half = (shown * 20 * bs) / 2, w = 56, hh = 20;
       const cands = [
-        { x: q.x + half + 16, y: q.y - hh }, { x: q.x - half - 16 - w, y: q.y - hh }, { x: q.x - w / 2, y: q.y + 16 },
+        { x: q.x - w / 2, y: q.y + 10 }, { x: q.x + half + 8, y: q.y - hh }, { x: q.x - half - 8 - w, y: q.y - hh },
       ];
       const pick = cands.find((c) => c.x > 4 && c.y > 4 && c.x + w < vp.w - 4 && c.y + hh < vp.h - 4
         && !taken.some((t) => hit({ ...c, w, h: hh }, t)));
@@ -701,6 +823,7 @@ export function PixelWorld() {
           onPointerMove={onPointerMove}
           onPointerUp={onPointerUp}
           onPointerCancel={onPointerUp}
+          onClick={onStageClick}
           onWheel={cam.handlers.onWheel}
         >
           <canvas ref={canvasRef} className={styles.canvas} role="img"
@@ -708,7 +831,8 @@ export function PixelWorld() {
           <div ref={cam.ref} className="pointer-events-none absolute" style={{ left: stage.x, top: stage.y, width: Math.max(2, stage.w), height: Math.max(2, stage.h) }} />
 
           {signs.map((g) => (
-            <div key={g.id} className={styles.sign} style={{ left: g.x, top: g.y, width: g.w, fontSize: g.font }}>
+            <div key={g.id} className={styles.sign} style={{ left: g.x, top: g.y, width: g.w, fontSize: g.font, ...(miniMode ? { pointerEvents: "auto", cursor: "pointer" } : {}) }}
+              onClick={miniMode ? () => openLand(g.id) : undefined}>
               {g.name}
               {g.count != null && <span className="block text-[16px] font-normal" data-sign-count={g.count}><PixelNum value={g.count} /> models</span>}
             </div>
@@ -730,7 +854,7 @@ export function PixelWorld() {
             );
           })}
 
-          {world && world.nodes.map((n) => {
+          {world && !miniMode && world.nodes.map((n) => {
             const a = toScreen(xf, { x: n.foot.x * TS, y: n.foot.y * TS });
             const s = TS * xf.k;
             return (
@@ -745,7 +869,7 @@ export function PixelWorld() {
           })}
 
           {/* the secret islands: next-era silhouettes and the ruins of legacy/ */}
-          {world && tile >= 8 && world.hiddenIsland.names.map((id, i) => {
+          {world && tile >= 16 && world.hiddenIsland.names.map((id, i) => {
             const s = toScreen(xf, islandSlots(world.hiddenIsland)[i]);
             const m = NEXT_ERA.find((x) => x.id === id);
             return (
@@ -753,11 +877,11 @@ export function PixelWorld() {
                 onClick={() => setTeaser(teaser === id ? null : id)} aria-label={`uncharted: ${m?.name ?? id}`}>?</button>
             );
           })}
-          {world && tile >= 8 && (() => {
+          {world && tile >= 16 && (() => {
             const s = toScreen(xf, world.hiddenIsland.dragons);
             return <div className={styles.dragons} style={{ left: s.x - 40, top: s.y + 24 }}>{NEXT_ERA_COPY.warning}</div>;
           })()}
-          {world && tile >= 8 && world.ruinsIsland.names.map((id, i) => {
+          {world && tile >= 16 && world.ruinsIsland.names.map((id, i) => {
             const s = toScreen(xf, islandSlots(world.ruinsIsland)[i]);
             const r = RUINS.find((x) => x.id === id);
             return (
@@ -767,9 +891,9 @@ export function PixelWorld() {
           })}
 
           {harbourSigns.map((h) => (
-            <div key={h.key} className={styles.sign} title={`${h.boats} pipelines use this land`}
-              style={{ left: h.x, top: h.y, width: h.w, fontSize: 14, padding: "1px 6px 2px" }}>
-              <PixelNum value={h.boats} scale={2} /> boats
+            <div key={h.key} className={styles.pierTag} title={`${h.boats} pipelines dock here`}
+              style={{ left: h.x, top: h.y, width: h.w }}>
+              <Sailboat size={13} strokeWidth={2.5} aria-hidden />×<PixelNum value={h.boats} scale={2} />
             </div>
           ))}
 
@@ -848,7 +972,7 @@ export function PixelWorld() {
         />
         {!(mobile && cardOpen) && <Legend mobile={mobile} defaultOpen={false} />}
         {card && emblems && landedFor === card.name && (
-          <StatusCard card={card} looks={looks} atoms={atoms} emblems={emblems} lesson={lesson} evidence={evidence} still={still}
+          <StatusCard slide={animate} card={card} looks={looks} atoms={atoms} emblems={emblems} lesson={lesson} evidence={evidence} still={still}
             descendants={stats.desc.get(card.name) ?? 0} maxDescendants={stats.maxDesc} maxRuns={stats.maxRuns}
             sailing={sailing} onSail={setSailing}
             onPick={go} onClose={() => update({ zoom: "region" })} />

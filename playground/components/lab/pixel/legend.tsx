@@ -60,7 +60,7 @@ export function Legend({ mobile, defaultOpen }: { mobile: boolean; defaultOpen: 
     ["stones", "Stepping stones: a second parent", 2],
     ["trail", "Faint trail: lineage into another land", 2],
     ["bridge", "Bridge over a border river", 2],
-    ["boat", "Boat: a pipeline using this land", 2],
+    ["boat", "Boats: pipelines docking here (tag ×N when more than 3)", 2],
   ];
 
   return (

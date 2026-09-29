@@ -103,9 +103,10 @@ function Row({ name, emblems, look, atom, onPick, trailing }: {
 }
 
 export function StatusCard({
-  card, looks, atoms, emblems, lesson, evidence, still, descendants, maxDescendants, maxRuns,
+  slide = false, card, looks, atoms, emblems, lesson, evidence, still, descendants, maxDescendants, maxRuns,
   sailing, onSail, onPick, onClose,
 }: {
+  slide?: boolean;
   card: CardModel;
   looks: Map<string, NodeLook>;
   atoms: Set<string>;
@@ -150,7 +151,7 @@ export function StatusCard({
       as="aside"
       aria-label={`Status of ${displayName(card.name)}`}
       onKeyDown={onKey}
-      className={`${styles.scroll} pointer-events-auto absolute inset-x-2 bottom-2 max-h-[52%] sm:inset-x-auto sm:bottom-auto sm:right-4 sm:top-4 sm:max-h-[calc(100%-32px)] sm:w-[400px]`}
+      className={`${styles.scroll} ${slide ? styles.slideIn : ""} pointer-events-auto absolute inset-x-2 bottom-2 max-h-[52%] sm:inset-x-auto sm:bottom-auto sm:right-4 sm:top-4 sm:max-h-[calc(100%-32px)] sm:w-[400px]`}
     >
       <div className="px-2 pb-2 pt-1">
         <header className="flex items-start gap-3">

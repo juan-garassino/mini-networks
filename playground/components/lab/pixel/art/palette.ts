@@ -165,7 +165,7 @@ export interface Biome {
 export const BIOMES: Record<string, Biome> = {
   perception:     { key: "meadow",   name: "lush meadow",       low: "sand",    mid: "meadow",  high: "rock",  peak: "snow", forest: "forest", canopy: 0.55, accent: "meadow" },
   decision:       { key: "savanna",  name: "dry savanna",       low: "sand",    mid: "savanna", high: "rock",  peak: "rock", forest: "olive",  canopy: 0.25, accent: "savanna" },
-  sequence:       { key: "dunes",    name: "dunes & stone",     low: "sand",    mid: "sand",    high: "stone", peak: "stone", forest: "olive",  canopy: 0.08, accent: "stone" },
+  sequence:       { key: "dunes",    name: "dunes & mesas",     low: "sand",    mid: "sand",    high: "rock",  peak: "rock",  forest: "olive",  canopy: 0.08, accent: "rock" },
   generative:     { key: "volcanic", name: "volcanic reach",    low: "rock",    mid: "rock",    high: "rock",  peak: "lava", forest: "forest", canopy: 0.12, accent: "lava" },
   representation: { key: "ice",      name: "icy highlands",     low: "frost",   mid: "frost",   high: "snow",  peak: "snow", forest: "pine",   canopy: 0.35, accent: "snow" },
   structure:      { key: "crystal",  name: "crystal isle",      low: "stone",   mid: "stone",   high: "stone", peak: "magic", forest: "pine",   canopy: 0.15, accent: "magic" },

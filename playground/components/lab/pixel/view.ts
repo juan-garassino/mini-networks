@@ -7,6 +7,8 @@ import type { CamBox } from "@/components/lab/shared/camera";
 
 // art is 8 px per tile (art/ ART_PER_TILE): 1 art px on screen = tile/8 → integer for 8·n
 export const TILE_STEPS = [4, 8, 16, 24, 32, 40, 48] as const;
+// 3 = the far overview (mobile): a dedicated map rendered at 3 art px per tile
+export type AnyTile = TileStep | 3;
 export type TileStep = (typeof TILE_STEPS)[number];
 
 /** On-screen px per 16px world tile for camera scale k (screen px / world px). */
@@ -20,7 +22,7 @@ export function snapTile(k: number, tolerance = 1.12, max = 48): TileStep {
 export interface Stage { x: number; y: number; w: number; h: number }
 
 export interface Xform {
-  tile: TileStep;
+  tile: AnyTile;
   /** screen px per world px (tile / 16) */
   k: number;
   /** integer screen offsets: screen = world·k + off */
@@ -28,14 +30,18 @@ export interface Xform {
   oy: number;
 }
 
-export function xformFor(box: CamBox, stage: Stage, maxTile = 48): Xform {
+export function xformFor(box: CamBox, stage: Stage, maxTile = 48, opts: { fit?: "cover" | "contain"; tile?: number } = {}): Xform {
   if (![box.x, box.y, box.w, box.h].every(Number.isFinite) || stage.w <= 1 || stage.h <= 1) {
     return { tile: 16, k: 1, ox: 0, oy: 0 };
   }
-  // max of both axes: while the camera re-fits to a new stage aspect (card opening)
-  // the zoom must not drop a whole snap step for one frame
-  const k0 = Math.max(stage.w / Math.max(box.w, 1), stage.h / Math.max(box.h, 1));
-  const tile = snapTile(k0, 1.12, maxTile);
+  // cover (max axis) keeps the zoom stable while the camera re-fits to a new stage
+  // aspect; contain (min axis, no tolerance) guarantees the whole box is on screen
+  const k0 = opts.fit === "contain"
+    ? Math.min(stage.w / Math.max(box.w, 1), stage.h / Math.max(box.h, 1))
+    : Math.max(stage.w / Math.max(box.w, 1), stage.h / Math.max(box.h, 1));
+  // contain allows 5% overflow (the frame's padding absorbs it) so the desktop
+  // overview stays at the detailed 8px-tile layer
+  const tile = (opts.tile ?? snapTile(k0, opts.fit === "contain" ? 1.05 : 1.12, maxTile)) as AnyTile;
   const k = tile / 16;
   const cx = box.x + box.w / 2, cy = box.y + box.h / 2;
   return {

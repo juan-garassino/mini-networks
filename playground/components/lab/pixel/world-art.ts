@@ -161,6 +161,57 @@ export function islandSlots(island: World["hiddenIsland"]): Pt[] {
   return out;
 }
 
+function scale2(src: ArtImage): ArtImage {
+  const out = artBlank(src.w * 2, src.h * 2);
+  for (let y = 0; y < out.h; y++) for (let x = 0; x < out.w; x++) out.data[y * out.w + x] = src.data[(y >> 1) * src.w + (x >> 1)];
+  return out;
+}
+function outlined(src: ArtImage, ink: number): ArtImage {
+  const out = artBlank(src.w + 2, src.h + 2);
+  artBlit(out, src, 1, 1);
+  const d = new Uint8Array(out.data);
+  for (let y = 0; y < out.h; y++) for (let x = 0; x < out.w; x++) {
+    if (d[y * out.w + x] !== CLEAR) continue;
+    const n = [d[(y - 1) * out.w + x], d[(y + 1) * out.w + x], x > 0 ? d[y * out.w + x - 1] : CLEAR, x < out.w - 1 ? d[y * out.w + x + 1] : CLEAR];
+    if (n.some((v) => v !== undefined && v !== CLEAR)) out.data[y * out.w + x] = ink;
+  }
+  return out;
+}
+
+/** The hub atom of each family (most descendants): its capital shows on the far overview. */
+export function familyHubs(world: World): Map<string, WorldNode> {
+  const kids = new Map<string, number>();
+  for (const r of world.roads) kids.set(r.from, (kids.get(r.from) ?? 0) + 1);
+  const hubs = new Map<string, WorldNode>();
+  for (const n of world.nodes) if (n.atom) {
+    const cur = hubs.get(n.family);
+    if (!cur || (kids.get(n.name) ?? 0) > (kids.get(cur.name) ?? 0)) hubs.set(n.family, n);
+  }
+  return hubs;
+}
+
+/**
+ * The far overview (mobile): terrain rendered NATIVELY at 3 art px per tile
+ * (not a downsample) — halo, cliffs, biomes, relief read at 1 CSS px per art
+ * px — plus thin primary roads and one 12×15 micro-castle per family hub.
+ */
+export function buildMiniLayer(world: World, emblems: ArtEmblems | null): { origin: Pt; px: number; canvas: HTMLCanvasElement } {
+  const t = renderTerrain(world, { artPerTile: 3, extent: "all", canopies: true });
+  const img = t.img;
+  const A = (p: P): P => ({ x: (p.x - t.origin.x) / t.px, y: (p.y - t.origin.y) / t.px });
+  for (const { road, pts } of roadPolys(world)) {
+    if (road.kind === "bridge" || !road.primary) continue;
+    walkPoly(pts.map(A), (x, y) => put(img, x, y, RAMPS.wood[1]));
+  }
+  for (const hub of familyHubs(world).values()) {
+    const big = castleSprite(hub.name, emblems?.get(hub.name)?.get(9)).img;
+    const mini = downsample(big, 3, (v) => (v === RAMPS.ui[0] ? 0.7 : 1));
+    const c = A({ x: hub.center.x, y: (hub.foot.y + hub.foot.h) * 16 });
+    artBlit(img, mini, c.x - mini.w / 2, c.y - mini.h + 1);
+  }
+  return { origin: t.origin, px: t.px, canvas: artToCanvas(img) };
+}
+
 // ————————————————————————————— compose —————————————————————————————
 
 export function buildArtLayers(world: World, looks: Map<string, NodeLook>, emblems: ArtEmblems | null): ArtLayers {
@@ -253,8 +304,9 @@ export function buildArtLayers(world: World, looks: Map<string, NodeLook>, emble
   for (const s of islandSlots(world.ruinsIsland)) { const c = A(s); artBlit(img, ru.img, c.x - ru.anchor.x, c.y - ru.anchor.y); }
 
   // compass rose in the emptiest sea (north is up)
-  // compass rose: the first open-sea spot scanning from the world's lower-left corner
-  const cp = props.compass();
+  // compass rose at ×2 (chunky gold N/W/E/S) with an ink outline: the first open-sea
+  // spot scanning from the world's lower-left corner
+  const cp = { img: outlined(scale2(props.compass().img), RAMPS.ui[0]) };
   {
     const wb = world.camera.world;
     const tl = A({ x: wb.x, y: wb.y }), br = A({ x: wb.x + wb.w, y: wb.y + wb.h });
