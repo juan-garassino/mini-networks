@@ -53,6 +53,7 @@ heights are the catalogue's `map` field (`catalog.tsx` is the machine-readable l
 | `CritterArt {pose facing}` · `CritterWalk {still}` · `CRITTER_WALK` | you; poses `idle`, `walk0–3`, `train` (easter egg) | 130 |
 | `FogIsland` · `PaperDragon {silhouette}` · `Ruins` | secrets: "?" island, here be dragons, retired models | 96, 74, 62 |
 | `SignBoard {text family}` | region name | 52 (width follows text) |
+| `AtomLandmark {name, state, size, x, y}` | an atom as its own landmark (16 metaphors, `LANDMARKS[name].metaphor`); plaque = `iconFor(name)` + evidence state (champion star seal · trained glossy · untrained hollow · provisional pencil sketch). Unknown name → `AtomSpot` fallback | 124–236 (transformer, the capital, is the tallest) |
 | `ArtDiorama` | the harmony proof (specimen only; a staging reference) | — |
 
 ## Perf notes

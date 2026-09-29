@@ -9,6 +9,7 @@ import { SET_PIECES, TokenTrain } from "./setpieces";
 import { BIOME, BigTree, Mountains } from "./flora";
 import { CityBlock, HOUSES } from "./buildings";
 import { AtomSpot, CapitalSpot, LevelSpot, type SpotState } from "./spots";
+import { AtomLandmark, LANDMARKS } from "./landmarks";
 import { PaperBoat, PaperTrain, Pier, PlankBridge, RopeBridge, SteamBoat } from "./vehicles";
 import { PaperCloud } from "./sky";
 import { CritterArt, CritterWalk, type CritterPose } from "./critter";
@@ -90,6 +91,21 @@ export const CATALOG: SpecimenGroup[] = [
         draw: (size) => <s.C size={size} />,
       })),
       { id: "token-train", name: "Token train", encodes: "sequence biome prop (cars carry tokens)", W: 130, H: 30, map: 16, draw: (size) => <TokenTrain size={size} /> },
+    ],
+  },
+  {
+    id: "landmarks",
+    title: "Atom landmarks",
+    note: "One distinct landmark per atom: a picture of the mechanism it introduces, with the emblem plaque carrying its evidence state.",
+    items: [
+      ...Object.entries(LANDMARKS).map(([name, d], i): Specimen => ({
+        id: `landmark-${name}`, name: name.replace(/_/g, " "), encodes: d.metaphor, W: d.W, H: d.H, map: name === "transformer" ? 130 : 100,
+        draw: (size) => <AtomLandmark name={name} state={(["trained", "champion", "untrained", "trained"] as SpotState[])[i % 4]} size={size} />,
+      })),
+      ...(["champion", "trained", "untrained", "provisional"] as SpotState[]).map((st): Specimen => ({
+        id: `landmark-state-${st}`, name: `Lens tower, ${st}`, encodes: `evidence state on a landmark: ${st}`, W: 130, H: 172, map: 100,
+        draw: (size) => <AtomLandmark name="classifier" state={st} size={size} />,
+      })),
     ],
   },
   {

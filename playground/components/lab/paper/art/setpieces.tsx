@@ -496,7 +496,7 @@ export const CrystalLattice = memo(function CrystalLattice(p: ArtProps) {
 
 // ── 6 · decision: the dice keep ─────────────────────────────────────────
 const DK = { H: 214 };
-function Die({ cx, cy, s }: { cx: number; cy: number; s: number }) {
+export function Die({ cx, cy, s }: { cx: number; cy: number; s: number }) {
   // iso cube: top rhombus, lit left face, shaded right face; pips mapped per face
   const h = s * 0.5, v = s * 0.66;
   const top = poly(cx, cy - h * 2, cx + s, cy - h, cx, cy, cx - s, cy - h);
