@@ -1,11 +1,11 @@
 // Static SVG layers of the paper map. Each is memoised on world data so the
 // camera tween (which only changes the viewBox) does not re-render them.
-import { memo, type KeyboardEvent } from "react";
-import { roundedD, type World, type WorldNode } from "@/lib/world";
+import { memo, useMemo, type KeyboardEvent } from "react";
+import { roundedD, type Pt, type World, type WorldNode } from "@/lib/world";
 import { displayName, type EvidenceState } from "@/components/lab/shared/card-model";
 import { iconFor } from "@/lib/icons";
 import { familyName, inkOf, PAPER } from "./encoding";
-import { bridgeDeck, extruded, octagon, pts } from "./geometry";
+import { borders, bridgeDeck, extruded, landOutline, lineD, octagon, pickRiver, pts, ribbon, type Border } from "./geometry";
 import { pieceAnchor, PIECE_TOP } from "./set-pieces";
 import styles from "./paper.module.css";
 
@@ -49,20 +49,95 @@ const GROUND: Record<string, string> = {
   sequence: "url(#pa-sand)",           // dunes
 };
 
+/** Borders dressed in paper: one real river, every other shared edge a seam. */
+export function borderDressing(world: World) {
+  const bs = borders(world);
+  const river = pickRiver(bs);
+  const same = (b: Border) => river && ((b.a === river.pair[0] && b.b === river.pair[1]) || (b.a === river.pair[1] && b.b === river.pair[0]));
+  const seams = bs.flatMap((b) => b.lines.filter((l) => !(same(b) && l === river!.line))
+    .map((l) => ({ line: l, kind: (["generative", "structure"].includes(b.a) || ["generative", "structure"].includes(b.b) ? "wall" : "hedge") as "wall" | "hedge" })));
+  // plank bridges exactly where a road crosses the river
+  const crossings: { x: number; y: number; angle: number }[] = [];
+  if (river) {
+    const R = river.line;
+    for (const road of world.roads) {
+      const P = road.lanePoints.length ? road.lanePoints : road.points;
+      for (let i = 1; i < P.length; i++) for (let j = 1; j < R.length; j++) {
+        const hitPt = segHit(P[i - 1], P[i], R[j - 1], R[j]);
+        if (hitPt && !crossings.some((c) => Math.hypot(c.x - hitPt.x, c.y - hitPt.y) < 24))
+          crossings.push({ ...hitPt, angle: Math.atan2(P[i].y - P[i - 1].y, P[i].x - P[i - 1].x) });
+      }
+    }
+  }
+  return { river, seams, crossings };
+}
+
+function segHit(a: Pt, b: Pt, c: Pt, d: Pt): Pt | null {
+  const r = { x: b.x - a.x, y: b.y - a.y }, q = { x: d.x - c.x, y: d.y - c.y };
+  const den = r.x * q.y - r.y * q.x;
+  if (Math.abs(den) < 1e-9) return null;
+  const t = ((c.x - a.x) * q.y - (c.y - a.y) * q.x) / den, u = ((c.x - a.x) * r.y - (c.y - a.y) * r.x) / den;
+  return t >= 0 && t <= 1 && u >= 0 && u <= 1 ? { x: a.x + r.x * t, y: a.y + r.y * t } : null;
+}
+
 export const LandLayer = memo(function LandLayer({ world, outlines, fibre }: {
   world: World; outlines: string[]; fibre: boolean;
 }) {
+  const land = useMemo(() => landOutline(world), [world]);
+  const dress = useMemo(() => borderDressing(world), [world]);
+  const riverD = dress.river ? ribbon(dress.river.line, 22, 62, 30) : null;
   return (
     <g aria-hidden>
-      {/* cast shadow on the sea, card edge, die-cut rim, face, fibre */}
-      {world.regions.map((r) => <path key={`s${r.id}`} d={outlines[r.id]} fill={PAPER.seaDeep} opacity={0.75} transform="translate(7 11)" />)}
-      {/* white foam where land meets sea (two soft bands) */}
-      {world.regions.map((r) => <path key={`fo${r.id}`} d={outlines[r.id]} fill="none" stroke="#FFFFFF" strokeOpacity={0.3} strokeWidth={40} strokeLinejoin="round" />)}
-      {world.regions.map((r) => <path key={`fp${r.id}`} d={outlines[r.id]} fill="none" stroke="#FFFFFF" strokeOpacity={0.5} strokeWidth={22} strokeLinejoin="round" />)}
-      {world.regions.map((r) => <path key={`e${r.id}`} d={outlines[r.id]} fill={inkOf(r.family).edge} stroke={PAPER.die} strokeWidth={7} strokeLinejoin="round" transform="translate(0 6)" />)}
-      {world.regions.map((r) => <path key={`r${r.id}`} d={outlines[r.id]} fill={PAPER.die} stroke={PAPER.die} strokeWidth={7} strokeLinejoin="round" />)}
+      {/* one card for all the land: cast shadow, foam, card edge, die-cut rim */}
+      <path d={land} fill={PAPER.seaDeep} opacity={0.75} transform="translate(7 11)" />
+      <path d={land} fill="none" stroke="#FFFFFF" strokeOpacity={0.3} strokeWidth={40} strokeLinejoin="round" />
+      <path d={land} fill="none" stroke="#FFFFFF" strokeOpacity={0.5} strokeWidth={22} strokeLinejoin="round" />
+      <path d={land} fill="#8C7650" stroke={PAPER.die} strokeWidth={7} strokeLinejoin="round" transform="translate(0 6)" />
+      <path d={land} fill={PAPER.die} stroke={PAPER.die} strokeWidth={7} strokeLinejoin="round" />
+      <path d={land} fill="#6E7B55" />
+      {/* the families, printed side by side */}
       {world.regions.map((r) => <path key={`f${r.id}`} d={outlines[r.id]} fill={GROUND[r.family] ?? inkOf(r.family).face} />)}
-      {fibre && <path d={outlines.join("")} fill="url(#paper-fibre)" />}
+      {fibre && <path d={land} fill="url(#paper-fibre)" />}
+      {/* seams: a stitched hedge or a low stone wall along every other border */}
+      <g fill="none" strokeLinecap="round" strokeLinejoin="round">
+        {dress.seams.map((s, i) => {
+          const d = lineD(s.line);
+          return s.kind === "hedge" ? (
+            <g key={i}>
+              <path d={d} stroke="rgba(20,30,10,0.3)" strokeWidth={15} transform="translate(2 4)" />
+              <path d={d} stroke={PAPER.die} strokeWidth={16} />
+              <path d={d} stroke="#3E7F3A" strokeWidth={12} />
+              <path d={d} stroke="#63A945" strokeWidth={8} strokeDasharray="0.1 9" />
+              <path d={d} stroke="#9ED36A" strokeWidth={3.5} strokeDasharray="0.1 9" transform="translate(-1.5 -2)" />
+            </g>
+          ) : (
+            <g key={i}>
+              <path d={d} stroke="rgba(20,20,30,0.3)" strokeWidth={13} transform="translate(2 4)" />
+              <path d={d} stroke={PAPER.die} strokeWidth={14} />
+              <path d={d} stroke="#8A8F9E" strokeWidth={10} />
+              <path d={d} stroke="#C9CDD6" strokeWidth={10} strokeDasharray="9 3" strokeLinecap="butt" />
+              <path d={d} stroke="#E8EBF0" strokeWidth={2} strokeDasharray="9 3" strokeLinecap="butt" transform="translate(-1 -3)" />
+            </g>
+          );
+        })}
+      </g>
+      {/* the one real river: foam banks, blue cut paper, waves, a light stripe */}
+      {riverD && (
+        <g>
+          <path d={riverD} fill={PAPER.die} stroke={PAPER.die} strokeWidth={10} strokeLinejoin="round" />
+          <path d={riverD} fill="#FFFFFF" opacity={0.6} stroke="#FFFFFF" strokeWidth={16} strokeOpacity={0.35} strokeLinejoin="round" />
+          <path d={riverD} fill="#2E7FE8" />
+          <path d={riverD} fill="url(#paper-waves)" opacity={0.8} />
+          <path d={lineD(dress.river!.line)} fill="none" stroke="#8CC4FF" strokeWidth={3} strokeLinecap="round" strokeDasharray="14 10" transform="translate(-2 -2)" />
+        </g>
+      )}
+      {dress.crossings.map((c, i) => (
+        <g key={`b${i}`} transform={`translate(${c.x.toFixed(1)} ${c.y.toFixed(1)}) rotate(${(c.angle * 180 / Math.PI).toFixed(1)})`}>
+          <rect x={-30} y={-9} width={60} height={18} rx={3} fill={PAPER.shadow} transform="translate(2 4)" />
+          <rect x={-30} y={-9} width={60} height={18} rx={3} fill={PAPER.plank} stroke={PAPER.die} strokeWidth={3} />
+          <path d="M-22 -8v16M-12 -8v16M-2 -8v16M8 -8v16M18 -8v16" stroke={PAPER.plankDark} strokeWidth={1.6} />
+        </g>
+      ))}
     </g>
   );
 });
@@ -122,6 +197,8 @@ export const RoadLayer = memo(function RoadLayer({ world, lineage, only, loud }:
 });
 
 export const BridgeLayer = memo(function BridgeLayer({ world, only }: { world: World; only?: string[] }) {
+  // plank decks belong to the river only (LandLayer); other borders are seams
+  if (!only) return null;
   return (
     <g aria-hidden>
       {world.bridges.filter((b) => !only || only.includes(b.roadId)).map((b) => {

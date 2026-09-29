@@ -64,6 +64,15 @@ export const familyName = (f: string) => FAMILY_COPY[f]?.name ?? f.charAt(0).toU
 export interface Encoding { mark: string; encodes: string; source: string }
 
 export const ENCODING: Encoding[] = [
+  // ── region view = the family's clearing scene (owner reference 2026-09-29) ──
+  { mark: "clearing scene (canopy frame, glowing stage, biome trees)", encodes: "the family you entered; tree kind + palette = its biome (meadow, palms, puff/lava, snowy pines, crystals, acacias)", source: "region family → biomeOf()" },
+  { mark: "little paper character on a disc", encodes: "a derived model; body = family colour, belly emblem = species; disc = evidence (gold+star champion, blue trained, white hollow untrained, pencil provisional)", source: "world.nodes + evidenceState()" },
+  { mark: "mechanism landmark in the clearing", encodes: "an atom (its own landmark)", source: "AtomLandmark(name)" },
+  { mark: "character positions", encodes: "the model's world position, squashed into the clearing (same map for all)", source: "sceneLayout(world, family).map" },
+  { mark: "stepping stones", encodes: "builds-on roads inside the family (dotted stones = the walk back to the atom)", source: "world.roads (both ends in family)" },
+  { mark: "stones leaving through the trees + signpost 'To X'", encodes: "builds-on edges to another family, toward where it lies on the map; click to go there", source: "world.roads (cross-family) + camera.regions" },
+  { mark: "mushroom-tree, twin pines, hollow trunk, ferns, flowers, tufts", encodes: "nothing — clearing dressing in free space only (round-3 brief allows biome dressing)", source: "sceneLayout props" },
+  { mark: "dark vignette", encodes: "nothing — frames the stage", source: "—" },
   // ── round 2/3 marks ──
   { mark: "tilted ground plane (diorama)", encodes: "nothing — a camera: the far edge recedes; positions are the world's, picking unprojects the tilt", source: "diorama.ts (project / unproject)" },
   { mark: "printed ground (grass stripes, dunes)", encodes: "the family's biome: perception, sequence (others: their card-stock colour)", source: "world.regions[].family" },
@@ -86,7 +95,8 @@ export const ENCODING: Encoding[] = [
   { mark: "blue sea with scalloped waves", encodes: "no model lives here (empty space between families)", source: "world.terrain == SEA" },
   { mark: "coloured cardstock island", encodes: "a family of models; its area grows with the family's model count", source: "world.regions[] + world.regionOf" },
   { mark: "island colour", encodes: "which family (perception meadow, sequence tangerine, generative violet, representation teal, structure pink, decision lime)", source: "world.regions[].family → FAMILY_INK" },
-  { mark: "water channel between islands", encodes: "the border between two families that share models", source: "world.terrain == RIVER" },
+  { mark: "one blue river (smooth ribbon, foam banks, widening mouth, planks where roads cross)", encodes: "the longest family border that reaches the sea, preferring Representation's", source: "borders(world) → pickRiver" },
+  { mark: "stitched hedge / low stone wall", encodes: "every other border between two families (wall where Generative or Structure meets a neighbour)", source: "borders(world)" },
   { mark: "island sitting alone in the sea", encodes: "a family with no edges to other families", source: "world.regions[].islet" },
   { mark: "white die-cut rim + offset card edge", encodes: "layer order (sea < land < roads < spots < set-pieces); no data beyond stacking", source: "render order" },
   { mark: "paper-fibre texture on land", encodes: "land (vs sea); same tile everywhere", source: "world.terrain != SEA" },

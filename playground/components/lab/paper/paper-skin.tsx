@@ -30,6 +30,7 @@ import { PaperTags } from "./tags";
 import { CritterTraining, GrokkingNote, Note, RuinNote } from "./eggs";
 import { familyName, inkOf, PAPER } from "./encoding";
 import { ArtDefs, BigTree, CloudShadow } from "./art";
+import { biomeOf, ClearingProps, ClearingStage, ClearingVignette, SCENE_H, sceneLayout, sceneTags, Stones } from "./clearing";
 import styles from "./paper.module.css";
 
 const CARD_W = 430 + 24 + 24;        // desktop booklet width + margins (screen px)
@@ -37,6 +38,26 @@ const SHEET = 0.45;                   // phone bottom sheet height fraction
 const MAX_NODE_SCALE = 1.6;
 const TREE = 250;                     // foreground tree (screen px) at the bottom-right corner           // screen px per world px in the node view
 const DIM = "rgba(24,32,52,0.27)";    // node view: everything off the family tree steps back one value
+
+/** Scene tags: below each member, else above it, else culled; focus first. */
+function placeSceneTags(tags: { name: string; atom: boolean; at: Pt; text: string }[], toS: (p: Pt) => Pt,
+  focus: string | null, vp: { w: number; h: number }, blocks: Box[] = []) {
+  const out: { t: (typeof tags)[number]; p: Pt }[] = [];
+  const boxes: Box[] = [...blocks];
+  const order = [...tags].sort((a, b) => Number(b.name === focus) - Number(a.name === focus) || Number(b.atom) - Number(a.atom));
+  for (const t of order) {
+    const f = t.atom ? 16 : 14, w = 0.56 * f * t.text.length + 18, h = 26;
+    const below = toS(t.at), above = toS({ x: t.at.x, y: t.at.y - (t.atom ? 150 : 84) });
+    for (const p of [below, above]) {
+      const b = { x: p.x - w / 2, y: p.y, w, h };
+      if (b.x < 8 || b.x + w > vp.w - 8 || b.y < 8 || b.y + h > vp.h - 8) continue;
+      if (boxes.some((o) => b.x < o.x + o.w + 3 && o.x < b.x + b.w + 3 && b.y < o.y + o.h + 2 && o.y < b.y + b.h + 2)) continue;
+      boxes.push(b); out.push({ t, p });
+      break;
+    }
+  }
+  return out;
+}
 
 const union = (boxes: Box[]): Box => {
   const x0 = Math.min(...boxes.map((b) => b.x)), y0 = Math.min(...boxes.map((b) => b.y));
@@ -280,8 +301,12 @@ export function PaperSkin() {
   const [drawn, setDrawn] = useState(false);
   useEffect(() => {
     if (!ready || !world || !fibre) return;
-    const id = requestAnimationFrame(() => requestAnimationFrame(() => setDrawn(true)));
-    return () => cancelAnimationFrame(id);
+    // two frames after the data (the map is painted) — with a timer fallback:
+    // headless virtual time can starve rAF while the card mounts
+    let inner = 0;
+    const id = requestAnimationFrame(() => { inner = requestAnimationFrame(() => setDrawn(true)); });
+    const t = setTimeout(() => setDrawn(true), 150);
+    return () => { cancelAnimationFrame(id); cancelAnimationFrame(inner); clearTimeout(t); };
   }, [ready, world, fibre]);
 
   const [comp, setComp] = useState<string | null>(null);
@@ -388,6 +413,33 @@ export function PaperSkin() {
     return () => { delete w.__lab; };
   }, [drawn, select, update, view?.focus, park]);
 
+  // ── the region SCENE (biome clearing) ─────────────────────────────────
+  const [sceneFam, setSceneFam] = useState<string | null>(null);
+  useEffect(() => {
+    if (zoom === "overview") { setSceneFam(null); return; }
+    if (still || arrived) setSceneFam(active);
+  }, [zoom, active, still, arrived]);
+  const sceneOn = zoom !== "overview" && !!active && (sceneFam === active || still);
+  const aspect = vp.w / Math.max(1, vp.h);
+  const lay = useMemo(() => (world && active ? sceneLayout(world, active, aspect) : null), [world, active, aspect]);
+  const sk = vp.h / SCENE_H;                       // scene unit → px
+  const sceneZoom = useMemo(() => {
+    if (!lay || zoom !== "node" || !focus) return { z: 1, tx: 0, ty: 0 };
+    const m = lay.members.find((x) => x.node.name === focus);
+    if (!m) return { z: 1, tx: 0, ty: 0 };
+    const z = desktop ? 1.15 : 1.3;
+    const target = desktop ? { x: (vp.w - CARD_W) / 2, y: vp.h * 0.56 } : { x: vp.w / 2, y: vp.h * 0.3 };
+    // the forest floor extends past the scene, so the focus can always be centred
+    return { z, tx: target.x - m.at.x * sk * z, ty: target.y - m.at.y * sk * z };
+  }, [lay, zoom, focus, desktop, vp.w, vp.h, sk]);
+  const sceneToScreen = useCallback((p: Pt) => ({ x: p.x * sk * sceneZoom.z + sceneZoom.tx, y: p.y * sk * sceneZoom.z + sceneZoom.ty }), [sk, sceneZoom]);
+  const sceneWalk = useMemo(() => (lay && walk ? [...walk.points].reverse().map(lay.map) : []), [lay, walk]);
+  const scenePark = useMemo(() => {
+    const m = lay && focus ? lay.members.find((x) => x.node.name === focus) : undefined;
+    return m ? { x: m.at.x - (m.node.atom ? 74 : 40), y: m.at.y + 6 } : null;
+  }, [lay, focus]);
+  const trailRoads = useMemo(() => new Set(lineage), [lineage]);
+
   const card = useMemo(() => {
     if (zoom !== "node" || !focusNode || !taxonomy) return null;
     return cardModel(focusNode.name, { taxonomy, evidence, runs, family: focusNode.family, depth: focusNode.depth });
@@ -396,7 +448,13 @@ export function PaperSkin() {
   const models = useMemo(() => (world ? world.nodes.map((n) => n.name).sort() : []), [world]);
   const orderedNodes = useMemo(() => (world ? [...world.nodes].sort((a, b) => a.center.y - b.center.y) : []), [world]);
   const spotR = useCallback((n: string) => (world?.nodes.find((x) => x.name === n)?.atom ? SPOT_R.atom : SPOT_R.derived), [world]);
-  const toScreen = (p: Pt) => { const q = place(p); return { x: q.x, y: q.y }; };
+  const toScreen = (p: Pt) => {
+    if (sceneOn && lay) {
+      const m = world?.nodes.find((n) => Math.hypot(n.center.x - p.x, n.center.y - p.y) < 60 && n.family === active);
+      if (m) { const a = lay.members.find((x) => x.node.name === m.name)!.at; return sceneToScreen({ x: a.x, y: a.y - 60 }); }
+    }
+    const q = place(p); return { x: q.x, y: q.y };
+  };
   const zkLazy = useDeferredValue(zk);
   const staticBills = useMemo(() => (world ? worldBills(world, zkLazy, pops, still).bills : []), [world, zkLazy, pops, still]);
   const kinKey = kin?.names.join(",") ?? "";
@@ -457,7 +515,7 @@ export function PaperSkin() {
                 transform: dio.css.transform, transformOrigin: dio.css.transformOrigin,
               }}>
                 <svg viewBox={groundBox} width={dio.ground.w} height={dio.ground.h} className="block" role="application" aria-label="Paper map of the model zoo"
-                  style={{ transform: groundCss, transformOrigin: "0 0", willChange: moving ? "transform" : undefined }}>
+                  style={{ transform: groundCss, transformOrigin: "0 0" }}>
                   <PaperDefs fibre={fibre} />
                   <SeaLayer world={world} />
                   <SecretIslands world={world} />
@@ -501,7 +559,7 @@ export function PaperSkin() {
               </div>
               {/* stand-up props: billboards in screen space, far → near */}
               <svg className="pointer-events-none absolute inset-0 h-full w-full" viewBox={`0 0 ${Math.max(1, cam.size.w)} ${Math.max(1, cam.size.h)}`} aria-hidden
-                style={{ transform: propCss, transformOrigin: "0 0", willChange: moving ? "transform" : undefined }}>
+                style={{ transform: propCss, transformOrigin: "0 0" }}>
                 {/* node view: props off the family tree step back with the ground */}
                 <ArtDefs />
                 <g opacity={kin ? 0.55 : 1}><Billboards bills={bills} place={restPlace} /></g>
@@ -520,13 +578,61 @@ export function PaperSkin() {
           )}
         </div>
 
+        {sceneOn && lay && (
+          <div className={`${styles.scene} absolute inset-0 z-[6] overflow-hidden`} key={lay.family}
+            style={{ animation: still ? "none" : undefined, background: biomeOf(lay.family).floor }}>
+            <div className="absolute left-0 top-0" style={{
+              width: vp.w, height: vp.h, transformOrigin: "0 0",
+              transform: `translate(${sceneZoom.tx}px, ${sceneZoom.ty}px) scale(${sceneZoom.z})`,
+              transition: still ? "none" : "transform 650ms cubic-bezier(0.33, 1, 0.68, 1)",
+            }}>
+              <svg viewBox={`0 0 ${lay.W} ${lay.H}`} width={vp.w} height={vp.h} preserveAspectRatio="xMidYMid slice" role="application" style={{ overflow: "visible" }}
+                aria-label={`${familyName(lay.family)} clearing`}>
+                <ArtDefs />
+                <PaperDefs fibre={fibre} />
+                <ClearingStage lay={lay} />
+                {lay.stones.map((st) => <Stones key={st.road} pts={st.pts} ramp={biomeOf(lay.family).stone} trail={trailRoads.has(st.road)} />)}
+                {lay.exits.map((x) => <Stones key={x.family} pts={x.stones} ramp={biomeOf(lay.family).stone} trail={false} />)}
+                <ClearingProps lay={lay} states={states} focus={focus} dimOthers={zoom === "node"} kin={kin?.names ?? null}
+                  onHover={setHovered} onSelect={select} onExit={toFamily} />
+                {focus && scenePark && (
+                  <g>
+                    <PaperCritter key={`s-${focus}`} path={sceneWalk} still={still} park={scenePark} place={(p) => ({ x: p.x, y: p.y, k: 1.1 })} training={critter.unlocked} />
+                    <circle cx={scenePark.x} cy={scenePark.y - 24} r={26} fill="transparent" style={{ cursor: "pointer" }} onClick={() => critter.click()} />
+                  </g>
+                )}
+                <ClearingVignette lay={lay} />
+              </svg>
+            </div>
+            {/* name tags + keyboard targets for every member */}
+            {placeSceneTags(sceneTags(lay), sceneToScreen, focus, vp, lay.exits.map((x) => {
+              const w = (11.2 * (familyName(x.family).length + 3) + 28) * 1.1, a = sceneToScreen({ x: x.at.x - w / 2, y: x.at.y - 58 }), b = sceneToScreen({ x: x.at.x + w / 2, y: x.at.y });
+              return { x: a.x, y: a.y, w: b.x - a.x, h: b.y - a.y };
+            })).map(({ t, p }) => {
+              const hot = t.name === focus;
+              const f = t.atom ? 16 : 14;
+              const w = 0.56 * f * t.text.length + 18;
+              const muted = zoom === "node" && kin && !kin.names.includes(t.name);
+              return (
+                <button key={t.name} type="button" onClick={() => select(t.name)}
+                  onFocus={() => setHovered(t.name)} onBlur={() => setHovered(null)}
+                  className={`${styles.chip} absolute whitespace-nowrap rounded-md px-2 leading-6 focus-visible:outline-3 focus-visible:outline-[#2B2118]`}
+                  style={{ left: p.x - w / 2, top: p.y, fontSize: f, fontWeight: t.atom ? 600 : 500,
+                    background: hot ? PAPER.ink : PAPER.die, color: hot ? PAPER.die : PAPER.ink, opacity: muted ? 0.6 : 1 }}>
+                  {t.text}
+                </button>
+              );
+            })}
+          </div>
+        )}
+
         {/* a big foreground cutout overlapping the frame edge (depth only, no data) */}
-        {world && desktop && zoom !== "node" && (
+        {world && desktop && zoom === "overview" && (
           <svg aria-hidden className="pointer-events-none absolute bottom-0 right-0 z-[4]" width={TREE} height={TREE} viewBox={`${-TREE / 2} ${-TREE} ${TREE} ${TREE}`}>
             <BigTree x={TREE * 0.22} y={TREE * 0.12} size={TREE} />
           </svg>
         )}
-        {world && (
+        {world && !sceneOn && (
           <PaperTags world={world} place={place} version={restKey} hidden={moving} size={cam.size} focus={focus} kin={kin?.names ?? null}
             counts={stableCounts} obstacles={obstacles} spotR={(n) => spotR(n) * (world.nodes.find((x) => x.name === n)?.atom ? zk.atom : zk.derived)}
             atomsOnly={zoom === "overview"} regionSigns={regionSigns}
@@ -555,10 +661,10 @@ export function PaperSkin() {
         <PaperHud hudRef={hudRef} zoom={zoom} family={active} focus={focus} models={models}
           families={world ? world.regions.map((r) => r.family) : []}
           onWorld={toWorld} onRegion={toRegion} onFamily={toFamily} onFind={select} />
-        {zoom !== "node" && <PaperKey hideOnMobile={false} startOpen={zoom === "overview"} />}
+        {zoom === "overview" && <PaperKey hideOnMobile={false} startOpen={zoom === "overview"} />}
         {card && arrived && (
           <PaperCard card={card} still={still} onPick={select} onClose={toRegion}
-            runs={runs} evidence={evidence} comp={comp} onComp={setComp} />
+            runs={runs} evidence={evidence} comp={comp} onComp={setComp} ready={drawn} />
         )}
         {!world && (
           <p className={`${styles.card} absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 rounded-xl px-4 py-3 text-[15px]`}>

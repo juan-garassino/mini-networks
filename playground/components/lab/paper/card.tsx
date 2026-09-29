@@ -14,6 +14,7 @@ import type { ModelEvidence, RunSummary } from "@/lib/types";
 import { useLesson } from "@/hooks/use-lesson";
 import { displayName, EVIDENCE_COPY, type CardModel } from "@/components/lab/shared/card-model";
 import { Anatomy } from "@/components/lab/shared/lesson/anatomy";
+import { MechanismDiagram, hasDiagram } from "@/components/lab/shared/anatomy2";
 import { Sparkline } from "@/components/lab/shared/lesson/sparkline";
 import { TRY_COPY, tryAvailable, useTryIt } from "@/components/lab/shared/lesson/try-it";
 import { DOUBLE_DESCENT_EGG } from "@/components/lab/shared/eggs";
@@ -96,11 +97,13 @@ function TryIt({ name, evidence }: { name: string; evidence: ModelEvidence[] }) 
   );
 }
 
-export const PaperCard = memo(function PaperCard({ card, still, onPick, onClose, runs = [], evidence = [], comp = null, onComp }: {
+export const PaperCard = memo(function PaperCard({ card, still, onPick, onClose, runs = [], evidence = [], comp = null, onComp, ready = true }: {
   card: CardModel; still: boolean; onPick: (n: string) => void; onClose: () => void;
   runs?: RunSummary[]; evidence?: ModelEvidence[];
   /** the composition whose boat is sailing, and a setter (null = none) */
   comp?: string | null; onComp?: (name: string | null) => void;
+  /** the page has reported ready (heavy extras mount after) */
+  ready?: boolean;
 }) {
   const ink = inkOf(card.family);
   const lesson = useLesson(card.name, { runs, evidence, still });
@@ -113,6 +116,15 @@ export const PaperCard = memo(function PaperCard({ card, still, onPick, onClose,
   // the anatomy plays its forward pass for a few cycles when the page opens,
   // then rests (no idle motion)
   const [anim, setAnim] = useState(!still);
+  // the mechanism diagram mounts a beat after the card (it is heavy; the map
+  // must paint and report ready first)
+  const [diagramOn, setDiagramOn] = useState(false);
+  useEffect(() => {
+    setDiagramOn(false);
+    if (!ready) return;
+    const id = setTimeout(() => setDiagramOn(true), 60);
+    return () => clearTimeout(id);
+  }, [card.name, ready]);
   useEffect(() => {
     if (still) { setAnim(false); return; }
     setAnim(true);
@@ -157,9 +169,13 @@ export const PaperCard = memo(function PaperCard({ card, still, onPick, onClose,
       {/* 2 · how */}
       <Section title="How it works">
         <div className="rounded-lg bg-[#F6EFDF] px-2 py-1">
-          <Anatomy stages={schematicFor(card.name)} animate={anim} size={370} labelPx={13}
-            title={`${displayName(card.name)}, one forward pass`}
-            palette={{ node: PAPER.ink, edge: "#8A7B6A", active: PAPER.face, text: PAPER.inkSoft, accent: PAPER.faceDeep, fill: PAPER.die }} />
+          {diagramOn && hasDiagram(card.name) ? (
+            <MechanismDiagram name={card.name} theme="paper" variant="card" still={still} width={360} />
+          ) : (
+            <Anatomy stages={schematicFor(card.name)} animate={anim} size={370} labelPx={13}
+              title={`${displayName(card.name)}, one forward pass`}
+              palette={{ node: PAPER.ink, edge: "#8A7B6A", active: PAPER.face, text: PAPER.inkSoft, accent: PAPER.faceDeep, fill: PAPER.die }} />
+          )}
         </div>
         {lesson.lesson && (
           <p className="mt-2 max-w-[60ch] text-[16px] leading-[1.55]"><b>The idea:</b> {lesson.lesson.idea}</p>
