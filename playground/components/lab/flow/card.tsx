@@ -14,6 +14,7 @@ import type { ModelEvidence } from "@/lib/types";
 import type { LessonData } from "@/hooks/use-lesson";
 import { displayName, EVIDENCE_COPY, type CardModel } from "@/components/lab/shared/card-model";
 import { Anatomy } from "@/components/lab/shared/lesson/anatomy";
+import { MechanismDiagram, hasDiagram } from "@/components/lab/shared/anatomy2";
 import { Sparkline } from "@/components/lab/shared/lesson/sparkline";
 import { TRY_COPY, tryAvailable, useTryIt } from "@/components/lab/shared/lesson/try-it";
 import { ACCENT, fam, INK, INK_SOFT } from "./palette";
@@ -183,9 +184,13 @@ export function FlowCard({ c, lesson, mobile, still, evidence, familyOf, onPick,
 
       {full && (<>
       <Section title="One forward pass">
-        <Anatomy className={s.anatomy} stages={schematicFor(c.name)} animate={!still} size={mobile ? 330 : 380} labelPx={13}
-          palette={{ node: INK, edge: "#5E4F80", active: ACCENT, text: INK, accent: f.deep, fill: "#fff" }}
-          title={`${displayName(c.name)} — one forward pass`} />
+        {hasDiagram(c.name) ? (
+          <MechanismDiagram className={s.anatomy} name={c.name} theme="paper" variant="card" still={still} width={mobile ? 330 : 380} />
+        ) : (
+          <Anatomy className={s.anatomy} stages={schematicFor(c.name)} animate={!still} size={mobile ? 330 : 380} labelPx={13}
+            palette={{ node: INK, edge: "#5E4F80", active: ACCENT, text: INK, accent: f.deep, fill: "#fff" }}
+            title={`${displayName(c.name)} — one forward pass`} />
+        )}
         {c.introduces.map((m) => (
           <p key={m.key} className="mt-1 text-[15px] leading-snug"><b>Adds {words(m.key)}</b>: {m.description}</p>
         ))}

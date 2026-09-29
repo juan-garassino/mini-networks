@@ -9,6 +9,7 @@ import { memo, useEffect, useState } from "react";
 import type { CardModel } from "@/components/lab/shared/card-model";
 import { displayName, EVIDENCE_COPY } from "@/components/lab/shared/card-model";
 import { Anatomy } from "@/components/lab/shared/lesson/anatomy";
+import { MechanismDiagram, hasDiagram } from "@/components/lab/shared/anatomy2";
 import { Sparkline } from "@/components/lab/shared/lesson/sparkline";
 import { TRY_COPY, tryAvailable, useTryIt } from "@/components/lab/shared/lesson/try-it";
 import { DOUBLE_DESCENT_EGG } from "@/components/lab/shared/eggs";
@@ -196,9 +197,13 @@ export const LessonCard = memo(function LessonCard({
         <section>
           <h3 className={s.h3}>How it thinks</h3>
           <div className={s.plate} style={{ fontFamily: "var(--font-hybrid-round), system-ui" }} onPointerEnter={() => setPlaying(true)} onPointerLeave={() => setPlaying(false)}>
-            <Anatomy stages={schematicFor(card.name)} animate={!still && playing} size={mobile ? 320 : 324} labelPx={14}
-              palette={{ node: UI.text, edge: UI.dim, active: UI.gold, text: UI.text, accent: UI.cyan, fill: UI.panel }}
-              title={`${displayName(card.name)} — one forward pass`} />
+            {hasDiagram(card.name) ? (
+              <MechanismDiagram name={card.name} theme="pixel" variant="card" still={still} width={mobile ? 320 : 324} />
+            ) : (
+              <Anatomy stages={schematicFor(card.name)} animate={!still && playing} size={mobile ? 320 : 324} labelPx={14}
+                palette={{ node: UI.text, edge: UI.dim, active: UI.gold, text: UI.text, accent: UI.cyan, fill: UI.panel }}
+                title={`${displayName(card.name)} — one forward pass`} />
+            )}
           </div>
           {L?.idea && <p className={`${s.t16} ${s.measure} mt-2`}><span className={s.gold}>The idea:</span> {L.idea}</p>}
         </section>
