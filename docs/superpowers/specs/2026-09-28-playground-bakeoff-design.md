@@ -366,3 +366,15 @@ poor use of the screen, arbitrary/crowded paths inside, families don't feel like
 - **Update:** the owner chose the silhouette — the C-shaped parchment continent (bay open to
   the east, north-east arm with an islet tail, southern desert lobe). **Structure = underwater**:
   a sunken reef city inside the bay (gnn → coral reef network, nerf → glass light temple).
+
+## Round 5 (2026-09-29) — redraw the owner's reference map from scratch
+Owner found "the perfect reference" (a rich 3/4-view pixel diorama of the zoo) + a palette
+reference (less saturated). Decision: HAND-REDRAW it in our pixel system (never ship the
+image; local copies live gitignored in playground/.lab-shots/refs/), ADAPT labels/data to the
+real taxonomy. Supersedes Round 4's biome assignment. Geography per the reference:
+Representation snowy peaks (top-centre), Perception the west (forest, treehouse, windmill,
+medieval towns, lighthouse islets, a wild-west plateau in the south-west), Sequence the
+centre + north-east (blue-domed cathedral, ancient ruins, a desert stilt town), Generative
+the southern lava forge, Decision the east (green village + an underwater domed city in the
+south-east bay), Structure a floating cyberpunk island top-right. lib/world v3 reproduces
+this geography; the pixel illustrator redraws its set-pieces in the palette reference.
