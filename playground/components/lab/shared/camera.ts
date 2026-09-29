@@ -23,16 +23,22 @@ export function fitBox(target: CamBox, vw: number, vh: number): CamBox {
   return { x: target.x + target.w / 2 - w / 2, y: target.y + target.h / 2 - h / 2, w, h };
 }
 
-export function useCamera({ world, target, still, minWidth = 240 }: {
+export function useCamera({ world, target, still, minWidth = 240, targetViewport }: {
   world: CamBox;
   target: CamBox;
   still: boolean;
   minWidth?: number;
+  /** The viewport size the skin computed `target` for. Skins that size their
+   * target from the measured viewport pass it: until it matches the camera's
+   * own measurement the camera jumps instead of flying, so the first real
+   * framing never starts from a placeholder box. */
+  targetViewport?: { w: number; h: number };
 }) {
   const ref = useRef<HTMLDivElement | null>(null);
   const [size, setSize] = useState({ w: 1, h: 1 });
   const [box, setBox] = useState<CamBox>(target);
   const boxRef = useRef(box);
+  const framed = useRef(false);
   useEffect(() => { boxRef.current = box; }, [box]);
 
   useEffect(() => {
@@ -45,12 +51,19 @@ export function useCamera({ world, target, still, minWidth = 240 }: {
 
   // Fly to the (aspect-fitted) target whenever it or the viewport changes.
   const tx = target.x, ty = target.y, tw = target.w, th = target.h;
+  const ready = !targetViewport || (targetViewport.w === size.w && targetViewport.h === size.h);
   useEffect(() => {
     const to = fitBox({ x: tx, y: ty, w: tw, h: th }, size.w, size.h);
     const from = boxRef.current;
-    // Jump (no flight) under still=1, before the viewport is measured, or when
-    // the previous box is only the pre-data placeholder.
-    if (still || size.w <= 1 || from.w <= 1 || from.h <= 1) { setBox(to); return; }
+    const firstFrame = !framed.current;
+    // Jump (no flight) under still=1, before the viewport is measured, on the
+    // first real framing (the previous box was computed for an unmeasured
+    // viewport — flying from it starts hugely zoomed in), or from a placeholder.
+    if (still || size.w <= 1 || !ready || firstFrame || from.w <= 1 || from.h <= 1) {
+      if (size.w > 1 && ready) framed.current = true;
+      setBox(to);
+      return;
+    }
     // Progress advances by at most MAX_STEP per frame: when a skin blocks the
     // main thread (e.g. mounting the card), the flight is delayed rather than
     // skipped — wall-clock progress turned every fly-to into a cut.
@@ -69,7 +82,7 @@ export function useCamera({ world, target, still, minWidth = 240 }: {
     };
     raf = requestAnimationFrame(step);
     return () => cancelAnimationFrame(raf);
-  }, [tx, ty, tw, th, size.w, size.h, still]);
+  }, [tx, ty, tw, th, size.w, size.h, still, ready]);
 
   // Capture only once the press becomes a drag (>4px): capturing on press
   // retargets pointerup to the container and swallows clicks on map children.

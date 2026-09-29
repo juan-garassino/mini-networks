@@ -18,7 +18,8 @@ import { LabMotion } from "@/components/lab/shared/still";
 import { useCamera, type CamBox } from "@/components/lab/shared/camera";
 import { cardModel, displayName, evidenceState, type EvidenceState } from "@/components/lab/shared/card-model";
 import { CRITTER } from "@/components/lab/shared/critter";
-import { IMAGE, landBox, resolveMap, type Box, type MapId, type Pt } from "./anchors";
+import { IMAGE, landBox, resolveMap, type Box, type Family, type MapId, type Pt } from "./anchors";
+import { NavPad } from "./nav";
 import { buildRoadGraph, chainRoute, lineageRoutes, pointAt, polylineLength, rootChain } from "./roads";
 import { placeTags, textWidth, type PlacedTag, type TagSpec } from "./labels";
 import { PaintedOverlay } from "./overlay";
@@ -27,7 +28,9 @@ import { Controls, Search, type Labels, type Render } from "./hud";
 import { FAMILY_TITLE, IMAGES, THEMES } from "./theme";
 
 const W = IMAGE.w, H = IMAGE.h;
-const PIXEL_SCALES = [1, 2, 3];
+// The grid image is built from 4px blocks, so any scale where 4·k is a whole
+// number keeps every block crisp: quarter steps below 1×, then 1.5×, 2×, 3×.
+const PIXEL_SCALES = [0.25, 0.5, 0.75, 1, 1.25, 1.5, 2, 2.5, 3];
 const PAPER_MAX = 2;
 const CARD_W = 380; // desktop card width incl. margin (screen px)
 
@@ -152,15 +155,17 @@ export function PaintedSkin() {
   // ——— camera
   const [vp, setVp] = useState({ w: 1, h: 1 });
   const [manual, setManual] = useState<CamBox | null>(null);
-  const cover = Math.max(vp.w / W, vp.h / H);
+  // Overview shows the WHOLE map (contain-fit); zooming in goes up from there.
+  const fit = Math.min(vp.w / W, vp.h / H);
   const levels = useMemo(() => {
     if (mapId === "pixel") {
-      const base = PIXEL_SCALES.find((s) => s >= cover - 1e-3) ?? 3;
-      // node rests at 2× (context around the model); the wheel reaches the 3× cap
-      return { overview: base, region: Math.min(base + 1, 3), node: Math.min(base + 1, 3), min: base, max: 3 };
+      const snap = (k: number) => [...PIXEL_SCALES].reverse().find((s) => s <= k + 1e-3) ?? PIXEL_SCALES[0];
+      const up = (k: number) => PIXEL_SCALES.find((s) => s >= k - 1e-3) ?? 3;
+      const base = snap(fit);
+      return { overview: base, region: up(base * 1.8), node: up(Math.max(base * 2.2, 1)), min: PIXEL_SCALES[0], max: 3 };
     }
-    return { overview: cover, region: Math.min(PAPER_MAX, cover * 1.6), node: Math.min(PAPER_MAX, Math.max(cover * 2.1, 1.5)), min: cover, max: PAPER_MAX };
-  }, [mapId, cover]);
+    return { overview: fit, region: Math.min(PAPER_MAX, fit * 1.8), node: Math.min(PAPER_MAX, Math.max(fit * 2.2, 1.2)), min: fit * 0.8, max: PAPER_MAX };
+  }, [mapId, fit]);
 
   const target: CamBox = useMemo(() => {
     const zoom = view?.zoom ?? "overview";
@@ -182,7 +187,7 @@ export function PaintedSkin() {
 
   useEffect(() => { setManual(null); }, [view?.zoom, view?.focus, mapId, vp.w, vp.h]);
 
-  const cam = useCamera({ world: { x: 0, y: 0, w: W, h: H }, target: manual ?? target, still });
+  const cam = useCamera({ world: { x: 0, y: 0, w: W, h: H }, target: manual ?? target, still, targetViewport: vp });
   useEffect(() => {
     if (cam.size.w !== vp.w || cam.size.h !== vp.h) setVp({ w: cam.size.w, h: cam.size.h });
   }, [cam.size.w, cam.size.h, vp.w, vp.h]);
@@ -191,8 +196,7 @@ export function PaintedSkin() {
   const onWheel = useCallback((e: React.WheelEvent) => {
     const rect = (e.currentTarget as Element).getBoundingClientRect();
     const fx = (e.clientX - rect.left) / rect.width, fy = (e.clientY - rect.top) / rect.height;
-    const b = cam.box;
-    const cur = vp.w / b.w;
+    const cur = vp.w / cam.box.w;
     let k: number;
     if (mapId === "pixel") {
       wheelAcc.current += e.deltaY;
@@ -204,11 +208,44 @@ export function PaintedSkin() {
     } else {
       k = clamp(cur * Math.exp(-e.deltaY * 0.0015), levels.min, levels.max);
     }
-    if (Math.abs(k - cur) < 1e-3) return;
+    zoomTo(k, fx, fy);
+  }, [cam.box, vp.w, mapId, levels]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Zoom about a screen fraction (fx, fy); keeps the map centred when it's smaller than the view.
+  const zoomTo = (k: number, fx = 0.5, fy = 0.5) => {
+    const b = cam.box;
+    if (Math.abs(k - vp.w / b.w) < 1e-3) return;
     const px = b.x + fx * b.w, py = b.y + fy * b.h;
     const w = vp.w / k, h = vp.h / k;
-    setManual({ x: clamp(px - fx * w, 0, Math.max(0, W - w)), y: clamp(py - fy * h, 0, Math.max(0, H - h)), w, h });
-  }, [cam.box, vp.w, mapId, levels]);
+    setManual({
+      x: w >= W ? (W - w) / 2 : clamp(px - fx * w, 0, W - w),
+      y: h >= H ? (H - h) / 2 : clamp(py - fy * h, 0, H - h), w, h,
+    });
+  };
+  const stepZoom = (dir: 1 | -1) => {
+    const cur = vp.w / cam.box.w;
+    if (mapId === "pixel") {
+      const next = dir > 0 ? PIXEL_SCALES.find((s) => s > cur + 1e-3) : [...PIXEL_SCALES].reverse().find((s) => s < cur - 1e-3);
+      if (next !== undefined) zoomTo(clamp(next, levels.min, levels.max));
+    } else zoomTo(clamp(cur * (dir > 0 ? 1.4 : 1 / 1.4), levels.min, levels.max));
+  };
+  const panBy = (dx: number, dy: number) => {
+    const b = cam.box;
+    setManual({
+      ...b,
+      x: b.w >= W ? b.x : clamp(b.x + dx * b.w, 0, W - b.w),
+      y: b.h >= H ? b.y : clamp(b.y + dy * b.h, 0, H - b.h),
+    });
+  };
+  const centerAt = (x: number, y: number) => {
+    const b = cam.box;
+    setManual({ ...b, x: b.w >= W ? b.x : clamp(x - b.w / 2, 0, W - b.w), y: b.h >= H ? b.y : clamp(y - b.h / 2, 0, H - b.h) });
+  };
+  const fitWhole = () => { setManual(null); update({ zoom: "overview", focus: null }); };
+  const jumpLand = (f: Family) => {
+    const first = names.find((n) => family?.[n] === f && map.anchors[n]);
+    if (first) update({ zoom: "region", focus: first });
+  };
 
   // live scale; the pixel map snaps to its integer level once the flight lands
   let S = cam.scale > 0 && Number.isFinite(cam.scale) ? cam.scale : 1;
@@ -323,6 +360,15 @@ export function PaintedSkin() {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape" && view?.zoom === "node") update({ zoom: "region" });
+      const tag = (e.target as HTMLElement | null)?.tagName;
+      if (tag === "INPUT" || tag === "TEXTAREA") return;
+      if (e.key === "+" || e.key === "=") stepZoom(1);
+      else if (e.key === "-" || e.key === "_") stepZoom(-1);
+      else if (e.key === "0") fitWhole();
+      else if (e.key === "ArrowLeft") panBy(-0.2, 0);
+      else if (e.key === "ArrowRight") panBy(0.2, 0);
+      else if (e.key === "ArrowUp") panBy(0, -0.2);
+      else if (e.key === "ArrowDown") panBy(0, 0.2);
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
@@ -377,6 +423,11 @@ export function PaintedSkin() {
           </div>
         </div>
         <Search theme={theme} names={names} onPick={onSelect} />
+        {!still && (
+          <NavPad theme={theme} imgSrc={imgSrc} pixelated={mapId === "pixel"} box={cam.box}
+            canIn={vp.w / cam.box.w < levels.max - 1e-3} canOut={vp.w / cam.box.w > levels.min + 1e-3}
+            onZoom={stepZoom} onFit={fitWhole} onLand={jumpLand} onCenter={centerAt} />
+        )}
         {opts && <Controls theme={theme} map={mapId} render={render} labels={labels} set={set} online={online} />}
         {card && <PaintedCard card={card} theme={theme} still={still} onPick={onSelect} onClose={() => update({ zoom: "region" })} />}
       </div>
