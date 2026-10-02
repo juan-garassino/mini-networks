@@ -7,6 +7,7 @@
 import { memo, useEffect, useMemo, useRef } from "react";
 import type { PixelMap } from "./pixelmap";
 import { extractSprites, placeFurniture, type Placed, type SeaSprite } from "./sea-furniture";
+import { RING, SEA_VEIL } from "./true-map";
 
 export const SEA_PAD_X = 1100;
 export const SEA_PAD_Y = 800;
@@ -34,10 +35,12 @@ function spriteCanvas(pm: PixelMap, s: SeaSprite): HTMLCanvasElement {
   return cv;
 }
 
-export const SeaCanvas = memo(function SeaCanvas({ pm, furniture, scale, ox, oy, vw, vh, dpr, mapW, mapH }: {
+export const SeaCanvas = memo(function SeaCanvas({ pm, furniture, scale, ox, oy, vw, vh, dpr, mapW, mapH, ghost }: {
   pm: PixelMap;
   furniture: { sprites: SeaSprite[]; placed: Placed[] };
   scale: number; ox: number; oy: number; vw: number; vh: number; dpr: number; mapW: number; mapH: number;
+  /** a land is focused: veil everything outside the focus canvas's ring */
+  ghost: boolean;
 }) {
   const ref = useRef<HTMLCanvasElement | null>(null);
   const cache = useRef<HTMLCanvasElement[] | null>(null);
@@ -64,6 +67,16 @@ export const SeaCanvas = memo(function SeaCanvas({ pm, furniture, scale, ox, oy,
       if (p.flip) { ctx.save(); ctx.translate(x + w, y); ctx.scale(-1, 1); ctx.drawImage(src, 0, 0, w, h); ctx.restore(); }
       else ctx.drawImage(src, x, y, w, h);
     }
-  }, [pm, furniture, scale, ox, oy, vw, vh, dpr, mapW, mapH]);
+    if (ghost) {
+      // the ring is the focus canvas's job; everything beyond it is full ghost
+      const rx = Math.round((ox - RING * scale) * dpr), ry = Math.round((oy - RING * scale) * dpr);
+      const rw = Math.round((mapW + 2 * RING) * k), rh = Math.round((mapH + 2 * RING) * k);
+      ctx.fillStyle = `rgba(${SEA_VEIL[0]}, ${SEA_VEIL[1]}, ${SEA_VEIL[2]}, 0.8)`;
+      ctx.beginPath();
+      ctx.rect(0, 0, W, H);
+      ctx.rect(rx, ry, rw, rh);
+      ctx.fill("evenodd");
+    }
+  }, [pm, furniture, scale, ox, oy, vw, vh, dpr, mapW, mapH, ghost]);
   return <canvas ref={ref} aria-hidden className="pointer-events-none absolute inset-0 block" style={{ width: vw, height: vh, imageRendering: "pixelated" }} />;
 });

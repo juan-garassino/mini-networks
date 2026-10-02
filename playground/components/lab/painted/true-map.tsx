@@ -148,6 +148,15 @@ function useCanvasPaint(ref: React.RefObject<HTMLCanvasElement | null>, raster: 
 
 const BAND = 32;   // art px: the dithered falloff just outside the land
 const FAR = 120;   // art px: the ghost reaches full strength this far out
+/** The focus canvas reaches this far past the map's edge (≥ FAR): the parchment
+ * sea beyond the image is veiled by the same field, so no rectangle shows.
+ * Outside the ring the sea is at full ghost — SEA_GHOST, the stage's colour. */
+export const RING = 128;
+/** ghostRGB(parchment, 1): what the sea becomes far from the focused land */
+export const SEA_GHOST = "#e0d0a3";
+/** The veil over the extended sea: the parchment's duotone target, applied at
+ * alpha 0.8·a — exactly ghostRGB(parchment, a), so it joins the map's own sea. */
+export const SEA_VEIL: [number, number, number] = [220, 204, 160];
 
 /** Chamfer distance (1, √2) from land f's pixels, minus a 3-px dilation so
  * the coast foam and cliff faces belong to the land. 0 inside. */
@@ -198,11 +207,17 @@ function compositeFocus(
 ) {
   const L = levels.length - 1;
   const ox = origin?.x ?? w / 2, oy = origin?.y ?? h / 2;
-  for (let y = 0; y < h; y++) {
+  const BW = w + 2 * RING;
+  const [vr, vg, vb] = SEA_VEIL;
+  for (let Y = 0; Y < h + 2 * RING; Y++) {
+    const y = Y - RING;
     const dy2 = (y - oy) * (y - oy);
-    for (let x = 0; x < w; x++) {
-      const p = y * w + x;
-      const b = BAYER4[(y & 3) * 4 + (x & 3)];
+    const inY = y >= 0 && y < h;
+    const cy = inY ? y : y < 0 ? 0 : h - 1;
+    for (let X = 0; X < BW; X++) {
+      const x = X - RING;
+      const inside = inY && x >= 0 && x < w;
+      const b = BAYER4[(Y & 3) * 4 + (X & 3)];
       // which field this pixel shows: dithered wavefront between old and new
       let useNew = true;
       if (front !== Infinity) {
@@ -210,11 +225,21 @@ function compositeFocus(
         useNew = (front - dA) / 10 + b > 1;
       }
       const f = useNew ? to : from;
-      const dist = f.field ? f.field[p] : 0;
-      const lvl = Math.max(0, Math.min(L, Math.floor(ghostAt(dist) * L * f.strength + b)));
-      const src = levels[lvl];
-      const q = p * 4;
-      out[q] = src[q]; out[q + 1] = src[q + 1]; out[q + 2] = src[q + 2]; out[q + 3] = 255;
+      const q = (Y * BW + X) * 4;
+      if (inside) {
+        const p = y * w + x;
+        const dist = f.field ? f.field[p] : 0;
+        const lvl = Math.max(0, Math.min(L, Math.floor(ghostAt(dist) * L * f.strength + b)));
+        const src = levels[lvl];
+        const s = p * 4;
+        out[q] = src[s]; out[q + 1] = src[s + 1]; out[q + 2] = src[s + 2]; out[q + 3] = 255;
+      } else {
+        // beyond the edge: the field continues from the nearest map pixel
+        const cx = x < 0 ? 0 : x >= w ? w - 1 : x;
+        const dist = f.field ? f.field[cy * w + cx] + Math.hypot(x - cx, y - cy) : 0;
+        const lvl = Math.max(0, Math.min(L, Math.floor(ghostAt(dist) * L * f.strength + b)));
+        out[q] = vr; out[q + 1] = vg; out[q + 2] = vb; out[q + 3] = Math.round((255 * 0.8 * lvl) / L);
+      }
     }
   }
 }
@@ -317,7 +342,7 @@ export const TrueMapLayers = memo(function TrueMapLayers(p: TrueMapProps) {
     const ctx = cv?.getContext("2d");
     if (!cv || !ctx) return;
     const from = shown.current, to = { field: fieldFor(p.focusFam), strength: p.focusStrength };
-    const img = new ImageData(W, H);
+    const img = new ImageData(W + 2 * RING, H + 2 * RING);
     const paint = (front: number) => {
       compositeFocus(img.data, ghosts, from, to, front, origin, W, H);
       ctx.putImageData(img, 0, 0);
@@ -398,7 +423,8 @@ export const TrueMapLayers = memo(function TrueMapLayers(p: TrueMapProps) {
   return (
     <>
       <canvas ref={baseRef} width={W} height={H} style={px} aria-hidden />
-      <canvas ref={focusRef} width={W} height={H} aria-hidden style={{ ...px, visibility: focusOn ? "visible" : "hidden" }} />
+      <canvas ref={focusRef} width={W + 2 * RING} height={H + 2 * RING} aria-hidden
+        style={{ ...px, inset: "auto", left: `${(-RING / W) * 100}%`, top: `${(-RING / H) * 100}%`, width: `${((W + 2 * RING) / W) * 100}%`, height: `${((H + 2 * RING) / H) * 100}%`, visibility: focusOn ? "visible" : "hidden" }} />
       <canvas ref={fxRef} width={W} height={H} style={px} aria-hidden />
       <canvas ref={labelRef} width={W} height={H} style={px} aria-hidden />
       <svg viewBox={`0 0 ${W} ${H}`} className="absolute inset-0 block h-full w-full" role="group" aria-label="The models on the map">

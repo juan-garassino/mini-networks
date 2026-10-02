@@ -63,7 +63,7 @@ const KEYFRAMES = `
 const stamp = (i: number, still: boolean): CSSProperties =>
   still ? {} : { animation: `painted-stamp 160ms steps(2, end) both`, animationDelay: `${120 + i * 90}ms` };
 
-interface Opts { map: MapId; render: Render; labels: Labels; dev: boolean }
+interface Opts { map: MapId; render: Render; labels: Labels; dev: boolean; ui: boolean }
 
 function parseOpts(search: string): Opts {
   const p = new URLSearchParams(search);
@@ -72,7 +72,7 @@ function parseOpts(search: string): Opts {
   const render: Render = r === "clean" || r === "grid" || r === "baked" ? r : "true";
   const l = p.get("labels");
   const labels: Labels = l === "ours" || l === "baked" ? l : map === "pixel" && render === "baked" ? "baked" : "ours";
-  return { map, render, labels, dev: p.get("dev") === "1" };
+  return { map, render, labels, dev: p.get("dev") === "1", ui: p.get("ui") !== "0" };
 }
 
 function useOpts() {
@@ -162,6 +162,9 @@ export function PaintedSkin() {
   const mobile = winW < MOBILE_BP;
   const [sheet, setSheet] = useState<Sheet>("peek");
   const [devOpen, setDevOpen] = useState(false);
+  // "map only": every plate and the drawer hide (key h, or ?ui=0) to look at the map alone
+  const [uiHidden, setUiHidden] = useState(false);
+  useEffect(() => { if (opts) setUiHidden(!opts.ui); }, [opts]);
   const [fullDiagram, setFullDiagram] = useState(false);
   const furniture = useSeaFurniture(td?.pm ?? null, td?.sea ?? null, td?.lands ?? null);
 
@@ -300,7 +303,8 @@ export function PaintedSkin() {
 
   useEffect(() => { setManual(null); }, [view?.zoom, view?.focus, mapId, render, vp.w, vp.h, drawerPx]);
 
-  const cam = useCamera({ world: { x: 0, y: 0, w: W, h: H }, target: manual ?? target, still, targetViewport: vp, minWidth: 40 });
+  const camClamp = useMemo(() => ({ right: drawerPx, bottom: sheetPx }), [drawerPx, sheetPx]);
+  const cam = useCamera({ world: { x: 0, y: 0, w: W, h: H }, target: manual ?? target, still, targetViewport: vp, minWidth: 40, clamp: camClamp });
   useEffect(() => {
     if (cam.size.w !== vp.w || cam.size.h !== vp.h) setVp({ w: cam.size.w, h: cam.size.h });
   }, [cam.size.w, cam.size.h, vp.w, vp.h]);
@@ -526,7 +530,8 @@ export function PaintedSkin() {
       if (e.key === "Escape") { if (fullDiagram) setFullDiagram(false); else if (view?.zoom === "node") update({ zoom: "region" }); }
       const tag = (e.target as HTMLElement | null)?.tagName;
       if (tag === "INPUT" || tag === "TEXTAREA") return;
-      if (e.key === "+" || e.key === "=") stepZoom(1);
+      if (e.key === "h" || e.key === "H") setUiHidden((v) => !v);
+      else if (e.key === "+" || e.key === "=") stepZoom(1);
       else if (e.key === "-" || e.key === "_") stepZoom(-1);
       else if (e.key === "0") fitWhole();
       else if (e.key === "ArrowLeft") panBy(-0.2, 0);
@@ -588,7 +593,7 @@ export function PaintedSkin() {
         <div ref={cam.ref} {...cam.handlers} onWheel={onWheel}
           className="absolute inset-0 touch-none cursor-grab active:cursor-grabbing">
           {isTrue && td && furniture && (
-            <SeaCanvas pm={td.pm} furniture={furniture} scale={S} ox={ox} oy={oy} vw={vp.w} vh={vp.h} dpr={dpr} mapW={W} mapH={H} />
+            <SeaCanvas pm={td.pm} furniture={furniture} scale={S} ox={ox} oy={oy} vw={vp.w} vh={vp.h} dpr={dpr} mapW={W} mapH={H} ghost={focusFam !== null} />
           )}
           <div data-painted-map className="absolute left-0 top-0" style={{ width: W * S, height: H * S, transform: `translate(${ox}px, ${oy}px)` }}>
             {isTrue ? (
@@ -619,7 +624,14 @@ export function PaintedSkin() {
         </div>
 
         {/* ——— the four corners (the map stays draggable between them) */}
-        {opts && (
+        {opts && uiHidden && (
+          <button type="button" onClick={() => setUiHidden(false)} aria-label="Show the UI (h)" title="Show the UI (h)"
+            className="absolute right-3 top-3 z-20 px-2.5 py-1 leading-none opacity-50 hover:opacity-100 focus-visible:opacity-100 focus-visible:outline-2 sm:right-5 sm:top-5"
+            style={{ background: m.plateHi, color: m.ink, border: `var(--ap) solid ${m.border}`, fontFamily: m.bodyFont, fontSize: 14 }}>
+            UI
+          </button>
+        )}
+        {opts && !uiHidden && (
           <div className="pointer-events-none absolute inset-0 z-20" style={{ right: drawerPx, bottom: sheetPx }}>
             {/* paper: flush to the top so it covers the painter's own cartouche at the whole-map view */}
             <div className={`${corner} left-3 sm:left-5 ${m.crisp ? "top-3 sm:top-5" : "top-0"}`} style={stamp(0, still)}>
@@ -627,7 +639,8 @@ export function PaintedSkin() {
                 onPick={onSelect} onWhole={fitWhole} compact={mobile} />
             </div>
             <div className={`${corner} right-3 top-0 sm:right-5`} style={stamp(1, still)}>
-              <SheetTabs m={m} mapId={mapId} dev={opts.dev} render={render} labels={labels} setOpts={set} devOpen={devOpen} setDevOpen={setDevOpen} compact={mobile} />
+              <SheetTabs m={m} mapId={mapId} dev={opts.dev} render={render} labels={labels} setOpts={set} devOpen={devOpen} setDevOpen={setDevOpen} compact={mobile}
+                onHideUi={() => setUiHidden(true)} />
             </div>
             <div className={`${corner} bottom-3 left-3 flex flex-col items-start gap-3 sm:bottom-5 sm:left-5`} style={stamp(2, still)}>
               {!mobile && (
@@ -655,7 +668,7 @@ export function PaintedSkin() {
         )}
 
         {/* ——— the drawer */}
-        {card && (
+        {card && !uiHidden && (
           <Drawer m={m} mobile={mobile} sheet={sheet === "peek" ? "half" : sheet} setSheet={setSheet} card={card} still={still}
             onPick={onSelect} onBack={() => update({ zoom: "region" })}
             stateOf={(n) => states[n] ?? "untrained"} isAtom={(n) => atoms.has(n)}

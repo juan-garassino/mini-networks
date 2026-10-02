@@ -15,6 +15,8 @@ import { ChartPaper } from "@/components/views/chart-paper";
 import { Reactions } from "@/components/views/reactions";
 import { Observatory } from "@/components/views/observatory";
 
+const EDITION_IDS: EditionId[] = ["blueprint", "wallchart", "terminal", "metro", "atlas", "paper"];
+
 export default function Page() {
   const [sheet, setSheet] = useState<SheetId>("chart");
   const [selected, setSelected] = useState<string | null>(null);
@@ -33,8 +35,12 @@ export default function Page() {
         .catch(() => { if (alive) timer = setTimeout(load, 3000); });
     };
     load();
+    // ?edition=<id> gives every edition its own link (the design gallery at
+    // /lab/designs); otherwise the last chosen edition is remembered
+    const fromUrl = new URLSearchParams(window.location.search).get("edition") as EditionId | null;
     const saved = localStorage.getItem("mn-edition") as EditionId | null;
-    if (saved) setEdition(saved);
+    const pick = fromUrl && EDITION_IDS.includes(fromUrl) ? fromUrl : saved;
+    if (pick) setEdition(pick);
     return () => { alive = false; clearTimeout(timer); };
   }, []);
 

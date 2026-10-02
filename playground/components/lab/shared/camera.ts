@@ -23,11 +23,15 @@ export function fitBox(target: CamBox, vw: number, vh: number): CamBox {
   return { x: target.x + target.w / 2 - w / 2, y: target.y + target.h / 2 - h / 2, w, h };
 }
 
-export function useCamera({ world, target, still, minWidth = 240, targetViewport }: {
+export function useCamera({ world, target, still, minWidth = 240, targetViewport, clamp }: {
   world: CamBox;
   target: CamBox;
   still: boolean;
   minWidth?: number;
+  /** Keep the world covering the visible part of the viewport while dragging:
+   * the part left of `right` and above `bottom` (CSS px covered by a drawer or
+   * sheet). An axis where the world is smaller than the view stays centred. */
+  clamp?: { right: number; bottom: number };
   /** The viewport size the skin computed `target` for. Skins that size their
    * target from the measured viewport pass it: until it matches the camera's
    * own measurement the camera jumps instead of flying, so the first real
@@ -100,8 +104,16 @@ export function useCamera({ world, target, still, minWidth = 240, targetViewport
     const k = boxRef.current.w / size.w;
     const dx = (e.clientX - drag.current.x) * k, dy = (e.clientY - drag.current.y) * k;
     drag.current = { x: e.clientX, y: e.clientY, dragging: true };
-    setBox((b) => ({ ...b, x: b.x - dx, y: b.y - dy }));
-  }, [size.w]);
+    setBox((b) => {
+      let x = b.x - dx, y = b.y - dy;
+      if (clamp) {
+        const wv = b.w * Math.max(0.1, (size.w - clamp.right) / size.w), hv = b.h * Math.max(0.1, (size.h - clamp.bottom) / size.h);
+        x = wv >= world.w ? world.x + (world.w - wv) / 2 : Math.min(Math.max(x, world.x), world.x + world.w - wv);
+        y = hv >= world.h ? world.y + (world.h - hv) / 2 : Math.min(Math.max(y, world.y), world.y + world.h - hv);
+      }
+      return { ...b, x, y };
+    });
+  }, [size.w, size.h, clamp, world]);
   const onPointerUp = useCallback(() => { drag.current = null; }, []);
   const onWheel = useCallback((e: React.WheelEvent) => {
     const rect = (e.currentTarget as Element).getBoundingClientRect();

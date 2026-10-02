@@ -96,7 +96,13 @@ playground/ (repo root)  Next.js 16 + React 19 + TS + Tailwind v4 + Recharts +
                      legend↔minimap plate), a right drawer for the selected model
                      (drawer.tsx, mechanism diagram as hero, full-stage view);
                      one component tree, two materials (material.ts).
-                     ?map=pixel|paper; ?dev=1 reveals the render/labels tray.
+                     ?map=pixel|paper; ?dev=1 reveals the render/labels tray;
+                     "map only" tab / key h / ?ui=0 hides every plate + the drawer.
+                     /lab/designs = every design apart (lib/designs.ts: 6 classic
+                     editions via /?edition=<id>, /atlas, 4 lab skins, 2 painted
+                     maps, anatomy) with keep/drop verdicts (localStorage + posted
+                     to the feedback inbox as skin "designs"); thumbnails built by
+                     `node scripts/designs.mjs` into gitignored public/local/designs/.
 infra/gcp/           Dockerfile.train (ARG TORCH_INDEX: cpu|cu121) + entrypoint.sh
                      (MODE=train|sweep-task) + terraform/ (train job, L4 sweep
                      job, topic, trigger, IAM) + function/ (see its README)
