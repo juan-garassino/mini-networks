@@ -56,6 +56,7 @@ export interface PaintedMap {
 }
 
 export const IMAGE = { w: 1536, h: 1024 } as const;
+/** Minimum anchor spacing in 1536-wide image px; scaled by map.width / 1536. */
 export const MIN_GAP = 28;
 
 // ————————————————————————————————————————————————————————————— pixel (clean2 / grid geometry)
@@ -242,6 +243,178 @@ const PIXEL: PaintedMap = {
   },
   cartouche: { x: 24, y: 24, w: 292, h: 140 },
   pipelines: { x: 1440, y: 990 },
+  baked: [],
+};
+
+// ————————————————————————————————————————————————————————————— pixel TRUE (native 768×512)
+// pixel-map-true.png is TRUE pixel art: 768×512, 128 colours, a real 1-px
+// grid. The skin paints it itself from pixel-map.json (scripts/
+// pixelmap_to_json.py), so these anchors are in NATIVE art pixels — one unit
+// = one art pixel — and the camera rests only where an art pixel is a whole
+// number of device pixels. The composition is clean2's at exactly half scale:
+// every one of clean2's 25 round road markers was re-found on the true image
+// by colour (.lab-shots/painted/markers-true.ts: white discs 7–9 px wide)
+// within 3.3 px of its halved clean2 position. Anchors on a marker sit on the
+// detected disc centre; landmark anchors were halved from clean2 and then
+// checked one by one on 4× crops of the true image
+// (.lab-shots/painted/overlay/true-*.png) — corrections noted inline.
+const TRUE: PaintedMap = {
+  id: "pixel",
+  width: 768,
+  height: 512,
+  anchors: {
+    classifier: [280, 215, "the red church + blue hall town in the middle forest — the zoo's first atom at its busiest crossroads"],
+    segmentation: [228, 293, "the red manor above the docks — the second-biggest perception town"],
+    tabular_classifier: [131, 366, "the SW windmill on the rail desert — the tabular atom gets the desert's own landmark"],
+    resnet: [234, 227, "on its road marker: marker west of the church town, first stop on classifier's road (classifier child)"],
+    convnext: [185, 162.5, "on its road marker: marker on the NW forest road, one hop past resnet towards the grove (classifier + resnet)"],
+    lora: [144, 188, "the windmill chapel on the west lobe (classifier child)"],
+    mobilenet: [124, 215, "the cottage below the windmill — small and efficient (classifier child)"],
+    vit: [321, 239, "the watermill at the waterfall, the crossing towards the blue castle (transformer + classifier)"],
+    detection: [280, 291, "on its road marker: marker south of the church town (classifier child)"],
+    sam: [188.5, 301, "on its road marker: dock marker west of the manor (segmentation + transformer)"],
+    unet_ae: [166, 281, "the blue dock house beside Segmentation (segmentation child)"],
+    rpp_classifier: [163, 328, "the stilt house on the desert edge between docks and rail (classifier + tabular)"],
+    audio_classifier: [299, 328, "on its road marker: marker on the south cliff road (classifier child)"],
+    audio_spectrogram: [328.5, 365.5, "on its road marker: next marker down the same road, at the desert's volcano edge (audio line, 2nd)"],
+    audio_melspectrogram: [229, 346, "the water tower on the rail (audio line, 3rd)"],
+    simclr: [235, 93, "the great treehouse — the representation atom"],
+    vision_embed: [286.5, 102.5, "on its road marker: grove marker east of the treehouse (simclr's plainest child)"],
+    dino: [385, 59, "the snow castle — the plateau's summit (vit + simclr)"],
+    clip: [443, 90, "the white snow tower, on the road that drops to the desert towards the castle (simclr + transformer)"],
+    transformer: [368, 165, "the blue castle east of the river — the sequence capital"],
+    rnn: [428, 245, "the palm ruins at the heart of the desert — the oldest sequence atom"],
+    mamba: [503, 198, "the towered manor in the NE desert"],
+    text_seq2seq: [321, 162.5, "on its road marker: marker at the forest bridgehead in front of the castle (transformer child)"],
+    text_token_classifier: [324, 198, "on its road marker: marker at the church-town bridge, below the castle (transformer child)"],
+    moe: [413, 190, "the covered wagon east of the castle — experts on the road"],
+    audio_transformer: [470, 190, "the wooden watchtower (transformer + audio_spectrogram)"],
+    kimi: [543.5, 209, "on its road marker: marker at the NE bridgehead past Mamba — transformer + moe + mamba"],
+    deepseek: [543, 170, "the lookout crane on the NE rocks (transformer + moe)"],
+    grokking: [475, 280, "the small shrine SE of the ruins (transformer child)"],
+    rag: [373.5, 250.5, "on its road marker: marker west of the ruins, over the watermill bridge (transformer child)"],
+    text_diffusion: [466, 313.5, "on its road marker: south desert marker facing the volcano — transformer + diffusion"],
+    pixelcnn: [420, 350, "the crater peak, lava running down in rasters"],
+    diffusion: [348, 400, "the factory stack where the rail ends — noise in, samples out"],
+    tabular_diffusion: [379, 398, "on its road marker: the lava-junction marker next to the factory (diffusion + tabular)"],
+    vae: [370, 445, "the little lighthouse chapel on the south flank"],
+    gan: [440, 418, "the lava castle"],
+    gnn: [599.5, 94.5, "on its road marker: the city deck's west marker"],
+    nerf: [680, 93, "the city deck's east marker"],
+    alphazero: [630, 225, "the red church on the isle"],
+    rlhf: [693, 270, "the blue-domed observatory (transformer + reinforce)"],
+    grpo: [666, 280, "on its road marker: marker below the observatory (rlhf child)"],
+    dpo: [586, 250.5, "on its road marker: marker at the long bridge's isle end (rlhf child)"],
+    reinforce: [618, 330, "the drowned domed temple"],
+    rl_maze: [655, 392, "the drowned maze palace — on its dome (the halved clean2 point sat on the dome's rim)"],
+  },
+  junctions: {
+    "j:grove": [204, 122.5], // marker
+    "j:snowBridge": [333, 95],
+    "j:snowW": [346, 88], // marker
+    "j:snowHouse": [465, 118],
+    "j:snowSE": [492, 144.5], // marker
+    "j:westBridge": [183, 239],
+    "j:sw": [169, 353], // marker
+    "j:station": [265, 363],
+    "j:rail": [260, 406], // marker
+    "j:seqE": [506, 270], // marker
+    "j:lagoon": [604, 371],
+    "j:volE": [484, 422.5], // marker
+  },
+  roads: [
+    { a: "simclr", b: "j:grove", via: [[220, 113]] },
+    { a: "simclr", b: "vision_embed", via: [[260, 108]] },
+    { a: "vision_embed", b: "j:snowBridge", via: [[310, 100]], kind: "bridge" },
+    { a: "j:snowBridge", b: "j:snowW" },
+    { a: "j:snowW", b: "dino", via: [[368, 75]] },
+    { a: "j:snowW", b: "clip", via: [[380, 100], [420, 100]] },
+    { a: "clip", b: "j:snowHouse" },
+    { a: "j:snowHouse", b: "j:snowSE" },
+    { a: "j:snowSE", b: "deepseek", via: [[515, 160]] },
+    { a: "j:snowSE", b: "mamba", via: [[500, 170]] },
+    { a: "j:grove", b: "convnext", via: [[195, 143]] },
+    { a: "convnext", b: "lora", via: [[165, 175]] },
+    { a: "lora", b: "mobilenet", via: [[135, 203]] },
+    { a: "convnext", b: "resnet", via: [[200, 190], [220, 210]] },
+    { a: "mobilenet", b: "j:westBridge", via: [[155, 230]], kind: "bridge" },
+    { a: "j:westBridge", b: "resnet", via: [[210, 235]] },
+    { a: "resnet", b: "classifier", via: [[255, 223]] },
+    { a: "classifier", b: "vit", via: [[303, 235]] },
+    { a: "classifier", b: "text_token_classifier", via: [[300, 210], [308, 206]], kind: "bridge" },
+    { a: "resnet", b: "segmentation", via: [[220, 260]] },
+    { a: "resnet", b: "detection", via: [[258, 260]] },
+    { a: "classifier", b: "detection", via: [[280, 250]] },
+    { a: "segmentation", b: "sam", via: [[208, 300]] },
+    { a: "sam", b: "unet_ae" },
+    { a: "sam", b: "rpp_classifier", via: [[175, 318]] },
+    { a: "rpp_classifier", b: "j:sw" },
+    { a: "j:sw", b: "tabular_classifier", via: [[150, 361]] },
+    { a: "j:sw", b: "audio_melspectrogram", via: [[200, 358]] },
+    { a: "audio_melspectrogram", b: "j:station" },
+    { a: "j:station", b: "j:rail", via: [[263, 385]] },
+    { a: "j:station", b: "audio_classifier", via: [[283, 345]] },
+    { a: "detection", b: "audio_classifier", via: [[290, 310]] },
+    { a: "audio_classifier", b: "audio_spectrogram", via: [[313, 346]] },
+    { a: "vision_embed", b: "text_seq2seq", via: [[295, 130], [306, 153]], kind: "bridge" },
+    { a: "text_seq2seq", b: "transformer", via: [[345, 169]] },
+    { a: "text_seq2seq", b: "text_token_classifier" },
+    { a: "text_token_classifier", b: "transformer", via: [[350, 190]] },
+    { a: "vit", b: "rag", via: [[345, 244]], kind: "bridge" },
+    { a: "text_token_classifier", b: "rag", via: [[345, 220], [360, 240]] },
+    { a: "transformer", b: "moe", via: [[395, 198]] },
+    { a: "moe", b: "audio_transformer", via: [[440, 203]] },
+    { a: "audio_transformer", b: "mamba" },
+    { a: "mamba", b: "kimi", via: [[523, 205]] },
+    { a: "kimi", b: "deepseek", via: [[545, 190]] },
+    { a: "rag", b: "rnn", via: [[400, 253]] },
+    { a: "moe", b: "rnn", via: [[420, 215]] },
+    { a: "rnn", b: "grokking", via: [[455, 265]] },
+    { a: "grokking", b: "j:seqE" },
+    { a: "kimi", b: "j:seqE", via: [[523, 240]] },
+    { a: "rag", b: "text_diffusion", via: [[420, 303]] },
+    { a: "grokking", b: "text_diffusion", via: [[473, 300]] },
+    { a: "audio_spectrogram", b: "diffusion", via: [[340, 385]] },
+    { a: "j:rail", b: "diffusion", via: [[300, 393], [325, 398]] },
+    { a: "diffusion", b: "tabular_diffusion" },
+    { a: "tabular_diffusion", b: "pixelcnn", via: [[400, 370]] },
+    { a: "tabular_diffusion", b: "vae", via: [[378, 425]] },
+    { a: "tabular_diffusion", b: "gan", via: [[410, 408]] },
+    { a: "pixelcnn", b: "text_diffusion", via: [[440, 328]], kind: "bridge" },
+    { a: "gan", b: "j:volE", via: [[463, 423]] },
+    { a: "kimi", b: "dpo", via: [[555, 225], [575, 240]], kind: "bridge" },
+    { a: "j:seqE", b: "dpo", via: [[543, 263], [565, 255]], kind: "bridge" },
+    { a: "dpo", b: "alphazero", via: [[608, 235]] },
+    { a: "dpo", b: "grpo", via: [[625, 265]] },
+    { a: "alphazero", b: "grpo", via: [[650, 250]] },
+    { a: "grpo", b: "rlhf" },
+    { a: "grpo", b: "reinforce", via: [[645, 305]] },
+    { a: "reinforce", b: "j:lagoon", via: [[608, 350]] },
+    { a: "j:lagoon", b: "rl_maze", via: [[630, 385]] },
+    { a: "text_diffusion", b: "reinforce", via: [[505, 320], [530, 335], [555, 350]], kind: "bridge" },
+    { a: "gnn", b: "nerf", via: [[640, 105]] },
+    { a: "deepseek", b: "gnn", via: [[575, 130]], kind: "air" },
+  ],
+  lands: {
+    representation: [[190, 30], [280, 25], [320, 60], [350, 30], [430, 10], [500, 60], [520, 110], [505, 150], [480, 155], [450, 140], [410, 150], [350, 130], [330, 108], [300, 113], [295, 125], [260, 118], [220, 133], [190, 115]],
+    perception: [[65, 190], [100, 165], [150, 140], [190, 120], [220, 135], [260, 120], [295, 128], [305, 150], [313, 210], [320, 225], [340, 250], [345, 280], [320, 320], [345, 360], [335, 380], [300, 380], [280, 420], [225, 430], [150, 430], [100, 410], [70, 360], [90, 310], [100, 260], [60, 225]],
+    sequence: [[307, 150], [330, 115], [360, 135], [410, 150], [450, 143], [480, 155], [505, 150], [550, 160], [555, 220], [530, 280], [515, 320], [465, 330], [425, 325], [380, 310], [350, 280], [340, 250], [320, 225], [313, 210]],
+    generative: [[300, 385], [325, 370], [350, 350], [390, 325], [430, 325], [480, 360], [525, 430], [490, 480], [400, 495], [310, 480], [290, 440]],
+    // the city's silhouette (towers, deck, hanging blocks) — a rectangle took in the clouds and the desert rocks below
+    structure: [[530, 72], [562, 28], [596, 6], [690, 6], [716, 34], [744, 66], [746, 108], [718, 124], [704, 176], [680, 182], [642, 168], [600, 162], [568, 142], [530, 112]],
+    decision: [[560, 210], [650, 180], [725, 210], [740, 300], [750, 400], [710, 470], [550, 460], [500, 390], [525, 330], [555, 280], [570, 240]],
+  },
+  signs: {
+    perception: [100, 250],
+    representation: [488, 20],
+    sequence: [565, 295],
+    generative: [400, 493],
+    structure: [715, 128],
+    decision: [710, 325],
+  },
+
+  cartouche: { x: 12, y: 12, w: 146, h: 70 },
+  pipelines: { x: 720, y: 495 },
   baked: [],
 };
 
@@ -711,6 +884,8 @@ const PAPER: PaintedMap = {
 };
 
 export const MAPS: Record<MapId, PaintedMap> = { pixel: PIXEL, paper: PAPER };
+/** The true pixel map (render=true, the pixel default), in native art pixels. */
+export const TRUE_MAP = TRUE;
 
 // ————————————————————————————————————————————————————————————— helpers
 
@@ -758,6 +933,7 @@ export function warpToBaked(p: Pt): Pt {
 
 /** The map as drawn for a given render: pixel+baked gets every point warped. */
 export function resolveMap(id: MapId, render: string): PaintedMap {
+  if (id === "pixel" && render === "true") return TRUE;
   if (id !== "pixel" || render !== "baked") return MAPS[id];
   const m = PIXEL_V1;
   const w = (r: readonly [number, number]) => { const q = warpToBaked(pt(r)); return [Math.round(q.x), Math.round(q.y)] as const; };

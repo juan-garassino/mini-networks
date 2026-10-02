@@ -26,29 +26,31 @@ export interface PaintedTheme {
 }
 
 export const THEMES: Record<MapId, PaintedTheme> = {
+  // every pixel token is an entry of pixel-map-true.png's 128-colour palette
+  // (index in the comment) — the UI is cut from the same world as the map
   pixel: {
     id: "pixel",
-    sea: "#ecddad",
-    plate: "#f8e9c4",
-    plateHi: "#fff6dc",
-    border: "#6b1d1d",
-    ink: "#3b1a10",
-    inkSoft: "#7a4a32",
-    loud: "#6b1d1d",
-    loudInk: "#fff3d0",
-    road: "#ffd23f",
-    roadEdge: "#6b1d1d",
-    ring: "#ff5a36",
+    sea: "#f0e1ae",       // 0   the parchment sea
+    plate: "#f0e1ae",     // 0
+    plateHi: "#fdf4c1",   // 62
+    border: "#7a2424",    // 23  maroon ink
+    ink: "#3a1d2a",       // 17
+    inkSoft: "#715755",   // 15
+    loud: "#7a2424",      // 23
+    loudInk: "#fdf4c1",   // 62
+    road: "#fdc771",      // 8   road-marker gold
+    roadEdge: "#7a2424",  // 23
+    ring: "#e91c1d",      // 18
     tagFont: "var(--font-pixel), ui-monospace, monospace",
     signFont: "var(--font-pixel), ui-monospace, monospace",
     bodyFont: "var(--font-pixel), ui-monospace, monospace",
     crisp: true,
     radius: 0,
     evidence: {
-      champion: { fill: "#f6c21c", stroke: "#6b1d1d" },
-      provisional: { fill: "#f8e9c4", stroke: "#6b1d1d", dash: "2 2" },
-      trained: { fill: "#4fae57", stroke: "#1f4d25" },
-      untrained: { fill: "#c9bfa6", stroke: "#6d6552" },
+      champion: { fill: "#fece66", stroke: "#3a1d2a" },           // 112 · 17
+      provisional: { fill: "#f0e1ae", stroke: "#7a2424", dash: "2 2" },
+      trained: { fill: "#597b29", stroke: "#233424" },            // 9 · 70
+      untrained: { fill: "#9a8e88", stroke: "#221316" },          // 42 · 38
     },
   },
   paper: {
@@ -107,6 +109,7 @@ export const PAPER_TITLE: Record<string, string> = {
 };
 
 export const IMAGES = {
+  true: "/local/pixel-map-true.png", // minimap/preview only; the map itself is painted from pixel-map.json
   grid: "/local/pixel-map-grid.png",
   clean: "/local/pixel-map-clean2.png",
   baked: "/local/pixel-map.png",

@@ -173,30 +173,6 @@ function PixelSign({ at, fam, count, theme, scale }: { at: readonly [number, num
   );
 }
 
-function PixelCartouche({ box, theme, counts }: { box: Box; theme: PaintedTheme; counts: OverlayProps["counts"] }) {
-  const { x, y, w, h } = box;
-  const lines = [
-    `${counts.models} models across ${counts.lands === 6 ? "six" : counts.lands} lands,`,
-    `${counts.pipelines} pipelines, ${counts.champions} champions.`,
-    "Pick one: the blob walks",
-    "there from its root.",
-  ];
-  return (
-    <g shapeRendering="crispEdges" aria-hidden>
-      <rect x={x + 3} y={y + 3} width={w} height={h} fill="#3b1a10" opacity={0.3} />
-      <rect x={x} y={y} width={w} height={h} fill={theme.plate} stroke={theme.border} strokeWidth={3} />
-      <rect x={x + 6} y={y + 6} width={w - 12} height={h - 12} fill="none" stroke="#d9bf86" strokeWidth={1} />
-      {[[x, y], [x + w, y], [x, y + h], [x + w, y + h]].map(([cx, cy], i) => (
-        <rect key={i} x={cx - 5} y={cy - 5} width={10} height={10} fill={theme.border} />
-      ))}
-      <text x={x + 18} y={y + 36} fontSize={28} fontFamily={theme.signFont} fontWeight={700} fill={theme.border}>The Model Zoo</text>
-      {lines.map((l, i) => (
-        <text key={i} x={x + 18} y={y + 64 + i * 19} fontSize={15} fontFamily={theme.signFont} fontWeight={500} fill={theme.ink}>{l}</text>
-      ))}
-    </g>
-  );
-}
-
 function Critter({ c, theme, scale, onCritter }: { c: NonNullable<OverlayProps["critter"]>; theme: PaintedTheme; scale: number; onCritter: () => void }) {
   const hScreen = scale < 1.5 ? 34 : scale < 2.5 ? 40 : 44;
   const k = hScreen / scale / 140;
@@ -238,18 +214,8 @@ export const PaintedOverlay = memo(function PaintedOverlay(p: OverlayProps) {
 
       {p.heal && map.baked.filter((b) => b.kind === "subtitle" || b.kind === "count").map((b, i) => <Refill key={i} b={b} />)}
 
-      {p.ours && theme.id === "pixel" && (
-        <>
-          <PixelCartouche box={map.cartouche} theme={theme} counts={p.counts} />
-          {Object.entries(map.signs).map(([f, at]) => <PixelSign key={f} at={at} fam={f} count={p.famCount[f] ?? 0} theme={theme} scale={S} />)}
-          <g shapeRendering="crispEdges" aria-hidden>
-            <rect x={map.pipelines.x - 62} y={map.pipelines.y - 17} width={124} height={24} fill={theme.plate} stroke={theme.border} strokeWidth={2} />
-            <text x={map.pipelines.x} y={map.pipelines.y} fontSize={16} fontFamily={theme.signFont} fontWeight={700} fill={theme.border} textAnchor="middle">
-              {p.counts.pipelines} pipelines
-            </text>
-          </g>
-        </>
-      )}
+      {/* the title + counts live in the sidebar now; the map keeps only its family signs */}
+      {p.ours && theme.id === "pixel" && Object.entries(map.signs).map(([f, at]) => <PixelSign key={f} at={at} fam={f} count={p.famCount[f] ?? 0} theme={theme} scale={S} />)}
       {p.ours && theme.id === "paper" && (
         <>
           {Object.keys(map.signs).map((f) => {
