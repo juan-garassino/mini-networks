@@ -52,7 +52,7 @@ export function CardBody({ card, theme: m, still, onPick, stateOf, isAtom, diagr
       <p className="mt-2">{EVIDENCE_COPY[card.state]}{version ? ` (${version})` : ""}.</p>
 
       <H3 m={m}>How it works</H3>
-      <MechanismDiagram name={card.name} theme={m.id} variant="card" still={still} width={diagramWidth}
+      <MechanismDiagram name={card.name} theme={m.diagram} variant="card" still={still} width={diagramWidth}
         onOpen={() => { onOpenDiagram(); return true; }} />
 
       <p className="mt-5" style={{ fontSize: 17 }}>{card.description}</p>

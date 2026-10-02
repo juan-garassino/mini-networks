@@ -56,7 +56,7 @@ export function Drawer(p: DrawerProps) {
           </h2>
         </div>
         <div className="px-5 pb-8 pt-4">
-          <MechanismDiagram name={card.name} theme={m.id} variant="full" still={p.still} width={Math.min(1120, p.stageW - 40)} />
+          <MechanismDiagram name={card.name} theme={m.diagram} variant="full" still={p.still} width={Math.min(1120, p.stageW - 40)} />
         </div>
       </div>
     );

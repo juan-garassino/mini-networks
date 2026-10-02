@@ -44,7 +44,7 @@ import { TrueMapLayers, spotClear, useTrueMap } from "./true-map";
 import { PIXELMAP_CMD } from "./pixelmap";
 import { layoutRibbons, spotBoxes, type PlacedRibbon, type RibbonItem } from "./ribbons";
 import { ribbonSize } from "./pixel-art";
-import { FAMILY_TITLE, IMAGES, THEMES } from "./material";
+import { FAMILY_TITLE, IMAGES, MATERIALS } from "./material";
 
 // render=grid: 3-px blocks (scripts/pixelate_map.py --cell 3), rests on thirds.
 const GRID_CELL = 3;
@@ -147,7 +147,7 @@ export function PaintedSkin() {
   const mapId: MapId = opts?.map ?? "pixel";
   const render: Render = opts?.render ?? "true";
   const labels: Labels = opts?.labels ?? "ours";
-  const theme = THEMES[mapId];
+  const theme = MATERIALS[mapId];
   const isTrue = mapId === "pixel" && render === "true";
   const map = useMemo(() => resolveMap(mapId, render), [mapId, render]);
   const W = map.width, H = map.height;

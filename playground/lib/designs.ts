@@ -63,6 +63,12 @@ export const DESIGNS: Design[] = [
     ],
   },
   {
+    id: "sky", kind: "design", name: "Star atlas", pitch: "The zoo as an antique celestial chart: families are constellations, models are stars.",
+    variants: [
+      { id: "lab-sky", name: "The Celestial Zoo", pitch: "Indigo night, gold figures, lineage as constellation lines.", href: "/lab/sky/", shoot: { kind: "lab", skin: "sky", state: "overview" } },
+    ],
+  },
+  {
     id: "transit", kind: "layout", name: "Transit layout", pitch: "Lineage as transit lines, a layout the maps' roads could borrow.",
     variants: [
       { id: "metro", name: "Transit diagram", pitch: "Families as lines, models as stations.", href: "/?edition=metro", shoot: { kind: "url", path: "/?edition=metro" } },

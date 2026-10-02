@@ -10,8 +10,11 @@ import { Plate, Search } from "./plate";
 
 const WORDS = ["no", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine"];
 
-export function Cartouche({ m, counts, names, focusFam, famCount, famProven, onPick, onWhole, compact }: {
+export function Cartouche({ m, counts, names, focusFam, famCount, famProven, onPick, onWhole, compact, title = "The Model Zoo", noun = "lands" }: {
   m: Material;
+  title?: string;
+  /** what a family is called in the sentence: lands, constellations… */
+  noun?: string;
   counts: { models: number; pipelines: number; champions: number; lands: number };
   names: string[];
   focusFam: Family | null;
@@ -24,12 +27,12 @@ export function Cartouche({ m, counts, names, focusFam, famCount, famProven, onP
   const lands = WORDS[counts.lands] ?? String(counts.lands);
   const sentence = focusFam
     ? `${FAMILY_TITLE[focusFam]}: ${famCount[focusFam] ?? 0} models, ${famProven[focusFam] ?? 0} proven.`
-    : `${counts.models} models in ${lands} lands, ${counts.champions} proven.`;
+    : `${counts.models} models in ${lands} ${noun}, ${counts.champions} proven.`;
   const sub = focusFam && !m.crisp ? PAPER_SUBLINE[focusFam] : null;
   return (
-    <Plate m={m} as="header" label="The Model Zoo" className={compact ? "p-2.5" : "p-4 pt-3"} style={{ width: compact ? 200 : 324 }}>
+    <Plate m={m} as="header" label={title} className={compact ? "p-2.5" : "p-4 pt-3"} style={{ width: compact ? 200 : 324 }}>
       <h1 className="leading-none" style={{ fontFamily: m.signFont, fontWeight: 700, fontSize: compact ? 20 : 32, color: m.crisp ? m.border : m.ink }}>
-        The Model Zoo
+        {title}
       </h1>
       {!compact && (
         <>

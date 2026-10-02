@@ -98,9 +98,16 @@ playground/ (repo root)  Next.js 16 + React 19 + TS + Tailwind v4 + Recharts +
                      one component tree, two materials (material.ts).
                      ?map=pixel|paper; ?dev=1 reveals the render/labels tray;
                      "map only" tab / key h / ?ui=0 hides every plate + the drawer.
-                     /lab/designs = every design apart (lib/designs.ts: 6 classic
-                     editions via /?edition=<id>, /atlas, 4 lab skins, 2 painted
-                     maps, anatomy) with keep/drop verdicts (localStorage + posted
+                     /lab/sky = the Celestial Zoo (spec 2026-10-02-sky-atlas): an
+                     antique star atlas on lib/world positions — models are stars
+                     (glyph = evidence), families are constellations with figures
+                     (components/lab/sky/figures.ts), lineage = constellation lines,
+                     a selected star's pipelines = dotted arcs; reuses the painted
+                     four corners + drawer in the `sky` material (material.ts).
+                     /lab/designs = every design apart (lib/designs.ts, seven links: periodic
+                     table ×3 skins via /?edition=<id>, atlas plates, Network Atlas,
+                     Kawaii flow, paper maps ×4, pixel maps ×2, star atlas, + the
+                     transit layout idea; anatomy as a component) with keep/drop verdicts (localStorage + posted
                      to the feedback inbox as skin "designs"); thumbnails built by
                      `node scripts/designs.mjs` into gitignored public/local/designs/.
 infra/gcp/           Dockerfile.train (ARG TORCH_INDEX: cpu|cu121) + entrypoint.sh

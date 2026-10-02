@@ -20,17 +20,19 @@ const LEGEND: { s: EvidenceState; t: string }[] = [
   { s: "untrained", t: "not trained yet" },
 ];
 
-export function CornerPlate({ m, face, world, box, source, onCenter, width = 276 }: {
+export function CornerPlate({ m, face, world, box, source, onCenter, width = 276, note }: {
   m: Material; face: "legend" | "minimap"; world: { w: number; h: number }; box: CamBox; source: MinimapSource; onCenter: (x: number, y: number) => void; width?: number;
+  /** the legend's closing line (default: the painted maps' banner/stone note) */
+  note?: string;
 }) {
   return (
     <aside aria-label={face === "legend" ? "Legend" : "Minimap"} className="p-3" style={{ ...plateStyle(m), width, fontFamily: m.bodyFont, color: m.ink }}>
-      {face === "legend" ? <Legend m={m} /> : <Minimap m={m} world={world} box={box} source={source} onCenter={onCenter} width={width - 24 - 4} />}
+      {face === "legend" ? <Legend m={m} note={note} /> : <Minimap m={m} world={world} box={box} source={source} onCenter={onCenter} width={width - 24 - 4} />}
     </aside>
   );
 }
 
-function Legend({ m }: { m: Material }) {
+function Legend({ m, note }: { m: Material; note?: string }) {
   return (
     <ul className="space-y-1.5" style={{ fontSize: 14 }}>
       {LEGEND.map(({ s, t }) => (
@@ -42,7 +44,7 @@ function Legend({ m }: { m: Material }) {
         </li>
       ))}
       <li className="pt-1 leading-snug" style={{ color: m.inkSoft, fontSize: 13 }}>
-        {m.crisp ? "Banners fly over the atoms; the stones on the roads are models built from them." : "Signs mark the atoms; the markers on the roads are models built from them."}
+        {note ?? (m.crisp ? "Banners fly over the atoms; the stones on the roads are models built from them." : "Signs mark the atoms; the markers on the roads are models built from them.")}
       </li>
     </ul>
   );

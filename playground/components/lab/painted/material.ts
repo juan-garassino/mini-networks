@@ -4,8 +4,12 @@
 import type { EvidenceState } from "@/components/lab/shared/card-model";
 import type { MapId } from "./anchors";
 
+export type MaterialId = MapId | "sky";
+
 export interface Material {
-  id: MapId;
+  id: MaterialId;
+  /** which anatomy diagram theme the drawer uses */
+  diagram: "pixel" | "paper";
   sea: string;          // page colour beyond the image edge
   plate: string;        // tag / sign fill
   plateHi: string;      // hovered tag
@@ -28,11 +32,44 @@ export interface Material {
   evidence: Record<EvidenceState, { fill: string; stroke: string; dash?: string }>;
 }
 
-export const THEMES: Record<MapId, Material> = {
+// The night material for /lab/sky: an antique celestial chart — indigo plates,
+// a gold rule, cream engraving ink, the paper map's typefaces.
+const SKY: Material = {
+  id: "sky",
+  diagram: "pixel",
+  sea: "#0f1a3a",
+  plate: "#141f44",
+  plateHi: "#182650",
+  border: "#c9a24a",
+  ink: "#f2e8c9",
+  inkSoft: "#b7ad8f",
+  loud: "#c9a24a",
+  loudInk: "#121d3e",
+  road: "#e8c46a",
+  roadEdge: "#7a5a1a",
+  ring: "#ffd77a",
+  field: "#0c1430",
+  shadow: "rgba(0,0,0,.55)",
+  rule: "#3b4a7a",
+  tagFont: "var(--font-alegreya), Georgia, serif",
+  signFont: "var(--font-fell), Georgia, serif",
+  bodyFont: "var(--font-alegreya), Georgia, serif",
+  crisp: false,
+  radius: 2,
+  evidence: {
+    champion: { fill: "#ffd166", stroke: "#7a5a1a" },
+    provisional: { fill: "#141f44", stroke: "#c9a24a", dash: "2.5 2" },
+    trained: { fill: "#9fd3c7", stroke: "#3e7a70" },
+    untrained: { fill: "#5c6482", stroke: "#2a3150" },
+  },
+};
+
+export const MATERIALS: Record<MaterialId, Material> = {
   // every pixel token is an entry of pixel-map-true.png's 128-colour palette
   // (index in the comment) — the UI is cut from the same world as the map
   pixel: {
     id: "pixel",
+    diagram: "pixel",
     sea: "#f0e1ae",       // 0   the parchment sea
     plate: "#f0e1ae",     // 0
     plateHi: "#fdf4c1",   // 62
@@ -61,6 +98,7 @@ export const THEMES: Record<MapId, Material> = {
   },
   paper: {
     id: "paper",
+    diagram: "paper",
     sea: "#8fb7c9",
     plate: "#f1ddb8",
     plateHi: "#fff0d2",
@@ -87,6 +125,7 @@ export const THEMES: Record<MapId, Material> = {
       untrained: { fill: "#cbbfa8", stroke: "#7b6d57" },
     },
   },
+  sky: SKY,
 };
 
 export const FAMILY_TITLE: Record<string, string> = {

@@ -27,6 +27,7 @@ export default function LabIndex() {
       <nav className="flex gap-4 text-sm text-neutral-500">
         <a className="underline" href="/lab/designs/">All designs, apart</a>
         <a className="underline" href="/lab/painted/">Painted maps</a>
+        <a className="underline" href="/lab/sky/">Star atlas</a>
         <a className="underline" href="/lab/stub/">Reference stub</a>
         <a className="underline" href="/">Classic playground</a>
       </nav>
