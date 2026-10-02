@@ -3,7 +3,7 @@
 //
 //   node scripts/shoot.mjs --skin <name> --round <N|F|critic> [--base http://localhost:3000]
 //        [--states overview,region,node,dense] [--vp desktop,mobile]
-//        [--check-only] [--typecheck]
+//        [--check-only] [--typecheck] [--dpr 1|2]   (2 = the owner's retina screen)
 //        [--motion select,overview-to-region,konami,critter,idle]
 //
 // Per state: HTTP warm-up → --dump-dom health check → DevTools-protocol
@@ -55,6 +55,7 @@ const SHEET_MAX_BYTES = 1.5 * 1024 * 1024;
 const MOTION_KILL_MS = 4 * 60_000;
 
 const CHROME = "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome";
+let DPR = 1; // --dpr: device pixels per CSS px for every capture
 const CHROME_KILL_MS = 60_000;
 const WARMUP_MS = 90_000;
 const SLOT_COUNT = 2;
@@ -91,6 +92,7 @@ function parseArgs(argv) {
     else if (a === "--vp") opts.vp = val().split(",").filter(Boolean);
     else if (a === "--check-only") opts.checkOnly = true;
     else if (a === "--typecheck") opts.typecheck = true;
+    else if (a === "--dpr") { DPR = Number(val()); if (!(DPR === 1 || DPR === 2)) die("--dpr must be 1 or 2"); }
     else if (a === "--motion") opts.motion = val().split(",").filter(Boolean);
     else if (a === "-h" || a === "--help") { console.log(fs.readFileSync(fileURLToPath(import.meta.url), "utf8").split("\n").slice(1, 15).join("\n")); process.exit(0); }
     else die(`unknown argument ${a}`);
@@ -193,7 +195,7 @@ async function chrome(label, args, doneWhen) {
   const profile = fs.mkdtempSync(path.join(os.tmpdir(), "lab-shoot-"));
   try {
     return await run(CHROME, [
-      "--headless=new", "--disable-gpu", "--hide-scrollbars", "--force-device-scale-factor=1",
+      "--headless=new", "--disable-gpu", "--hide-scrollbars", `--force-device-scale-factor=${DPR}`,
       "--no-first-run", "--no-default-browser-check", "--disable-extensions",
       "--enable-logging=stderr", "--v=0",
       `--user-data-dir=${profile}`, "--virtual-time-budget=15000", ...args,
@@ -211,7 +213,7 @@ async function withCdp(label, [w, h], killMs, body) {
   const slot = await acquireSlot(label);
   const profile = fs.mkdtempSync(path.join(os.tmpdir(), "lab-shoot-"));
   const child = spawn(CHROME, [
-    "--headless=new", "--disable-gpu", "--hide-scrollbars", "--force-device-scale-factor=1",
+    "--headless=new", "--disable-gpu", "--hide-scrollbars", `--force-device-scale-factor=${DPR}`,
     "--no-first-run", "--no-default-browser-check", "--disable-extensions",
     `--user-data-dir=${profile}`, "--remote-debugging-port=0",
     `--window-size=${Math.max(w, 500)},${h}`, "about:blank",
@@ -295,7 +297,7 @@ async function withCdp(label, [w, h], killMs, body) {
 // the capture waits for data-lab-ready on the very page being shot.
 async function cdpScreenshot(label, url, [w, h], mobile, pngPath) {
   return withCdp(label, [w, h], CHROME_KILL_MS, async ({ send, load }) => {
-    await send("Emulation.setDeviceMetricsOverride", { width: w, height: h, deviceScaleFactor: 1, mobile });
+    await send("Emulation.setDeviceMetricsOverride", { width: w, height: h, deviceScaleFactor: DPR, mobile });
     const ready = await load(url);
     const shot = await send("Page.captureScreenshot", { format: "png" });
     if (!shot.result?.data) return { ok: false, why: "capture failed" };
@@ -460,7 +462,7 @@ async function captureMotion(opts, name, url, framesDir, jpg) {
     const errors = [];
     on("Runtime.exceptionThrown", (p) => errors.push(String(p.exceptionDetails?.exception?.description ?? p.exceptionDetails?.text ?? "exception").split("\n")[0]));
     await send("Runtime.enable");
-    await send("Emulation.setDeviceMetricsOverride", { width: w, height: h, deviceScaleFactor: 1, mobile: false });
+    await send("Emulation.setDeviceMetricsOverride", { width: w, height: h, deviceScaleFactor: DPR, mobile: false });
     if (!(await load(url))) return { ok: false, retry: true, why: "not ready after 20s" };
     await sleep(MOTION_SETTLE_MS);
 
@@ -522,7 +524,7 @@ async function captureMotion(opts, name, url, framesDir, jpg) {
     await Promise.race([loaded, sleep(30_000)]);
     const [sw, sh] = await evaluate(`[Math.max(document.documentElement.scrollWidth, document.body.scrollWidth), document.documentElement.scrollHeight]`) ?? [];
     if (!sw || !sh) return { ok: false, why: "contact sheet did not lay out" };
-    await send("Emulation.setDeviceMetricsOverride", { width: sw, height: sh, deviceScaleFactor: 1, mobile: false });
+    await send("Emulation.setDeviceMetricsOverride", { width: sw, height: sh, deviceScaleFactor: DPR, mobile: false });
     for (let i = 0; i < 120 && !(await evaluate(`document.body.dataset.done === "1"`)); i++) await sleep(250);
     const maxDelta = await evaluate(`window.__maxDelta`);
     await evaluate(`new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)))`);

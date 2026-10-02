@@ -1,0 +1,26 @@
+// Painted skin — every visual mark → the datum it encodes. A mark not in this
+// table does not belong on the screen. (Biome dressing is the owner's
+// painting; the live layer only adds what is listed here.)
+export const ENCODING = {
+  // on the map
+  "land sign": "family name + number of models in that land (count badge)",
+  "atom banner": "a root model (no parents); flag colour = evidence state",
+  "road stone": "a derived model on the painted roads; stone colour = evidence state",
+  "model ribbon": "the model's name; loud (inked) when selected, lit when hovered",
+  "lit road": "the selected model's lineage back to its root atom",
+  "focus fade": "lands other than the focused one fade (dithered band = distance from it)",
+  critter: "walks the lineage road from the root to the selected model",
+  // the four corners
+  "cartouche sentence": "live counts: models, lands, proven champions (or the focused land's)",
+  "sheet tab": "which owner map is open (pixel / paper)",
+  "compass points": "pan direction; hub = whole map (filled gold when at the whole map)",
+  "scale bar tick": "one model, in land order; fill = evidence state; wide gap = land boundary",
+  "pipeline tick": "one composition (pipeline)",
+  "legend row": "the evidence vocabulary (banner + stone per state)",
+  "minimap frame": "the camera box on the whole map (shown only when zoomed in)",
+  // the drawer
+  "drawer glyph": "the selected model's evidence state, as its own map sprite",
+  "mechanism diagram": "how the model works, drawn from the real champion's outputs",
+  "signpost chip": "a parent (built on) or child (leads to) model, with its evidence glyph",
+  "metric line": "best gate metric vs the M bar, and run count",
+} as const;

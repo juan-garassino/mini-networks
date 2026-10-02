@@ -9,11 +9,11 @@ import { CRITTER } from "@/components/lab/shared/critter";
 import { displayName, type EvidenceState } from "@/components/lab/shared/card-model";
 import { IMAGE, type BakedText, type Box, type PaintedMap, type Pt } from "./anchors";
 import type { PlacedTag } from "./labels";
-import { FAMILY_TITLE, PAPER_TITLE, type PaintedTheme } from "./theme";
+import { FAMILY_TITLE, PAPER_TITLE, type Material } from "./material";
 
 export interface OverlayProps {
   map: PaintedMap;
-  theme: PaintedTheme;
+  theme: Material;
   scale: number;
   heal: boolean;                 // paper + labels=ours: cover the painter's model plates with ours
   ours: boolean;                 // draw our signs / cartouche
@@ -40,7 +40,7 @@ const d = (pts: Pt[]) => pts.map((p, i) => `${i ? "L" : "M"}${p.x.toFixed(1)} ${
  * error never shows the old lettering): the real model name, or an honest
  * "no model yet" where the painter invented one. Acts as that model's tag. */
 function PaperPlate({ b, theme, sel, hov, dim, lit, onSelect, onHover }: {
-  b: BakedText; theme: PaintedTheme; sel: boolean; hov: boolean; dim: boolean; lit: boolean;
+  b: BakedText; theme: Material; sel: boolean; hov: boolean; dim: boolean; lit: boolean;
   onSelect: (n: string) => void; onHover: (n: string | null) => void;
 }) {
   const pad = 4;
@@ -71,7 +71,7 @@ function Refill({ b }: { b: BakedText }) {
 }
 
 /** A wax seal with the land's live model count, pinned to the painter's plate. */
-function FamilySeal({ box, count, theme }: { box: Box; count: number; theme: PaintedTheme }) {
+function FamilySeal({ box, count, theme }: { box: Box; count: number; theme: Material }) {
   const cx = box.x + box.w - 4, cy = box.y + box.h - 2, r = 15;
   return (
     <g aria-hidden>
@@ -87,7 +87,7 @@ const star = (R: number) =>
   `M0 ${-R * 0.62} L${R * 0.19} ${-R * 0.12} L${R * 0.62} ${-R * 0.12} L${R * 0.27} ${R * 0.16} L${R * 0.4} ${R * 0.62} L0 ${R * 0.33} L${-R * 0.4} ${R * 0.62} L${-R * 0.27} ${R * 0.16} L${-R * 0.62} ${-R * 0.12} L${-R * 0.19} ${-R * 0.12} Z`;
 
 function Marker({ name, at, r, state, theme, sel, hov, dim, onSelect, onHover }: {
-  name: string; at: Pt; r: number; state: EvidenceState; theme: PaintedTheme; sel: boolean; hov: boolean; dim: boolean;
+  name: string; at: Pt; r: number; state: EvidenceState; theme: Material; sel: boolean; hov: boolean; dim: boolean;
   onSelect: (n: string) => void; onHover: (n: string | null) => void;
 }) {
   const ev = theme.evidence[state];
@@ -128,7 +128,7 @@ function Marker({ name, at, r, state, theme, sel, hov, dim, onSelect, onHover }:
 }
 
 function Tag({ t, theme, font: font0, sel, hov, dim, lit, onSelect, onHover }: {
-  t: PlacedTag; theme: PaintedTheme; font: number; sel: boolean; hov: boolean; dim: boolean; lit: boolean;
+  t: PlacedTag; theme: Material; font: number; sel: boolean; hov: boolean; dim: boolean; lit: boolean;
   onSelect: (n: string) => void; onHover: (n: string | null) => void;
 }) {
   // the selected model's tag grows a quarter: with the ring, the loudest thing on the map
@@ -154,7 +154,7 @@ function Tag({ t, theme, font: font0, sel, hov, dim, lit, onSelect, onHover }: {
   );
 }
 
-function PixelSign({ at, fam, count, theme, scale }: { at: readonly [number, number]; fam: string; count: number; theme: PaintedTheme; scale: number }) {
+function PixelSign({ at, fam, count, theme, scale }: { at: readonly [number, number]; fam: string; count: number; theme: Material; scale: number }) {
   // painted-scale, but tempered: grows as √zoom so a close-up stays about the model
   const k = 1 / Math.sqrt(Math.max(1, scale));
   const title = FAMILY_TITLE[fam].toUpperCase();
@@ -173,7 +173,7 @@ function PixelSign({ at, fam, count, theme, scale }: { at: readonly [number, num
   );
 }
 
-function Critter({ c, theme, scale, onCritter }: { c: NonNullable<OverlayProps["critter"]>; theme: PaintedTheme; scale: number; onCritter: () => void }) {
+function Critter({ c, theme, scale, onCritter }: { c: NonNullable<OverlayProps["critter"]>; theme: Material; scale: number; onCritter: () => void }) {
   const hScreen = scale < 1.5 ? 34 : scale < 2.5 ? 40 : 44;
   const k = hScreen / scale / 140;
   const hopY = c.hop ? (-Math.sin(c.hop * Math.PI) * 18) / scale : 0;

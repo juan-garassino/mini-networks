@@ -12,8 +12,15 @@
 // Other renders (clean / grid / baked, paper) draw the image with the SVG
 // overlay (overlay.tsx) in 1536-px image coordinates.
 //
-// Layout: a left sidebar (desktop) or bottom sheet (phones) holds EVERYTHING
-// that isn't the map (sidebar.tsx); the map fills the rest edge to edge.
+// Layout, "four corners": the map owns every pixel of the viewport (the pixel
+// map's parchment sea runs on to the edges, dressed with the map's own sea
+// furniture — stage.tsx; the paper map is cover-cropped). Everything that is
+// not the map is cartographic furniture in the corners (corners/): the title
+// cartouche + search (top-left), the Pixel / Paper sheet tabs (top-right), the
+// compass that navigates + the scale bar that measures the zoo (bottom-left)
+// and a legend that turns into a minimap when zoomed (bottom-right). Selecting
+// a model opens the drawer (drawer.tsx) on the right; the camera refits to the
+// width that is left. One component tree, two materials (material.ts).
 // /lab contract: URL view → useWorld → camera → paint → data-lab-ready → window.__lab.
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import { useWorld } from "@/hooks/use-world";
@@ -22,16 +29,22 @@ import { LabMotion } from "@/components/lab/shared/still";
 import { useCamera, type CamBox } from "@/components/lab/shared/camera";
 import { cardModel, displayName, evidenceState, type EvidenceState } from "@/components/lab/shared/card-model";
 import { CRITTER } from "@/components/lab/shared/critter";
-import { FAMILIES, insidePolygon, landBox, resolveMap, type Box, type Family, type MapId, type Pt } from "./anchors";
+import { FAMILIES, landBox, resolveMap, type Box, type Family, type MapId, type Pt } from "./anchors";
 import { buildRoadGraph, chainRoute, lineageRoutes, pointAt, polylineLength, rootChain } from "./roads";
 import { placeTags, textWidth, type PlacedTag, type TagSpec } from "./labels";
 import { PaintedOverlay } from "./overlay";
-import { Sidebar, sheetHeight, type Labels, type Render, type Sheet } from "./sidebar";
+import { Drawer, DRAWER_W, sheetHeight, type Sheet } from "./drawer";
+import { Cartouche } from "./corners/cartouche";
+import { SheetTabs, type Labels, type Render } from "./corners/sheet-tabs";
+import { Compass } from "./corners/compass";
+import { ScaleBar } from "./corners/scale-bar";
+import { CornerPlate } from "./corners/corner-plate";
+import { SeaCanvas, useSeaFurniture } from "./stage";
 import { TrueMapLayers, spotClear, useTrueMap } from "./true-map";
 import { PIXELMAP_CMD } from "./pixelmap";
 import { layoutRibbons, spotBoxes, type PlacedRibbon, type RibbonItem } from "./ribbons";
 import { ribbonSize } from "./pixel-art";
-import { FAMILY_TITLE, IMAGES, THEMES } from "./theme";
+import { FAMILY_TITLE, IMAGES, THEMES } from "./material";
 
 // render=grid: 3-px blocks (scripts/pixelate_map.py --cell 3), rests on thirds.
 const GRID_CELL = 3;
@@ -44,9 +57,13 @@ const MOBILE_BP = 640;
 const KEYFRAMES = `
 @keyframes painted-march { to { stroke-dashoffset: -32; } }
 @keyframes painted-pulse { 0%,100% { transform: scale(1); opacity: 1; } 50% { transform: scale(1.22); opacity: .5; } }
+@keyframes painted-stamp { from { opacity: 0; transform: translate(0, 3px); } to { opacity: 1; transform: none; } }
 `;
+// the load moment: the four corners stamp onto the sea, two frames each, in turn
+const stamp = (i: number, still: boolean): CSSProperties =>
+  still ? {} : { animation: `painted-stamp 160ms steps(2, end) both`, animationDelay: `${120 + i * 90}ms` };
 
-interface Opts { map: MapId; render: Render; labels: Labels }
+interface Opts { map: MapId; render: Render; labels: Labels; dev: boolean }
 
 function parseOpts(search: string): Opts {
   const p = new URLSearchParams(search);
@@ -55,7 +72,7 @@ function parseOpts(search: string): Opts {
   const render: Render = r === "clean" || r === "grid" || r === "baked" ? r : "true";
   const l = p.get("labels");
   const labels: Labels = l === "ours" || l === "baked" ? l : map === "pixel" && render === "baked" ? "baked" : "ours";
-  return { map, render, labels };
+  return { map, render, labels, dev: p.get("dev") === "1" };
 }
 
 function useOpts() {
@@ -68,7 +85,7 @@ function useOpts() {
   }, []);
   const set = useCallback((next: Partial<Opts>) => {
     const p = new URLSearchParams(window.location.search);
-    for (const [k, v] of Object.entries(next)) if (v) p.set(k, v);
+    for (const [k, v] of Object.entries(next)) if (v) p.set(k, String(v));
     window.history.replaceState(null, "", `${window.location.pathname}?${p}`);
     setOpts(parseOpts(p.toString()));
   }, []);
@@ -125,7 +142,7 @@ export function PaintedSkin() {
   const { view, update } = useLabView();
   const { opts, set } = useOpts();
   const still = view?.still ?? true;
-  const { taxonomy, evidence, runs, family, ready, online } = useWorld(view ? view.still : null);
+  const { taxonomy, evidence, runs, family, ready } = useWorld(view ? view.still : null);
 
   const mapId: MapId = opts?.map ?? "pixel";
   const render: Render = opts?.render ?? "true";
@@ -144,6 +161,9 @@ export function PaintedSkin() {
   const winW = useWindowW();
   const mobile = winW < MOBILE_BP;
   const [sheet, setSheet] = useState<Sheet>("peek");
+  const [devOpen, setDevOpen] = useState(false);
+  const [fullDiagram, setFullDiagram] = useState(false);
+  const furniture = useSeaFurniture(td?.pm ?? null, td?.sea ?? null, td?.lands ?? null);
 
   // ——— data
   const names = useMemo(() => taxonomy?.models.map((m) => m.name).filter((n) => map.anchors[n]) ?? [], [taxonomy, map]);
@@ -170,6 +190,12 @@ export function PaintedSkin() {
     for (const n of names) { const f = family?.[n]; if (f) c[f] = (c[f] ?? 0) + 1; }
     return c;
   }, [names, family]);
+  const famProven = useMemo(() => {
+    const c: Record<string, number> = {};
+    for (const n of names) { const f = family?.[n]; if (f && states[n] === "champion") c[f] = (c[f] ?? 0) + 1; }
+    return c;
+  }, [names, family, states]);
+  const pipelines = useMemo(() => taxonomy?.compositions.map((c) => c.name) ?? [], [taxonomy]);
   const counts = useMemo(() => ({
     models: names.length,
     pipelines: taxonomy?.compositions.length ?? 0,
@@ -180,8 +206,6 @@ export function PaintedSkin() {
   const graph = useMemo(() => buildRoadGraph(map), [map]);
   const selected = view?.zoom === "node" && view.focus && map.anchors[view.focus] ? view.focus : null;
   const [hovered, setHovered] = useState<string | null>(null);
-  const [hoverRow, setHoverRow] = useState<Family | null>(null);
-  const [mapHoverFam, setMapHoverFam] = useState<Family | null>(null);
   const lineage = useMemo(() => (selected && taxonomy ? lineageRoutes(graph, selected, parentsOf) : []), [selected, graph, parentsOf, taxonomy]);
   const lineageSet = useMemo(() => {
     const s = new Set<string>();
@@ -192,24 +216,35 @@ export function PaintedSkin() {
   }, [selected, parentsOf]);
   const viewFam = (view?.zoom === "region" || view?.zoom === "node") && view.focus && family?.[view.focus]
     ? (family[view.focus] as Family) : null;
-  const focusFam: Family | null = hoverRow ?? viewFam;
-  // a hovered land row gets the lighter version of the focus gradient
-  const focusStrength = hoverRow && hoverRow !== viewFam ? 0.55 : 1;
+  const focusFam: Family | null = viewFam;
+  const focusStrength = 1;
 
-  // where the focus reveal starts: the focused model, or a hovered land's centre
-  const focusAtX = hoverRow && hoverRow !== viewFam
-    ? (() => { const b = td?.landBox[hoverRow]; return b ? [Math.round(b.x + b.w / 2), Math.round(b.y + b.h / 2)] : null; })()
-    : view?.focus && map.anchors[view.focus] ? [Math.floor(map.anchors[view.focus][0]), Math.floor(map.anchors[view.focus][1])] : null;
+  // where the focus reveal starts: the focused model
+  const focusAtX = view?.focus && map.anchors[view.focus] ? [Math.floor(map.anchors[view.focus][0]), Math.floor(map.anchors[view.focus][1])] : null;
   const fax = focusAtX?.[0] ?? null, fay = focusAtX?.[1] ?? null;
   const focusAt = useMemo(() => (fax == null || fay == null ? null : { x: fax, y: fay }), [fax, fay]);
 
   // ——— camera
   const [vp, setVp] = useState({ w: 1, h: 1 });
   const [manual, setManual] = useState<CamBox | null>(null);
-  // phones: the sheet covers the bottom of the map; frame into the part above it
-  const sheetPx = mobile ? sheetHeight(selected ? (sheet === "peek" ? "half" : sheet) : sheet, vp.h) : 0;
+  // phones: the sheet covers the bottom of the map; desktop: the drawer covers
+  // the right — frame into the part that stays visible
+  const sheetPx = mobile && selected ? sheetHeight(sheet === "peek" ? "half" : sheet, vp.h) : 0;
   const visH = Math.max(120, vp.h - sheetPx);
-  const fit = Math.min(vp.w / W, visH / H);
+  const drawerPx = !mobile && selected && !fullDiagram ? DRAWER_W : 0;
+  const visW = Math.max(160, vp.w - drawerPx);
+  // the continent (union of the land boxes) is what the whole-map view frames;
+  // the image's own sea margins may fall off — the sea continues anyway
+  const continent: Box = useMemo(() => {
+    if (!td) return { x: 0, y: 0, w: W, h: H };
+    let x0 = W, y0 = H, x1 = 0, y1 = 0;
+    for (const f of FAMILIES) { const b = td.landBox[f]; if (!b || !b.w) continue; x0 = Math.min(x0, b.x); y0 = Math.min(y0, b.y); x1 = Math.max(x1, b.x + b.w); y1 = Math.max(y1, b.y + b.h); }
+    const m = 14;
+    return x1 > x0 ? { x: x0 - m, y: y0 - m, w: x1 - x0 + 2 * m, h: y1 - y0 + 2 * m } : { x: 0, y: 0, w: W, h: H };
+  }, [td, W, H]);
+  const fit = isTrue ? Math.min(visW / continent.w, visH / continent.h)
+    : mapId === "paper" ? Math.max(visW / W, visH / H)      // cover: the painting fills the screen
+    : Math.min(visW / W, visH / H);
   const crisp = useMemo(() => Array.from({ length: TRUE_MAX * dpr }, (_, i) => (i + 1) / dpr), [dpr]);
   const down = useCallback((k: number) => [...crisp].reverse().find((s) => s <= k + 1e-3) ?? crisp[0], [crisp]);
   const upTo = useCallback((k: number) => crisp.find((s) => s >= k - 1e-3) ?? crisp[crisp.length - 1], [crisp]);
@@ -222,7 +257,7 @@ export function PaintedSkin() {
       // the next crisp scale up instead (the map then pans)
       let base = down(fit);
       if (mobile && base < fit * 0.75) base = upTo(fit);
-      return { overview: base, region: upTo(base * 1.8), node: upTo(Math.max(2, base * 2)), min: Math.min(base, crisp[0]), max: TRUE_MAX };
+      return { overview: base, region: upTo(base * 1.8), node: upTo(Math.max(2, base * 2)), min: base, max: TRUE_MAX };
     }
     if (snapGrid) {
       const snap = (k: number) => [...GRID_SCALES].reverse().find((s) => s <= k + 1e-3) ?? GRID_SCALES[0];
@@ -231,16 +266,17 @@ export function PaintedSkin() {
       return { overview: base, region: up(base * 1.8), node: up(Math.max(base * 2.2, 1)), min: GRID_SCALES[0], max: IMG_MAX };
     }
     const max = mapId === "paper" ? PAPER_MAX : IMG_MAX;
-    return { overview: fit, region: Math.min(max, fit * 1.8), node: Math.min(max, Math.max(fit * 2.2, 1.2)), min: fit * 0.8, max };
-  }, [isTrue, snapGrid, mapId, fit, crisp, down, upTo, mobile]);
+    return { overview: fit, region: Math.min(max, fit * 1.8), node: Math.min(max, Math.max(fit * 2.2, 1.2)), min: mapId === "paper" ? fit : fit * 0.8, max };
+  }, [isTrue, snapGrid, mapId, fit, down, upTo, mobile]);
 
   const boxAt = useCallback((cx: number, cy: number, k: number): CamBox => {
-    // centre (cx, cy) in the VISIBLE part of the view (above the sheet on phones)
-    const w = vp.w / k, h = vp.h / k, hv = visH / k;
-    const x = w >= W ? (W - w) / 2 : clamp(cx - w / 2, 0, W - w);
+    // centre (cx, cy) in the VISIBLE part of the view (left of the drawer,
+    // above the sheet); the covered part shows more map or more sea
+    const w = vp.w / k, h = vp.h / k, wv = visW / k, hv = visH / k;
+    const x = wv >= W ? (W - wv) / 2 : clamp(cx - wv / 2, 0, W - wv);
     const y = hv >= H ? (H - hv) / 2 : clamp(cy - hv / 2, 0, H - hv);
     return { x, y, w, h };
-  }, [vp, visH, W, H]);
+  }, [vp, visW, visH, W, H]);
 
   const landFrame = useCallback((f: Family): Box => {
     if (td) return td.landBox[f];
@@ -255,14 +291,14 @@ export function PaintedSkin() {
     if (zoom === "region" && a && family?.[focus!]) {
       const lb = landFrame(family[focus!] as Family);
       const m = isTrue ? 10 : 60;
-      let k = Math.min(vp.w / (lb.w + m * 2), visH / (lb.h + m * 2));
+      let k = Math.min(visW / (lb.w + m * 2), visH / (lb.h + m * 2));
       k = isTrue ? clamp(down(k), levels.overview, TRUE_MAX) : clamp(k, levels.min, levels.max);
       return boxAt(lb.x + lb.w / 2, lb.y + lb.h / 2, k);
     }
-    return boxAt(W / 2, H / 2, levels.overview);
-  }, [view, map, levels, family, landFrame, boxAt, vp.w, visH, isTrue, down, W, H]);
+    return isTrue ? boxAt(continent.x + continent.w / 2, continent.y + continent.h / 2, levels.overview) : boxAt(W / 2, H / 2, levels.overview);
+  }, [view, map, levels, family, landFrame, boxAt, visW, visH, isTrue, down, W, H, continent]);
 
-  useEffect(() => { setManual(null); }, [view?.zoom, view?.focus, mapId, render, vp.w, vp.h]);
+  useEffect(() => { setManual(null); }, [view?.zoom, view?.focus, mapId, render, vp.w, vp.h, drawerPx]);
 
   const cam = useCamera({ world: { x: 0, y: 0, w: W, h: H }, target: manual ?? target, still, targetViewport: vp, minWidth: 40 });
   useEffect(() => {
@@ -302,7 +338,8 @@ export function PaintedSkin() {
   };
   const panBy = (dx: number, dy: number) => {
     const b = cam.box;
-    setManual({ ...b, x: b.w >= W ? b.x : clamp(b.x + dx * b.w, 0, W - b.w), y: b.h >= H ? b.y : clamp(b.y + dy * b.h, 0, H - b.h) });
+    const wv = (visW / vp.w) * b.w, hv = (visH / vp.h) * b.h;
+    setManual({ ...b, x: wv >= W ? b.x : clamp(b.x + dx * b.w, 0, W - wv), y: hv >= H ? b.y : clamp(b.y + dy * b.h, 0, H - hv) });
   };
   const centerAt = (x: number, y: number) => {
     const b = cam.box;
@@ -323,8 +360,10 @@ export function PaintedSkin() {
   // layout scale: the resting scale of the current target (labels re-layout per level, not per frame)
   const Sl = manual ? vp.w / manual.w : vp.w / target.w;
   const layoutS = Number.isFinite(Sl) && Sl > 0 ? Sl : 1;
-  // one art pixel in CSS px (sidebar borders): the true map's current scale
+  // one art pixel in CSS px (plate borders): the true map's current scale
   const ap = isTrue ? clamp(Math.round(layoutS * dpr) / dpr, 1, 3) : 2;
+  const theme_ = theme;
+  const zoomedIn_ = curScale() > levels.overview + 1e-3;
 
   // ——— fonts
   const [fontsReady, setFontsReady] = useState(false);
@@ -356,9 +395,9 @@ export function PaintedSkin() {
   const restBox = manual ?? target;
   const visible: Box = useMemo(() => {
     const x0 = Math.max(0, restBox.x), y0 = Math.max(0, restBox.y);
-    const x1 = Math.min(W, restBox.x + restBox.w), y1 = Math.min(H, restBox.y + (visH / vp.h) * restBox.h);
+    const x1 = Math.min(W, restBox.x + (visW / vp.w) * restBox.w), y1 = Math.min(H, restBox.y + (visH / vp.h) * restBox.h);
     return { x: x0 + 2, y: y0 + 2, w: Math.max(40, x1 - x0 - 4), h: Math.max(40, y1 - y0 - 4) };
-  }, [restBox.x, restBox.y, restBox.w, restBox.h, W, H, visH, vp.h]);
+  }, [restBox.x, restBox.y, restBox.w, restBox.h, W, H, visW, visH, vp.w, vp.h]);
   const signs: PlacedRibbon[] = useMemo(() => {
     if (!isTrue || !ours) return [];
     return FAMILIES.map((f) => {
@@ -478,11 +517,13 @@ export function PaintedSkin() {
   const onSelect = useCallback((n: string) => {
     update({ zoom: "node", focus: n });
     setSheet((s) => (s === "peek" ? "half" : s));
+    setFullDiagram(false);
   }, [update]);
+  useEffect(() => { if (!selected) setFullDiagram(false); }, [selected]);
   const setView = useCallback((v: Partial<Omit<LabView, "still">>) => update(v), [update]);
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape" && view?.zoom === "node") update({ zoom: "region" });
+      if (e.key === "Escape") { if (fullDiagram) setFullDiagram(false); else if (view?.zoom === "node") update({ zoom: "region" }); }
       const tag = (e.target as HTMLElement | null)?.tagName;
       if (tag === "INPUT" || tag === "TEXTAREA") return;
       if (e.key === "+" || e.key === "=") stepZoom(1);
@@ -496,21 +537,6 @@ export function PaintedSkin() {
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   });
-
-  // hovering a land on the map lights its row in the sidebar
-  const onMapPointer = (e: React.PointerEvent) => {
-    const rect = (e.currentTarget as Element).getBoundingClientRect();
-    const x = cam.box.x + ((e.clientX - rect.left) / rect.width) * cam.box.w;
-    const y = cam.box.y + ((e.clientY - rect.top) / rect.height) * cam.box.h;
-    let f: Family | null = null;
-    if (td) {
-      const px = Math.floor(x), py = Math.floor(y);
-      if (px >= 0 && py >= 0 && px < W && py < H) { const i = td.lands[py * W + px]; f = i >= 0 ? FAMILIES[i] : null; }
-    } else {
-      f = FAMILIES.find((fam) => insidePolygon({ x, y }, map.lands[fam])) ?? null;
-    }
-    if (f !== mapHoverFam) setMapHoverFam(f);
-  };
 
   const card = useMemo(() => {
     if (!selected || !taxonomy || !family) return null;
@@ -546,74 +572,95 @@ export function PaintedSkin() {
     return () => { delete w.__lab; };
   }, [drawn, onSelect, setView, onCritter]);
 
-  const swatch = useMemo(() => {
-    if (td) return td.swatch;
-    const s: Partial<Record<Family, string>> = {};
-    for (const f of FAMILIES) s[f] = theme.evidence.champion.fill;
-    return s;
-  }, [td, theme]);
-
-  const sidebar = opts && (
-    <Sidebar theme={theme} mobile={mobile} sheet={selected && sheet === "peek" ? "half" : sheet} setSheet={setSheet}
-      mapId={mapId} render={render} labels={labels} setOpts={set} online={online}
-      counts={counts} names={names} family={family} atoms={atoms} states={states} famCount={famCount} swatch={swatch}
-      world={{ w: W, h: H }} box={cam.box}
-      minimap={isTrue ? { canvas: baseCanvas.current, version: trueVersion } : { img: imgSrc, pixelated: mapId === "pixel" }}
-      canIn={curScale() < levels.max - 1e-3} canOut={curScale() > levels.min + 1e-3}
-      onZoom={(d) => stepZoom(d)} onFit={fitWhole} onCenter={centerAt}
-      focusFam={focusFam} mapHoverFam={mapHoverFam} onHoverLand={setHoverRow} onLand={jumpLand}
-      card={card} onPick={onSelect} onBack={() => update({ zoom: "region" })} still={still} />
-  );
+  const m = theme_;
+  const whole = !manual && (view?.zoom ?? "overview") === "overview";
+  const compassUnit = m.crisp ? clamp(Math.round(ap * 3), 4, 6) : 5;
+  const minimap = isTrue ? { canvas: baseCanvas.current, version: trueVersion } : { img: imgSrc, pixelated: mapId === "pixel" };
+  const corner = "pointer-events-auto absolute z-20";
 
   return (
     <LabMotion still={still}>
       <style>{KEYFRAMES}</style>
       <div data-painted-root data-lab-ready={drawn ? "1" : undefined}
-        className="relative flex h-full w-full select-none overflow-hidden"
-        style={{ background: theme.sea, ["--ap" as string]: `${ap}px` } as CSSProperties}>
-        {!mobile && sidebar}
-        <div className="relative h-full min-w-0 flex-1 overflow-hidden" style={{ background: theme.sea }}>
-          <div ref={cam.ref} {...cam.handlers} onWheel={onWheel} onPointerMove={(e) => { cam.handlers.onPointerMove(e); onMapPointer(e); }}
-            onPointerLeave={() => setMapHoverFam(null)}
-            className="absolute inset-0 touch-none cursor-grab active:cursor-grabbing">
-            <div data-painted-map className="absolute left-0 top-0" style={{ width: W * S, height: H * S, transform: `translate(${ox}px, ${oy}px)` }}>
-              {isTrue ? (
-                td && taxonomy ? (
-                  <TrueMapLayers data={td} map={map} states={states} atoms={atoms} focusFam={focusFam}
-                    focusStrength={focusStrength} focusAt={focusAt}
-                    ribbons={ribbons} signs={signs} lineage={lineage.map((l) => l.pts)}
-                    selected={selected} hovered={hovered} critter={critter} scale={S} still={still}
-                    onSelect={onSelect} onHover={setHovered} onCritter={onCritter} onPainted={onPainted} />
-                ) : null
-              ) : (
-                <>
-                  {/* eslint-disable-next-line @next/next/no-img-element -- a local, owner-supplied painting */}
-                  <img key={imgSrc} src={imgSrc} alt={mapId === "pixel" ? "A pixel-art map of six lands" : "A painted storybook map of six lands"}
-                    width={W} height={H} draggable={false} onLoad={() => setImgLoaded(imgSrc)}
-                    ref={(el) => { if (el?.complete && el.naturalWidth && imgLoaded !== imgSrc) setImgLoaded(imgSrc); }}
-                    className="absolute inset-0 block h-full w-full max-w-none"
-                    style={{ imageRendering: mapId === "pixel" ? "pixelated" : "auto" }} />
-                  {taxonomy && (
-                    <PaintedOverlay map={map} theme={theme} scale={S} heal={heal} ours={ours}
-                      tags={tags} tagFont={tagFont} markerR={markerR} states={states} famCount={famCount} counts={counts}
-                      selected={selected} hovered={hovered} lineage={lineage} lineageSet={lineageSet}
-                      critter={critter} still={still} onSelect={onSelect} onHover={setHovered} onCritter={onCritter} />
-                  )}
-                </>
-              )}
-            </div>
-          </div>
-          {isTrue && (trueState.status === "missing" || trueState.status === "error") && (
-            <div role="alert" className="absolute inset-x-4 top-4 z-10 mx-auto max-w-xl p-4 text-[15px]"
-              style={{ background: theme.plateHi, color: theme.ink, border: `var(--ap) solid ${theme.border}`, fontFamily: theme.bodyFont }}>
-              <p className="font-bold">The true pixel map has not been converted yet.</p>
-              <p className="mt-1">Run:</p>
-              <pre className="mt-1 whitespace-pre-wrap break-all text-[13px]">{PIXELMAP_CMD}</pre>
-              {trueState.status === "error" && <p className="mt-2 text-[13px]" style={{ color: theme.inkSoft }}>{trueState.message}</p>}
-            </div>
+        className="relative h-full w-full select-none overflow-hidden"
+        style={{ background: m.sea, ["--ap" as string]: `${ap}px` } as CSSProperties}>
+        {/* ——— the stage: sea to every edge, the map on it */}
+        <div ref={cam.ref} {...cam.handlers} onWheel={onWheel}
+          className="absolute inset-0 touch-none cursor-grab active:cursor-grabbing">
+          {isTrue && td && furniture && (
+            <SeaCanvas pm={td.pm} furniture={furniture} scale={S} ox={ox} oy={oy} vw={vp.w} vh={vp.h} dpr={dpr} mapW={W} mapH={H} />
           )}
-          {mobile && sidebar}
+          <div data-painted-map className="absolute left-0 top-0" style={{ width: W * S, height: H * S, transform: `translate(${ox}px, ${oy}px)` }}>
+            {isTrue ? (
+              td && taxonomy ? (
+                <TrueMapLayers data={td} map={map} states={states} atoms={atoms} focusFam={focusFam}
+                  focusStrength={focusStrength} focusAt={focusAt}
+                  ribbons={ribbons} signs={signs} lineage={lineage.map((l) => l.pts)}
+                  selected={selected} hovered={hovered} critter={critter} scale={S} still={still}
+                  onSelect={onSelect} onHover={setHovered} onCritter={onCritter} onPainted={onPainted} />
+              ) : null
+            ) : (
+              <>
+                {/* eslint-disable-next-line @next/next/no-img-element -- a local, owner-supplied painting */}
+                <img key={imgSrc} src={imgSrc} alt={mapId === "pixel" ? "A pixel-art map of six lands" : "A painted storybook map of six lands"}
+                  width={W} height={H} draggable={false} onLoad={() => setImgLoaded(imgSrc)}
+                  ref={(el) => { if (el?.complete && el.naturalWidth && imgLoaded !== imgSrc) setImgLoaded(imgSrc); }}
+                  className="absolute inset-0 block h-full w-full max-w-none"
+                  style={{ imageRendering: mapId === "pixel" ? "pixelated" : "auto" }} />
+                {taxonomy && (
+                  <PaintedOverlay map={map} theme={m} scale={S} heal={heal} ours={ours}
+                    tags={tags} tagFont={tagFont} markerR={markerR} states={states} famCount={famCount} counts={counts}
+                    selected={selected} hovered={hovered} lineage={lineage} lineageSet={lineageSet}
+                    critter={critter} still={still} onSelect={onSelect} onHover={setHovered} onCritter={onCritter} />
+                )}
+              </>
+            )}
+          </div>
         </div>
+
+        {/* ——— the four corners (the map stays draggable between them) */}
+        {opts && (
+          <div className="pointer-events-none absolute inset-0 z-20" style={{ right: drawerPx, bottom: sheetPx }}>
+            {/* paper: flush to the top so it covers the painter's own cartouche at the whole-map view */}
+            <div className={`${corner} left-3 sm:left-5 ${m.crisp ? "top-3 sm:top-5" : "top-0"}`} style={stamp(0, still)}>
+              <Cartouche m={m} counts={counts} names={names} focusFam={focusFam} famCount={famCount} famProven={famProven}
+                onPick={onSelect} onWhole={fitWhole} compact={mobile} />
+            </div>
+            <div className={`${corner} right-3 top-0 sm:right-5`} style={stamp(1, still)}>
+              <SheetTabs m={m} mapId={mapId} dev={opts.dev} render={render} labels={labels} setOpts={set} devOpen={devOpen} setDevOpen={setDevOpen} compact={mobile} />
+            </div>
+            <div className={`${corner} bottom-3 left-3 flex flex-col items-start gap-3 sm:bottom-5 sm:left-5`} style={stamp(2, still)}>
+              {!mobile && (
+                <ScaleBar m={m} names={names} family={family} states={states} atoms={atoms} pipelines={pipelines} counts={counts}
+                  selected={selected} onPick={onSelect} onLand={jumpLand} focusFam={focusFam} />
+              )}
+              <Compass m={m} unit={mobile ? 3.5 : compassUnit} onPan={panBy} onWhole={fitWhole} onZoom={(d) => stepZoom(d)}
+                canIn={curScale() < levels.max - 1e-3} canOut={curScale() > levels.min + 1e-3} whole={whole} />
+            </div>
+            {!mobile && (
+              <div className={`${corner} bottom-3 right-3 sm:bottom-5 sm:right-5`} style={stamp(3, still)}>
+                <CornerPlate m={m} face={zoomedIn_ ? "minimap" : "legend"} world={{ w: W, h: H }} box={cam.box} source={minimap} onCenter={centerAt} />
+              </div>
+            )}
+          </div>
+        )}
+
+        {isTrue && (trueState.status === "missing" || trueState.status === "error") && (
+          <div role="alert" className="absolute inset-x-4 top-24 z-30 mx-auto max-w-xl p-4" style={{ ...{ background: m.plateHi, color: m.ink, border: `var(--ap) solid ${m.border}`, fontFamily: m.bodyFont }, fontSize: 15 }}>
+            <p className="font-bold">The true pixel map has not been converted yet.</p>
+            <p className="mt-1">Run:</p>
+            <pre className="mt-1 whitespace-pre-wrap break-all text-[13px]">{PIXELMAP_CMD}</pre>
+            {trueState.status === "error" && <p className="mt-2 text-[13px]" style={{ color: m.inkSoft }}>{trueState.message}</p>}
+          </div>
+        )}
+
+        {/* ——— the drawer */}
+        {card && (
+          <Drawer m={m} mobile={mobile} sheet={sheet === "peek" ? "half" : sheet} setSheet={setSheet} card={card} still={still}
+            onPick={onSelect} onBack={() => update({ zoom: "region" })}
+            stateOf={(n) => states[n] ?? "untrained"} isAtom={(n) => atoms.has(n)}
+            fullDiagram={fullDiagram} setFullDiagram={setFullDiagram} stageW={vp.w} />
+        )}
       </div>
     </LabMotion>
   );

@@ -1,10 +1,10 @@
-// Per-map look for the live layer: the pixel map gets parchment plates with a
-// 1-art-px maroon border in Pixelify Sans (crisp, square); the paper map gets
-// softer painted plates in IM Fell / Alegreya that match the painter's tags.
+// Material tokens for the live layer, one per owner map. Every component
+// renders both: the pixel map gets parchment plates cut from its own 128-colour
+// palette (1-art-px maroon borders, Pixelify Sans); the paper map gets painted
 import type { EvidenceState } from "@/components/lab/shared/card-model";
 import type { MapId } from "./anchors";
 
-export interface PaintedTheme {
+export interface Material {
   id: MapId;
   sea: string;          // page colour beyond the image edge
   plate: string;        // tag / sign fill
@@ -17,6 +17,9 @@ export interface PaintedTheme {
   road: string;         // lit lineage road
   roadEdge: string;
   ring: string;         // selection ring
+  field: string;        // input fill
+  shadow: string;       // hard plate shadow (pixel) / soft (paper)
+  rule: string;         // thin inner rule on plates
   tagFont: string;
   signFont: string;
   bodyFont: string;
@@ -25,7 +28,7 @@ export interface PaintedTheme {
   evidence: Record<EvidenceState, { fill: string; stroke: string; dash?: string }>;
 }
 
-export const THEMES: Record<MapId, PaintedTheme> = {
+export const THEMES: Record<MapId, Material> = {
   // every pixel token is an entry of pixel-map-true.png's 128-colour palette
   // (index in the comment) — the UI is cut from the same world as the map
   pixel: {
@@ -41,6 +44,9 @@ export const THEMES: Record<MapId, PaintedTheme> = {
     road: "#fdc771",      // 8   road-marker gold
     roadEdge: "#7a2424",  // 23
     ring: "#e91c1d",      // 18
+    field: "#fffedb",     // 61
+    shadow: "#221316",    // 38
+    rule: "#e9deb0",      // 120
     tagFont: "var(--font-pixel), ui-monospace, monospace",
     signFont: "var(--font-pixel), ui-monospace, monospace",
     bodyFont: "var(--font-pixel), ui-monospace, monospace",
@@ -66,6 +72,9 @@ export const THEMES: Record<MapId, PaintedTheme> = {
     road: "#f4b73e",
     roadEdge: "#5a2c12",
     ring: "#c0392b",
+    field: "#fff7e4",
+    shadow: "rgba(43,29,18,.35)",
+    rule: "#7a5a3a",
     tagFont: "var(--font-alegreya), Georgia, serif",
     signFont: "var(--font-fell), Georgia, serif",
     bodyFont: "var(--font-alegreya), Georgia, serif",

@@ -84,6 +84,19 @@ playground/ (repo root)  Next.js 16 + React 19 + TS + Tailwind v4 + Recharts +
                      (?zoom=overview|region|node&focus=<model>&still=1); skins
                      set data-lab-ready when drawn; every mark is declared in
                      components/lab/<skin>/encoding.ts.
+                     /lab/painted = the owner's two painted maps (pixel 768×512
+                     128-colour, paper 1536×1024; local, gitignored under
+                     playground/public/local/) with the live data layer, in the
+                     "four corners" layout (spec 2026-10-02-painted-four-corners):
+                     the map owns the whole viewport (pixel sea extended to the
+                     edges with the map's own sea furniture — stage.tsx +
+                     sea-furniture.ts; paper cover-cropped), chrome only in the
+                     corners (corners/: cartouche + search, Pixel/Paper sheet
+                     tabs, compass navigation + scale bar of models by evidence,
+                     legend↔minimap plate), a right drawer for the selected model
+                     (drawer.tsx, mechanism diagram as hero, full-stage view);
+                     one component tree, two materials (material.ts).
+                     ?map=pixel|paper; ?dev=1 reveals the render/labels tray.
 infra/gcp/           Dockerfile.train (ARG TORCH_INDEX: cpu|cu121) + entrypoint.sh
                      (MODE=train|sweep-task) + terraform/ (train job, L4 sweep
                      job, topic, trigger, IAM) + function/ (see its README)
@@ -158,7 +171,7 @@ Writes `runs/sweep/<ts>/report.{md,json}`; non-zero exit on any non-pass.
 - `make playground` — build the Next.js UI to `playground/out` (rebuild after UI changes; CI builds it for deploy)
 - `make playground-dev` — Next dev server on :3000 with hot reload (proxies API to :8000 via `NEXT_PUBLIC_API_BASE`)
 - `cd playground && npm test` — lib/world layout invariants (node --test + strip-types, no deps)
-- `make lab-shoot SKIN=<skin> ROUND=<n>` — headless screenshots of a /lab skin (4 states × desktop/mobile → gitignored `playground/.lab-shots/<skin>/r<n>/`; ≤2 Chrome at once; `--typecheck`/`--check-only` via `node scripts/shoot.mjs`)
+- `make lab-shoot SKIN=<skin> ROUND=<n>` — headless screenshots of a /lab skin (4 states × desktop/mobile → gitignored `playground/.lab-shots/<skin>/r<n>/`; ≤2 Chrome at once; `--typecheck`/`--check-only`/`--dpr 2` (the owner's retina scale — use it for the pixel map) via `node scripts/shoot.mjs`; the painted skin's extra states live in `.lab-shots/painted/shoot-painted.mjs`)
 - `make lab-board` — build `playground/.lab-shots/board.html`, the round-by-round bake-off comparison page
 - Lab feedback loop: the owner writes notes (+ pasted pictures) in the Feedback tab on any `/lab/<skin>` page; read new ones in `playground/.lab-shots/feedback/*/note.json` (images beside them), relay to the skin's builder, then write `status.json` `{"status":"relayed"|"addressed","reply":"…"}` so the tab shows the loop closing
 - `make -C infra/gcp validate` — terraform fmt-check + validate (static, no cloud)
