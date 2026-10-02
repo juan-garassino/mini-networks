@@ -234,7 +234,7 @@ export function PaintedSkin() {
   // the right — frame into the part that stays visible
   const sheetPx = mobile && selected ? sheetHeight(sheet === "peek" ? "half" : sheet, vp.h) : 0;
   const visH = Math.max(120, vp.h - sheetPx);
-  const drawerPx = !mobile && selected && !fullDiagram ? DRAWER_W : 0;
+  const drawerPx = !mobile && selected && !fullDiagram && !uiHidden ? DRAWER_W : 0;
   const visW = Math.max(160, vp.w - drawerPx);
   // the continent (union of the land boxes) is what the whole-map view frames;
   // the image's own sea margins may fall off — the sea continues anyway
@@ -272,12 +272,14 @@ export function PaintedSkin() {
     return { overview: fit, region: Math.min(max, fit * 1.8), node: Math.min(max, Math.max(fit * 2.2, 1.2)), min: mapId === "paper" ? fit : fit * 0.8, max };
   }, [isTrue, snapGrid, mapId, fit, down, upTo, mobile]);
 
-  const boxAt = useCallback((cx: number, cy: number, k: number): CamBox => {
+  const boxAt = useCallback((cx: number, cy: number, k: number, free = false): CamBox => {
     // centre (cx, cy) in the VISIBLE part of the view (left of the drawer,
-    // above the sheet); the covered part shows more map or more sea
+    // above the sheet); the covered part shows more map or more sea.
+    // free: centre exactly, even if that shows sea past the map's edge (a
+    // land on the coast is still framed in the middle — the sea goes on)
     const w = vp.w / k, h = vp.h / k, wv = visW / k, hv = visH / k;
-    const x = wv >= W ? (W - wv) / 2 : clamp(cx - wv / 2, 0, W - wv);
-    const y = hv >= H ? (H - hv) / 2 : clamp(cy - hv / 2, 0, H - hv);
+    const x = free ? cx - wv / 2 : wv >= W ? (W - wv) / 2 : clamp(cx - wv / 2, 0, W - wv);
+    const y = free ? cy - hv / 2 : hv >= H ? (H - hv) / 2 : clamp(cy - hv / 2, 0, H - hv);
     return { x, y, w, h };
   }, [vp, visW, visH, W, H]);
 
@@ -290,13 +292,12 @@ export function PaintedSkin() {
     const zoom = view?.zoom ?? "overview";
     const focus = view?.focus ?? null;
     const a = focus ? map.anchors[focus] : undefined;
-    if (zoom === "node" && a) return boxAt(a[0], a[1], levels.node);
-    if (zoom === "region" && a && family?.[focus!]) {
+    if ((zoom === "node" || zoom === "region") && a && family?.[focus!]) {
       const lb = landFrame(family[focus!] as Family);
       const m = isTrue ? 10 : 60;
       let k = Math.min(visW / (lb.w + m * 2), visH / (lb.h + m * 2));
       k = isTrue ? clamp(down(k), levels.overview, TRUE_MAX) : clamp(k, levels.min, levels.max);
-      return boxAt(lb.x + lb.w / 2, lb.y + lb.h / 2, k);
+      return boxAt(lb.x + lb.w / 2, lb.y + lb.h / 2, k, true);
     }
     return isTrue ? boxAt(continent.x + continent.w / 2, continent.y + continent.h / 2, levels.overview) : boxAt(W / 2, H / 2, levels.overview);
   }, [view, map, levels, family, landFrame, boxAt, visW, visH, isTrue, down, W, H, continent]);
@@ -304,7 +305,9 @@ export function PaintedSkin() {
   useEffect(() => { setManual(null); }, [view?.zoom, view?.focus, mapId, render, vp.w, vp.h, drawerPx]);
 
   const camClamp = useMemo(() => ({ right: drawerPx, bottom: sheetPx }), [drawerPx, sheetPx]);
-  const cam = useCamera({ world: { x: 0, y: 0, w: W, h: H }, target: manual ?? target, still, targetViewport: vp, minWidth: 40, clamp: camClamp });
+  const framed = (view?.zoom ?? "overview") !== "overview";
+  const camWorld = useMemo(() => (framed ? { x: -W * 0.25, y: -H * 0.25, w: W * 1.5, h: H * 1.5 } : { x: 0, y: 0, w: W, h: H }), [framed, W, H]);
+  const cam = useCamera({ world: camWorld, target: manual ?? target, still, targetViewport: vp, minWidth: 40, clamp: camClamp });
   useEffect(() => {
     if (cam.size.w !== vp.w || cam.size.h !== vp.h) setVp({ w: cam.size.w, h: cam.size.h });
   }, [cam.size.w, cam.size.h, vp.w, vp.h]);
