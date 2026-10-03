@@ -404,15 +404,16 @@ export function PaintedSkin() {
   }, []);
   const measure = useMeasure(fontsReady);
 
-  // ——— which names show (restraint): atoms always; a derived model when
-  // selected / on the lit lineage / hovered / in the focused land, or when the
-  // view is zoomed to ≥ 2 art px (true) or ≥ 1.8× the overview (images)
+  // ——— which names show: three levels of openness.
+  //   whole map   only the land signs — the painting is the thing; a hovered
+  //               model shows its name
+  //   in a land   (zoomed in, or a land in focus) that land's names open
+  //   a model     its card opens (the drawer) and its lineage is named
   const zoomedIn = isTrue ? layoutS >= 2 - 1e-3 : layoutS >= levels.overview * 1.8;
-  // with a land in focus, only THAT land's derived names show (others dim)
   const showName = useCallback((n: string) =>
-    atoms.has(n) || n === selected || n === hovered || lineageSet.has(n)
+    n === selected || n === hovered || lineageSet.has(n)
       || (focusFam !== null ? family?.[n] === focusFam : zoomedIn),
-  [atoms, selected, hovered, lineageSet, focusFam, family, zoomedIn]);
+  [selected, hovered, lineageSet, focusFam, family, zoomedIn]);
 
   // ——— true map: ribbons + signs (art px)
   // glyph size: the 5-px caps land at ~10 screen px (ribbons) and ~14 (signs)

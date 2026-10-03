@@ -11,6 +11,11 @@
 //            they flicker
 //   foliage  small green blobs (trees, bushes): leaves rustle — sparse
 //            highlight swaps, never a shift
+//   falls    the painted waterfalls (landmark boxes): the water pours — a fast
+//            wave running down through the blues and the white streaks
+//   flags    small red things on a pole or tower top: they flutter
+//   gulls    a few birds cross the parchment sea (drawn only over the sea)
+//   splash   now and then a fish breaks the water: a ring that widens and goes
 //
 // Every class keeps the painting's own colours: a pixel only ever shows a
 // colour from its ramp, so a still frame is still the owner's map.
@@ -43,6 +48,12 @@ export interface Life {
   crater: Int32Array;
   /** lighthouse lamps: a beam sweeps from each */
   lamps: { x: number; y: number }[];
+  falls: LifeClass;
+  flags: LifeClass;
+  /** the parchment sea (gulls fly only over it) */
+  sea: Uint8Array;
+  /** a bounding box of the sea for the gulls' flight paths */
+  seaBox: { x: number; y: number; w: number; h: number };
   /** per-pixel hash in [0,1) for phases */
   noise: (p: number) => number;
 }
@@ -110,7 +121,11 @@ function rampOf(pm: PixelMap, inClass: Uint8Array): { ramp: Uint8Array; rampPos:
   return { ramp: Uint8Array.from(ids), rampPos };
 }
 
-export interface Landmarks { vents: readonly (readonly [number, number])[]; lamps: readonly (readonly [number, number])[] }
+export interface Landmarks {
+  vents: readonly (readonly [number, number])[];
+  lamps: readonly (readonly [number, number])[];
+  falls?: readonly { x: number; y: number; w: number; h: number }[];
+}
 
 export function analyseLife(pm: PixelMap, sea: Uint8Array, lands: Int8Array, generative: number, landmarks?: Landmarks): Life {
   const { w, h, idx } = pm;
@@ -120,6 +135,7 @@ export function analyseLife(pm: PixelMap, sea: Uint8Array, lands: Int8Array, gen
   // (a body of water is big, or meets the sea — blue roofs and domes are
   // neither; waterfalls are tall and narrow)
   const waterC = classify(pm, (hh, s, v) => hh >= 168 && hh <= 202 && s >= 0.45 && v >= 0.28);
+  const whiteC = classify(pm, (_h, s, v) => s <= 0.3 && v >= 0.88);
   const wc = components(pm, waterC, notSea);
   const coastal = new Uint8Array(wc.comps.length);
   for (let p = 0; p < w * h; p++) {
@@ -128,11 +144,20 @@ export function analyseLife(pm: PixelMap, sea: Uint8Array, lands: Int8Array, gen
     const x = p % w;
     if ((x > 0 && sea[p - 1]) || (x < w - 1 && sea[p + 1]) || (p >= w && sea[p - w]) || (p + w < w * h && sea[p + w])) coastal[id] = 1;
   }
-  const water = pick(pm, wc.label, wc.comps, (c) => c.size >= 300 || coastal[wc.comps.indexOf(c)] === 1 || (c.y1 - c.y0 >= 20 && c.x1 - c.x0 <= 10 && c.size >= 40));
+  const water = pick(pm, wc.label, wc.comps, (c) => c.size >= 300 || coastal[wc.comps.indexOf(c)] === 1);
+  // waterfalls: the blue and white pixels inside the hand-placed boxes
+  const fallC = new Uint8Array(pm.hex.length);
+  for (let i = 0; i < fallC.length; i++) fallC[i] = waterC[i] || whiteC[i] ? 1 : 0;
+  const falls: number[] = [];
+  for (const b of landmarks?.falls ?? []) {
+    for (let y = Math.max(0, b.y); y < Math.min(h, b.y + b.h); y++) for (let x = Math.max(0, b.x); x < Math.min(w, b.x + b.w); x++) {
+      const p = y * w + x;
+      if (fallC[idx[p]] && !sea[p]) falls.push(p);
+    }
+  }
   const waterSet = new Uint8Array(w * h);
   for (const p of water) waterSet[p] = 1;
   // foam: near-white touching water
-  const whiteC = classify(pm, (_h, s, v) => s <= 0.3 && v >= 0.88);
   const foam: number[] = [], foamUnder: number[] = [];
   for (let p = 0; p < w * h; p++) {
     if (!whiteC[idx[p]] || sea[p]) continue;
@@ -182,12 +207,33 @@ export function analyseLife(pm: PixelMap, sea: Uint8Array, lands: Int8Array, gen
   });
 
   const noise = (p: number) => { let v = (p * 2654435761) >>> 0; v ^= v >>> 15; v = Math.imul(v, 2246822519) >>> 0; v ^= v >>> 13; return (v >>> 8) / 16777216; };
+  // flags: a small pure-red thing with something dark right under it (a pole,
+  // a tower top) — berries on bushes have green under them
+  const redC = classify(pm, (hh, s, v) => (hh >= 352 || hh <= 4) && s >= 0.8 && v >= 0.6);
+  const rc = components(pm, redC, notSea);
+  const darkUnder = new Uint8Array(rc.comps.length);
+  for (let p = 0; p < w * h; p++) {
+    const id = rc.label[p];
+    if (id < 0 || darkUnder[id]) continue;
+    for (let d = 1; d <= 2; d++) {
+      const q = p + d * w;
+      if (q >= w * h || rc.label[q] === id) continue;
+      const k = idx[q] * 3;
+      if (0.3 * pm.palette[k] + 0.59 * pm.palette[k + 1] + 0.11 * pm.palette[k + 2] < 80) { darkUnder[id] = 1; break; }
+    }
+  }
+  const flags = pick(pm, rc.label, rc.comps, (c) => c.size >= 5 && c.size <= 30 && c.x1 - c.x0 >= 2 && c.y1 - c.y0 >= 2 && darkUnder[rc.comps.indexOf(c)] === 1);
+  const flagC = classify(pm, (hh, s, v) => (hh >= 348 || hh <= 6) && s >= 0.65 && v >= 0.45);
+
+  let sx0 = w, sy0 = h, sx1 = 0, sy1 = 0;
+  for (let p = 0; p < w * h; p++) if (sea[p]) { const x = p % w, y = (p / w) | 0; if (x < sx0) sx0 = x; if (x > sx1) sx1 = x; if (y < sy0) sy0 = y; if (y > sy1) sy1 = y; }
+
   const cls = (px: Int32Array, c: Uint8Array): LifeClass => {
     const xs = new Int16Array(px.length), ys = new Int16Array(px.length), ph = new Float32Array(px.length);
     for (let i = 0; i < px.length; i++) { xs[i] = px[i] % w; ys[i] = (px[i] / w) | 0; ph[i] = noise(px[i]); }
     return { px, xs, ys, ph, ...rampOf(pm, c) };
   };
-  return { w, h, water: cls(water, waterC), foam: Int32Array.from(foam), foamUnder: Uint8Array.from(foamUnder), lava: cls(lava, lavaC), lights: cls(lights, lightC), foliage: cls(foliage, greenC), crater: Int32Array.from(crater), lamps, noise };
+  return { w, h, water: cls(water, waterC), foam: Int32Array.from(foam), foamUnder: Uint8Array.from(foamUnder), lava: cls(lava, lavaC), lights: cls(lights, lightC), foliage: cls(foliage, greenC), crater: Int32Array.from(crater), lamps, falls: cls(Int32Array.from(falls), fallC), flags: cls(flags, flagC), sea, seaBox: { x: sx0, y: sy0, w: sx1 - sx0 + 1, h: sy1 - sy0 + 1 }, noise };
 }
 
 // ————————————————————————————————————————————— one frame
@@ -258,8 +304,24 @@ const TAU = Math.PI * 2;
 export function paintLife(out: Uint8ClampedArray, pm: PixelMap, life: Life, t: number, fp: FramePaint, travellers: Traveller[] = []) {
   const { w, h } = pm;
   const { noise } = life;
-  // water: two crossing swells, glints where they add up
-  ramped(out, pm, life.water, fp, (x, y, n) => Math.sin(x * 0.21 + y * 0.34 - t * 1.7 + n * TAU) + 0.6 * Math.sin(x * 0.07 - y * 0.11 + t * 0.9 + n * 2), 1.05, -1.15, 1.45);
+  // water: two crossing swells, glints where they add up (its own loop: the
+  // biggest class, kept monomorphic so V8 inlines it)
+  {
+    const c = life.water, { px, xs, ys, ph, rampPos, ramp } = c, top = ramp.length - 1, { idx, palette } = pm;
+    for (let i = 0; i < px.length; i++) {
+      const pos = rampPos[idx[px[i]]];
+      if (pos < 0) continue;
+      const x = xs[i], y = ys[i], n = ph[i];
+      const v = Math.sin(x * 0.21 + y * 0.34 - t * 1.7 + n * TAU) + 0.6 * Math.sin(x * 0.07 - y * 0.11 + t * 0.9 + n * 2);
+      let np = pos;
+      if (v > 1.45) np = Math.min(top, pos + 2);
+      else if (v > 1.05) np = Math.min(top, pos + 1);
+      else if (v < -1.15) np = Math.max(0, pos - 1);
+      if (np === pos) continue;
+      const k = ramp[np] * 3;
+      put(out, w, h, x, y, [palette[k], palette[k + 1], palette[k + 2]], fp);
+    }
+  }
   // foam: a wave pulls it back now and then, showing the water under it
   for (let i = 0; i < life.foam.length; i++) {
     const p = life.foam[i], x = p % w, y = (p / w) | 0;
@@ -274,6 +336,43 @@ export function paintLife(out: Uint8ClampedArray, pm: PixelMap, life: Life, t: n
   ramped(out, pm, life.lights, fp, (_x, _y, n) => Math.sin(t * (2.5 + n * 5) + n * 40), Infinity, -0.93);
   // foliage: gusts cross the trees, lifting leaf highlights
   ramped(out, pm, life.foliage, fp, (x, y, n) => Math.sin(x * 0.45 + y * 0.3 + t * 2.3 + n * TAU) + 0.5 * Math.sin(x * 0.05 + t * 0.6), 1.15, -Infinity);
+
+  // waterfalls: the water pours — a fast wave running down, bright at the lip
+  ramped(out, pm, life.falls, fp, (x, y, n) => Math.sin(y * 0.7 + x * 0.3 - t * 9 + n * 2), 0.7, -0.7);
+  // flags: a flutter running along the cloth
+  ramped(out, pm, life.flags, fp, (x, y, n) => Math.sin(x * 1.3 + y * 0.5 - t * 7 + n * 2), 0.6, -0.6);
+  // gulls over the sea: a few 2-frame birds on slow straight flights
+  const GULLS = 5;
+  for (let i = 0; i < GULLS; i++) {
+    const n = noise(1000 + i * 97);
+    const period = 40 + n * 25;
+    const ph = ((t / period) + n) % 1;
+    const yy = life.seaBox.y + (0.08 + ((i * 0.37 + n) % 1) * 0.84) * life.seaBox.h + Math.sin(t * 0.7 + i) * 3;
+    const x0 = i % 2 ? life.seaBox.x + life.seaBox.w * (1 - ph) : life.seaBox.x + life.seaBox.w * ph;
+    const x = Math.round(x0), y = Math.round(yy);
+    const flap = Math.floor(t * 3 + i) % 2;
+    const pts: [number, number][] = flap ? [[-2, -1], [-1, 0], [0, 0], [1, 0], [2, -1]] : [[-2, 0], [-1, -1], [0, 0], [1, -1], [2, 0]];
+    let over = true;
+    for (const [dx, dy] of pts) { const q = (y + dy) * w + x + dx; if (x + dx < 0 || x + dx >= w || y + dy < 0 || y + dy >= h || !life.sea[q]) { over = false; break; } }
+    if (over) for (const [dx, dy] of pts) put(out, w, h, x + dx, y + dy, INK_RGB, fp);
+  }
+  // splashes: a fish breaks the water — a dot, a ring, gone (two at a time)
+  if (life.water.px.length) {
+    const top = life.water.ramp[life.water.ramp.length - 1] * 3;
+    const hi: RGB = [pm.palette[top], pm.palette[top + 1], pm.palette[top + 2]];
+    for (let i = 0; i < 2; i++) {
+      const slot = Math.floor(t / 1.6 + i * 0.5);
+      const ph = (t / 1.6 + i * 0.5) % 1;
+      if (ph > 0.55) continue;
+      const p = life.water.px[Math.floor(noise(slot * 31 + i) * life.water.px.length)];
+      const cx = p % w, cy = (p / w) | 0;
+      if (ph < 0.15) { put(out, w, h, cx, cy, hi, fp); put(out, w, h, cx, cy - 1, hi, fp); }
+      else {
+        const r = ph < 0.35 ? 1 : 2;
+        for (let dx = -r; dx <= r; dx++) for (let dy = -r; dy <= r; dy++) if (Math.abs(dx) + Math.abs(dy) === r) put(out, w, h, cx + dx, cy + dy, hi, fp);
+      }
+    }
+  }
 
   // embers + smoke from every vent
   if (life.crater.length) {

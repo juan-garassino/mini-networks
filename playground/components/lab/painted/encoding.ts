@@ -17,6 +17,12 @@ export const ENCODING = {
   "window flicker": "decoration: lit windows and lanterns flicker",
   "leaf rustle": "decoration: gusts lift highlights across the trees",
   "lighthouse beam": "decoration: a ray sweeps round each lamp",
+  waterfall: "decoration: the painted falls pour (landmark boxes)",
+  "flag flutter": "decoration: small red flags on poles and towers ripple",
+  gull: "decoration: a few birds cross the parchment sea",
+  splash: "decoration: now and then a fish breaks the water",
+  // openness (three levels): whole map = land signs only (hover names a model);
+  // in a land = that land's names; a model = its card + named lineage
   // the four corners
   "cartouche sentence": "live counts: models, lands, proven champions (or the focused land's)",
   "sheet tab": "which owner map is open (pixel / paper)",

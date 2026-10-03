@@ -97,17 +97,21 @@ playground/ (repo root)  Next.js 16 + React 19 + TS + Tailwind v4 + Recharts +
                      (drawer.tsx, mechanism diagram as hero, full-stage view);
                      one component tree, two materials (material.ts). The pixel
                      map is alive (life.ts → a 12-fps canvas above the focus
-                     layer): water glints + foam, lava pulse with embers + smoke
-                     from the volcano's vents, window flicker, leaf rustle,
-                     lighthouse beams, and carts travelling every builds_on edge
+                     layer): water glints + foam, waterfalls, lava pulse with
+                     embers + smoke from the volcano's vents, window flicker,
+                     leaf rustle, flag flutter, gulls, fish splashes, lighthouse
+                     beams, and carts travelling every builds_on edge
                      parent → child in the child's evidence colour (lit on the
                      selected lineage). Pixel classes come from the palette +
-                     connected components; hand-placed features (vents, lamps)
-                     live in anchors.ts `landmarks`; every moving pixel keeps to
+                     connected components; hand-placed features (vents, lamps,
+                     waterfall boxes) live in anchors.ts `landmarks`; every moving pixel keeps to
                      its own colour ramp, never covers our markers, and ghosts
                      itself by the focus field; still=1 / reduced-motion → frame 0.
                      ?map=pixel|paper; ?dev=1 reveals the render/labels tray;
                      "map only" tab / key h / ?ui=0 hides every plate + the drawer.
+                     Labels open in three levels: whole map = land signs only
+                     (hover names a model), in a land = that land's names, a
+                     model = its card (drawer) + named lineage.
                      /lab/sky = the Celestial Zoo (spec 2026-10-02-sky-atlas): an
                      antique star atlas on lib/world positions — models are stars
                      (glyph = evidence), families are constellations with figures

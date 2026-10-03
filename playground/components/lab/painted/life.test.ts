@@ -57,7 +57,7 @@ test("a frame only ever paints ramp colours, skips protected pixels and repeats 
   paintLife(b, pm, life, 1.25, fp);
   assert.deepEqual(a, b);
   assert.equal(a[(6 * w + 6) * 4 + 3], 0, "protected pixel untouched");
-  const allowed = new Set(HEX.map((c) => c.toLowerCase()).concat(["#feed73", "#fffebb"]));
+  const allowed = new Set(HEX.map((c) => c.toLowerCase()).concat(["#feed73", "#fffebb", "#3a1d2a"])); // + beam, gull ink
   let painted = 0;
   for (let p = 0; p < pm.w * pm.h; p++) {
     if (!a[p * 4 + 3]) continue;
