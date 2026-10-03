@@ -522,15 +522,16 @@ export function PaintedSkin() {
 
   // ——— interaction
   const onSelect = useCallback((n: string) => {
+    if (n === selected) { setManual(null); update({ zoom: "overview", focus: null }); return; }
     update({ zoom: "node", focus: n });
     setSheet((s) => (s === "peek" ? "half" : s));
     setFullDiagram(false);
-  }, [update]);
+  }, [update, selected]);
   useEffect(() => { if (!selected) setFullDiagram(false); }, [selected]);
   const setView = useCallback((v: Partial<Omit<LabView, "still">>) => update(v), [update]);
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") { if (fullDiagram) setFullDiagram(false); else if (view?.zoom === "node") update({ zoom: "region" }); }
+      if (e.key === "Escape") { if (fullDiagram) setFullDiagram(false); else if ((view?.zoom ?? "overview") !== "overview") fitWhole(); }
       const tag = (e.target as HTMLElement | null)?.tagName;
       if (tag === "INPUT" || tag === "TEXTAREA") return;
       if (e.key === "h" || e.key === "H") setUiHidden((v) => !v);
@@ -594,6 +595,7 @@ export function PaintedSkin() {
         style={{ background: m.sea, ["--ap" as string]: `${ap}px` } as CSSProperties}>
         {/* ——— the stage: sea to every edge, the map on it */}
         <div ref={cam.ref} {...cam.handlers} onWheel={onWheel}
+          onClick={() => { if (!cam.dragged.current && (view?.zoom ?? "overview") !== "overview") fitWhole(); }}
           className="absolute inset-0 touch-none cursor-grab active:cursor-grabbing">
           {isTrue && td && furniture && (
             <SeaCanvas pm={td.pm} furniture={furniture} scale={S} ox={ox} oy={oy} vw={vp.w} vh={vp.h} dpr={dpr} mapW={W} mapH={H} ghost={focusFam !== null} />
@@ -673,7 +675,7 @@ export function PaintedSkin() {
         {/* ——— the drawer */}
         {card && !uiHidden && (
           <Drawer m={m} mobile={mobile} sheet={sheet === "peek" ? "half" : sheet} setSheet={setSheet} card={card} still={still}
-            onPick={onSelect} onBack={() => update({ zoom: "region" })}
+            onPick={onSelect} onBack={fitWhole}
             stateOf={(n) => states[n] ?? "untrained"} isAtom={(n) => atoms.has(n)}
             fullDiagram={fullDiagram} setFullDiagram={setFullDiagram} stageW={vp.w} />
         )}

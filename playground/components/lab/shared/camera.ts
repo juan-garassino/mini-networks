@@ -114,7 +114,10 @@ export function useCamera({ world, target, still, minWidth = 240, targetViewport
       return { ...b, x, y };
     });
   }, [size.w, size.h, clamp, world]);
-  const onPointerUp = useCallback(() => { drag.current = null; }, []);
+  // true after a press that panned; the skins read it on click to tell a tap
+  // on the sea (deselect) from the end of a drag
+  const dragged = useRef(false);
+  const onPointerUp = useCallback(() => { dragged.current = drag.current?.dragging ?? false; drag.current = null; }, []);
   const onWheel = useCallback((e: React.WheelEvent) => {
     const rect = (e.currentTarget as Element).getBoundingClientRect();
     const fx = (e.clientX - rect.left) / rect.width, fy = (e.clientY - rect.top) / rect.height;
@@ -135,5 +138,6 @@ export function useCamera({ world, target, still, minWidth = 240, targetViewport
     scale,                                   // screen px per world px
     offset: { x: -box.x * scale, y: -box.y * scale },
     handlers: { onPointerDown, onPointerMove, onPointerUp, onPointerCancel: onPointerUp, onWheel },
+    dragged,
   };
 }

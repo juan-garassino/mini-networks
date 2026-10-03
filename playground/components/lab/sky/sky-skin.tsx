@@ -175,11 +175,14 @@ export function SkySkin() {
     const first = nodes.filter((n) => n.family === f).sort((a, b) => Number(b.atom) - Number(a.atom))[0];
     if (first) update({ zoom: "region", focus: first.name });
   };
-  const onSelect = useCallback((n: string) => { update({ zoom: "node", focus: n }); setSheet((s) => (s === "peek" ? "half" : s)); setFullDiagram(false); }, [update]);
+  const onSelect = useCallback((n: string) => {
+    if (n === selected) { setManual(null); update({ zoom: "overview", focus: null }); return; }
+    update({ zoom: "node", focus: n }); setSheet((s) => (s === "peek" ? "half" : s)); setFullDiagram(false);
+  }, [update, selected]);
   useEffect(() => { if (!selected) setFullDiagram(false); }, [selected]);
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") { if (fullDiagram) setFullDiagram(false); else if (view?.zoom === "node") update({ zoom: "region" }); }
+      if (e.key === "Escape") { if (fullDiagram) setFullDiagram(false); else if ((view?.zoom ?? "overview") !== "overview") fitWhole(); }
       const tag = (e.target as HTMLElement | null)?.tagName;
       if (tag === "INPUT" || tag === "TEXTAREA") return;
       if (e.key === "h" || e.key === "H") setUiHidden((v) => !v);
@@ -225,7 +228,8 @@ export function SkySkin() {
     <LabMotion still={still}>
       <div data-lab-ready={drawn ? "1" : undefined} className="relative h-full w-full select-none overflow-hidden"
         style={{ background: m.sea, ["--ap" as string]: "2px" } as CSSProperties}>
-        <div ref={cam.ref} {...cam.handlers} onWheel={onWheel} className="absolute inset-0 touch-none cursor-grab active:cursor-grabbing">
+        <div ref={cam.ref} {...cam.handlers} onWheel={onWheel}
+          onClick={() => { if (!cam.dragged.current && (view?.zoom ?? "overview") !== "overview") fitWhole(); }} className="absolute inset-0 touch-none cursor-grab active:cursor-grabbing">
           {world && (
             <svg viewBox={cam.viewBox} className="block h-full w-full" role="group" aria-label="The Celestial Zoo: a star atlas of the models">
               <defs>
@@ -345,7 +349,7 @@ export function SkySkin() {
 
         {card && !uiHidden && (
           <Drawer m={m} mobile={mobile} sheet={sheet === "peek" ? "half" : sheet} setSheet={setSheet} card={card} still={still}
-            onPick={onSelect} onBack={() => update({ zoom: "region" })}
+            onPick={onSelect} onBack={fitWhole}
             stateOf={(n) => states[n] ?? "untrained"} isAtom={(n) => atoms.has(n)}
             fullDiagram={fullDiagram} setFullDiagram={setFullDiagram} stageW={vp.w} />
         )}
