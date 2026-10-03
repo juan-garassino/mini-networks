@@ -24,24 +24,34 @@ function linePixels([x0, y0]: Pt, [x1, y1]: Pt): Pt[] {
   return out;
 }
 
-/** Path data for a polyline drawn as pixels: every `step`-th pixel (1 = solid). */
-export function pixelPolyline(pts: Pt[], step = 1, w = 1): string {
+/**
+ * Path data for a polyline drawn as pixels: every `step`-th pixel (1 = solid).
+ * `phase` shifts which pixels are lit along the walk from pts[0] to the end, so
+ * raising it by one per animation frame marches the dots in the direction of
+ * flow (see tick.ts); it has no effect on a solid wire.
+ */
+export function pixelPolyline(pts: Pt[], step = 1, w = 1, phase = 0): string {
   let d = "";
   let k = 0;
   const seen = new Set<string>();
+  const ph = ((Math.round(phase) % step) + step) % step;
   for (let i = 0; i + 1 < pts.length; i++) {
     for (const [x, y] of linePixels(pts[i], pts[i + 1])) {
       const key = `${x},${y}`;
       if (seen.has(key)) continue;
       seen.add(key);
-      if (k++ % step === 0) d += `M${x} ${y}h${w}v${w}h${-w}z`;
+      if ((k++ - ph + step) % step === 0) d += `M${x} ${y}h${w}v${w}h${-w}z`;
     }
   }
   return d;
 }
 
-export function Wire({ pts, fill, step = 2, w = 1 }: { pts: Pt[]; fill: string; step?: number; w?: number }) {
-  return <path d={pixelPolyline(pts, step, w)} fill={fill} />;
+export function Wire({ pts, fill, step = 2, w = 1, phase = 0 }: {
+  pts: Pt[]; fill: string; step?: number; w?: number;
+  /** animation: the frame from useTick — dots advance one pixel per unit, a→b */
+  phase?: number;
+}) {
+  return <path d={pixelPolyline(pts, step, w, phase)} fill={fill} />;
 }
 
 export function PText({ x, y, text, fill, s = 1, anchor = "start" }: {
