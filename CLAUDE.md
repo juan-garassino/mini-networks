@@ -95,7 +95,17 @@ playground/ (repo root)  Next.js 16 + React 19 + TS + Tailwind v4 + Recharts +
                      tabs, compass navigation + scale bar of models by evidence,
                      legend↔minimap plate), a right drawer for the selected model
                      (drawer.tsx, mechanism diagram as hero, full-stage view);
-                     one component tree, two materials (material.ts).
+                     one component tree, two materials (material.ts). The pixel
+                     map is alive (life.ts → a 12-fps canvas above the focus
+                     layer): water glints + foam, lava pulse with embers + smoke
+                     from the volcano's vents, window flicker, leaf rustle,
+                     lighthouse beams, and carts travelling every builds_on edge
+                     parent → child in the child's evidence colour (lit on the
+                     selected lineage). Pixel classes come from the palette +
+                     connected components; hand-placed features (vents, lamps)
+                     live in anchors.ts `landmarks`; every moving pixel keeps to
+                     its own colour ramp, never covers our markers, and ghosts
+                     itself by the focus field; still=1 / reduced-motion → frame 0.
                      ?map=pixel|paper; ?dev=1 reveals the render/labels tray;
                      "map only" tab / key h / ?ui=0 hides every plate + the drawer.
                      /lab/sky = the Celestial Zoo (spec 2026-10-02-sky-atlas): an

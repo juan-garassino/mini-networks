@@ -5,6 +5,8 @@
 //   base   the map's pixels + evidence re-coloured road markers, atom banners
 //   focus  the focus gradient: out-of-focus pixels fade toward a warm sepia
 //          ghost over a dithered band around the focused land (see focusField)
+//   life   the moving pixels: water glints, foam, lava pulse, embers + smoke,
+//          window flicker, leaf rustle, carts on the roads (life.ts), 12 fps
 //   fx     lit lineage road, selection brackets, the walking critter
 //   labels ribbons (bitmap font) + family signs
 //   hit    an invisible SVG of buttons for pointer + keyboard + screen readers
@@ -20,6 +22,7 @@ import {
   BAYER4, GHOST_LEVELS, INK, Raster, critterSprite, drawBanner, drawBrackets, drawDisc, drawLitRoad, drawRibbons, drawSprite, ghostRGB,
   rasterPolyline, recolourMarker, type Sprite,
 } from "./pixel-art";
+import { analyseLife, paintLife, type Traveller } from "./life";
 import { clutterTable, type PlacedRibbon } from "./ribbons";
 
 // ——— loading + derived data
@@ -257,6 +260,8 @@ export interface TrueMapProps {
   ribbons: PlacedRibbon[];
   signs: PlacedRibbon[];
   lineage: Pt[][];
+  /** carts on the roads: one per builds_on edge */
+  travellers: Traveller[];
   selected: string | null;
   hovered: string | null;
   critter: (Pt & { dir: number; walking: boolean; hop: number }) | null;
@@ -371,6 +376,50 @@ export const TrueMapLayers = memo(function TrueMapLayers(p: TrueMapProps) {
   }, [p.focusFam, p.focusStrength, ghosts, origin?.x, origin?.y, p.still, fieldFor, W, H]);
   void target;
 
+  // life: the moving pixels, a 12-fps loop over the base (above the focus
+  // layer, so each moving pixel ghosts itself by the same field)
+  const lifeRef = useRef<HTMLCanvasElement | null>(null);
+  const life = useMemo(() => analyseLife(pm, data.sea, data.lands, FAMILIES.indexOf("generative"), map.landmarks), [pm, data.sea, data.lands, map.landmarks]);
+  // never paint over our own markers and banners
+  const skip = useMemo(() => {
+    const m = new Uint8Array(W * H);
+    for (let q = 0; q < W * H; q++) {
+      const k = pm.idx[q] * 3;
+      if (base.data[q * 4] !== pm.palette[k] || base.data[q * 4 + 1] !== pm.palette[k + 1] || base.data[q * 4 + 2] !== pm.palette[k + 2]) m[q] = 1;
+    }
+    return m;
+  }, [base, pm, W, H]);
+  const latest = useRef({ travellers: p.travellers, focusFam: p.focusFam, focusStrength: p.focusStrength });
+  useEffect(() => { latest.current = { travellers: p.travellers, focusFam: p.focusFam, focusStrength: p.focusStrength }; });
+  useEffect(() => {
+    const cv = lifeRef.current;
+    const ctx = cv?.getContext("2d");
+    if (!cv || !ctx) return;
+    const img = new ImageData(W, H);
+    const L = GHOST_LEVELS;
+    const frame = (t: number) => {
+      const { travellers, focusFam, focusStrength } = latest.current;
+      const field = fieldFor(focusFam);
+      const ghost = field
+        ? (q: number) => Math.max(0, Math.min(L, Math.floor(ghostAt(field[q]) * L * focusStrength + BAYER4[(((q / W) | 0) & 3) * 4 + ((q % W) & 3)]))) / L
+        : null;
+      img.data.fill(0);
+      paintLife(img.data, pm, life, t, { skip, ghost, ghostRGB }, travellers);
+      ctx.putImageData(img, 0, 0);
+    };
+    const reduced = typeof window !== "undefined" && window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+    if (p.still || reduced) { frame(0); return; }
+    let raf = 0, last = -1;
+    const t0 = performance.now();
+    const step = (now: number) => {
+      const tick = Math.floor((now - t0) / (1000 / 12));
+      if (tick !== last) { last = tick; frame(tick / 12); }
+      raf = requestAnimationFrame(step);
+    };
+    raf = requestAnimationFrame(step);
+    return () => cancelAnimationFrame(raf);
+  }, [pm, life, skip, fieldFor, p.still, W, H]);
+
   // labels: family signs + ribbons
   const labels = useMemo(() => {
     const r = new Raster(W, H);
@@ -425,6 +474,7 @@ export const TrueMapLayers = memo(function TrueMapLayers(p: TrueMapProps) {
       <canvas ref={baseRef} width={W} height={H} style={px} aria-hidden />
       <canvas ref={focusRef} width={W + 2 * RING} height={H + 2 * RING} aria-hidden
         style={{ ...px, inset: "auto", left: `${(-RING / W) * 100}%`, top: `${(-RING / H) * 100}%`, width: `${((W + 2 * RING) / W) * 100}%`, height: `${((H + 2 * RING) / H) * 100}%`, visibility: focusOn ? "visible" : "hidden" }} />
+      <canvas ref={lifeRef} width={W} height={H} style={px} aria-hidden />
       <canvas ref={fxRef} width={W} height={H} style={px} aria-hidden />
       <canvas ref={labelRef} width={W} height={H} style={px} aria-hidden />
       <svg viewBox={`0 0 ${W} ${H}`} className="absolute inset-0 block h-full w-full" role="group" aria-label="The models on the map">

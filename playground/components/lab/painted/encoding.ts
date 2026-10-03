@@ -10,6 +10,13 @@ export const ENCODING = {
   "lit road": "the selected model's lineage back to its root atom",
   "focus fade": "lands other than the focused one fade (dithered band = distance from it)",
   critter: "walks the lineage road from the root to the selected model",
+  "road cart": "one builds_on edge, travelling parent → child in the child's evidence colour; the selected lineage's carts run lit and without gaps",
+  // life (the painting breathing — no data beyond the carts; every pixel keeps to its own ramp)
+  "water glint": "decoration: waves cross the blue water, foam blinks",
+  "lava pulse": "decoration: the flow brightens in waves; embers + smoke rise from the three vents",
+  "window flicker": "decoration: lit windows and lanterns flicker",
+  "leaf rustle": "decoration: gusts lift highlights across the trees",
+  "lighthouse beam": "decoration: a ray sweeps round each lamp",
   // the four corners
   "cartouche sentence": "live counts: models, lands, proven champions (or the focused land's)",
   "sheet tab": "which owner map is open (pixel / paper)",

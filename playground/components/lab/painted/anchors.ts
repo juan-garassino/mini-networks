@@ -53,6 +53,8 @@ export interface PaintedMap {
   /** where "N pipelines" goes */
   pipelines: Pt;
   baked: BakedText[];
+  /** hand-placed features of the painting that life.ts animates */
+  landmarks?: { vents: readonly (readonly [number, number])[]; lamps: readonly (readonly [number, number])[] };
 }
 
 export const IMAGE = { w: 1536, h: 1024 } as const;
@@ -416,6 +418,8 @@ const TRUE: PaintedMap = {
   cartouche: { x: 12, y: 12, w: 146, h: 70 },
   pipelines: { x: 720, y: 495 },
   baked: [],
+  // the volcano's three chimney tops (smoke + embers) and the two lighthouse lamps (beams)
+  landmarks: { vents: [[426, 317], [411, 330], [403, 338]], lamps: [[369, 438], [41, 126]] },
 };
 
 // ————————————————————————————————————————————————————————————— pixel v1 (render=baked only)

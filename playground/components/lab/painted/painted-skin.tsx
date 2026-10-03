@@ -30,7 +30,9 @@ import { useCamera, type CamBox } from "@/components/lab/shared/camera";
 import { cardModel, displayName, evidenceState, type EvidenceState } from "@/components/lab/shared/card-model";
 import { CRITTER } from "@/components/lab/shared/critter";
 import { FAMILIES, landBox, resolveMap, type Box, type Family, type MapId, type Pt } from "./anchors";
-import { buildRoadGraph, chainRoute, lineageRoutes, pointAt, polylineLength, rootChain } from "./roads";
+import type { Traveller } from "./life";
+import { EVIDENCE_ART } from "./pixel-art";
+import { buildRoadGraph, chainRoute, lineageRoutes, pointAt, polylineLength, rootChain, route } from "./roads";
 import { placeTags, textWidth, type PlacedTag, type TagSpec } from "./labels";
 import { PaintedOverlay } from "./overlay";
 import { Drawer, DRAWER_W, sheetHeight, type Sheet } from "./drawer";
@@ -210,6 +212,25 @@ export function PaintedSkin() {
   const selected = view?.zoom === "node" && view.focus && map.anchors[view.focus] ? view.focus : null;
   const [hovered, setHovered] = useState<string | null>(null);
   const lineage = useMemo(() => (selected && taxonomy ? lineageRoutes(graph, selected, parentsOf) : []), [selected, graph, parentsOf, taxonomy]);
+  // the carts: every builds_on edge travelled parent → child in the child's
+  // evidence colour; the selected model's lineage runs lit and without gaps
+  const travellers = useMemo<Traveller[]>(() => {
+    if (!isTrue || !taxonomy) return [];
+    const rgb = (hx: string) => [parseInt(hx.slice(1, 3), 16), parseInt(hx.slice(3, 5), 16), parseInt(hx.slice(5, 7), 16)] as const;
+    const litKeys = new Set(lineage.map((l) => `${l.from}>${l.to}`));
+    const out: Traveller[] = [];
+    let i = 0;
+    for (const n of names) for (const par of parentsOf(n)) {
+      if (!map.anchors[par]) continue;
+      const pts = route(graph, par, n);
+      if (!pts) continue;
+      const art = EVIDENCE_ART[states[n] ?? "untrained"];
+      const lit = litKeys.has(`${par}>${n}`);
+      out.push({ pts, len: polylineLength(pts), speed: lit ? 16 : 9 + (i % 3) * 1.5, phase: ((i * 0.618) % 1), body: rgb(art.ramp[1]), hi: rgb(art.ramp[0]), lit });
+      i++;
+    }
+    return out;
+  }, [isTrue, taxonomy, names, parentsOf, map, graph, states, lineage]);
   const lineageSet = useMemo(() => {
     const s = new Set<string>();
     if (!selected) return s;
@@ -605,7 +626,7 @@ export function PaintedSkin() {
               td && taxonomy ? (
                 <TrueMapLayers data={td} map={map} states={states} atoms={atoms} focusFam={focusFam}
                   focusStrength={focusStrength} focusAt={focusAt}
-                  ribbons={ribbons} signs={signs} lineage={lineage.map((l) => l.pts)}
+                  ribbons={ribbons} signs={signs} lineage={lineage.map((l) => l.pts)} travellers={travellers}
                   selected={selected} hovered={hovered} critter={critter} scale={S} still={still}
                   onSelect={onSelect} onHover={setHovered} onCritter={onCritter} onPainted={onPainted} />
               ) : null
