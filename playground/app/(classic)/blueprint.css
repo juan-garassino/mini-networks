@@ -98,6 +98,10 @@ body::after {
 [data-edition="metro"] body, body[data-edition="metro"] { background-image: none; }
 [data-edition="metro"] { --font-display: var(--font-jost); --font-draft: var(--font-jost); }
 [data-edition="metro"] body::after { opacity: 0.03; }
+[data-edition="metro"] .metro-stop text { transition: fill 0.12s ease; }
+[data-edition="metro"] .metro-stop:hover > text { fill: var(--redline); }
+[data-edition="metro"] .metro-stop:focus-visible { outline: 2px solid var(--redline); }
+[data-edition="metro"] .metro-service:hover > span:first-child { color: var(--redline); }
 
 /* 4 · botanical atlas: sage + garamond */
 [data-edition="atlas"] {
