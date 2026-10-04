@@ -102,7 +102,16 @@ playground/ (repo root)  Next.js 16 + React 19 + TS + Tailwind v4 + Recharts +
                      corners (corners/: cartouche + search, Pixel/Paper sheet
                      tabs, compass navigation + scale bar of models by evidence,
                      legend↔minimap plate), a right drawer for the selected model
-                     (drawer.tsx, mechanism diagram as hero, full-stage view);
+                     (drawer.tsx, text card; full-stage diagram view);
+                     on desktop the "How <model> works" diagram is a MAP PLATE
+                     hung beside the castle on a leader line (map-plate.tsx:
+                     full animated diagram at 1 art px = 1 CSS px, scrubber/keys
+                     kept, Enlarge → full stage, Close keeps the selection;
+                     plate-place.ts composes camera scale + castle spot + plate
+                     side so the pair fits the visible map clear of the corner
+                     plates and the lineage; Esc = enlarged → plate → deselect;
+                     ?plate=0 starts closed; phones keep the diagram in the
+                     sheet; sky keeps it in its drawer via `diagramOn`);
                      one component tree, two materials (material.ts). The pixel
                      map is alive (life.ts → a 12-fps canvas above the focus
                      layer): water glints + foam, waterfalls, lava pulse with

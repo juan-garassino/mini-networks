@@ -3,7 +3,8 @@
 // The model drawer: only when a model is selected. Desktop: a 440-px sheet
 // sliding in from the right (the camera refits to the remaining width); phones:
 // the peek / half / full bottom sheet with a drag handle. "Open full diagram"
-// takes over the whole stage with the mechanism diagram and a way back.
+// (or the map plate's Enlarge) takes over the whole stage with the mechanism
+// diagram and a way back. diagramOn="map": the desktop card is text only.
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { MechanismDiagram } from "@/components/lab/shared/anatomy2";
 import { displayName, type CardModel } from "@/components/lab/shared/card-model";
@@ -33,6 +34,11 @@ export interface DrawerProps {
   fullDiagram: boolean;
   setFullDiagram: (v: boolean) => void;
   stageW: number;
+  /** where the diagram lives on desktop: in the card (default) or on the map
+   * as a plate (painted); phones always keep it in the sheet */
+  diagramOn?: "drawer" | "map";
+  /** diagramOn "map" and the plate is closed: reopen it */
+  onShowDiagram?: () => void;
 }
 
 export function Drawer(p: DrawerProps) {
@@ -40,7 +46,8 @@ export function Drawer(p: DrawerProps) {
   const body = (
     <CardBody card={card} theme={m} still={p.still} onPick={p.onPick} stateOf={p.stateOf} isAtom={p.isAtom}
       diagramWidth={p.mobile ? Math.max(240, Math.min(380, p.stageW - 40)) : DRAWER_W - 48}
-      onOpenDiagram={() => p.setFullDiagram(true)} />
+      onOpenDiagram={() => p.setFullDiagram(true)}
+      diagramOn={p.mobile ? "drawer" : p.diagramOn ?? "drawer"} onShowDiagram={p.onShowDiagram} />
   );
   const back = (
     <Btn m={m} onClick={p.onBack} label="Back to the map" style={{ fontSize: 14, minHeight: 26 }}>← Back to the map</Btn>

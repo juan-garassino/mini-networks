@@ -22,7 +22,7 @@
 // a model opens the drawer (drawer.tsx) on the right; the camera refits to the
 // width that is left. One component tree, two materials (material.ts).
 // /lab contract: URL view → useWorld → camera → paint → data-lab-ready → window.__lab.
-import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import { useWorld } from "@/hooks/use-world";
 import { useLabView, type LabView } from "@/components/lab/shared/url-state";
 import { LabMotion } from "@/components/lab/shared/still";
@@ -47,6 +47,8 @@ import { PIXELMAP_CMD } from "./pixelmap";
 import { layoutRibbons, spotBoxes, type PlacedRibbon, type RibbonItem } from "./ribbons";
 import { ribbonSize } from "./pixel-art";
 import { FAMILY_TITLE, IMAGES, MATERIALS } from "./material";
+import { Leader, MapPlate, plateEstimate } from "./map-plate";
+import { composePlate, plateRect, sample, type PBox, type PPt, type PlatePlan } from "./plate-place";
 
 // render=grid: 3-px blocks (scripts/pixelate_map.py --cell 3), rests on thirds.
 const GRID_CELL = 3;
@@ -65,7 +67,7 @@ const KEYFRAMES = `
 const stamp = (i: number, still: boolean): CSSProperties =>
   still ? {} : { animation: `painted-stamp 160ms steps(2, end) both`, animationDelay: `${120 + i * 90}ms` };
 
-interface Opts { map: MapId; render: Render; labels: Labels; dev: boolean; ui: boolean }
+interface Opts { map: MapId; render: Render; labels: Labels; dev: boolean; ui: boolean; plate: boolean }
 
 function parseOpts(search: string): Opts {
   const p = new URLSearchParams(search);
@@ -74,7 +76,7 @@ function parseOpts(search: string): Opts {
   const render: Render = r === "clean" || r === "grid" || r === "baked" ? r : "true";
   const l = p.get("labels");
   const labels: Labels = l === "ours" || l === "baked" ? l : map === "pixel" && render === "baked" ? "baked" : "ours";
-  return { map, render, labels, dev: p.get("dev") === "1", ui: p.get("ui") !== "0" };
+  return { map, render, labels, dev: p.get("dev") === "1", ui: p.get("ui") !== "0", plate: p.get("plate") !== "0" };
 }
 
 function useOpts() {
@@ -168,6 +170,16 @@ export function PaintedSkin() {
   const [uiHidden, setUiHidden] = useState(false);
   useEffect(() => { if (opts) setUiHidden(!opts.ui); }, [opts]);
   const [fullDiagram, setFullDiagram] = useState(false);
+  // the "How it works" plate on the map (desktop): open on every new
+  // selection; Close hides it and keeps the selection; ?plate=0 starts closed
+  const [plateOpen, setPlateOpen] = useState(true);
+  // ?plate= read once the URL is known (a render-time adjustment, not an effect)
+  const optPlate = opts?.plate;
+  const [plateFromUrl, setPlateFromUrl] = useState<boolean | undefined>(undefined);
+  if (optPlate !== plateFromUrl) {
+    setPlateFromUrl(optPlate);
+    if (optPlate !== undefined) setPlateOpen(optPlate);
+  }
   const furniture = useSeaFurniture(td?.pm ?? null, td?.sea ?? null, td?.lands ?? null);
 
   // ——— data
@@ -309,17 +321,94 @@ export function PaintedSkin() {
     return landBox(map.lands[f]);
   }, [td, map]);
 
+  // a land's framing scale: the whole land in the visible map, kept clear of
+  // the corner plates (cartouche, scale bar, legend sit in the corners) by a
+  // screen-px safe inset on desktop
+  const landFitK = useCallback((lb: Box) => {
+    const m = isTrue ? 10 : 60;
+    const safe = !mobile && !uiHidden ? 72 : 0;
+    return Math.min((visW - safe * 2) / (lb.w + m * 2), (visH - safe * 2) / (lb.h + m * 2));
+  }, [isTrue, mobile, uiHidden, visW, visH]);
+  const crispK = useCallback((k: number) => (isTrue ? clamp(down(k), levels.overview, TRUE_MAX) : clamp(k, levels.min, levels.max)), [isTrue, down, levels]);
+
+  // ——— the "How it works" plate on the map (desktop, a model selected): it
+  // hangs beside the castle on a leader line; the camera frames the castle
+  // and the plate as a pair (plate-place.ts). Corner plates are measured so
+  // the plate never lands on one.
+  const rootRef = useRef<HTMLDivElement | null>(null);
+  const [corners, setCorners] = useState<PBox[]>([]);
+  const plateEl = useRef<HTMLElement | null>(null);
+  const [plateMeasured, setPlateMeasured] = useState<{ name: string; zoom: number; w: number; h: number } | null>(null);
+  const plateWanted = !mobile && !!selected && plateOpen && !uiHidden && view?.zoom === "node";
+  // ×2 only when the visible map could hold a doubled plate with room to spare
+  const plateZoom = visW >= 2 * 560 + 420 && visH >= 2 * 316 + 380 ? 2 : 1;
+  const plateSize = selected && plateMeasured?.name === selected && plateMeasured.zoom === plateZoom
+    ? plateMeasured : plateEstimate(selected ?? "", plateZoom, 2);
+  const anchorPt = useCallback((n: string): PPt => {
+    const a = map.anchors[n];
+    return isTrue ? { x: Math.floor(a[0]) + 0.5, y: Math.floor(a[1]) + 0.5 } : { x: a[0], y: a[1] };
+  }, [map, isTrue]);
+  // the selected castle's clearance (map units, around its anchor) — the plate
+  // keeps out of it. True map: an atom stands on a painted castle / town that
+  // runs ~35 art px either side of its flag and further down than up (the
+  // flag flies from the keep), so the box is the landmark, not just the
+  // ribbon keep-out; a derived model is a road stone. Image renders: the marker.
+  // `spot` is the half-size of the marker itself: the leader's dot sits there.
+  const castleBox: PBox = useMemo(() => {
+    if (!selected) return { x: 0, y: 0, w: 0, h: 0 };
+    // image renders: the marker, and room below it for the name tag
+    if (!isTrue || !td) return { x: -14, y: -14, w: 28, h: 46 };
+    if (atoms.has(selected)) return { x: -36, y: -40, w: 72, h: 92 };
+    const c = spotClear(selected, atoms, td.markers);
+    return { x: -c - 2, y: -c - 2, w: 2 * c + 5, h: 2 * c + 5 };
+  }, [selected, isTrue, td, atoms]);
+  const castleSpot = selected && isTrue && td ? spotClear(selected, atoms, td.markers) : 0;
+  const PLATE_GAP = 40;
+  const plan: PlatePlan | null = useMemo(() => {
+    if (!plateWanted || !selected || !family?.[selected] || vp.w <= 1) return null;
+    const fam = family[selected] as Family;
+    const lb = landFrame(fam);
+    const kLand = crispK(landFitK(lb));
+    const scales = isTrue
+      ? crisp.filter((s) => s <= kLand + 1e-3 && s >= levels.overview - 1e-3).reverse().slice(0, 3)
+      : [kLand, kLand / 1.2, kLand / 1.4].filter((s) => s >= levels.min - 1e-3);
+    const a = anchorPt(selected);
+    const others = names.filter((n) => n !== selected);
+    const keep = [
+      { pts: lineage.flatMap((l) => sample(l.pts, isTrue ? 4 : 8)), weight: 12 },
+      { pts: others.filter((n) => lineageSet.has(n)).map(anchorPt), weight: 120 },
+      { pts: others.filter((n) => family?.[n] === fam && !lineageSet.has(n)).map(anchorPt), weight: 20 },
+      { pts: map.signs[fam] ? [{ x: map.signs[fam][0], y: map.signs[fam][1] }] : [], weight: 30 },
+    ];
+    const view = { x: 0, y: 0, w: visW, h: visH };
+    const bounded = mapId === "paper" ? { w: W, h: H } : undefined;
+    const base = { anchor: a, castle: castleBox, plate: plateSize, land: lb, view, avoid: corners, keep, gap: PLATE_GAP, bounded };
+    // the land-centred framing (paper: kept on the painting), for the last resort
+    const wv = visW / kLand, hv = visH / kLand;
+    const camX = bounded ? clamp(lb.x + lb.w / 2 - wv / 2, 0, Math.max(0, W - wv)) : lb.x + lb.w / 2 - wv / 2;
+    const camY = bounded ? clamp(lb.y + lb.h / 2 - hv / 2, 0, Math.max(0, H - hv)) : lb.y + lb.h / 2 - hv / 2;
+    return composePlate({ ...base, castlePad: 14, scales, inset: 16 })
+      ?? composePlate({ ...base, castlePad: 0, scales, inset: 4 })
+      // paper, a model on the painting's edge: no camera on the painting fits
+      // the pair, so let the view run past the edge (the page is the sea's blue)
+      ?? (bounded ? composePlate({ ...base, bounded: undefined, castlePad: 14, scales, inset: 16 }) : null)
+      // last resort: the land-centred framing, the plate on its least-bad side
+      ?? composePlate({ ...base, castlePad: 0, scales: [kLand], inset: 4, fixed: { x: (a.x - camX) * kLand, y: (a.y - camY) * kLand } });
+  }, [plateWanted, selected, family, vp.w, landFrame, crispK, landFitK, isTrue, crisp, levels, anchorPt, names, lineage, lineageSet, map, visW, visH, mapId, W, H, castleBox, plateSize, corners]);
+
   const target: CamBox = useMemo(() => {
     const zoom = view?.zoom ?? "overview";
     const focus = view?.focus ?? null;
     const a = focus ? map.anchors[focus] : undefined;
+    if (zoom === "node" && plan && focus) {
+      // the castle + plate pair, composed: the castle rests at plan.at
+      const p = anchorPt(focus);
+      return { x: p.x - plan.at.x / plan.k, y: p.y - plan.at.y / plan.k, w: vp.w / plan.k, h: vp.h / plan.k };
+    }
     if ((zoom === "node" || zoom === "region") && a && family?.[focus!]) {
       const lb = landFrame(family[focus!] as Family);
       const m = isTrue ? 10 : 60;
-      // keep the land clear of the corner plates (cartouche, scale bar, legend
-      // sit in the corners): frame it inside a screen-px safe inset on desktop
-      const safe = !mobile && !uiHidden ? 72 : 0;
-      let k = Math.min((visW - safe * 2) / (lb.w + m * 2), (visH - safe * 2) / (lb.h + m * 2));
+      let k = landFitK(lb);
       // phones: a whole land at 390 px wide packs its names on top of each
       // other — go in half as close again (bounded by the height) and centre
       // on the focused model, kept inside its land; the rest of the land pans
@@ -340,7 +429,7 @@ export function PaintedSkin() {
       return boxAt(lb.x + lb.w / 2, lb.y + lb.h / 2, k, mapId !== "paper");
     }
     return isTrue ? boxAt(continent.x + continent.w / 2, continent.y + continent.h / 2, levels.overview) : boxAt(W / 2, H / 2, levels.overview);
-  }, [view, map, levels, family, landFrame, boxAt, visW, visH, isTrue, down, W, H, continent, mobile, uiHidden, mapId]);
+  }, [view, map, levels, family, landFrame, boxAt, visW, visH, isTrue, down, W, H, continent, mobile, mapId, plan, anchorPt, vp.w, vp.h, landFitK]);
 
   useEffect(() => { setManual(null); }, [view?.zoom, view?.focus, mapId, render, vp.w, vp.h, drawerPx]);
 
@@ -412,6 +501,21 @@ export function PaintedSkin() {
   const theme_ = theme;
   const zoomedIn_ = curScale() > levels.overview + 1e-3;
 
+  // the plate and its leader at rest, in map units: the labels lay out around them
+  const plateRest: Box[] = useMemo(() => {
+    if (!plan || !selected) return [];
+    const a = anchorPt(selected);
+    const r = plateRect(plan.side, plan.slide, castleBox, layoutS, plateSize, PLATE_GAP);
+    const box = { x: a.x + r.x / layoutS, y: a.y + r.y / layoutS, w: r.w / layoutS, h: r.h / layoutS };
+    const t = 3 / layoutS;
+    const leader = plan.side === "right" ? { x: a.x, y: a.y - t, w: box.x - a.x, h: 2 * t }
+      : plan.side === "left" ? { x: box.x + box.w, y: a.y - t, w: a.x - box.x - box.w, h: 2 * t }
+      : plan.side === "below" ? { x: a.x - t, y: a.y, w: 2 * t, h: box.y - a.y }
+      : { x: a.x - t, y: box.y + box.h, w: 2 * t, h: a.y - box.y - box.h };
+    return [box, leader];
+  }, [plan, selected, anchorPt, castleBox, layoutS, plateSize]);
+
+
   // ——— fonts
   const [fontsReady, setFontsReady] = useState(false);
   useEffect(() => {
@@ -422,6 +526,31 @@ export function PaintedSkin() {
     return () => { alive = false; clearTimeout(fallback); };
   }, []);
   const measure = useMeasure(fontsReady);
+
+  // measure the corner plates (the plate keeps off them) and the plate itself
+  useLayoutEffect(() => {
+    const root = rootRef.current;
+    if (!root) return;
+    const o = root.getBoundingClientRect();
+    const next = [...root.querySelectorAll<HTMLElement>("[data-corner]")].map((el) => {
+      const r = el.getBoundingClientRect();
+      return { x: Math.round(r.left - o.left), y: Math.round(r.top - o.top), w: Math.round(r.width), h: Math.round(r.height) };
+    }).filter((r) => r.w > 0 && r.h > 0);
+    setCorners((cur) => (cur.length === next.length && cur.every((c, i) => Math.abs(c.x - next[i].x) + Math.abs(c.y - next[i].y) + Math.abs(c.w - next[i].w) + Math.abs(c.h - next[i].h) < 4) ? cur : next));
+  }, [vp.w, vp.h, mobile, uiHidden, selected, focusFam, fontsReady, zoomedIn_, drawerPx, opts]);
+  const plateShown = Boolean(plan && plateWanted && !fullDiagram && selected);
+  useLayoutEffect(() => {
+    const el = plateEl.current;
+    if (!plateShown || !el || !selected) return;
+    const on = () => {
+      const w = el.offsetWidth, h = el.offsetHeight;
+      setPlateMeasured((cur) => (cur && cur.name === selected && cur.zoom === plateZoom && cur.w === w && cur.h === h ? cur : { name: selected, zoom: plateZoom, w, h }));
+    };
+    on();
+    const ro = new ResizeObserver(on);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [plateShown, selected, plateZoom]);
 
   // ——— which names show: three levels of openness.
   //   whole map   only the land signs — the painting is the thing; a hovered
@@ -478,9 +607,11 @@ export function PaintedSkin() {
       const a = map.anchors[n];
       return spotBoxes({ ax: Math.floor(a[0]), ay: Math.floor(a[1]), clear: spotClear(n, atoms, td.markers), banner: atoms.has(n) });
     });
-    return layoutRibbons(items, { g, spots, obstacles: signs.map((s) => s.box), bounds: visible, clutter: td.clutter })
+    const obstacles = signs.map((s) => s.box);
+    obstacles.push(...plateRest);
+    return layoutRibbons(items, { g, spots, obstacles, bounds: visible, clutter: td.clutter })
       .map((rb) => ({ ...rb, dim: focusFam !== null && family?.[rb.name] !== focusFam && !lineageSet.has(rb.name) && rb.name !== hovered }));
-  }, [isTrue, td, taxonomy, names, ours, showName, selected, hovered, map, atoms, lineageSet, depthOf, g, signs, visible, focusFam, family]);
+  }, [isTrue, td, taxonomy, names, ours, showName, selected, hovered, map, atoms, lineageSet, depthOf, g, signs, visible, focusFam, family, plateRest]);
 
   // ——— image renders: SVG overlay tags
   const screenFont = layoutS < 1.5 ? 11 : layoutS < 2.5 ? 13 : 14;
@@ -513,8 +644,8 @@ export function PaintedSkin() {
         priority: (n === selected ? 1000 : 0) + (lineageSet.has(n) ? 300 : 0) + (atoms.has(n) ? 100 : 50 - depthOf(n)),
       };
     });
-    return placeTags(specs, { markerR, obstacles, bounds: { x: 2, y: 2, w: W - 4, h: H - 4 } });
-  }, [taxonomy, isTrue, ours, names, plated, showName, selected, hovered, map, screenFont, layoutS, measure, mapId, lineageSet, atoms, depthOf, markerR, obstacles, W, H]);
+    return placeTags(specs, { markerR, obstacles: [...obstacles, ...plateRest], bounds: { x: 2, y: 2, w: W - 4, h: H - 4 } });
+  }, [taxonomy, isTrue, ours, names, plated, showName, selected, hovered, map, screenFont, layoutS, measure, mapId, lineageSet, atoms, depthOf, markerR, obstacles, W, H, plateRest]);
 
   // ——— critter: walks from the selected model's root atom along the painted roads
   const [critter, setCritter] = useState<(Pt & { dir: number; walking: boolean; hop: number }) | null>(null);
@@ -567,14 +698,22 @@ export function PaintedSkin() {
     update({ zoom: "node", focus: n });
     setSheet((s) => (s === "peek" ? "half" : s));
     setFullDiagram(false);
+    setPlateOpen(true);
   }, [update, selected]);
   useEffect(() => { if (!selected) setFullDiagram(false); }, [selected]);
   const setView = useCallback((v: Partial<Omit<LabView, "still">>) => update(v), [update]);
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") { if (fullDiagram) setFullDiagram(false); else if ((view?.zoom ?? "overview") !== "overview") fitWhole(); }
+      // Escape peels one layer at a time: the enlarged diagram, the plate, the selection
+      if (e.key === "Escape") {
+        if (fullDiagram) setFullDiagram(false);
+        else if (plateShown) setPlateOpen(false);
+        else if ((view?.zoom ?? "overview") !== "overview") fitWhole();
+      }
       const tag = (e.target as HTMLElement | null)?.tagName;
       if (tag === "INPUT" || tag === "TEXTAREA") return;
+      // keys the plate's diagram uses (its scrubber / picks) never pan the map
+      if (e.defaultPrevented || (e.target as HTMLElement | null)?.closest?.("[data-map-plate]")) return;
       if (e.key === "h" || e.key === "H") setUiHidden((v) => !v);
       else if (e.key === "+" || e.key === "=") stepZoom(1);
       else if (e.key === "-" || e.key === "_") stepZoom(-1);
@@ -631,7 +770,7 @@ export function PaintedSkin() {
   return (
     <LabMotion still={still}>
       <style>{KEYFRAMES}</style>
-      <div data-painted-root data-lab-ready={drawn ? "1" : undefined}
+      <div ref={rootRef} data-painted-root data-lab-ready={drawn ? "1" : undefined}
         className="relative h-full w-full select-none overflow-hidden"
         style={{ background: m.sea, ["--ap" as string]: `${ap}px` } as CSSProperties}>
         {/* ——— the stage: sea to every edge, the map on it */}
@@ -669,6 +808,36 @@ export function PaintedSkin() {
           </div>
         </div>
 
+        {/* ——— the "How it works" plate, hung on the map beside the castle (map
+            space: it follows the castle; screen size: its pixels stay crisp).
+            A sibling of the stage, so a tap on it is never a tap on the sea */}
+        {plateShown && plan && selected && (() => {
+          const snap = (v: number) => Math.round(v * dpr) / dpr;
+          const a = anchorPt(selected);
+          const cx = a.x * S + ox, cy = a.y * S + oy;
+          const r = plateRect(plan.side, plan.slide, castleBox, S, plateSize, PLATE_GAP);
+          const px = snap(cx + r.x), py = snap(cy + r.y);
+          // the dot: at the edge of the model's own spot (its flag / stone),
+          // on the plate's side; the line crosses the landmark to the plate
+          const d = isTrue ? Math.min(castleSpot, 8) * S : markerR * S + 3;
+          const at = plan.side === "right" ? { x: snap(cx + d), y: snap(cy) } : plan.side === "left" ? { x: snap(cx - d), y: snap(cy) }
+            : plan.side === "below" ? { x: snap(cx), y: snap(cy + d) } : { x: snap(cx), y: snap(cy - d) };
+          const edge = plan.side === "right" ? px : plan.side === "left" ? px + plateSize.w : plan.side === "below" ? py : py + plateSize.h;
+          // while the camera is still flying in, the plate waits (a full-size
+          // plate over a far-out map reads as a modal); it fades in on landing
+          const landed = manual !== null || Math.abs(S / plan.k - 1) < 0.08;
+          return (
+            <div className="pointer-events-none absolute inset-0 z-[15]"
+              style={{ right: drawerPx, opacity: landed ? 1 : 0, visibility: landed ? "visible" : "hidden", transition: still ? undefined : "opacity 180ms steps(3, end)" }}>
+              <Leader m={m} side={plan.side} castle={at} edge={edge} t={ap} />
+              <MapPlate ref={plateEl} m={m} name={selected} still={still} zoom={plateZoom}
+                data={{ "data-plate-side": plan.side, "data-plate-k": String(plan.k), "data-plate-cost": String(Math.round(plan.cost)) }}
+                style={{ left: px, top: py, ...stamp(4, still) }}
+                onEnlarge={() => setFullDiagram(true)} onClose={() => setPlateOpen(false)} />
+            </div>
+          );
+        })()}
+
         {/* ——— the four corners (the map stays draggable between them) */}
         {opts && uiHidden && (
           <button type="button" onClick={() => setUiHidden(false)} aria-label="Show the UI (h)" title="Show the UI (h)"
@@ -680,15 +849,15 @@ export function PaintedSkin() {
         {opts && !uiHidden && (
           <div className="pointer-events-none absolute inset-0 z-20" style={{ right: drawerPx, bottom: sheetPx }}>
             {/* paper: flush to the top so it covers the painter's own cartouche at the whole-map view */}
-            <div className={`${corner} left-3 sm:left-5 ${m.crisp ? "top-3 sm:top-5" : "top-0"}`} style={stamp(0, still)}>
+            <div data-corner className={`${corner} left-3 sm:left-5 ${m.crisp ? "top-3 sm:top-5" : "top-0"}`} style={stamp(0, still)}>
               <Cartouche m={m} counts={counts} names={names} focusFam={focusFam} famCount={famCount} famProven={famProven}
                 onPick={onSelect} onWhole={fitWhole} compact={mobile} />
             </div>
-            <div className={`${corner} right-3 top-0 sm:right-5`} style={stamp(1, still)}>
+            <div data-corner className={`${corner} right-3 top-0 sm:right-5`} style={stamp(1, still)}>
               <SheetTabs m={m} mapId={mapId} dev={opts.dev} render={render} labels={labels} setOpts={set} devOpen={devOpen} setDevOpen={setDevOpen} compact={mobile}
                 onHideUi={() => setUiHidden(true)} />
             </div>
-            <div className={`${corner} bottom-3 left-3 flex flex-col items-start gap-3 sm:bottom-5 sm:left-5`} style={stamp(2, still)}>
+            <div data-corner className={`${corner} bottom-3 left-3 flex flex-col items-start gap-3 sm:bottom-5 sm:left-5`} style={stamp(2, still)}>
               {!mobile && (
                 <ScaleBar m={m} names={names} family={family} states={states} atoms={atoms} pipelines={pipelines} counts={counts}
                   selected={selected} onPick={onSelect} onLand={jumpLand} focusFam={focusFam} />
@@ -697,7 +866,7 @@ export function PaintedSkin() {
                 canIn={curScale() < levels.max - 1e-3} canOut={curScale() > levels.min + 1e-3} whole={whole} />
             </div>
             {!mobile && (
-              <div className={`${corner} bottom-3 right-3 sm:bottom-5 sm:right-5`} style={stamp(3, still)}>
+              <div data-corner className={`${corner} bottom-3 right-3 sm:bottom-5 sm:right-5`} style={stamp(3, still)}>
                 <CornerPlate m={m} face={zoomedIn_ ? "minimap" : "legend"} world={{ w: W, h: H }} box={cam.box} source={minimap} onCenter={centerAt} />
               </div>
             )}
@@ -718,7 +887,8 @@ export function PaintedSkin() {
           <Drawer m={m} mobile={mobile} sheet={sheet === "peek" ? "half" : sheet} setSheet={setSheet} card={card} still={still}
             onPick={onSelect} onBack={fitWhole}
             stateOf={(n) => states[n] ?? "untrained"} isAtom={(n) => atoms.has(n)}
-            fullDiagram={fullDiagram} setFullDiagram={setFullDiagram} stageW={vp.w} />
+            fullDiagram={fullDiagram} setFullDiagram={setFullDiagram} stageW={vp.w}
+            diagramOn="map" onShowDiagram={plateOpen ? undefined : () => setPlateOpen(true)} />
         )}
       </div>
     </LabMotion>

@@ -3,7 +3,9 @@
 // The lesson card's content, in the drawer: the SAME facts every skin shows
 // (shared cardModel). Order: who it is and whether it is proven → how it
 // works (the diagram, full width) → what it does and introduces → its roads
-// (built on / leads to) → the pipelines it is in → the numbers.
+// (built on / leads to) → the pipelines it is in → the numbers. With
+// diagramOn="map" (the painted maps on desktop) the diagram is a plate on the
+// map instead (map-plate.tsx) and the card is text only.
 import { displayName, EVIDENCE_COPY, type CardModel } from "@/components/lab/shared/card-model";
 import { MechanismDiagram } from "@/components/lab/shared/anatomy2";
 import { THEMES } from "@/components/lab/shared/anatomy2/themes";
@@ -53,10 +55,15 @@ function H3({ m, children }: { m: Material; children: React.ReactNode }) {
   );
 }
 
-export function CardBody({ card, theme: m, still, onPick, stateOf, isAtom, diagramWidth, onOpenDiagram }: {
+export function CardBody({ card, theme: m, still, onPick, stateOf, isAtom, diagramWidth, onOpenDiagram, diagramOn = "drawer", onShowDiagram }: {
   card: CardModel; theme: Material; still: boolean; onPick: (n: string) => void;
   stateOf: (n: string) => CardModel["state"]; isAtom: (n: string) => boolean;
   diagramWidth: number; onOpenDiagram: () => void;
+  /** "map": the diagram hangs on the map as a plate (painted, desktop), so the
+   * card keeps only the text; "drawer" (default): the diagram is in the card */
+  diagramOn?: "drawer" | "map";
+  /** diagramOn "map" with the plate closed: a one-line link that reopens it */
+  onShowDiagram?: () => void;
 }) {
   const ev = card.evidence;
   const version = ev?.champion_version?.match(/v\d+/)?.[0];
@@ -70,11 +77,21 @@ export function CardBody({ card, theme: m, still, onPick, stateOf, isAtom, diagr
       </h2>
       <p className="mt-2">{EVIDENCE_COPY[card.state]}{version ? ` (${version})` : ""}.</p>
 
-      <H3 m={m}>How it works</H3>
-      <DiagramMat m={m}>
-        <MechanismDiagram name={card.name} theme={m.diagram} variant="card" still={still} width={diagramWidth - 2 * MAT_PAD - 6}
-          onOpen={() => { onOpenDiagram(); return true; }} />
-      </DiagramMat>
+      {diagramOn === "drawer" ? (
+        <>
+          <H3 m={m}>How it works</H3>
+          <DiagramMat m={m}>
+            <MechanismDiagram name={card.name} theme={m.diagram} variant="card" still={still} width={diagramWidth - 2 * MAT_PAD - 6}
+              onOpen={() => { onOpenDiagram(); return true; }} />
+          </DiagramMat>
+        </>
+      ) : onShowDiagram ? (
+        <button type="button" onClick={onShowDiagram}
+          className="mt-3 underline decoration-dotted underline-offset-4 hover:brightness-110 focus-visible:outline-2 focus-visible:outline-offset-2"
+          style={{ color: m.crisp ? m.border : m.ink, fontFamily: m.bodyFont, fontSize: 16 }}>
+          Show how it works
+        </button>
+      ) : null}
 
       <p className="mt-5" style={{ fontSize: 17 }}>{card.description}</p>
       {card.introduces.length > 0 && (
