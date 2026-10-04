@@ -2,15 +2,18 @@
 // every visual mark → the datum it encodes. The on-screen key renders
 // METRO_LEGEND, so the key cannot drift from the marks.
 
-/** One line per family. Softened signage colours: distinct at a glance, never
- * loud against the warm off-white sheet. */
+/** Line order = the periodic table's family order (also the key's order). */
+export const LINE_ORDER = ["perception", "sequence", "generative", "representation", "structure", "decision"] as const;
+
+/** One line per family. Pastel signage: told apart at a glance, never loud on the
+ * neutral sheet; each still holds a white letter on its origin bullet. */
 export const LINE_COLORS: Record<string, string> = {
-  perception: "#d4563f",
-  sequence: "#3f6fc0",
-  generative: "#3d9064",
-  representation: "#8662b8",
-  structure: "#cf8a33",
-  decision: "#2b9590",
+  perception: "#e2826d",
+  sequence: "#6b8fd0",
+  generative: "#5fae86",
+  representation: "#a28bd2",
+  structure: "#d9a95a",
+  decision: "#4fb0a9",
 };
 
 export const LINE_NAMES: Record<string, string> = {
@@ -23,25 +26,28 @@ export const LINE_NAMES: Record<string, string> = {
 };
 
 export const METRO_ENCODING = {
-  line: "a family (lib/blueprint placement); colour = family; one strip map per line",
-  track: "builds on, inside one family: a track runs from the parent to the child (transitive links are dropped, so convnext hangs off resnet, not classifier)",
-  "track geometry": "45° and 90° only; generations read left to right, one column per generation, one row per branch",
-  "origin bullet": "an atom (elementary model), lettered with its element symbol",
-  "station tick": "a derived model with a single parent",
-  "end bar": "a station where its branch ends: nothing in this family builds on it yet",
-  "interchange ring": "a model that builds on two or more parents",
-  "change-for bullet": "a parent on another line, lettered with its symbol and painted in that line's colour",
-  "line header": "the family name, its station count and its interchange count",
-  "through service": "a composition: the pipeline name and the stations it calls at, each in its own line's colour",
+  map: "one connected system: the whole zoo is a single network diagram, not one strip per family",
+  line: "a family's service (colour = family): it calls at every model of the family and at every model built on one of them",
+  "track geometry": "0°, 45° and 90° only, on one 20-px grid, one corner radius; the drawing is authored like the periodic table's placement (components/metro/layout.ts STATIONS + ROUTES)",
+  "station order": "every path starts at an origin (or at a station nearer one), so riding away from an origin follows the way models build on each other; a station's exact parents are in its spec sheet",
+  district: "where each family's stations sit: the painted maps' geography (Perception west, Representation north, Structure a north-east island, Sequence centre, Decision east, Generative south); the quiet area name is the family",
+  "origin bullet": "an atom (elementary model), lettered with its element symbol, in its line's colour",
+  "station tick": "a derived model served by one line; the tick points at its name",
+  "terminus bar": "a station on one line where that line's path ends: nothing further on this line builds from here",
+  "interchange ring": "a model served by two or more lines: it builds on models from more than one family",
+  "label weight": "semibold = an atom or an interchange (where you change), regular = a station on one line",
+  train: "one per line, riding the line's longest path outward from its origin; motion only, frozen under ?still=1 and prefers-reduced-motion",
+  "through service": "a composition (pipeline): its name and the stations it calls at, each bullet in that station's line colour; hovering one lights those stations on the map",
+  "line count": "in the key: how many stations the line calls at (its own models + the models built on them)",
 } as const;
 
-export type MetroMark = "origin" | "tick" | "end" | "interchange" | "change";
+export type MetroMark = "origin" | "tick" | "terminus" | "interchange" | "train";
 
 /** The on-screen key, in reading order. */
 export const METRO_LEGEND: { mark: MetroMark; label: string }[] = [
   { mark: "origin", label: "Origin: an atom" },
-  { mark: "tick", label: "Station: one parent" },
-  { mark: "end", label: "End of branch" },
-  { mark: "interchange", label: "Interchange: two or more parents" },
-  { mark: "change", label: "Change for a parent on another line" },
+  { mark: "tick", label: "Station on one line" },
+  { mark: "terminus", label: "End of a branch" },
+  { mark: "interchange", label: "Interchange: two or more lines" },
+  { mark: "train", label: "Train, outbound from an origin" },
 ];

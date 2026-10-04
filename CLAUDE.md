@@ -67,8 +67,14 @@ playground/ (repo root)  Next.js 16 + React 19 + TS + Tailwind v4 + Recharts +
                      /web/taxonomy). 66 per-species glyphs, six edition themes
                      behind a toggle (blueprint/wall chart/terminal/metro/atlas/
                      paper — manila city-map: districts, lots, routes, compass;
-                     metro = one octilinear strip map per family line,
-                     components/metro/{layout,encoding}.ts),
+                     metro = ONE connected Beck-style system map: a line is a
+                     family's service (its models + every model built on
+                     them), interchange rings where families meet; stations
+                     + paths authored on one grid in the painted maps'
+                     geography, audited to 0 crossings/overlaps/label
+                     collisions (data-* on the SVG; lib/world/metro.test.ts),
+                     ?specimen=1 = the knot crop; components/metro/
+                     {layout,encoding}.ts),
                      animated per-species forward-pass anatomy (PRs #18–#22).
                      Static-exported (output:'export' → playground/out) and
                      served by FastAPI StaticFiles at /. Pure client of

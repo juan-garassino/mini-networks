@@ -88,20 +88,23 @@ body::after {
 [data-edition="terminal"] { --font-display: var(--font-vt); --font-draft: var(--font-vt); }
 [data-edition="terminal"] .bp-title { letter-spacing: 0.05em; }
 
-/* 3 · metro map: signage on warm off-white */
+/* 3 · metro map: one system map, pastel lines on a neutral porcelain sheet */
 [data-edition="metro"] {
-  --paper: #f4f1ea; --paper-deep: #e9e4d8;
-  --ink: #191919; --ink-dim: #6e6a60;
-  --line: #191919; --line-faint: #d4cec0;
-  --redline: #e0301e;
+  --paper: #f3f4f1; --paper-deep: #e8eae5;
+  --ink: #1f2327; --ink-dim: #686d71;
+  --line: #1f2327; --line-faint: #d5d8d2;
+  --redline: #cf4f3e;
 }
 [data-edition="metro"] body, body[data-edition="metro"] { background-image: none; }
 [data-edition="metro"] { --font-display: var(--font-jost); --font-draft: var(--font-jost); }
-[data-edition="metro"] body::after { opacity: 0.03; }
-[data-edition="metro"] .metro-stop text { transition: fill 0.12s ease; }
-[data-edition="metro"] .metro-stop:hover > text { fill: var(--redline); }
-[data-edition="metro"] .metro-stop:focus-visible { outline: 2px solid var(--redline); }
-[data-edition="metro"] .metro-service:hover > span:first-child { color: var(--redline); }
+[data-edition="metro"] body::after { opacity: 0.02; }
+[data-edition="metro"] .metro-stop .metro-label { transition: fill 0.12s ease; }
+[data-edition="metro"] .metro-stop:hover .metro-label,
+[data-edition="metro"] .metro-stop:focus-visible .metro-label { fill: var(--redline); }
+[data-edition="metro"] .metro-stop:focus-visible { outline: none; }
+[data-edition="metro"] .metro-stop:focus-visible .metro-label { text-decoration: underline; }
+[data-edition="metro"] .metro-service:hover > span:first-child,
+[data-edition="metro"] .metro-service:focus-visible > span:first-child { color: var(--redline); }
 
 /* 4 · botanical atlas: sage + garamond */
 [data-edition="atlas"] {

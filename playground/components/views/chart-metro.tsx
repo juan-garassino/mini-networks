@@ -1,17 +1,52 @@
 "use client";
 
+import { useMemo, useState, useSyncExternalStore } from "react";
 import type { TaxonomyResponse } from "@/lib/types";
 import { symbolFor } from "@/lib/blueprint";
 import { LINE_COLORS, LINE_NAMES, METRO_LEGEND, type MetroMark } from "@/components/metro/encoding";
-import { BADGE, LABEL_PX, labelOf, layoutStrip, makeFamilyOf, textWidth, type Stop, type Strip } from "@/components/metro/layout";
+import {
+  CARTOUCHE, COLS, DISTRICTS, DISTRICT_PX, G, LABEL_PX, TRACK_W, buildMetro, labelOf, makeFamilyOf, trainPose,
+  type MetroLayout, type MetroLine, type MetroStation,
+} from "@/components/metro/layout";
 
-// Edition 3: the zoo as a transit system. Each family is a line, drawn as its
-// own strip map (the diagram posted inside a carriage): tracks are builds_on
-// links inside the family, 45°/90° only, generations left → right. Every mark
-// is declared in components/metro/encoding.ts; the key below renders it.
-const FAMILIES = Object.keys(LINE_COLORS);
+// Edition 3: the zoo as ONE transit system (Beck / Vignelli). Families are
+// lines; a line calls at its family's models and at every model built on one
+// of them, so where families meet you change at an interchange ring. Stations
+// and paths are drafted in components/metro/layout.ts (audited: no crossings,
+// overlaps or touching labels); every mark is declared in encoding.ts and the
+// key renders METRO_LEGEND.
 const INK = "var(--ink)";
-const TRACK_W = 6;
+const PAPER = "var(--paper)";
+const FONT = "var(--font-jost), sans-serif";
+/** The knot (signature specimen): the blue arm's three interchanges with Perception. */
+const SPECIMEN = { x: 4, y: 0.6, w: 42, h: 23 };
+/** On a phone the map keeps a legible scale and pans inside its frame. */
+const PHONE_MIN_W = 1180;
+const TRAIN_SPEED = 46; // px per second
+const TRAIN_STILL_T = 0.42; // where a frozen train stands along its path
+
+const noop = () => () => {};
+/** Phone: the frame opens on the west side of the knot (vit / sam), not on blank margin. */
+const PHONE_START_X = 3 * G;
+function openOnTheKnot(el: HTMLDivElement | null) {
+  if (el && el.scrollWidth > el.clientWidth + 1 && el.scrollLeft === 0) {
+    el.scrollLeft = PHONE_START_X * (el.scrollWidth / (COLS * G));
+  }
+}
+function useQueryFlag(name: string) {
+  return useSyncExternalStore(noop, () => new URLSearchParams(window.location.search).get(name) === "1", () => false);
+}
+function usePrefersReducedMotion() {
+  return useSyncExternalStore(
+    (cb) => {
+      const mq = window.matchMedia("(prefers-reduced-motion: reduce)");
+      mq.addEventListener("change", cb);
+      return () => mq.removeEventListener("change", cb);
+    },
+    () => window.matchMedia("(prefers-reduced-motion: reduce)").matches,
+    () => true,
+  );
+}
 
 export function ChartMetro({
   taxonomy, onSelect,
@@ -19,40 +54,64 @@ export function ChartMetro({
   taxonomy: TaxonomyResponse | null;
   onSelect: (name: string) => void;
 }) {
-  if (!taxonomy) return null;
-  const familyOf = makeFamilyOf(taxonomy.models);
-  const strips = FAMILIES.map((f) => layoutStrip(taxonomy.models, f, familyOf)).filter((s) => s.stops.length);
-  // one shared width keeps every strip on the same column grid
-  const W = Math.max(...strips.map((s) => s.width));
+  const layout = useMemo(() => (taxonomy ? buildMetro(taxonomy) : null), [taxonomy]);
+  const familyOf = useMemo(() => (taxonomy ? makeFamilyOf(taxonomy) : null), [taxonomy]);
+  const [lit, setLit] = useState<string[] | null>(null);
+  const specimen = useQueryFlag("specimen");
+  const still = useQueryFlag("still");
+  const reduced = usePrefersReducedMotion();
+  if (!taxonomy || !layout || !familyOf) return null;
+  const live = !still && !reduced;
+  const interchanges = layout.stations.filter((s) => s.kind === "interchange").length;
+
+  if (specimen) {
+    return (
+      <div className="h-full overflow-auto p-4 sm:p-8">
+        <MetroMap layout={layout} onSelect={onSelect} lit={null} live={live}
+          view={SPECIMEN} interchanges={interchanges} className="w-full" />
+      </div>
+    );
+  }
 
   return (
     <div className="h-full overflow-y-auto overflow-x-hidden">
-      <div className="mx-auto max-w-[1400px] px-4 pb-10 pt-6 sm:px-8">
-        <header className="border-b-[3px] border-ink pb-5">
-          <div className="text-[11px] tracking-[0.3em] text-ink-dim">NETWORK DIAGRAM · NOT TO SCALE</div>
-          <h1 className="bp-title mt-1 text-[28px] font-bold leading-tight text-ink sm:text-4xl">The mini_networks Transit Authority</h1>
-          <div className="mt-4 flex flex-wrap items-start justify-between gap-x-10 gap-y-5">
-            <p className="max-w-[48ch] text-[13px] leading-snug text-ink-dim">
-              {taxonomy.models.length} stations on {strips.length} lines. Each line is a family; a track
-              means the model builds on the one before it. Ride left to right, one generation per stop.
-            </p>
-            <MetroKey strips={strips} />
-          </div>
+      <div className="mx-auto max-w-[1480px] px-4 pb-10 pt-3 sm:px-6">
+        {/* phone: the cartouche sits in the map's far corner, so the title leads here */}
+        <header className="pb-3 md:hidden">
+          <h1 className="text-[22px] font-semibold leading-tight text-ink">mini_networks transit</h1>
+          <p className="mt-1 text-[13px] leading-snug text-ink-dim">
+            {layout.stations.length} stations on {layout.lines.length} lines. Change at a ring. Swipe the map sideways to ride east.
+          </p>
         </header>
 
-        <div className="mt-7 grid gap-x-12 gap-y-9"
-          style={{ gridTemplateColumns: `repeat(auto-fill, minmax(min(100%, ${W}px), 1fr))` }}>
-          {strips.map((s) => <StripPanel key={s.family} strip={s} width={W} onSelect={onSelect} />)}
+        <div ref={openOnTheKnot} className="metro-frame -mx-4 overflow-x-auto overflow-y-hidden px-4 md:mx-0 md:overflow-visible md:px-0">
+          <MetroMap layout={layout} onSelect={onSelect} lit={lit} live={live} interchanges={interchanges}
+            className="metro-map block h-auto w-full md:max-h-[calc(100dvh-112px)]" minWidth={PHONE_MIN_W} />
         </div>
 
-        <section className="mt-10">
-          <div className="flex items-baseline justify-between border-b-[3px] border-ink pb-2">
-            <h2 className="text-[17px] font-bold text-ink">Through services</h2>
-            <span className="text-[12px] text-ink-dim">{taxonomy.compositions.length} pipelines across lines</span>
+        <PhoneKey layout={layout} />
+
+        {layout.unplaced.length > 0 && (
+          <p className="mt-4 text-[13px] text-ink-dim">
+            Under construction (not on the drawing yet):{" "}
+            {layout.unplaced.map((n) => (
+              <button key={n} onClick={() => onSelect(n)} className="mr-2 text-ink underline decoration-line-faint underline-offset-2">{labelOf(n)}</button>
+            ))}
+          </p>
+        )}
+
+        <section className="mt-8">
+          <div className="flex items-baseline justify-between gap-4 border-b-2 border-ink pb-2">
+            <h2 className="text-[17px] font-semibold text-ink">Through services</h2>
+            <span className="text-right text-[12px] text-ink-dim">
+              {taxonomy.compositions.length} pipelines that ride several lines. Point at one to light its stops.
+            </span>
           </div>
-          <div className="grid sm:grid-cols-2 xl:grid-cols-3 sm:gap-x-10">
+          <div className="grid sm:grid-cols-2 sm:gap-x-10 xl:grid-cols-3">
             {taxonomy.compositions.map((c) => (
               <button key={c.name} onClick={() => onSelect(c.name)}
+                onMouseEnter={() => setLit(c.composes)} onMouseLeave={() => setLit(null)}
+                onFocus={() => setLit(c.composes)} onBlur={() => setLit(null)}
                 className="metro-service grid grid-cols-[1fr_auto] items-center gap-3 border-b border-line-faint py-2 text-left">
                 <span className="truncate text-[13px] text-ink">{labelOf(c.name)}</span>
                 <span className="flex gap-1">
@@ -67,118 +126,208 @@ export function ChartMetro({
   );
 }
 
-function StripPanel({ strip, width, onSelect }: { strip: Strip; width: number; onSelect: (n: string) => void }) {
-  const { family, color, stops, tracks, height, interchanges } = strip;
+function MetroMap({
+  layout, onSelect, lit, live, view, interchanges, className, minWidth,
+}: {
+  layout: MetroLayout;
+  onSelect: (n: string) => void;
+  lit: string[] | null;
+  live: boolean;
+  view?: { x: number; y: number; w: number; h: number };
+  interchanges: number;
+  className?: string;
+  minWidth?: number;
+}) {
+  const { width, height, stations, lines, audit } = layout;
+  const vb = view ? [view.x * G, view.y * G, view.w * G, view.h * G] : [0, 0, width, height];
+  const litSet = lit ? new Set(lit) : null;
   return (
-    <section className="min-w-0">
-      <div className="flex items-center gap-3 pb-2">
-        <span className="h-[10px] w-10 rounded-full" style={{ background: color }} />
-        <h2 className="text-[17px] font-bold text-ink">{LINE_NAMES[family] ?? family} line</h2>
-        <span className="ml-auto text-[12px] tabular-nums text-ink-dim">
-          {stops.length} stations{interchanges ? `, ${interchanges} interchange${interchanges > 1 ? "s" : ""}` : ""}
-        </span>
-      </div>
-      <div className="overflow-x-auto border-t border-line-faint">
-        <svg width={width} height={height} viewBox={`0 0 ${width} ${height}`} className="block"
-          style={{ fontFamily: "var(--font-jost), sans-serif" }} role="img" aria-label={`${family} line`}>
-          {tracks.map((d, i) => (
-            <path key={i} d={d} fill="none" stroke={color} strokeWidth={TRACK_W} strokeLinecap="round" strokeLinejoin="round" />
-          ))}
-          {stops.map((s) => <StopMark key={s.name} s={s} color={color} onSelect={onSelect} />)}
-        </svg>
-      </div>
-    </section>
+    <svg viewBox={vb.join(" ")} className={className} role="img"
+      aria-label={`Transit map: ${stations.length} stations on ${lines.length} lines, ${interchanges} interchanges`}
+      style={{ fontFamily: FONT, minWidth }}
+      data-crossings={audit.crossings} data-overlaps={audit.overlaps} data-pass-through={audit.passThrough}
+      data-label-collisions={audit.labelCollisions} data-off-grid={audit.offGrid}
+      data-service-mismatch={audit.serviceMismatch.length} data-stations={stations.length} data-metro-ready="1">
+      {DISTRICTS.map((d) => (
+        <text key={d.family} x={d.x * G} y={d.y * G} textAnchor={d.anchor} fontSize={DISTRICT_PX}
+          fill="var(--ink-dim)" opacity={0.75} letterSpacing="0.02em" className="select-none">
+          {LINE_NAMES[d.family]}
+        </text>
+      ))}
+
+      <g opacity={litSet ? 0.28 : 1} style={{ transition: "opacity 160ms ease" }}>
+        {lines.map((l) => l.paths.map((p, i) => (
+          <path key={`${l.family}-${i}`} d={p.d} fill="none" stroke={l.color} strokeWidth={TRACK_W}
+            strokeLinecap="round" strokeLinejoin="round" />
+        )))}
+        {lines.map((l) => <Train key={l.family} line={l} live={live} />)}
+      </g>
+
+      {stations.map((s) => (
+        <StationMark key={s.name} s={s} onSelect={onSelect} dim={!!litSet && !litSet.has(s.name)} />
+      ))}
+
+      {!view && <Cartouche layout={layout} interchanges={interchanges} />}
+    </svg>
   );
 }
 
-function StopMark({ s, color, onSelect }: { s: Stop; color: string; onSelect: (n: string) => void }) {
-  const label = labelOf(s.name);
-  const lx = s.labelSide === "right" ? s.x + (s.kind === "origin" ? 18 : 14) : s.x - 3;
-  const ly = s.labelSide === "right" ? s.y + 4.5 : s.y - 14;
-  const bx = lx + textWidth(label) + 6 + BADGE / 2;
+function StationMark({ s, onSelect, dim }: { s: MetroStation; onSelect: (n: string) => void; dim: boolean }) {
+  const color = LINE_COLORS[s.lines[0]] ?? "#888";
+  const weight = s.kind === "tick" ? 400 : 600;
   return (
-    <g className="metro-stop cursor-pointer" onClick={() => onSelect(s.name)}>
-      <title>{label}{s.changeFor.length ? ` (change for ${s.changeFor.map((c) => labelOf(c.name)).join(", ")})` : ""}</title>
-      {/* generous hit area */}
-      <rect x={s.x - 14} y={s.y - 28} width={textWidth(label) + 40} height={44} fill="transparent" />
-      <Mark kind={s.kind} x={s.x} y={s.y} color={color} up={s.labelSide === "above"} symbol={symbolFor(s.name)} />
-      <text x={lx} y={ly} fontSize={LABEL_PX} fill={INK} fontWeight={s.atom ? 600 : 400}>{label}</text>
-      {s.changeFor.map((c, i) => (
-        <g key={c.name} transform={`translate(${bx + i * BADGE} ${ly - 4.5})`}>
-          <circle r={8} fill={LINE_COLORS[c.family] ?? "#777"} />
-          <text y={3} textAnchor="middle" fontSize={8.5} fontWeight={700} fill="#fff">{symbolFor(c.name)}</text>
-        </g>
-      ))}
+    <g className="metro-stop cursor-pointer outline-none" tabIndex={0} role="button"
+      aria-label={`${s.label}${s.lines.length > 1 ? `, change for ${s.lines.map((f) => LINE_NAMES[f]).join(" and ")}` : ""}`}
+      onClick={() => onSelect(s.name)}
+      onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onSelect(s.name); } }}
+      opacity={dim ? 0.3 : 1} style={{ transition: "opacity 160ms ease" }}>
+      <title>{s.label}{s.parents.length ? `, built on ${s.parents.map(labelOf).join(", ")}` : ", an atom"}</title>
+      <rect x={Math.min(s.box.x, s.x - 12) - 3} y={Math.min(s.box.y, s.y - 12) - 3}
+        width={Math.max(s.box.x + s.box.w, s.x + 12) - Math.min(s.box.x, s.x - 12) + 6}
+        height={Math.max(s.box.y + s.box.h, s.y + 12) - Math.min(s.box.y, s.y - 12) + 6} fill="transparent" />
+      <Mark kind={s.kind} x={s.x} y={s.y} color={color} tick={s.tick} terminus={s.terminus} symbol={symbolFor(s.name)} />
+      <text x={s.text.x} y={s.text.y} textAnchor={s.text.anchor} fontSize={LABEL_PX} fontWeight={weight} fill={INK}
+        className="metro-label">{s.label}</text>
     </g>
   );
 }
 
-function Mark({ kind, x, y, color, up = true, symbol = "" }: {
-  kind: MetroMark; x: number; y: number; color: string; up?: boolean; symbol?: string;
+function Mark({ kind, x, y, color, tick = { x: 0, y: -1 }, terminus = false, symbol = "" }: {
+  kind: MetroMark; x: number; y: number; color: string; tick?: { x: number; y: number }; terminus?: boolean; symbol?: string;
 }) {
   switch (kind) {
     case "origin":
       return (
         <g>
-          <circle cx={x} cy={y} r={11.5} fill={color} stroke="var(--paper)" strokeWidth={2} />
+          <circle cx={x} cy={y} r={10.5} fill={color} stroke={PAPER} strokeWidth={2.5} />
           <text x={x} y={y + 3.6} textAnchor="middle" fontSize={10} fontWeight={700} fill="#fff">{symbol}</text>
         </g>
       );
     case "tick":
-      return <line x1={x} y1={y} x2={x} y2={up ? y - 9 : y + 9} stroke={color} strokeWidth={4} />;
-    case "end":
-      return <line x1={x} y1={y - 8} x2={x} y2={y + 8} stroke={color} strokeWidth={4.5} strokeLinecap="round" />;
-    case "interchange":
-      return <circle cx={x} cy={y} r={7.5} fill="var(--paper)" stroke={INK} strokeWidth={2.6} />;
-    case "change":
       return (
         <g>
-          <circle cx={x} cy={y} r={8} fill={color} />
-          <text x={x} y={y + 3} textAnchor="middle" fontSize={8.5} fontWeight={700} fill="#fff">{symbol}</text>
+          {terminus
+            ? <line x1={x - tick.x * 8.5} y1={y - tick.y * 8.5} x2={x + tick.x * 8.5} y2={y + tick.y * 8.5} stroke={color} strokeWidth={4.5} strokeLinecap="round" />
+            : <line x1={x} y1={y} x2={x + tick.x * 8.5} y2={y + tick.y * 8.5} stroke={color} strokeWidth={4.5} />}
         </g>
       );
+    case "terminus":
+      return <Mark kind="tick" x={x} y={y} color={color} tick={{ x: 0, y: -1 }} terminus />;
+    case "interchange":
+      return (
+        <g>
+          <circle cx={x} cy={y} r={7.5} fill={PAPER} stroke={INK} strokeWidth={2.6} />
+        </g>
+      );
+    case "train":
+      return <TrainBody x={x} y={y} angle={0} color={color} />;
   }
 }
 
-function Bullet({ name, family }: { name: string; family: string }) {
+function TrainBody({ x, y, angle, color }: { x: number; y: number; angle: number; color: string }) {
   return (
-    <svg width={20} height={20} viewBox="-10 -10 20 20" aria-label={labelOf(name)} role="img">
-      <title>{labelOf(name)}</title>
-      <circle r={9} fill={LINE_COLORS[family] ?? "#777"} />
-      <text y={3.2} textAnchor="middle" fontSize={9} fontWeight={700} fill="#fff"
-        style={{ fontFamily: "var(--font-jost), sans-serif" }}>{symbolFor(name)}</text>
-    </svg>
+    <g transform={`translate(${x} ${y}) rotate(${angle})`}>
+      <rect x={-9} y={-4.5} width={18} height={9} rx={4.5} fill={PAPER} stroke={color} strokeWidth={2.2} />
+      <rect x={2.5} y={-1.6} width={4} height={3.2} rx={1.2} fill={color} />
+    </g>
   );
 }
 
-function MetroKey({ strips }: { strips: Strip[] }) {
+/** One train per line, riding its longest path outward from the origin. Live: SMIL along
+ * the path, fading at each end; still / reduced motion: parked at a fixed pose. */
+function Train({ line, live }: { line: MetroLine; live: boolean }) {
+  const path = line.paths[line.trainPath];
+  if (!path) return null;
+  if (!live) {
+    const p = trainPose(path, TRAIN_STILL_T);
+    return <g className="metro-train"><TrainBody x={p.x} y={p.y} angle={(p.angle * 180) / Math.PI} color={line.color} /></g>;
+  }
+  const dur = Math.max(6, path.length / TRAIN_SPEED);
   return (
-    <div className="grid grid-cols-1 gap-x-8 gap-y-4 text-[12px] text-ink sm:grid-cols-[auto_auto]">
-      <div>
-        <div className="mb-1 text-[11px] font-semibold text-ink-dim">Lines</div>
-        {strips.map((s) => (
-          <div key={s.family} className="flex h-[20px] items-center gap-2">
-            <span className="h-[6px] w-7 rounded-full" style={{ background: s.color }} />
-            <span className="w-[100px]">{LINE_NAMES[s.family] ?? s.family}</span>
-            <span className="w-5 text-right tabular-nums text-ink-dim">{s.stops.length}</span>
-          </div>
-        ))}
-      </div>
-      <div>
-        <div className="mb-1 text-[11px] font-semibold text-ink-dim">Symbols</div>
+    <g className="metro-train" opacity={0}>
+      <TrainBody x={0} y={0} angle={0} color={line.color} />
+      <animateMotion dur={`${dur}s`} repeatCount="indefinite" rotate="auto" path={path.d} />
+      <animate attributeName="opacity" dur={`${dur}s`} repeatCount="indefinite" values="0;1;1;0" keyTimes="0;0.05;0.93;1" />
+    </g>
+  );
+}
+
+/** The map's own cartouche: title, one sentence, lines with counts, symbols. */
+function Cartouche({ layout, interchanges }: { layout: MetroLayout; interchanges: number }) {
+  const x0 = CARTOUCHE.x * G, y0 = CARTOUCHE.y * G, w = CARTOUCHE.w * G, h = CARTOUCHE.h * G;
+  const pad = 18;
+  const colB = x0 + pad + 172;
+  return (
+    <g className="select-none">
+      <rect x={x0} y={y0} width={w} height={h} fill={PAPER} stroke={INK} strokeWidth={1.5} rx={3} />
+      <text x={x0 + pad} y={y0 + 32} fontSize={21} fontWeight={600} fill={INK}>mini_networks transit</text>
+      <text x={x0 + pad} y={y0 + 54} fontSize={12} fill="var(--ink-dim)">
+        {layout.stations.length} stations on {layout.lines.length} lines, {interchanges} interchanges, {layout.audit.crossings} crossings.
+      </text>
+      <text x={x0 + pad} y={y0 + 70} fontSize={12} fill="var(--ink-dim)">
+        A line calls at its family and at every model built on it.
+      </text>
+      <line x1={x0 + pad} x2={x0 + w - pad} y1={y0 + 84} y2={y0 + 84} stroke="var(--line-faint)" strokeWidth={1} />
+      {layout.lines.map((l, i) => {
+        const y = y0 + 104 + i * 19;
+        return (
+          <g key={l.family}>
+            <line x1={x0 + pad} x2={x0 + pad + 26} y1={y - 4} y2={y - 4} stroke={l.color} strokeWidth={TRACK_W} strokeLinecap="round" />
+            <text x={x0 + pad + 36} y={y} fontSize={12.5} fill={INK}>{LINE_NAMES[l.family]}</text>
+            <text x={x0 + pad + 146} y={y} fontSize={12.5} fill="var(--ink-dim)" textAnchor="end" style={{ fontVariantNumeric: "tabular-nums" }}>{l.stations.length}</text>
+          </g>
+        );
+      })}
+      {METRO_LEGEND.map(({ mark, label }, i) => {
+        const y = y0 + 104 + i * 22;
+        return (
+          <g key={mark}>
+            {mark === "terminus" && <line x1={colB} x2={colB + 15} y1={y - 4} y2={y - 4} stroke="#9a9d9f" strokeWidth={TRACK_W} strokeLinecap="round" />}
+            {mark !== "train" && mark !== "origin" && mark !== "terminus" && <line x1={colB} x2={colB + 30} y1={y - 4} y2={y - 4} stroke="#9a9d9f" strokeWidth={TRACK_W} strokeLinecap="round" />}
+            {mark === "origin" && <line x1={colB + 15} x2={colB + 30} y1={y - 4} y2={y - 4} stroke="#9a9d9f" strokeWidth={TRACK_W} strokeLinecap="round" />}
+            {mark === "train" && <line x1={colB} x2={colB + 30} y1={y - 4} y2={y - 4} stroke="#9a9d9f" strokeWidth={TRACK_W} strokeLinecap="round" />}
+            <Mark kind={mark} x={colB + 15} y={y - 4} color="#9a9d9f" symbol="At" tick={{ x: 0, y: -1 }} />
+            <text x={colB + 42} y={y} fontSize={12.5} fill={INK}>{label}</text>
+          </g>
+        );
+      })}
+    </g>
+  );
+}
+
+/** Phone only: the key below the map (the in-map cartouche is a long swipe away). */
+function PhoneKey({ layout }: { layout: MetroLayout }) {
+  return (
+    <div className="mt-4 grid grid-cols-2 gap-x-6 gap-y-1 text-[12px] text-ink md:hidden">
+      {layout.lines.map((l) => (
+        <div key={l.family} className="flex h-[20px] items-center gap-2">
+          <span className="h-[6px] w-6 rounded-full" style={{ background: l.color }} />
+          <span>{LINE_NAMES[l.family]}</span>
+          <span className="ml-auto tabular-nums text-ink-dim">{l.stations.length}</span>
+        </div>
+      ))}
+      <div className="col-span-2 mt-2 grid grid-cols-1 gap-1">
         {METRO_LEGEND.map(({ mark, label }) => (
-          <div key={mark} className="flex min-h-[24px] items-center gap-2">
-            <svg width={38} height={24} viewBox="0 0 38 24" aria-hidden className="shrink-0">
-              {mark !== "change" && (
-                <line x1={2} y1={14} x2={mark === "end" ? 19 : 36} y2={14}
-                  stroke="#8a8478" strokeWidth={5} strokeLinecap="round" />
-              )}
-              <Mark kind={mark} x={19} y={14} color={mark === "change" ? LINE_COLORS.sequence : "#8a8478"} symbol={mark === "origin" ? "Cv" : "At"} />
+          <div key={mark} className="flex items-center gap-2">
+            <svg width={34} height={22} viewBox="0 0 34 22" aria-hidden className="shrink-0">
+              <line x1={mark === "origin" ? 17 : 2} x2={mark === "terminus" ? 17 : 32} y1={11} y2={11} stroke="#9a9d9f" strokeWidth={TRACK_W} strokeLinecap="round" />
+              <Mark kind={mark} x={17} y={11} color="#9a9d9f" symbol="At" tick={{ x: 0, y: -1 }} />
             </svg>
             <span>{label}</span>
           </div>
         ))}
       </div>
     </div>
+  );
+}
+
+function Bullet({ name, family }: { name: string; family: string }) {
+  return (
+    <svg width={20} height={20} viewBox="-10 -10 20 20" aria-label={labelOf(name)} role="img">
+      <title>{labelOf(name)}</title>
+      <circle r={9} fill={LINE_COLORS[family] ?? "#888"} />
+      <text y={3.2} textAnchor="middle" fontSize={9} fontWeight={700} fill="#fff"
+        style={{ fontFamily: FONT }}>{symbolFor(name)}</text>
+    </svg>
   );
 }
