@@ -37,7 +37,9 @@ export function Compass({ m, unit, onPan, onWhole, onZoom, canIn, canOut, whole 
   const diag: [number, number][] = [[2.5, 2.5], [N - 2.5, 2.5], [N - 2.5, N - 2.5], [2.5, N - 2.5]];
   const key = (fn: () => void) => (e: React.KeyboardEvent) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); fn(); } };
   return (
-    <div className="flex items-end gap-2" role="group" aria-label="Map navigation">
+    // the N rides above the rose (overflow): reserve its height so a plate stacked
+    // above never collides with it
+    <div className="flex items-end gap-2" role="group" aria-label="Map navigation" style={{ paddingTop: Math.round(unit * 4) }}>
       <svg width={size} height={size} viewBox={`0 0 ${N} ${N}`} shapeRendering={m.crisp ? "crispEdges" : "geometricPrecision"}
         style={{ display: "block", overflow: "visible", filter: m.crisp ? `drop-shadow(var(--ap) var(--ap) 0 ${m.shadow})` : `drop-shadow(1px 2px 0 ${m.shadow})` }}>
         {/* the rose's ring: a parchment disc with an ink rim */}

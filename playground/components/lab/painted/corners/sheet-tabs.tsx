@@ -20,11 +20,11 @@ export function SheetTabs({ m, mapId, dev, render, labels, setOpts, devOpen, set
     const on = mapId === id;
     return (
       <button key={id} type="button" role="tab" aria-selected={on} onClick={() => setOpts({ map: id })}
-        className={`${compact ? "px-2.5 pb-1.5" : "px-4 pb-2"} leading-none focus-visible:outline-2 focus-visible:outline-offset-2`}
+        className={`${compact ? "px-2 pb-1.5" : "px-4 pb-2"} leading-none focus-visible:outline-2 focus-visible:outline-offset-2`}
         style={{
           ...plateStyle(m, { loud: on, shadow: on }),
           borderTop: "none", paddingTop: on ? (compact ? 10 : 14) : (compact ? 6 : 8),
-          fontFamily: m.signFont, fontWeight: 700, fontSize: compact ? 15 : 20,
+          fontFamily: m.signFont, fontWeight: 700, fontSize: compact ? 14 : 20,
           marginTop: 0,
         }}>
         {text}
@@ -33,12 +33,12 @@ export function SheetTabs({ m, mapId, dev, render, labels, setOpts, devOpen, set
   };
   return (
     <nav aria-label="Map sheets" className="flex flex-col items-end">
-      <div role="tablist" className="flex items-start gap-1.5">
+      <div role="tablist" className={`flex items-start ${compact ? "gap-1" : "gap-1.5"}`}>
         {tab("pixel", "Pixel")}
         {tab("paper", "Paper")}
         <button type="button" onClick={onHideUi} aria-label="Map only: hide the UI (h)" title="Map only (h)"
-          className={`${compact ? "px-2 pb-1.5 pt-1.5" : "px-3 pb-2 pt-2"} leading-none focus-visible:outline-2`}
-          style={{ ...plateStyle(m, { shadow: true }), borderTop: "none", fontFamily: m.bodyFont, fontSize: compact ? 13 : 14 }}>
+          className={`${compact ? "px-1.5 pb-1.5 pt-1.5" : "px-3 pb-2 pt-2"} leading-none focus-visible:outline-2`}
+          style={{ ...plateStyle(m, { shadow: true }), borderTop: "none", fontFamily: m.bodyFont, fontSize: compact ? 12 : 14 }}>
           map only
         </button>
         {dev && (

@@ -1,18 +1,19 @@
 "use client";
 
-// Bottom-left, under the compass: the scale bar measures the zoo. One tick per
-// model in land order, filled by its evidence (gold champion, green trained,
-// dashed hollow when the bar is still provisional, grey untrained); a wider
-// gap separates the lands. Hover names the model, click focuses it. A second,
-// thinner row of ticks is the pipelines — what the painted "28 pipelines"
-// scale bar promised.
+// Bottom-left, over the compass: the scale bar measures the zoo, drawn the way
+// a map draws its scale — one inked bar, divided. Each land is a framed
+// segment; each cell in it is one model in land order (atoms first), filled
+// by its evidence (gold champion, green trained, hatched when the bar is still
+// provisional, grey untrained). Under the baseline hang the minor graduations:
+// one per pipeline. Hover names the model, click focuses it, double-click a
+// segment opens that land.
 import { useState } from "react";
 import { displayName, type EvidenceState } from "@/components/lab/shared/card-model";
 import { FAMILIES, type Family } from "../anchors";
 import { FAMILY_TITLE, type Material } from "../material";
 import { plateStyle } from "./plate";
 
-const TICK = 6, GAP = 2, LAND_GAP = 10, H = 14, PIPE_H = 7;
+const CELL = 7, H = 12, LAND_GAP = 6, PIPE_H = 6, PIPE_STEP = 6;
 
 export function ScaleBar({ m, names, family, states, atoms, pipelines, counts, selected, onPick, onLand, focusFam }: {
   m: Material;
@@ -32,29 +33,31 @@ export function ScaleBar({ m, names, family, states, atoms, pipelines, counts, s
     f,
     models: names.filter((n) => family?.[n] === f).sort((a, b) => Number(atoms.has(b)) - Number(atoms.has(a)) || a.localeCompare(b)),
   })).filter((g) => g.models.length);
-  const style = (s: EvidenceState, on: boolean): React.CSSProperties => {
+  const cell = (s: EvidenceState, on: boolean): React.CSSProperties => {
     const e = m.evidence[s];
     return {
-      width: TICK, height: H, flex: "none", boxSizing: "border-box",
-      background: s === "provisional" ? `repeating-linear-gradient(to bottom, ${e.fill} 0 2px, ${e.stroke} 2px 3px)` : e.fill,
-      border: `1px ${s === "provisional" ? "dashed" : "solid"} ${e.stroke}`,
-      boxShadow: on ? `0 -3px 0 ${m.ring}` : undefined,
-      transform: on ? "translateY(-2px)" : undefined,
+      width: CELL, height: H, flex: "none", padding: 0, border: 0,
+      background: s === "provisional"
+        ? `repeating-linear-gradient(135deg, ${e.stroke} 0 1px, ${m.plateHi} 1px 3px)`
+        : e.fill,
+      boxShadow: on ? `0 0 0 var(--ap, 2px) ${m.ring}` : undefined,
+      position: on ? "relative" : undefined, zIndex: on ? 1 : undefined,
     };
   };
   return (
     <div className="p-3" style={{ ...plateStyle(m), fontFamily: m.bodyFont, color: m.ink }} role="group" aria-label="Scale: every model, by evidence">
-      <div className="relative flex items-end" style={{ gap: LAND_GAP, height: H + 2 }}>
+      <div className="relative flex items-end" style={{ gap: LAND_GAP }}>
         {groups.map(({ f, models }) => (
-          <div key={f} className="flex items-end" style={{ gap: GAP, opacity: focusFam && focusFam !== f ? 0.45 : 1 }} role="group" aria-label={FAMILY_TITLE[f]}
-            onDoubleClick={() => onLand(f)}>
+          // a land = one framed segment; the frame colour shows between cells as the divisions
+          <div key={f} className="flex" role="group" aria-label={FAMILY_TITLE[f]} onDoubleClick={() => onLand(f)}
+            style={{ gap: "var(--ap, 2px)", padding: "var(--ap, 2px)", background: m.border, opacity: focusFam && focusFam !== f ? 0.4 : 1 }}>
             {models.map((n) => {
               const on = n === selected || n === hover;
               return (
                 <button key={n} type="button" aria-label={`${displayName(n)}, ${states[n] ?? "untrained"}`} title={displayName(n)}
                   onClick={() => onPick(n)} onPointerEnter={() => setHover(n)} onPointerLeave={() => setHover(null)}
                   onFocus={() => setHover(n)} onBlur={() => setHover(null)}
-                  className="block p-0 focus-visible:outline-2" style={style(states[n] ?? "untrained", on)} />
+                  className="block focus-visible:outline-2" style={cell(states[n] ?? "untrained", on)} />
               );
             })}
           </div>
@@ -65,14 +68,14 @@ export function ScaleBar({ m, names, family, states, atoms, pipelines, counts, s
           </span>
         )}
       </div>
-      {/* the baseline with end caps, like a drawn scale */}
+      {/* the baseline, with the pipelines hanging under it as minor graduations */}
       <div className="mt-1" style={{ height: 0, borderTop: `var(--ap, 2px) solid ${m.border}` }} />
-      <div className="mt-1.5 flex items-end gap-0.5" aria-label={`${counts.pipelines} pipelines`} role="img">
+      <div className="flex items-start justify-between" aria-label={`${counts.pipelines} pipelines`} role="img" style={{ gap: PIPE_STEP - 2 }}>
         {pipelines.map((p) => (
-          <span key={p} title={displayName(p)} style={{ width: TICK, height: PIPE_H, flex: "none", boxSizing: "border-box", background: m.plate, border: `1px solid ${m.border}` }} />
+          <span key={p} title={displayName(p)} style={{ width: 2, height: PIPE_H, flex: "none", background: m.border }} />
         ))}
       </div>
-      <p className="mt-1.5 flex justify-between gap-4 leading-none" style={{ fontSize: 14, color: m.inkSoft }}>
+      <p className="mt-2 flex justify-between gap-4 leading-none" style={{ fontSize: 14, color: m.inkSoft }}>
         <span>{counts.models} models, {counts.champions} proven</span>
         <span>{counts.pipelines} pipelines</span>
       </p>

@@ -7,7 +7,7 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { MechanismDiagram } from "@/components/lab/shared/anatomy2";
 import { displayName, type CardModel } from "@/components/lab/shared/card-model";
-import { CardBody } from "./card";
+import { CardBody, DiagramMat } from "./card";
 import { Btn } from "./corners/plate";
 import type { Material } from "./material";
 
@@ -56,7 +56,9 @@ export function Drawer(p: DrawerProps) {
           </h2>
         </div>
         <div className="px-5 pb-8 pt-4">
-          <MechanismDiagram name={card.name} theme={m.diagram} variant="full" still={p.still} width={Math.min(1120, p.stageW - 40)} />
+          <DiagramMat m={m} className="mx-auto w-fit">
+            <MechanismDiagram name={card.name} theme={m.diagram} variant="full" still={p.still} width={Math.min(1120, p.stageW - 64)} />
+          </DiagramMat>
         </div>
       </div>
     );

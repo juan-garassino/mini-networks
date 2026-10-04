@@ -6,6 +6,7 @@
 // (built on / leads to) → the pipelines it is in → the numbers.
 import { displayName, EVIDENCE_COPY, type CardModel } from "@/components/lab/shared/card-model";
 import { MechanismDiagram } from "@/components/lab/shared/anatomy2";
+import { THEMES } from "@/components/lab/shared/anatomy2/themes";
 import { FAMILY_TITLE, type Material } from "./material";
 import { EvidenceIcon } from "./pixel-icon";
 import { plateStyle } from "./corners/plate";
@@ -22,6 +23,24 @@ function Signpost({ name, theme: m, onPick, state, atom }: { name: string; theme
         : <span aria-hidden className="inline-block h-2.5 w-2.5 rounded-full" style={{ background: m.evidence[state].fill, border: `1.5px solid ${m.evidence[state].stroke}` }} />}
       {displayName(name)}
     </button>
+  );
+}
+
+/** The diagram is drawn on its own dusk ground with captions in that palette;
+ * set straight on the cream drawer the ground floated and the caption + "Open
+ * full diagram" link vanished. A mat cut from the diagram's ground, framed
+ * like every other plate, holds picture and caption together as one object. */
+export const MAT_PAD = 10;
+export function DiagramMat({ m, children, className = "" }: { m: Material; children: React.ReactNode; className?: string }) {
+  return (
+    <div className={className} style={{
+      background: THEMES[m.diagram].ground, padding: `${MAT_PAD}px ${MAT_PAD}px ${MAT_PAD - 2}px`,
+      border: `var(--ap, 2px) solid ${m.border}`,
+      boxShadow: m.crisp ? `var(--ap) var(--ap) 0 ${m.shadow}` : `2px 3px 0 ${m.shadow}`,
+      borderRadius: m.radius,
+    }}>
+      {children}
+    </div>
   );
 }
 
@@ -52,8 +71,10 @@ export function CardBody({ card, theme: m, still, onPick, stateOf, isAtom, diagr
       <p className="mt-2">{EVIDENCE_COPY[card.state]}{version ? ` (${version})` : ""}.</p>
 
       <H3 m={m}>How it works</H3>
-      <MechanismDiagram name={card.name} theme={m.diagram} variant="card" still={still} width={diagramWidth}
-        onOpen={() => { onOpenDiagram(); return true; }} />
+      <DiagramMat m={m}>
+        <MechanismDiagram name={card.name} theme={m.diagram} variant="card" still={still} width={diagramWidth - 2 * MAT_PAD - 6}
+          onOpen={() => { onOpenDiagram(); return true; }} />
+      </DiagramMat>
 
       <p className="mt-5" style={{ fontSize: 17 }}>{card.description}</p>
       {card.introduces.length > 0 && (

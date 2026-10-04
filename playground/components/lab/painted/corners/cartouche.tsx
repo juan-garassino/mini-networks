@@ -30,7 +30,7 @@ export function Cartouche({ m, counts, names, focusFam, famCount, famProven, onP
     : `${counts.models} models in ${lands} ${noun}, ${counts.champions} proven.`;
   const sub = focusFam && !m.crisp ? PAPER_SUBLINE[focusFam] : null;
   return (
-    <Plate m={m} as="header" label={title} className={compact ? "p-2.5" : "p-4 pt-3"} style={{ width: compact ? 200 : 324 }}>
+    <Plate m={m} as="header" label={title} className={compact ? "p-2.5" : "p-4 pt-3"} style={{ width: compact ? 168 : 324 }}>
       <h1 className="leading-none" style={{ fontFamily: m.signFont, fontWeight: 700, fontSize: compact ? 20 : 32, color: m.crisp ? m.border : m.ink }}>
         {title}
       </h1>

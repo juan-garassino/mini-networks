@@ -27,13 +27,13 @@ export const ENCODING = {
   "cartouche sentence": "live counts: models, lands, proven champions (or the focused land's)",
   "sheet tab": "which owner map is open (pixel / paper)",
   "compass points": "pan direction; hub = whole map (filled gold when at the whole map)",
-  "scale bar tick": "one model, in land order; fill = evidence state; wide gap = land boundary",
-  "pipeline tick": "one composition (pipeline)",
+  "scale bar cell": "one model, in land order (atoms first); fill = evidence state (hatched = provisional); one framed segment = one land",
+  "pipeline tick": "one composition (pipeline): a graduation hanging under the scale bar's baseline",
   "legend row": "the evidence vocabulary (banner + stone per state)",
   "minimap frame": "the camera box on the whole map (shown only when zoomed in)",
   // the drawer
   "drawer glyph": "the selected model's evidence state, as its own map sprite",
-  "mechanism diagram": "how the model works, drawn from the real champion's outputs",
+  "mechanism diagram": "how the model works, drawn from the real champion's outputs (on a framed mat cut from the diagram's own ground)",
   "signpost chip": "a parent (built on) or child (leads to) model, with its evidence glyph",
   "metric line": "best gate metric vs the M bar, and run count",
 } as const;

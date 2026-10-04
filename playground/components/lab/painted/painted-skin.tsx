@@ -316,12 +316,25 @@ export function PaintedSkin() {
     if ((zoom === "node" || zoom === "region") && a && family?.[focus!]) {
       const lb = landFrame(family[focus!] as Family);
       const m = isTrue ? 10 : 60;
-      let k = Math.min(visW / (lb.w + m * 2), visH / (lb.h + m * 2));
+      // keep the land clear of the corner plates (cartouche, scale bar, legend
+      // sit in the corners): frame it inside a screen-px safe inset on desktop
+      const safe = !mobile && !uiHidden ? 72 : 0;
+      let k = Math.min((visW - safe * 2) / (lb.w + m * 2), (visH - safe * 2) / (lb.h + m * 2));
+      // phones: a whole land at 390 px wide packs its names on top of each
+      // other — go in half as close again (bounded by the height) and centre
+      // on the focused model, kept inside its land; the rest of the land pans
+      if (isTrue && mobile) k = Math.min(k * 1.5, visH / (lb.h + m * 2));
       k = isTrue ? clamp(down(k), levels.overview, TRUE_MAX) : clamp(k, levels.min, levels.max);
+      if (isTrue && mobile) {
+        const wv = visW / k, hv = visH / k;
+        const cx = wv >= lb.w ? lb.x + lb.w / 2 : clamp(a[0], lb.x + wv / 2, lb.x + lb.w - wv / 2);
+        const cy = hv >= lb.h ? lb.y + lb.h / 2 : clamp(a[1], lb.y + hv / 2, lb.y + lb.h - hv / 2);
+        return boxAt(cx, cy, k, true);
+      }
       return boxAt(lb.x + lb.w / 2, lb.y + lb.h / 2, k, true);
     }
     return isTrue ? boxAt(continent.x + continent.w / 2, continent.y + continent.h / 2, levels.overview) : boxAt(W / 2, H / 2, levels.overview);
-  }, [view, map, levels, family, landFrame, boxAt, visW, visH, isTrue, down, W, H, continent]);
+  }, [view, map, levels, family, landFrame, boxAt, visW, visH, isTrue, down, W, H, continent, mobile, uiHidden]);
 
   useEffect(() => { setManual(null); }, [view?.zoom, view?.focus, mapId, render, vp.w, vp.h, drawerPx]);
 
