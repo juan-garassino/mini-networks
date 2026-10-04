@@ -1,77 +1,68 @@
 "use client";
 
-// In-canvas chrome for the atlas (Image 17 parts): title block + node-type and
-// edge-type legends (top-left), a decorative timeline axis + counts (bottom).
-// Plain HTML overlays positioned over the full-bleed SVG.
-import { ATLAS_INK, ATLAS_INK_DIM, HUB_INK } from "./theme";
+// The Network Atlas's left column: title block, live counts and the key.
+// The key is rendered from NETWORK_LEGEND (encoding.ts) so it names exactly
+// the marks the graph draws — nothing decorative, nothing it doesn't draw.
+import { useId } from "react";
+import { NETWORK_LEGEND, type LegendMark } from "./encoding";
+import { ATLAS_INK, ATLAS_INK_DIM, HUB_INK, R_DERIVED, R_MODEL } from "./theme";
 
-const NODE_KEYS: [string, string][] = [
-  ["model", "Model"], ["family", "Family"], ["milestone", "Milestone"], ["concept", "Concept"],
-];
-const EDGE_KEYS = ["Derives from", "Evolves to", "Combines with", "Related to", "Similar to"];
+const SANS = "var(--font-jost), sans-serif";
+const SERIF = "var(--font-cormorant), serif";
+const SAMPLE = "#7d756a"; // a neutral ink for family-coloured marks in the key
 
-export function AtlasTitle() {
+function Swatch({ mark }: { mark: LegendMark }) {
+  const id = `leg-${mark}-${useId().replace(/[^a-zA-Z0-9_-]/g, "")}`; // the key renders twice (desktop column + phone)
   return (
-    <div className="pointer-events-none absolute left-8 top-7 select-none">
-      <h1 className="leading-[0.95] tracking-[0.02em]" style={{ fontFamily: "var(--font-cormorant), serif", color: ATLAS_INK, fontSize: 34, fontWeight: 700 }}>
-        THE<br />NETWORK<br />ATLAS
+    <svg width="34" height="18" viewBox="0 0 34 18" aria-hidden className="shrink-0">
+      <defs>
+        <marker id={id} viewBox="0 0 10 10" refX="9" refY="5" markerWidth="5" markerHeight="5" orient="auto">
+          <path d="M0 0 L10 5 L0 10z" fill={mark === "builds-hub" ? HUB_INK : ATLAS_INK_DIM} />
+        </marker>
+      </defs>
+      {mark === "atom" && <circle cx="9" cy="9" r={R_MODEL * 0.8} fill={SAMPLE} />}
+      {mark === "derived" && <circle cx="9" cy="9" r={R_DERIVED * 0.75} fill={SAMPLE} />}
+      {mark === "milestone" && <><circle cx="9" cy="9" r="5.2" fill={SAMPLE} /><circle cx="9" cy="9" r="7.8" fill="none" stroke={SAMPLE} strokeWidth="1.1" opacity="0.7" /></>}
+      {mark === "hub" && <><circle cx="9" cy="9" r="6" fill={HUB_INK} /><circle cx="9" cy="9" r="8.4" fill="none" stroke={HUB_INK} strokeWidth="1.1" opacity="0.6" /></>}
+      {mark === "concept" && <><circle cx="7" cy="9" r="4" fill={SAMPLE} /><circle cx="16" cy="5" r="1.8" fill={SAMPLE} opacity="0.6" /></>}
+      {mark === "builds" && <line x1="1" y1="9" x2="31" y2="9" stroke={ATLAS_INK_DIM} strokeWidth="1" markerEnd={`url(#${id})`} />}
+      {mark === "builds-hub" && <line x1="1" y1="9" x2="31" y2="9" stroke={HUB_INK} strokeWidth="1.1" markerEnd={`url(#${id})`} />}
+      {mark === "pipeline" && <line x1="1" y1="9" x2="33" y2="9" stroke={SAMPLE} strokeWidth="1" strokeDasharray="1.5 4" strokeLinecap="round" />}
+    </svg>
+  );
+}
+
+export function AtlasTitle({ counts }: { counts: { models: number; links: number; pipelines: number } | null }) {
+  return (
+    <div className="select-none">
+      <h1 className="text-[30px] leading-[0.95] tracking-[0.02em] md:text-[34px]" style={{ fontFamily: SERIF, color: ATLAS_INK, fontWeight: 700 }}>
+        The Network<br />Atlas
       </h1>
-      <p className="mt-3 max-w-[190px] text-[11px] leading-snug" style={{ color: ATLAS_INK_DIM, fontFamily: "var(--font-jost), sans-serif" }}>
-        A map of machine intelligence — the relationships between neural
-        networks, models and ideas.
+      <p className="mt-3 max-w-[30ch] text-[12px] leading-[1.45]" style={{ color: ATLAS_INK_DIM, fontFamily: SANS }}>
+        How the models of mini_networks build on one another and
+        combine into pipelines. Pick any model to read its lineage.
       </p>
+      {counts && (
+        <p className="mt-3 text-[11px] tabular-nums" style={{ color: ATLAS_INK, fontFamily: SANS }}>
+          {counts.models} models, {counts.links} builds-on links, {counts.pipelines} pipelines
+        </p>
+      )}
     </div>
   );
 }
 
 export function AtlasLegend() {
   return (
-    <div className="pointer-events-none absolute bottom-24 left-8 select-none text-[11px]"
-      style={{ color: ATLAS_INK, fontFamily: "var(--font-jost), sans-serif" }}>
-      <div className="mb-3 space-y-1.5">
-        {NODE_KEYS.map(([k, label]) => (
-          <div key={k} className="flex items-center gap-2.5">
-            {k === "model" && <span className="inline-block h-3.5 w-3.5 rounded-full" style={{ background: HUB_INK }} />}
-            {k === "family" && <span className="inline-block h-3.5 w-3.5 rounded-full border-[1.5px]" style={{ borderColor: HUB_INK }} />}
-            {k === "milestone" && <span className="inline-block h-3.5 w-3.5 rounded-full border-[1.5px]" style={{ background: HUB_INK, boxShadow: `0 0 0 2px #f4f0e6, 0 0 0 3px ${HUB_INK}` }} />}
-            {k === "concept" && <span className="inline-block h-1.5 w-1.5 rounded-full" style={{ background: HUB_INK }} />}
+    <div className="select-none text-[11.5px]" style={{ color: ATLAS_INK, fontFamily: SANS }}>
+      <h2 className="mb-2 text-[15px] font-bold" style={{ fontFamily: SERIF }}>Key</h2>
+      <ul className="grid grid-cols-2 gap-x-4 gap-y-1 md:grid-cols-1">
+        {NETWORK_LEGEND.map(({ mark, label }) => (
+          <li key={mark} className="flex items-center gap-2 leading-tight">
+            <Swatch mark={mark} />
             <span>{label}</span>
-          </div>
+          </li>
         ))}
-      </div>
-      <div className="space-y-1.5" style={{ color: ATLAS_INK_DIM }}>
-        {EDGE_KEYS.map((e, i) => (
-          <div key={e} className="flex items-center gap-2.5">
-            <svg width="26" height="6" viewBox="0 0 26 6">
-              <line x1="0" y1="3" x2="26" y2="3" stroke={ATLAS_INK} strokeWidth="1"
-                strokeDasharray={i === 2 ? "2 3" : i >= 3 ? "1 3" : undefined}
-                markerEnd={i === 1 ? "url(#leg-arrow)" : undefined} />
-              <defs><marker id="leg-arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="5" markerHeight="5" orient="auto"><path d="M0 0 L10 5 L0 10z" fill={ATLAS_INK} /></marker></defs>
-            </svg>
-            <span>{e}</span>
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-}
-
-export function AtlasTimeline({ models, edges }: { models: number; edges: number }) {
-  const years = [2012, 2014, 2016, 2018, 2020, 2022, 2024, 2026];
-  return (
-    <div className="pointer-events-none absolute inset-x-0 bottom-6 select-none px-8">
-      <div className="mx-auto flex max-w-[900px] items-center gap-3" style={{ color: ATLAS_INK_DIM, fontFamily: "var(--font-jost), sans-serif" }}>
-        <div className="relative h-px flex-1" style={{ background: ATLAS_INK_DIM }}>
-          {years.map((y, i) => (
-            <div key={y} className="absolute -top-1.5 flex flex-col items-center" style={{ left: `${(i / (years.length - 1)) * 100}%`, transform: "translateX(-50%)" }}>
-              <span className="block h-2 w-px" style={{ background: ATLAS_INK_DIM }} />
-              <span className="mt-1 text-[9px]">{y}</span>
-            </div>
-          ))}
-          <span className="absolute -top-[3px] h-2 w-2 rounded-full" style={{ left: "62%", background: ATLAS_INK }} />
-        </div>
-        <span className="whitespace-nowrap text-[10px]">{models} models · {edges} relationships</span>
-      </div>
+      </ul>
     </div>
   );
 }

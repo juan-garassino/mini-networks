@@ -75,7 +75,10 @@ playground/ (repo root)  Next.js 16 + React 19 + TS + Tailwind v4 + Recharts +
                      playground/AGENTS.md before UI work — this Next.js version
                      differs from training data.
                      Route groups: app/(classic)/ = the edition UI at / and
-                     /atlas (blueprint.css scoped there); app/lab/ = the
+                     /atlas (blueprint.css scoped there; the atlas edition's
+                     plates and the /atlas Network Atlas — ?focus=<model>,
+                     key column + docked detail rail — declare their marks in
+                     components/atlas/encoding.ts, which the key renders); app/lab/ = the
                      design bake-off stage (spec 2026-09-28-playground-bakeoff):
                      /lab/{paper,pixel,hybrid,flow} skins + /lab/stub reference,
                      all painting lib/world/ — the pure deterministic layout

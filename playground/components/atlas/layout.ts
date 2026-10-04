@@ -18,8 +18,13 @@ export type AtlasNode = {
 };
 export type ConceptDot = { x: number; y: number; color: string; home: string };
 export type AtlasEdge = { from: string; to: string; type: "derives" | "combine"; hub: boolean };
+export type RegionField = { key: RegionKey; cx: number; cy: number; r: number };
 export type AtlasLayout = {
   nodes: AtlasNode[];
+  /** one field per family, fitted around its members after relaxation */
+  fields: RegionField[];
+  /** model → the compositions (pipelines) it takes part in */
+  pipelines: Map<string, string[]>;
   concepts: ConceptDot[];
   edges: AtlasEdge[];
   adj: Map<string, Set<string>>;
@@ -97,15 +102,17 @@ export function computeAtlas(tax: TaxonomyResponse, W: number, H: number): Atlas
     });
   }
 
-  // deterministic collision relaxation (hub stays pinned)
+  // deterministic collision relaxation (hub stays pinned); every pass also
+  // reins each node back inside its family's circle so fields never interleave
   const pad = 12;
-  for (let pass = 0; pass < 60; pass++) {
+  const home = (n: AtlasNode) => REGION_BY_KEY[n.region];
+  for (let pass = 0; pass < 80; pass++) {
     for (let i = 0; i < nodes.length; i++) {
       for (let k = i + 1; k < nodes.length; k++) {
         const a = nodes[i], b = nodes[k];
         const dx = b.x - a.x, dy = b.y - a.y;
         const d = Math.hypot(dx, dy) || 0.01;
-        const min = a.r + b.r + pad + 20; // room for labels
+        const min = a.r + b.r + pad + 22; // room for labels
         if (d < min) {
           const push2 = (min - d) / 2;
           const ux = dx / d, uy = dy / d;
@@ -114,12 +121,29 @@ export function computeAtlas(tax: TaxonomyResponse, W: number, H: number): Atlas
         }
       }
     }
+    for (const n of nodes) {
+      if (n.name === HUB_NAME) continue;
+      const reg = home(n);
+      const cx = reg.cx * W, cy = reg.cy * H, lim = reg.r * Math.min(W, H) * 1.05;
+      const d = Math.hypot(n.x - cx, n.y - cy);
+      if (d > lim) { n.x = cx + ((n.x - cx) / d) * lim; n.y = cy + ((n.y - cy) / d) * lim; }
+    }
   }
   // keep inside canvas margins
   for (const n of nodes) {
     n.x = Math.max(70, Math.min(W - 70, n.x));
-    n.y = Math.max(70, Math.min(H - 96, n.y));
+    n.y = Math.max(70, Math.min(H - 40, n.y));
   }
+
+  // fields: centred on the members' centroid, just wide enough to hold them
+  const fields: RegionField[] = REGIONS.map((reg) => {
+    const ms = nodes.filter((n) => n.region === reg.key && n.name !== HUB_NAME);
+    if (ms.length === 0) return { key: reg.key, cx: reg.cx * W, cy: reg.cy * H, r: 40 };
+    const cx = ms.reduce((t, n) => t + n.x, 0) / ms.length;
+    const cy = ms.reduce((t, n) => t + n.y, 0) / ms.length;
+    const r = Math.max(56, ...ms.map((n) => Math.hypot(n.x - cx, n.y - cy) + n.r + 30));
+    return { key: reg.key, cx, cy, r };
+  });
 
   const byName = new Map(nodes.map((n) => [n.name, n]));
 
@@ -148,7 +172,9 @@ export function computeAtlas(tax: TaxonomyResponse, W: number, H: number): Atlas
       }
     }
   }
+  const pipelines = new Map<string, string[]>();
   for (const c of tax.compositions) {
+    for (const m of c.composes) pipelines.set(m, [...(pipelines.get(m) ?? []), c.name]);
     const mem = c.composes.filter((x) => byName.has(x));
     for (let i = 1; i < mem.length; i++) {
       edges.push({ from: mem[i - 1], to: mem[i], type: "combine", hub: false });
@@ -156,7 +182,7 @@ export function computeAtlas(tax: TaxonomyResponse, W: number, H: number): Atlas
     }
   }
 
-  return { nodes, concepts, edges, adj, byName, usedBy };
+  return { nodes, fields, pipelines, concepts, edges, adj, byName, usedBy };
 }
 
 export const CONCEPT_R = R_CONCEPT;

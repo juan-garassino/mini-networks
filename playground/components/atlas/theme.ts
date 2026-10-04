@@ -19,16 +19,17 @@ export type Region = {
   cx: number; cy: number; r: number;
 };
 
-// hand-placed like the reference: VISION top-left, LANGUAGE top-right,
-// GENERATIVE right, GEOMETRY mid-left, REINFORCEMENT bottom-left,
-// KNOWLEDGE bottom-centre — the Transformer hub sits dead centre between them.
+// Hand-placed around the transformer hub (dead centre); radii grow with the
+// family's head-count (perception 15, sequence 12, decision 6, generative 5,
+// representation 4, structure 2) so no field has to overlap a neighbour.
+// Inks are muted engraving pigments, not signal colours.
 export const REGIONS: Region[] = [
-  { key: "perception", name: "Vision", tagline: "see · understand · represent", color: "#c0433a", cx: 0.24, cy: 0.30, r: 0.20 },
-  { key: "sequence", name: "Language", tagline: "generate · reason · communicate", color: "#2f4b7c", cx: 0.72, cy: 0.28, r: 0.19 },
-  { key: "generative", name: "Generative", tagline: "create · imagine · synthesize", color: "#d0682f", cx: 0.80, cy: 0.66, r: 0.16 },
-  { key: "representation", name: "Geometry", tagline: "embed · represent · measure", color: "#6a4d8c", cx: 0.22, cy: 0.62, r: 0.15 },
-  { key: "decision", name: "Reinforcement", tagline: "learn · act · adapt", color: "#3f7d4f", cx: 0.34, cy: 0.82, r: 0.15 },
-  { key: "structure", name: "Knowledge", tagline: "retrieve · augment · ground", color: "#5a5f66", cx: 0.60, cy: 0.80, r: 0.15 },
+  { key: "perception", name: "Vision", tagline: "see · understand · represent", color: "#b0574d", cx: 0.25, cy: 0.33, r: 0.19 },
+  { key: "sequence", name: "Language", tagline: "generate · reason · communicate", color: "#46608c", cx: 0.745, cy: 0.32, r: 0.175 },
+  { key: "generative", name: "Generative", tagline: "create · imagine · synthesize", color: "#bd7745", cx: 0.80, cy: 0.77, r: 0.115 },
+  { key: "representation", name: "Geometry", tagline: "embed · represent · measure", color: "#7a6298", cx: 0.16, cy: 0.77, r: 0.105 },
+  { key: "decision", name: "Reinforcement", tagline: "learn · act · adapt", color: "#4d8459", cx: 0.39, cy: 0.80, r: 0.12 },
+  { key: "structure", name: "Knowledge", tagline: "retrieve · augment · ground", color: "#6b7077", cx: 0.60, cy: 0.83, r: 0.08 },
 ];
 
 export const REGION_BY_KEY: Record<string, Region> =
