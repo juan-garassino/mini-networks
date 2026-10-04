@@ -127,6 +127,18 @@ const G: Record<string, Glyph> = {
   "²": ["xx.", "..x", ".x.", "xxx", "...", "...", "..."],
   "↵": ["....x", "....x", ".x..x", "xxxxx", ".x...", ".....", "....."],
   "✓": [".....", "....x", "....x", "...x.", "x.x..", ".x...", "....."],
+  // alignment group (rlhf / grpo / dpo): ratio, chosen⁺ / rejected⁻, bounds
+  // ρ: a ROUND bowl (p's is square) whose stem hooks back right at the foot, so it never reads as p
+  "ρ": ["....", "....", ".xx.", "x..x", "x..x", "x..x", "xxx.", "x...", ".xxx"],
+  "⁺": [".x.", "xxx", ".x.", "...", "...", "...", "..."],
+  "▲": [".....", "..x..", "..x..", ".xxx.", ".xxx.", "xxxxx", "....."],
+  "▼": [".....", "xxxxx", ".xxx.", ".xxx.", "..x..", "..x..", "....."],
+  "≥": ["x...", ".x..", "..x.", ".x..", "x...", "....", "xxxx"],
+  "≤": ["...x", "..x.", ".x..", "..x.", "...x", "....", "xxxx"],
+  // adapt group (lora): the low-rank update ΔW
+  "Δ": ["..x..", "..x..", ".x.x.", ".x.x.", "x...x", "x...x", "xxxxx"],
+  // rpp group: the prior strengths λ_conv / λ_free
+  "λ": ["xx...", "..x..", "..x..", ".x.x.", ".x.x.", "x...x", "x...x"],
 };
 
 // 3×5 mini face for subscripts (baseline-aligned with the main face's row 6).
@@ -156,6 +168,10 @@ const M: Record<string, Glyph> = {
   "×": ["...", "x.x", ".x.", "x.x", "..."],
   a: ["...", "xx.", "..x", "xxx", "xxx"],
   g: ["xxx", "x.x", "xxx", "..x", "xx."],
+  // π_{ref}: the frozen reference policy (alignment group)
+  r: ["...", "x.x", "xx.", "x..", "x.."],
+  e: [".x.", "x.x", "xxx", "x..", ".xx"],
+  f: [".xx", "x..", "xxx", "x..", "x.."],
 };
 
 export const FONT_H = 7;

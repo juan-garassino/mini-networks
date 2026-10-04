@@ -1,5 +1,7 @@
 # Anatomy v2 — style bible
 
+> Per-group design dossiers (expert / creative / designer / critic sections, one file per group) live in `playground/.lab-shots/anatomy/dossier/<group>.md` (gitignored; all 44 models now have a diagram).
+
 How the 26 pixel "How it works" diagrams are drawn, extracted from the code in
 `diagrams/*.tsx` as it stands (2026-10-03). Coordinates below are real ones.
 Field correctness (does the drawing match `models/<name>/model.py`?) is the

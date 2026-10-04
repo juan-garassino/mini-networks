@@ -32,6 +32,15 @@ import { TWIN_CARD_VIEW, TWIN_VIEW, TwinCard, TwinDiagram, type TwinName } from 
 import { GNN_CARD_VIEW, GNN_VIEW, GNNCard, GNNDiagram } from "./diagrams/gnn";
 import { UNET_CARD_VIEW, UNET_VIEW, UNetCard, UNetDiagram, type UNetName } from "./diagrams/unet";
 import { AlphaZeroCard, AlphaZeroDiagram, MazeCard, MazeDiagram, RL_CARD_VIEW, RL_VIEW, type MazeName } from "./diagrams/rl";
+import { TEXT_DEFS } from "./diagrams/text";
+import { AUDIO_DEFS } from "./diagrams/audio";
+import { TAB_DEFS } from "./diagrams/tabular";
+import { ALIGNMENT_DEFS } from "./diagrams/alignment";
+import { DETECT_DEFS } from "./diagrams/detect";
+import { PIXELCNN_DEFS } from "./diagrams/pixelcnn";
+import { NERF_DEFS } from "./diagrams/nerf";
+import { ADAPT_DEFS } from "./diagrams/adapt";
+import { RPP_DEFS } from "./diagrams/rpp";
 import type { KeyHandler } from "./diagrams/types";
 
 export type { ThemeName } from "./themes";
@@ -114,6 +123,15 @@ const DIAGRAMS: Record<string, DiagramDef> = {
     card: { view: CLIP_CARD_VIEW, render: ({ theme }) => <CLIPCard theme={theme} /> },
     badge: "real champion similarities",
   },
+  ...TEXT_DEFS,
+  ...AUDIO_DEFS,
+  ...TAB_DEFS,
+  ...ALIGNMENT_DEFS,
+  ...DETECT_DEFS,
+  ...PIXELCNN_DEFS,
+  ...NERF_DEFS,
+  ...ADAPT_DEFS,
+  ...RPP_DEFS,
 };
 
 /** Link to the full specimen view; `from` (a same-site path) powers its back link. */

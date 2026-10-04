@@ -140,6 +140,14 @@ playground/ (repo root)  Next.js 16 + React 19 + TS + Tailwind v4 + Recharts +
                      skin "designs"); thumbnails shot LIVE (still=1, one CDP Chrome
                      slot) by `node scripts/designs.mjs` into gitignored
                      public/local/designs/{<id>.jpg,shots.json}.
+                     /lab/anatomy = "How it works": components/lab/shared/anatomy2/
+                     pixel mechanism diagrams (index.tsx DIAGRAMS registry, full
+                     view + card each, pixel/paper themes, tick.ts useTick, baked
+                     real outputs in data/*-champion.ts via scripts/export_champions.py).
+                     All 44 models now have a rich diagram (generic fallback unused;
+                     ?variant=card = contact sheet). Design contract: anatomy2/STYLE.md;
+                     per-group expert→designer→critic dossiers in
+                     .lab-shots/anatomy/dossier/ (shots: .lab-shots/anatomy/shoot-anatomy.mjs).
 infra/gcp/           Dockerfile.train (ARG TORCH_INDEX: cpu|cu121) + entrypoint.sh
                      (MODE=train|sweep-task) + terraform/ (train job, L4 sweep
                      job, topic, trigger, IAM) + function/ (see its README)

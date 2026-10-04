@@ -75,7 +75,9 @@ export default function AnatomySpecimen() {
   // below 1× the art is unreadable: keep 1× and let the diagram scroll sideways
   const narrow = avail < base;
   const width = narrow ? base : Math.floor(avail / base) * base;
-  const models = [...DIAGRAM_NAMES, FALLBACK_DEMO];
+  // every model may now have a rich diagram: show the fallback demo only when it is still generic
+  const fallbackShown = !DIAGRAM_NAMES.includes(FALLBACK_DEMO);
+  const models = fallbackShown ? [...DIAGRAM_NAMES, FALLBACK_DEMO] : [...DIAGRAM_NAMES];
 
   return (
     <main
@@ -99,7 +101,7 @@ export default function AnatomySpecimen() {
                   background: m === view.model ? th.panel : "transparent",
                   color: m === view.model ? th.wireHot : th.text,
                 }}>
-                {m}{m === FALLBACK_DEMO ? " (old)" : ""}
+                {m}{fallbackShown && m === FALLBACK_DEMO ? " (old)" : ""}
               </button>
             ))}
           </nav>

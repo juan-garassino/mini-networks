@@ -29,3 +29,19 @@ export const RLHF_KL_COEF = 0.1 as const;
 export const RLHF_PPO_CLIP = 0.2 as const;
 // RLHF_VOCAB: character vocabulary size
 export const RLHF_VOCAB = 65 as const;
+// RLHF_STANDIN_PROMPT: grpo/dpo stand-in: the trainers' first prompt (16-char corpus window)
+export const RLHF_STANDIN_PROMPT = "First Citizen:\nB" as const;
+// RLHF_GROUP: grpo stand-in: G=4 responses of 16 chars from the rlhf champion (seed 2080, T=1.0, '\n' kept)
+export const RLHF_GROUP = ["one wird SYyurd ", "r d pmeuigipemak", " chp,\nYs\nToul, a", "RO\nces he mathau"] as const;
+// RLHF_GROUP_REWARDS: shakespearean_score of each (decode drops '\n', as in training)
+export const RLHF_GROUP_REWARDS = [0.0, 0.0, 0.083, 0.083] as const;
+// RLHF_GROUP_ADV: (r - mean) / (std_unbiased + 1e-6), exactly GRPOTrainer
+export const RLHF_GROUP_ADV = [-0.866, -0.866, 0.866, 0.866] as const;
+// RLHF_PAIR: dpo stand-in: [chosen, rejected] 16-char responses (seed 2081) after 2 tied pairs skipped
+export const RLHF_PAIR = ["is hogs acethior", "ith.\nAW.\nGud nep"] as const;
+// RLHF_PAIR_REWARDS: their scores: used only to sort, never in the loss
+export const RLHF_PAIR_REWARDS = [0.083, 0.0] as const;
+// RLHF_PAIR_TIED: tied pairs skipped before this one
+export const RLHF_PAIR_TIED = 2 as const;
+// RLHF_PAIR_LOGP: Σ log π over the 31 terms of each [prompt + response] (eval mode); at step 0 π_ref is the same net, so lr = lp and m = 0
+export const RLHF_PAIR_LOGP = [-85.75, -93.28] as const;

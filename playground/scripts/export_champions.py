@@ -376,10 +376,13 @@ def export_detection(config, trainer, dl_fn, n: int, seed: int) -> TsFile:
 
     ious = [iou(true_box[i].tolist(), pred_box[i].tolist()) for i in range(len(idx))]
     fm = maps[0]  # [B,64,14,14] after conv2+pool
-    contrast = fm[0].flatten(1).std(1) / fm[0].flatten(1).amax(1).clamp_min(1e-6)
+    # the channel that sees the DIGIT, not the zero-padding border: largest
+    # spatial std over the interior (rows/cols 1..12), averaged over the items
+    inner = fm[:, :, 1:13, 1:13].flatten(2)  # [B,64,144]
+    contrast = (inner.std(2) / fm.flatten(2).amax(2).clamp_min(1e-6)).mean(0)
     ch = int(contrast.argmax())
     f = TsFile("detection", "DET", champion_version("detection"),
-               f"YOLO-style dual-head CNN on {len(idx)} MNIST test digits placed at random (np seed {seed}) on a "
+               f"dual-head CNN (one class head, one box head; no grid, no anchors) on {len(idx)} MNIST test digits placed at random (np seed {seed}) on a "
                f"{config.canvas_size}px canvas: class probabilities, predicted vs true box (normalized xyxy), IoU, and one backbone map.")
     f.add("CANVAS_SIZE", config.canvas_size, "canvas side in px")
     f.add("DIGIT_IDX", idx, f"MNIST test index of each placed digit [{len(idx)}]")
@@ -390,7 +393,7 @@ def export_detection(config, trainer, dl_fn, n: int, seed: int) -> TsFile:
     f.add("PROBS", rnd(probs), f"class softmax [{len(idx)}][10]")
     f.add("PRED", pred, "argmax class")
     f.add("IOU", rnd(ious), "box IoU per item")
-    f.add("MAP_CH", ch, "backbone channel shown (highest std/max contrast on item 0, of 64 after conv2+pool)")
+    f.add("MAP_CH", ch, "backbone channel shown (highest interior std/max, mean over the items, of 64 after conv2+pool)")
     f.add("MAPS", [nib_pos(fm[i, ch])[0] for i in range(len(idx))], f"that 14x14 ReLU map per item, nibbles over [0, max] [{len(idx)}] x 196")
     return f
 
@@ -527,6 +530,36 @@ def export_audio_transformer(config, trainer, dl_fn, n: int, seed: int) -> TsFil
     return f
 
 
+def capture_attention(mhas: list) -> tuple[list, Callable[[], None]]:
+    """Make each nn.MultiheadAttention in `mhas` also return its per-head weights.
+
+    The torch encoder/decoder layers call their attention with need_weights=False
+    (and the encoder layer's fused fast path skips the module entirely under
+    no_grad), so we wrap forward() to force need_weights=True,
+    average_attn_weights=False and record weights [B, heads, q, k] per call, in
+    module order. Run the probe forward with grad ENABLED (no fast path), then
+    call the returned restore()."""
+    store: list = [None] * len(mhas)
+    originals = [m.forward for m in mhas]
+
+    def wrap(i, orig):
+        def fwd(*a, **kw):
+            kw["need_weights"] = True
+            kw["average_attn_weights"] = False
+            out, w = orig(*a, **kw)
+            store[i] = w.detach()
+            return out, w
+        return fwd
+
+    for i, m in enumerate(mhas):
+        m.forward = wrap(i, originals[i])
+
+    def restore() -> None:
+        for m, orig in zip(mhas, originals):
+            m.forward = orig
+    return store, restore
+
+
 def export_text_token_classifier(config, trainer, dl_fn, n: int, seed: int) -> TsFile:
     import torch
     from mini_networks.core.data.text import vowel_labels
@@ -559,6 +592,21 @@ def export_text_token_classifier(config, trainer, dl_fn, n: int, seed: int) -> T
     f.add("TEXT_P", t_p, "p(vowel) per char")
     f.add("TEXT_TRUE", t_true, "true vowel flag per char")
     f.add("TEXT_ACC", rnd(acc), "token accuracy on TEXT")
+    # attention on LINE: every layer x head, the full (unmasked) square
+    layers = trainer.model.encoder.layers
+    store, restore = capture_attention([l.self_attn for l in layers])
+    try:
+        ids = torch.tensor([ds.stoi[c] for c in line], dtype=torch.long).unsqueeze(0)
+        with torch.enable_grad():  # grad on -> no fused fast path, self_attn.forward runs
+            trainer.model(ids)
+    finally:
+        restore()
+    T = len(line)
+    future = torch.triu(torch.ones(T, T), 1)
+    f.add("ATTN", [[nib(store[l][0, h], 0.0, 1.0) for h in range(store[l].shape[1])] for l in range(len(layers))],
+          f"encoder self-attention on LINE, [layer][head] -> {T}x{T} row-major (query rows, key cols), nibbles [0, 1]; NO causal mask")
+    f.add("ATTN_FUTURE", [[rnd(float((store[l][0, h] * future).sum(-1).mean())) for h in range(store[l].shape[1])] for l in range(len(layers))],
+          "mean attention mass a query puts on LATER keys (k > i), [layer][head]; a causal LM has exactly 0")
     return f
 
 
@@ -570,8 +618,15 @@ def export_text_seq2seq(config, trainer, dl_fn, n: int, seed: int) -> TsFile:
     x, _ = ds[0]  # the corpus opening, a real training window
     src, tgt = split_seq_halves(x)
     dec = lambda ids: "".join(ds.itos[int(i)] for i in ids)  # noqa: E731
-    with torch.no_grad():
-        logits = trainer.model(src.unsqueeze(0), tgt[:-1].unsqueeze(0))[0]  # predicts tgt[1:]
+    dlayers = trainer.model.transformer.decoder.layers
+    store, restore = capture_attention([l.self_attn for l in dlayers] + [l.multihead_attn for l in dlayers])
+    try:
+        with torch.no_grad():
+            logits = trainer.model(src.unsqueeze(0), tgt[:-1].unsqueeze(0))[0]  # predicts tgt[1:]
+    finally:
+        restore()
+    nl = len(dlayers)
+    d_self, d_cross = store[:nl], store[nl:]
     p = torch.softmax(logits, -1)
     top = p.argmax(-1)
     true_p = p.gather(1, tgt[1:].unsqueeze(1)).squeeze(1)
@@ -589,6 +644,17 @@ def export_text_seq2seq(config, trainer, dl_fn, n: int, seed: int) -> TsFile:
     f.add("TRUE_P", rnd(true_p), "probability of the true char")
     f.add("SAMPLED", dec(sampled), f"sampled decode from SRC's last char [{len(sampled)} chars]")
     f.add("TEMPERATURE", 0.8, "sampling temperature used for SAMPLED")
+    nq, nk = d_cross[0].shape[-2], d_cross[0].shape[-1]
+    f.add("SELF", [[nib(w[0, h], 0.0, 1.0) for h in range(w.shape[1])] for w in d_self],
+          f"decoder self-attention (causal) on the teacher-forced pass, [layer][head] -> {nq}x{nq}, nibbles [0, 1]")
+    f.add("CROSS_HI", 0.25, "upper end of the CROSS nibble range (real weights stay <= ~.25; 1/32 = .031 is uniform)")
+    f.add("CROSS", [[nib(w[0, h], 0.0, 0.25) for h in range(w.shape[1])] for w in d_cross],
+          f"decoder cross-attention (Q tgt, K/V encoder memory), [layer][head] -> {nq}x{nk} row-major, nibbles [0, CROSS_HI]; no mask")
+    ent = lambda w: float((-(w * w.clamp_min(1e-12).log()).sum(-1)).mean())  # noqa: E731
+    f.add("CROSS_MAXW", [[rnd(float(w[0, h].max())) for h in range(w.shape[1])] for w in d_cross],
+          "largest single cross-attention weight, [layer][head]")
+    f.add("CROSS_ENTROPY", [[rnd(ent(w[0, h])) for h in range(w.shape[1])] for w in d_cross],
+          f"mean row entropy (nats) of cross-attention, [layer][head]; uniform over {nk} keys = ln {nk} = {math.log(nk):.2f}")
     return f
 
 
@@ -666,7 +732,53 @@ def export_rlhf(config, trainer, dl_fn, n: int, seed: int) -> TsFile:
     f.add("KL_COEF", config.kl_coef, "KL(π‖π_ref) weight in the PPO objective")
     f.add("PPO_CLIP", config.ppo_clip, "PPO ratio clip ε")
     f.add("VOCAB", ds.vocab_size, "character vocabulary size")
+    _rlhf_stand_in(f, config, trainer, ds, seed)
     return f
+
+
+def _rlhf_stand_in(f: TsFile, config, trainer, ds, seed: int) -> None:
+    """grpo / dpo have no local champions: run THEIR rollout code shape with the
+    rlhf champion as a stand-in policy, so the anatomy can show real text. The
+    trainers' first prompt (16-char corpus window), M budget (16 new chars,
+    T=1.0, eval mode), rewards via the same decode + shakespearean_score.
+    Seeded after the main sample so the constants above never change."""
+    import torch
+    from mini_networks.models.rlhf.model import shakespearean_score
+    from mini_networks.models.rlhf.trainer import _log_probs_of_tokens
+
+    tok, model = trainer.tokenizer, trainer.model
+    prompt_ids = tok.encode(ds.text)[:16]
+    raw = lambda ids: "".join(ds.itos[i] for i in ids)  # noqa: E731 — keeps '\n' (id 0), which decode drops
+    model.eval()
+
+    def roll():
+        with torch.no_grad():
+            full = model.generate(torch.tensor([prompt_ids]), max_new_tokens=16, temperature=1.0)
+            lp = float(_log_probs_of_tokens(model, full).sum())
+        resp = full[0, len(prompt_ids):].tolist()
+        return raw(resp), float(shakespearean_score(tok.decode(resp))), lp
+
+    seed_all(seed + 1)
+    group = [roll() for _ in range(4)]
+    r = torch.tensor([g[1] for g in group])
+    adv = (r - r.mean()) / (r.std() + 1e-6)  # GRPOTrainer._grpo_update, unbiased std
+    seed_all(seed + 2)
+    tied, pair = 0, None
+    while pair is None and tied < 16:  # DPOTrainer._collect_pairs: two samples, ties skipped
+        a, b = roll(), roll()
+        if a[1] == b[1]:
+            tied += 1
+        else:
+            pair = sorted([a, b], key=lambda c: c[1], reverse=True)
+    f.add("STANDIN_PROMPT", raw(prompt_ids), "grpo/dpo stand-in: the trainers' first prompt (16-char corpus window)")
+    f.add("GROUP", [g[0] for g in group], f"grpo stand-in: G=4 responses of 16 chars from the rlhf champion (seed {seed + 1}, T=1.0, '\\n' kept)")
+    f.add("GROUP_REWARDS", rnd([g[1] for g in group]), "shakespearean_score of each (decode drops '\\n', as in training)")
+    f.add("GROUP_ADV", rnd(adv), "(r - mean) / (std_unbiased + 1e-6), exactly GRPOTrainer")
+    if pair is not None:
+        f.add("PAIR", [p[0] for p in pair], f"dpo stand-in: [chosen, rejected] 16-char responses (seed {seed + 2}) after {tied} tied pairs skipped")
+        f.add("PAIR_REWARDS", rnd([p[1] for p in pair]), "their scores: used only to sort, never in the loss")
+        f.add("PAIR_TIED", tied, "tied pairs skipped before this one")
+        f.add("PAIR_LOGP", rnd([p[2] for p in pair], 2), "Σ log π over the 31 terms of each [prompt + response] (eval mode); at step 0 π_ref is the same net, so lr = lp and m = 0")
 
 
 def export_tabular_diffusion(config, trainer, dl_fn, n: int, seed: int) -> TsFile:
