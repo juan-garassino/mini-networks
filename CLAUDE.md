@@ -89,6 +89,22 @@ playground/ (repo root)  Next.js 16 + React 19 + TS + Tailwind v4 + Recharts +
                      (?zoom=overview|region|node&focus=<model>&still=1); skins
                      set data-lab-ready when drawn; every mark is declared in
                      components/lab/<skin>/encoding.ts.
+                     /lab/flow = the Kawaii DFD (spec .lab-shots/rework/flow/brief.md,
+                     owner reference: an IxDF data-flow diagram): lib/world/dfd.ts
+                     lays models on a strict grid (desktop: two stacks of family
+                     lanes x generation columns, one left x per column; phone: one
+                     file-tree column between two routing gutters) and routes every
+                     builds_on edge orthogonally (one elbow radius, arrowhead at its
+                     own input port, inline labels in gaps on cross-family edges) with
+                     ZERO crossings/overlaps/box hits — desktop by a maze router,
+                     phone by a two-page channel annealer (off-sheet connector
+                     fallback, budget 2); dfd.test.ts proves it on the fixture + 5
+                     shuffles + 5 perturbations; the board carries data-crossings /
+                     data-overlaps. Boxes: atom = store (index cell), derived =
+                     process (strip with lineage address 4.1.2 + evidence mark),
+                     creature = silhouette (family) + face (evidence). Docked drawer
+                     (phone: bottom sheet ≤55%), packets ride the lit lineage;
+                     /lab/flow/specimen = the router alone (?mode=mobile).
                      /lab/painted = the owner's two painted maps (pixel 768×512
                      128-colour, paper 1536×1024; local, gitignored under
                      playground/public/local/) with the live data layer, in the

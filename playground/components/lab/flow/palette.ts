@@ -1,31 +1,23 @@
-// Skin D tokens. Text is always plum on light — pastels are fills only.
-export const INK = "#3B2E5A";        // plum ink: every outline and every word
-export const INK_SOFT = "#5E4F80";   // secondary text (≥5:1 on PAPER)
-export const PAPER = "#F3F0FF";      // lilac grid paper
-export const DOT = "#D6CCF4";        // grid dots (one per half row pitch)
-export const CARD = "#FFFFFF";
-export const GOLD = "#F6BE3B";       // champion medal
-export const SWEAT = "#7FB7FF";      // provisional sweat drop
+// Skin D · Kawaii DFD — tokens. A data-flow sheet: white paper, one ink for every
+// line and word, colour only in the family header strips (soft pastels, never text)
+// and in the one selection accent that lights a lineage.
+export const SHEET = "#FCFCFA";      // the paper
+export const INK = "#2E2742";        // every edge, outline and word
+export const INK_SOFT = "#5D5672";   // secondary text (≥ 6:1 on SHEET)
+export const RULE = "#E4E1EA";       // swim-lane rules
+export const HEAD = "#8A84A0";       // column headers (Atoms / Gen n) — large enough to stay legible
+export const ACCENT = "#2F5FD0";     // the one accent: selection, lit lineage, pipeline order
+export const GOLD = "#E2A322";       // champion mark
 
-// One pastel per family (brief palette, unchanged: all pass as fills under
-// plum text/outlines; none is ever used as a text colour).
-export const FAMILY: Record<string, { fill: string; deep: string; label: string; kind: string }> = {
-  perception:     { fill: "#8FE3C0", deep: "#3E9C78", label: "Perception",     kind: "eyeballs" },
-  sequence:       { fill: "#9CC9FF", deep: "#4A83C9", label: "Sequence",       kind: "token caterpillars" },
-  generative:     { fill: "#FFB38A", deep: "#D06E3B", label: "Generative",     kind: "egg clouds" },
-  representation: { fill: "#C6B2FF", deep: "#7D62D6", label: "Representation", kind: "mirror twins" },
-  structure:      { fill: "#FFE27A", deep: "#C29A12", label: "Structure",      kind: "crystals" },
-  decision:       { fill: "#FF9CCB", deep: "#CC4F8C", label: "Decision",       kind: "dice bots" },
+// One family = a soft pastel strip, a slightly deeper creature fill and a deep tone
+// (packets riding out of that family). Pastels are fills only, never text colours.
+export const FAMILY: Record<string, { strip: string; body: string; deep: string; label: string; kind: string }> = {
+  perception:     { strip: "#D5EEE1", body: "#A5DCC2", deep: "#3E9C78", label: "Perception",     kind: "eyeballs" },
+  sequence:       { strip: "#DAE6F7", body: "#AECAEF", deep: "#4A7FC4", label: "Sequence",       kind: "caterpillars" },
+  generative:     { strip: "#F8E2D3", body: "#F2BE9F", deep: "#CC6C3A", label: "Generative",     kind: "eggs" },
+  representation: { strip: "#E7E0F7", body: "#C7B8EF", deep: "#7A62CF", label: "Representation", kind: "mirror twins" },
+  structure:      { strip: "#F3EBC6", body: "#E8D488", deep: "#A9840F", label: "Structure",      kind: "crystals" },
+  decision:       { strip: "#F6DCE7", body: "#EEB2CC", deep: "#C04F86", label: "Decision",       kind: "dice bots" },
 };
-export const UNKNOWN_FAMILY = { fill: "#E4DEF7", deep: "#8B80A8", label: "Other", kind: "newcomers" };
+export const UNKNOWN_FAMILY = { strip: "#ECE9F2", body: "#D2CDE0", deep: "#7D7896", label: "Other", kind: "newcomers" };
 export const fam = (f: string) => FAMILY[f] ?? UNKNOWN_FAMILY;
-
-// The one accent: focus, the lineage route, the ferry sail, Try it.
-export const ACCENT = "#D6336C";
-
-/** Opaque mix of two #rrggbb colours (t = 0 → a, 1 → b). */
-export function hexMix(a: string, b: string, t: number) {
-  const p = (h: string) => [1, 3, 5].map((i) => parseInt(h.slice(i, i + 2), 16));
-  const x = p(a), y = p(b);
-  return `#${x.map((v, i) => Math.round(v + (y[i] - v) * t).toString(16).padStart(2, "0")).join("")}`;
-}
