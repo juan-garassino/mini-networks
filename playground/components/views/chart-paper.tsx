@@ -4,7 +4,7 @@ import { motion } from "motion/react";
 import type { TaxonModel, TaxonomyResponse } from "@/lib/types";
 import { ATOMS, FAMILY_BLOCKS, PLACEMENT, symbolFor } from "@/lib/blueprint";
 import { AtlasDefs } from "@/components/paper/atlas/defs";
-import { beachPathOf, groundPathOf, IslandLabel, IslandTerrain, RegionBorder, type IsleSpec } from "@/components/paper/atlas/island";
+import { beachPathOf, groundPathOf, IslandLabel, IslandTerrain, RegionBorder, type IsleSpec, type KeepOut } from "@/components/paper/atlas/island";
 import { Landmark } from "@/components/paper/atlas/landmarks";
 import { BorderFrame, CompassRose, Galleon, ScaleBar, ScrollBanner, SeaSerpent } from "@/components/paper/atlas/furniture";
 
@@ -23,9 +23,9 @@ const ISLES: IsleSpec[] = [
   { fam: "perception", name: "Perception Meadows", color: "#3f6f3f", biome: "meadow", landmark: "observatory", cx: 400, cy: 400, rx: 300, ry: 235, seed: 1 },
   { fam: "sequence", name: "Sequence Wetlands", color: "#356470", biome: "wetland", landmark: "clock", cx: 1085, cy: 385, rx: 285, ry: 226, seed: 2 },
   { fam: "structure", name: "Woven Marches", color: "#9c6b28", biome: "forest", landmark: "lattice", cx: 748, cy: 548, rx: 122, ry: 108, seed: 3 },
-  { fam: "generative", name: "Generative Mesa", color: "#a53c22", biome: "mesa", landmark: "kiln", cx: 1132, cy: 800, rx: 226, ry: 190, seed: 4 },
+  { fam: "generative", name: "Generative Mesa", color: "#a53c22", biome: "mesa", landmark: "kiln", cx: 1132, cy: 800, rx: 226, ry: 190, seed: 4, label: [1090, 640] },
   { fam: "decision", name: "Crossroads Pines", color: "#356e6a", biome: "pines", landmark: "signpost", cx: 792, cy: 850, rx: 236, ry: 176, seed: 5 },
-  { fam: "representation", name: "Mirror Heath", color: "#524f83", biome: "heath", landmark: "mirrors", cx: 360, cy: 828, rx: 208, ry: 176, seed: 6 },
+  { fam: "representation", name: "Mirror Heath", color: "#524f83", biome: "heath", landmark: "mirrors", cx: 360, cy: 828, rx: 208, ry: 176, seed: 6, label: [330, 676] },
 ];
 
 const blockForCol = (col: number) =>
@@ -41,6 +41,32 @@ const hex = (cx: number, cy: number, r: number) =>
     const a = ((60 * k - 90) * Math.PI) / 180;
     return `${cx + r * Math.cos(a)},${cy + r * Math.sin(a)}`;
   }).join(" ");
+
+// octilinear trail between two towns: one 45° leg, then a straight run, with
+// rounded bends — the transit diagram's track grammar borrowed for the map
+function octiTrail(a: { x: number; y: number }, b: { x: number; y: number }): string {
+  const dx = b.x - a.x, dy = b.y - a.y;
+  const d = Math.min(Math.abs(dx), Math.abs(dy));
+  const m = { x: a.x + Math.sign(dx) * d, y: a.y + Math.sign(dy) * d };
+  if (d === 0 || (m.x === b.x && m.y === b.y)) return ` L ${b.x} ${b.y}`;
+  const l1 = Math.hypot(m.x - a.x, m.y - a.y), l2 = Math.hypot(b.x - m.x, b.y - m.y);
+  const r = Math.min(18, l1 / 2, l2 / 2);
+  const p = { x: m.x - ((m.x - a.x) / l1) * r, y: m.y - ((m.y - a.y) / l1) * r };
+  const q = { x: m.x + ((b.x - m.x) / l2) * r, y: m.y + ((b.y - m.y) / l2) * r };
+  return ` L ${p.x.toFixed(1)} ${p.y.toFixed(1)} Q ${m.x} ${m.y} ${q.x.toFixed(1)} ${q.y.toFixed(1)} L ${b.x} ${b.y}`;
+}
+
+// long names break onto two balanced lines instead of being cut off
+function nameLines(label: string): string[] {
+  if (label.length <= 14 || !label.includes(" ")) return [label];
+  const words = label.split(" ");
+  let best = 1, bestDiff = Infinity;
+  for (let i = 1; i < words.length; i++) {
+    const diff = Math.abs(words.slice(0, i).join(" ").length - words.slice(i).join(" ").length);
+    if (diff < bestDiff) { best = i; bestDiff = diff; }
+  }
+  return [words.slice(0, best).join(" "), words.slice(best).join(" ")];
+}
 
 export function ChartPaper({
   taxonomy, onSelect,
@@ -90,17 +116,31 @@ export function ChartPaper({
     }).join(" ");
   }
 
-  // compositions → orthogonal LAND trails between the territories they link
+  // compositions → octilinear land trails between the towns they link; a small
+  // per-trail offset keeps parallel trails from fusing into one line
   const trails = taxonomy.compositions.flatMap((c, ci) => {
-    const stops = c.composes.map((n) => pos.get(n)).filter(Boolean) as { x: number; y: number }[];
+    const o = ((ci % 5) - 2) * 4;
+    const stops = (c.composes.map((n) => pos.get(n)).filter(Boolean) as { x: number; y: number }[])
+      .map((p) => ({ x: p.x + o, y: p.y + o }));
     if (stops.length < 2) return [];
     let d = `M ${stops[0].x} ${stops[0].y}`;
-    for (let i = 1; i < stops.length; i++) {
-      const a = stops[i - 1], b = stops[i];
-      d += (ci + i) % 2 === 0 ? ` L ${b.x} ${a.y} L ${b.x} ${b.y}` : ` L ${a.x} ${b.y} L ${b.x} ${b.y}`;
-    }
-    const color = ISLES.find((r) => r.fam === pos.get(c.composes[0])?.fam)?.color ?? "#4a6a70";
-    return [{ d, color, name: c.name, composes: c.composes }];
+    for (let i = 1; i < stops.length; i++) d += octiTrail(stops[i - 1], stops[i]);
+    return [{ d, name: c.name, composes: c.composes }];
+  });
+
+  // keep-out boxes: each territory's town grid (lots + roads) and landmark
+  const keep: KeepOut[] = ISLES.flatMap((is) => {
+    const pts = [...pos.values()].filter((p) => p.fam === is.fam);
+    if (!pts.length) return [];
+    const x0 = Math.min(...pts.map((p) => p.x)) - 56, x1 = Math.max(...pts.map((p) => p.x)) + 56;
+    const y0 = Math.min(...pts.map((p) => p.y)) - 30, y1 = Math.max(...pts.map((p) => p.y)) + 62;
+    const [lx, ly] = landmarkAt[is.fam];
+    const [nx, ny] = is.label ?? [is.cx, is.cy - is.ry - 12];
+    return [
+      { x: (x0 + x1) / 2, y: y0 + (y1 - y0) * 0.35, w: x1 - x0, h: y1 - y0 },
+      { x: lx, y: ly, w: 96, h: 90 },
+      { x: nx, y: ny + 30, w: is.name.length * 15, h: 70 }, // the territory name (props stand below their base)
+    ];
   });
 
   const beachPaths = ISLES.map(beachPathOf);
@@ -108,7 +148,8 @@ export function ChartPaper({
 
   return (
     <div className="h-full overflow-auto p-2 sm:p-3">
-      <svg viewBox={`0 0 ${VB_W} ${VB_H}`} className="mx-auto block h-auto w-full max-w-[1560px]"
+      {/* below ~900px the map keeps a legible size and pans instead of shrinking */}
+      <svg viewBox={`0 0 ${VB_W} ${VB_H}`} className="mx-auto block h-auto w-full min-w-[900px] max-w-[1560px]"
         style={{ fontFamily: "var(--font-draft), cursive" }}>
         <AtlasDefs />
         <clipPath id="a-land">
@@ -131,12 +172,12 @@ export function ChartPaper({
         {ISLES.map((is) => <RegionBorder key={is.fam} is={is} />)}
 
         {/* territory terrain (kept within each territory core) */}
-        {ISLES.map((is) => <IslandTerrain key={is.fam} is={is} />)}
+        {ISLES.map((is) => <IslandTerrain key={is.fam} is={is} keep={keep} />)}
 
         {/* composition trails across the land */}
         {trails.map((t, i) => (
-          <path key={i} className="map-route" d={t.d} fill="none" stroke={t.color}
-            strokeWidth={1.8} strokeDasharray="2 8" strokeLinecap="round" opacity={0.5}
+          <path key={i} className="map-route" d={t.d} fill="none" stroke={INK}
+            strokeWidth={1.7} strokeDasharray="0.1 7" strokeLinecap="round" opacity={0.34}
             onClick={() => onSelect(t.name)}>
             <title>{t.name.replace(/_/g, " ")} — {t.composes.join(" + ")}</title>
           </path>
@@ -158,6 +199,8 @@ export function ChartPaper({
           const color = ISLES.find((r) => r.fam === fam)!.color;
           const elem = m.level === "elementary";
           const label = m.name.replace(/_/g, " ");
+          const lines = nameLines(label);
+          const tagW = Math.max(...lines.map((l) => l.length)) * 6.1 + 12;
           return (
             <g key={m.name} className="map-town" onClick={() => onSelect(m.name)}>
               <title>{label}</title>
@@ -167,9 +210,11 @@ export function ChartPaper({
               <text x={x} y={y + 5.5} textAnchor="middle" fontFamily="var(--font-display)" fontSize={15} fontWeight={800} fill={elem ? "#fff" : color}>
                 {ATOMS[m.name]?.symbol ?? symbolFor(m.name)}
               </text>
-              <text x={x} y={y + 39} textAnchor="middle" fontSize={12.5} fill={INK}
-                style={{ paintOrder: "stroke" }} stroke="#f4efe0" strokeWidth={3.4} strokeLinejoin="round">
-                {label.length > 17 ? label.slice(0, 16) + "…" : label}
+              {/* name tag: a small cardstock plate, so roads pass under the name, never through it */}
+              <rect x={x - tagW / 2} y={y + 27} width={tagW} height={lines.length * 13 + 5} rx={3}
+                fill="#f6f0de" stroke={INK} strokeOpacity={0.28} strokeWidth={0.9} />
+              <text x={x} y={y + 39} textAnchor="middle" fontSize={12.5} fill={INK}>
+                {lines.map((line, li) => <tspan key={li} x={x} dy={li ? 13 : 0}>{line}</tspan>)}
               </text>
             </g>
           );

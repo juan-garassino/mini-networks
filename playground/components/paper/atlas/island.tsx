@@ -9,7 +9,15 @@ import { Bush, Flower, Hill, Mountain, Pine, Pond, Reed, Rock, Tree } from "./te
 export type IsleSpec = {
   fam: string; name: string; color: string; biome: string; landmark: string;
   cx: number; cy: number; rx: number; ry: number; seed: number;
+  /** hand-set name position when the default (above the territory) lands on a neighbour */
+  label?: [number, number];
 };
+
+/** Keep-out boxes (town hex + its two-line label, landmarks): terrain props
+ * that would sit on a town or its name are dropped, so labels stay legible. */
+export type KeepOut = { x: number; y: number; w: number; h: number };
+const clear = (x: number, y: number, pad: number, keep: KeepOut[]) =>
+  keep.every((k) => Math.abs(x - k.x) > k.w / 2 + pad || y < k.y - k.h * 0.35 - pad || y > k.y + k.h * 0.65 + pad);
 
 // smooth closed blob around a wobbled ellipse
 export function blobPath(cx: number, cy: number, rx: number, ry: number, seed: number): string {
@@ -36,14 +44,17 @@ const SCATTER: [number, number][] = [
   [0.7, 3.2], [0.82, 4.7], [0.66, 5.9], [0.76, 0.95],
 ];
 
-function biomeTerrain(is: IsleSpec): ReactNode[] {
+function biomeTerrain(is: IsleSpec, keep: KeepOut[]): ReactNode[] {
   const out: ReactNode[] = [];
-  if (is.biome === "wetland") out.push(<Pond key="pond" x={is.cx} y={is.cy + is.ry * 0.5} rx={is.rx * 0.26} ry={is.ry * 0.13} />);
-  if (is.biome === "heath") out.push(<Pond key="pond" x={is.cx} y={is.cy + is.ry * 0.48} rx={is.rx * 0.28} ry={is.ry * 0.14} />);
-  if (is.biome === "mesa") out.push(<Mountain key="mt" x={is.cx + is.rx * 0.5} y={is.cy - is.ry * 0.1} s={0.9} snow={false} />);
+  // ponds/mountain only where they leave every town and road untouched
+  const pondOk = (x: number, y: number, rx: number) => clear(x, y, rx, keep);
+  if (is.biome === "wetland" && pondOk(is.cx, is.cy + is.ry * 0.5, is.rx * 0.26)) out.push(<Pond key="pond" x={is.cx} y={is.cy + is.ry * 0.5} rx={is.rx * 0.26} ry={is.ry * 0.13} />);
+  if (is.biome === "heath" && pondOk(is.cx, is.cy + is.ry * 0.48, is.rx * 0.28)) out.push(<Pond key="pond" x={is.cx} y={is.cy + is.ry * 0.48} rx={is.rx * 0.28} ry={is.ry * 0.14} />);
+  if (is.biome === "mesa" && clear(is.cx + is.rx * 0.5, is.cy - is.ry * 0.1, 40, keep)) out.push(<Mountain key="mt" x={is.cx + is.rx * 0.5} y={is.cy - is.ry * 0.1} s={0.9} snow={false} />);
   SCATTER.forEach(([rr, aa], i) => {
     const x = is.cx + Math.cos(aa) * is.rx * rr;
     const y = is.cy + Math.sin(aa) * is.ry * rr;
+    if (!clear(x, y, 16, keep)) return;
     const el =
       is.biome === "meadow" ? (i % 3 === 0 ? <Flower x={x} y={y} hue="#c0522f" /> : i % 3 === 1 ? <Tree x={x} y={y} s={0.92} /> : <Bush x={x} y={y} />)
       : is.biome === "wetland" ? (i % 2 ? <Reed x={x} y={y} /> : <Bush x={x} y={y} />)
@@ -74,13 +85,13 @@ export function RegionBorder({ is }: { is: IsleSpec }) {
   return <path d={groundPathOf(is)} fill="none" stroke={is.color} strokeWidth={1.6} strokeDasharray="6 7" opacity={0.4} />;
 }
 
-export function IslandTerrain({ is }: { is: IsleSpec }) {
-  return <g>{biomeTerrain(is)}</g>;
+export function IslandTerrain({ is, keep = [] }: { is: IsleSpec; keep?: KeepOut[] }) {
+  return <g>{biomeTerrain(is, keep)}</g>;
 }
 
 export function IslandLabel({ is }: { is: IsleSpec }) {
   return (
-    <text x={is.cx} y={is.cy - is.ry - 12} textAnchor="middle" fontFamily="var(--font-display)"
+    <text x={is.label?.[0] ?? is.cx} y={is.label?.[1] ?? is.cy - is.ry - 12} textAnchor="middle" fontFamily="var(--font-display)"
       fontSize={20} fontWeight={800} letterSpacing="0.14em" fill={is.color}
       style={{ paintOrder: "stroke", textTransform: "uppercase" }}
       stroke="#dfeaea" strokeWidth={5} strokeLinejoin="round">
