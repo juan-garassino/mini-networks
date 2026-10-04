@@ -478,7 +478,11 @@ export function SkySkin() {
       if (lit) { out.push({ id: r.id, a, b, ink: INK.lit, pattern: r.kind === "primary" ? "solid" : "dash", comet: { busy: true, ink: EVIDENCE_RUN[b.state] } }); continue; }
       if (r.kind === "primary") {
         const dimmed = focusFam !== null && b.family !== focusFam;
-        const base = fam ? mix(fam.tint[0], fam.ramp[2], 0.3) : INK.cross;
+        // the whole sky: lines sit quietly under the stars (the nebula + sprites
+        // read first, the fans of a busy parent never shout); a focused family's
+        // own lines come up to the pastel
+        const quiet = focusFam === null && !selected;
+        const base = fam ? (quiet ? mix(fam.tint[0], fam.ramp[3], 0.62) : mix(fam.tint[0], fam.ramp[2], 0.3)) : INK.cross;
         out.push({ id: r.id, a, b, ink: dimmed ? dim(base, 0.7) : base, pattern: "solid", comet: selected || dimmed ? null : { busy: false, ink: EVIDENCE_RUN[b.state] } });
       } else if (touches) {
         // secondary + cross-family lineage: shown only on focus, dashed and quiet
@@ -517,12 +521,20 @@ export function SkySkin() {
     const sel = selected ? byName.get(selected) : undefined;
     if (sel) {
       const a = scr(sel);
-      const inner = { x0: 80, y0: mobile ? 150 : 80, x1: visW - 80, y1: visH - (mobile ? 110 : 80) };
       for (const p of partners) {
         const st = byName.get(p.name)!;
         const b = scr(st);
         const M = 18;
-        if (b.x > M && b.y > M && b.x < visW - M && b.y < visH - M) { arcs.push({ a: sel, b: st }); continue; }
+        if (b.x > M && b.y > M && b.x < visW - M && b.y < visH - M) {
+          arcs.push({ a: sel, b: st });
+          // no sign or name sits on an arc: its pixels are obstacles too
+          const A: [number, number] = [Math.round((a.x - AP / 2) / AP), Math.round((a.y - AP / 2) / AP)], B: [number, number] = [Math.round((b.x - AP / 2) / AP), Math.round((b.y - AP / 2) / AP)];
+          arcPixels(A, B, starRadius(sel.state, sel.atom) + 3, starRadius(st.state, st.atom) + 3).forEach(([x, y], j) => { if (j % 3 === 0) obstacles.push({ x: x * AP - 2, y: y * AP - 2, w: AP + 4, h: AP + 4 }); });
+          continue;
+        }
+        const cw = displayName(p.name).length * 8 + 34, ch = 26;
+        // the chevron hugs the screen edge (its plate just inside it), on the ray toward the partner
+        const inner = { x0: 8 + cw / 2, y0: (mobile ? 140 : 70) + ch / 2, x1: visW - 8 - cw / 2, y1: visH - (mobile ? 110 : 80) - ch / 2 };
         const dx = b.x - a.x, dy = b.y - a.y;
         let t = 1;
         if (dx > 0) t = Math.min(t, (inner.x1 - a.x) / dx); else if (dx < 0) t = Math.min(t, (inner.x0 - a.x) / dx);
@@ -530,7 +542,6 @@ export function SkySkin() {
         t = Math.max(0, t);
         const dir = Math.abs(dx) > Math.abs(dy) ? (dx > 0 ? "r" : "l") : dy > 0 ? "d" : "u";
         let c = { x: clamp(a.x + dx * t, inner.x0, inner.x1), y: clamp(a.y + dy * t, inner.y0, inner.y1) };
-        const cw = displayName(p.name).length * 8 + 34, ch = 26;
         // two chevrons never stack: step along the edge
         for (let k = 0; k < 6 && chevrons.some((o) => Math.abs(o.x - c.x) < cw && Math.abs(o.y - c.y) < ch); k++) c = { x: c.x, y: c.y + ch + 6 };
         chevrons.push({ name: p.name, ...c, dir });
@@ -570,8 +581,25 @@ export function SkySkin() {
         const dx = Math.max(q.x - p.x, 0, p.x - (q.x + pw)), dy = Math.max(q.y - p.y, 0, p.y - (q.y + plaqueH));
         return Math.hypot(dx, dy);
       }));
+      // …and never sits on another family's cloud (the share of its area painted
+      // in a neighbour's nebula, read off the bake): a sign is read as part of
+      // the colour under it
+      const fi = bake ? bake.families.indexOf(f) : -1;
+      const foreign = (q: { x: number; y: number }) => {
+        if (!bake) return 0;
+        let n = 0, o = 0;
+        for (let y = q.y + 2; y < q.y + plaqueH; y += 6) for (let x = q.x + 2; x < q.x + pw; x += 6) {
+          n++;
+          const bx = Math.floor((camBox.x + x / S - bake.x) / bake.cell), by = Math.floor((camBox.y + y / S - bake.y) / bake.cell);
+          if (bx < 0 || by < 0 || bx >= bake.w || by >= bake.h) continue;
+          const k = by * bake.w + bx;
+          if (bake.owner[k] >= 0 && bake.owner[k] !== fi && bake.level[k] >= 2) o++;
+        }
+        return n ? o / n : 0;
+      };
       const owned = (q: { x: number; y: number }) => !rest.length || near(rest, q) >= near(own, q) + 6;
-      let pick = allowed.find((q) => q.inside && !obstacles.some((o) => hit(box(q), o)) && (regionish || owned(q)));
+      const clean = (q: { x: number; y: number }) => regionish || foreign(q) <= 0.12;
+      let pick = allowed.find((q) => q.inside && !obstacles.some((o) => hit(box(q), o)) && (regionish || (owned(q) && clean(q))));
       if (!pick && !(regionish && f !== focusFam)) {
         // the anchor is taken (a packed phone sky): the free spot nearest the
         // anchor whose closest star is one of the family's OWN — so a sign
@@ -586,7 +614,7 @@ export function SkySkin() {
             if (obstacles.some((o) => hit(box(q), o))) continue;
             if (!owned(q)) continue;
             const dOwn = near(own, q);
-            const cost = dOwn * 2 + Math.hypot(q.x - a0.x, q.y - a0.y) * 0.5;
+            const cost = dOwn * 2 + Math.hypot(q.x - a0.x, q.y - a0.y) * 0.5 + foreign(q) * 260;
             if (!best || cost < best.cost) best = { q, cost };
           }
         }
@@ -628,7 +656,7 @@ export function SkySkin() {
       labels.push({ s, x: c.x, y: c.y, fs, anchor: c.anchor });
     }
     return { plaques, labels, arcs, chevrons };
-  }, [stars, scr, hulls, famCount, mobile, regionish, uiHidden, vp.w, vp.h, visW, visH, drawerPx, S, selected, hovered, lineageSet, partnerSet, focusFam, zoomedIn, byName, partners]);
+  }, [stars, scr, hulls, famCount, mobile, regionish, uiHidden, vp.w, vp.h, visW, visH, drawerPx, S, selected, hovered, lineageSet, partnerSet, focusFam, zoomedIn, byName, partners, bake, camBox.x, camBox.y]);
 
   const whole = !manual && (view?.zoom ?? "overview") === "overview";
   const corner = "pointer-events-auto absolute z-20";

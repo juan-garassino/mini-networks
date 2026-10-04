@@ -9,14 +9,14 @@ export const ENCODING = {
   // the marks (art grid, 1 art px = 2 CSS px)
   "star sprite": "one model at its lib/world position; shape = evidence: gold ray sparkle = champion, mint cut gem = trained, broken lilac ring = new with a provisional bar, dim grey point = not trained yet",
   "star size": "atom (large sprite: 11×11 sparkle / 7×7 gem / 9×9 ring / 5×5 point) vs derived (7 / 5 / 7 / 3)",
-  "asterism line": "a builds_on edge, parent → child: 1-art-px line in the family's pastel, stopping short of both stars. Overview: primary in-family edges only. A focused family adds its secondary + cross-family edges, dashed and quiet. The selected model's lineage is pastel gold",
+  "asterism line": "a builds_on edge, parent → child: 1-art-px line in the family's pastel, stopping short of both stars. Overview: primary in-family edges only, sunk toward the nebula so the stars read first. A focused family adds its secondary + cross-family edges, dashed and quiet. The selected model's lineage is pastel gold",
   comet: "lineage direction: a bright pixel with a 3-px tail runs each primary line from parent to child, in the child's evidence ramp (only the selected lineage runs, faster, when a model is selected)",
   glint: "champion: now and then a champion's rays grow by two art px and its core whitens",
   "selection ring": "the selected model (broken pastel-gold ring); a dotted cream ring = hover",
-  "pipeline arc": "the selected model's pipelines: one dotted pastel-aqua arc to each partner star on screen (hover the partner: the pipelines' names)",
-  "edge chevron": "a pipeline partner off screen: a pastel-aqua named plate on the edge, toward it; click selects it",
+  "pipeline arc": "the selected model's pipelines: one dotted pastel-aqua arc to each partner star on screen, never under a sign or a name (hover the partner: the pipelines' names)",
+  "edge chevron": "a pipeline partner off screen: a pastel-aqua named plate hugging the screen edge on the ray toward it; click selects it",
   // the words
-  "sign plaque": "a family: emblem (Eye, Serpent, Furnace, Mirrors, Lattice, Arrow) + FAMILY + model count, bordered in the family's pastel, on its nebula's top-left (taken: the nearest free spot whose closest star is the family's own); zoomed in, the Latin constellation name under it; click opens the family",
+  "sign plaque": "a family: emblem (Eye, Serpent, Furnace, Mirrors, Lattice, Arrow) + FAMILY + model count, bordered in the family's pastel, on its nebula's top-left (taken: the nearest free spot whose closest star is the family's own and that sits on little of another family's cloud, read off the bake); zoomed in, the Latin constellation name under it; click opens the family",
   "star name": "the model's name (Pixelify): atoms always; derived on hover, selection, lineage, as a pipeline partner (aqua), in the focused family or when zoomed in",
   meteor: "decoration only: a pixel meteor every ~11 s",
   motion: "12-fps flip-book (twinkle, glint, comets, meteor); frame 0 only under ?still=1 and prefers-reduced-motion",
