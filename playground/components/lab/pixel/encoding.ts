@@ -64,9 +64,9 @@ export const ENCODING: Mark[] = [
   { mark: "navy pier tag with a boat icon ×N (zoomed in only)", encodes: "N pipelines dock at this harbour (more than the 3 boats drawn)", source: "world.harbours[].boats" },
   { mark: "far overview (mobile): native 3-art-px-per-tile map, one micro-castle per land, 6 land signs at the land centroid", encodes: "the six families, each land's hub atom; tap a land to open it", source: "renderTerrain(artPerTile 3), familyHubs(world), region centroids" },
   // regions
-  { mark: "wooden region signboard", encodes: "family name + model count (count in 5×7 pixel digits, asserted against the node count)", source: "world.regions[].setPiece, world.nodes" },
+  { mark: "wooden region signboard (parchment edition: ink banner with parchment lettering, the inverse of a model plate)", encodes: "family name + model count (count in 5×7 pixel digits, asserted against the node count)", source: "world.regions[].setPiece, world.nodes" },
   // focus & avatar
-  { mark: "ink name-plate in screen space (gold = atom, cream = derived; constant 16/14px, priority-placed, culled)", encodes: "model name, atom vs derived", source: "placeScreenLabels(world, camera, viewport)" },
+  { mark: "ink name-plate in screen space (gold = atom, cream = derived; constant 16/14px, priority-placed, culled); parchment edition: lineage kin keep the plate + a heavy ink underline", encodes: "model name, atom vs derived", source: "placeScreenLabels(world, camera, viewport)" },
   { mark: "focused sprite one scale step larger on an ink-and-gold plinth, gold plate, gold corner brackets", encodes: "the focused model (loudest object)", source: "?focus= (URL)" },
   { mark: "whole map one ramp step darker (node view); other lands darker (region view)", encodes: "not the focus: steps back one value; kin and the region's land stay full value", source: "lineage(); art region mask" },
   { mark: "white-cored dotted quest route", encodes: "the critter's walk from the root atom", source: "pathToAtom(world, focus)" },

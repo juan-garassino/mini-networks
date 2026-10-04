@@ -8,7 +8,7 @@
 //   Proof     gate bar, real metric curve, samples, Try it (only when served)
 //   Pipelines compositions — pick one and its boat sails the ferry route
 // Every number is a 5×7 pixel digit (pixel-num.tsx). Body text ≥16px.
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import { BookOpen, LineChart, Network, Workflow } from "lucide-react";
 import { displayName, EVIDENCE_COPY, type CardModel } from "@/components/lab/shared/card-model";
 import { Anatomy } from "@/components/lab/shared/lesson/anatomy";
@@ -36,6 +36,14 @@ import styles from "./pixel.module.css";
 const CELLS = 16;
 const SPAN = 1.25; // gate meter spans 0…1.25× the bar, so the bar sits at 80%
 // four pages on one row: the family page holds lineage AND pipelines
+
+/** Title size: the longest word of the name fits the ~150px beside the portrait
+ *  and the Close button on a 390px phone (Pixelify bold ≈ 0.66 em per glyph), 28px at most. */
+function titleSize(text: string): CSSProperties {
+  const longest = Math.max(...text.split(/\s+/).map((w) => w.length));
+  const px = Math.max(17, Math.min(28, Math.floor(150 / (0.66 * longest))));
+  return { fontSize: px, lineHeight: `${px + 2}px` };
+}
 export const PAGES = ["Lesson", "Anatomy", "Family", "Proof"] as const;
 const PAGE_ICON: Record<(typeof PAGES)[number], typeof BookOpen> = { Lesson: BookOpen, Anatomy: Workflow, Family: Network, Proof: LineChart };
 export type Page = (typeof PAGES)[number];
@@ -166,7 +174,8 @@ export function StatusCard({
               label={`${displayName(card.name)} as it stands on the map`} />
           </div>
           <div className="min-w-0 flex-1">
-            <h2 className="text-[28px] font-bold leading-none text-[#fff6e0]">{displayName(card.name)}</h2>
+            {/* sized so the longest word fits beside the portrait and Close (never clipped) */}
+            <h2 className="font-bold text-[#fff6e0]" style={titleSize(displayName(card.name))}>{displayName(card.name)}</h2>
             <p className="mt-2 text-[18px] font-bold leading-tight text-[#f5c24a]" title="Level: how many steps it sits below its root atom">
               LV <PixelNum value={card.depth} />
               <span className="ml-2 text-[14px] font-normal text-[#bccbe8]">{card.depth === 0 ? "an atom, a root" : card.depth === 1 ? "1 step below its atom" : `${card.depth} steps below its atom`}</span>

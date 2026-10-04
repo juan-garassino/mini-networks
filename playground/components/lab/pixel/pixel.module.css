@@ -369,8 +369,11 @@
 }
 .parchment .plateAtom { font-weight: 700; }
 .parchment .sign {
-  background: #f6ecd2;
-  border: 2px solid #5a1a14;
-  box-shadow: 0 2px 0 rgba(90, 26, 20, 0.35);
+  /* land names read as a different class from model plates: an ink banner with
+     parchment lettering (model plates are parchment with ink lettering) */
+  color: #f6ecd2;
+  background: #5a1a14;
+  border: 2px solid #3b140e;
+  box-shadow: inset 0 0 0 1px #8a3a2c, 0 2px 0 rgba(90, 26, 20, 0.35);
   text-shadow: none;
 }

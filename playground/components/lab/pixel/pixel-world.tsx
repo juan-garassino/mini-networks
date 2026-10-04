@@ -1091,7 +1091,9 @@ export function PixelWorld() {
               <div key={l.node} aria-hidden className={`${styles.plate} ${cls} ${dim ? styles.plateDim : ""}`}
                 style={{ left: l.x, top: l.y, height: l.h, fontSize: l.font,
                   ...(kinTone.has(l.node) && !focus ? (ink
-                    ? (zoom === "node" ? { boxShadow: "none", background: "transparent", textDecoration: "underline", textDecorationColor: "#5a1a14", textUnderlineOffset: 3 } : { boxShadow: "none", background: "transparent" })
+                    // lineage kin keep their parchment plate (a name on bare terrain sinks
+                    // into the trees) and carry a heavier ink rule underneath instead
+                    ? { borderBottom: "3px solid #5a1a14" }
                     : { boxShadow: `inset 0 0 0 2px ${kinTone.get(l.node)}, 0 2px 0 #1e1f4e` }) : {}) }}
                 onClick={() => onNode(l.node)}>
                 <span>{displayName(l.node)}</span>
