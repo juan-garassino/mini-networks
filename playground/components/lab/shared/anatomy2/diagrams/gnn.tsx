@@ -28,7 +28,7 @@ function Graph({ theme: T, x, y, s, labels, title, sub, node = 3 }: { theme: The
       <path d={edgeD} stroke={T.wire} strokeWidth={0.5} opacity={0.5} fill="none" />
       {P.map(([px, py], i) => (
         <g key={i}>
-          {train.has(i) && <rect x={px - 2} y={py - 2} width={node + 2} height={node + 2} fill="#ffffff" />}
+          {train.has(i) && <rect x={px - 2} y={py - 2} width={node + 2} height={node + 2} fill={T.text} />}
           <rect x={px - 1} y={py - 1} width={node} height={node} fill={col[labels[i]]} />
           {labels[i] !== GNN_Y[i] && <rect x={px} y={py} width={1} height={1} fill={T.ground} />}
         </g>

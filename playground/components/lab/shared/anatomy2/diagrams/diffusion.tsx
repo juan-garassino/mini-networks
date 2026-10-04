@@ -38,9 +38,13 @@ const BUS = 84, SUB = 97;
 const XT = { x: 16, y: 130 };
 const EH = { x: 440, y: 130 };    // ε̂ (prediction)
 const EP = { x: 440, y: 226 };    // ε (true noise)
-const DIA = { cx: 528, cy: 206 };
+const DIA = { cx: 528, cy: 206 }; // midway between the ε̂ (158) and ε (254) centres
+const LOSS_X = 510;
 const TBUS = 296;
-const LEVEL = [{ top: 116, h: 84 }, { top: 157, h: 42 }, { top: 186, h: 21 }]; // 28 / 14 / 7 px
+// 28 / 14 / 7 px; centres step by a constant 20 (158 → 178 → 198) so the
+// descent reads as one staircase, and every channel label shares LABEL_Y
+const LEVEL = [{ top: 116, h: 84 }, { top: 157, h: 42 }, { top: 188, h: 21 }];
+const LABEL_Y = 212; // one row under the deepest level for every block label
 const mid = (l: number) => LEVEL[l].top + Math.floor(LEVEL[l].h / 2);
 
 interface Block { id: string; x: number; bars: number; lvl: number; ch: number; temb: boolean; attn?: boolean; bw?: number }
@@ -89,7 +93,7 @@ export function DiffusionDiagram({ theme, t, onT }: { theme: Theme; t: number; o
   const nearest = CHAIN_T.reduce((b, v, i) => (Math.abs(v - tt) < Math.abs(CHAIN_T[b] - tt) ? i : b), 0);
 
   // waveform + strips of the 128-d embedding (64 cos + 64 sin)
-  const PX = 15, PY = 232;
+  const PX = 16, PY = 232;
   let cosD = "", sinD = "";
   const stripC: string[] = Array(8).fill(""), stripS: string[] = Array(8).fill("");
   for (let k = 0; k < 64; k++) {
@@ -125,7 +129,6 @@ export function DiffusionDiagram({ theme, t, onT }: { theme: Theme; t: number; o
     onT(((x - cx(0)) / (cx(6) - cx(0))) * 1000);
   };
 
-  const labelY = (b: Block) => LEVEL[b.lvl].top + LEVEL[b.lvl].h + 3;
 
   return (
     <g>
@@ -199,7 +202,9 @@ export function DiffusionDiagram({ theme, t, onT }: { theme: Theme; t: number; o
         return <Bars key={b.id} x={b.x} y={top} bars={b.bars} h={h} theme={T} bw={b.bw ?? BW} gap={GAP} detail={detail} />;
       })}
       {BLOCKS.map((b) => (
-        <PText key={`c${b.id}`} x={bcx(b) + (b.bw === 1 ? 1 : 0)} y={labelY(b)} text={b.attn ? "attn" : `_{${b.ch}}`} fill={T.textDim} anchor="middle" />
+        // subscripts sit 4 px low in the font; "attn" (main face) drops 2 px so
+        // both share one baseline at LABEL_Y + 8
+        <PText key={`c${b.id}`} x={bcx(b) + (b.bw === 1 ? 1 : 0)} y={b.attn ? LABEL_Y + 2 : LABEL_Y} text={b.attn ? "attn" : `_{${b.ch}}`} fill={T.textDim} anchor="middle" />
       ))}
 
       {/* x_t with its real coefficients */}
@@ -223,7 +228,7 @@ export function DiffusionDiagram({ theme, t, onT }: { theme: Theme; t: number; o
       <PText x={103} y={PY + 10} text="mlp" fill={T.text} anchor="middle" />
       <Wire pts={[[102, PY + 21], [102, TBUS], [bcx(e("dec1")), TBUS]]} fill={T.wire} />
       {BLOCKS.filter((b) => b.temb).map((b) => (
-        <Wire key={`t${b.id}`} pts={[[bcx(b), TBUS], [bcx(b), labelY(b) + 8]]} fill={T.wire} />
+        <Wire key={`t${b.id}`} pts={[[bcx(b), TBUS], [bcx(b), LABEL_Y + 11]]} fill={T.wire} />
       ))}
 
       {/* ——— prediction vs truth → loss ——— */}
@@ -232,14 +237,15 @@ export function DiffusionDiagram({ theme, t, onT }: { theme: Theme; t: number; o
       <PText x={EH.x} y={EH.y + TH + 16} text={predT === tt ? "champion" : `champion t${predT}`} fill={T.textDim} />
       <Thumb x={EP.x} y={EP.y} data={base.eps} theme={T} />
       <PText x={EP.x} y={EP.y + TH + 5} text="ε ~ N(0,I)" fill={T.text} />
-      <Wire pts={[[EH.x + TH + 2, EH.y + TH - 6], [DIA.cx - 6, DIA.cy - 1]]} fill={T.wire} />
-      <Wire pts={[[EP.x + TH + 2, EP.y + 12], [DIA.cx - 6, DIA.cy + 1]]} fill={T.wire} />
+      {/* both noises leave from their centres and meet on the diamond's row */}
+      <Wire pts={[[EH.x + TH + 2, EH.y + TH / 2], [LOSS_X, EH.y + TH / 2], [LOSS_X, DIA.cy], [DIA.cx - 8, DIA.cy]]} fill={T.wire} />
+      <Wire pts={[[EP.x + TH + 2, EP.y + TH / 2], [LOSS_X, EP.y + TH / 2], [LOSS_X, DIA.cy + 1]]} fill={T.wire} />
       <Diamond cx={DIA.cx} cy={DIA.cy} theme={T} />
       <PText x={DIA.cx + 1} y={DIA.cy + 10} text="MSE" fill={T.loss} anchor="middle" />
       <PText x={DIA.cx + 1} y={DIA.cy + 20} text={mse.toFixed(2).replace(/^0/, "")} fill={T.loss} anchor="middle" />
 
-      <rect x={14} y={TBUS + 8} width={12} height={2} fill={T.accent} />
-      <PText x={30} y={TBUS + 6} text="gauge = √ᾱ_t, signal left" fill={T.textDim} />
+      <rect x={16} y={TBUS + 8} width={12} height={2} fill={T.accent} />
+      <PText x={32} y={TBUS + 6} text="gauge = √ᾱ_t, signal left" fill={T.textDim} />
       <PText x={DIFFUSION_VIEW.w - 14} y={TBUS + 6} text={`1 bar = ${CH_PER_BAR} channels   height = 28, 14, 7 px`} fill={T.textDim} anchor="end" />
     </g>
   );
@@ -268,7 +274,7 @@ export function DiffusionCard({ theme, t }: { theme: Theme; t: number }) {
   const predT = tt === 380 ? 380 : Math.max(25, Math.min(1000, Math.round(tt / 25) * 25));
   const pred = unNib(DIFF_PRED[String(predT) as keyof typeof DIFF_PRED]);
   const mse = DIFF_MSE[String(predT) as keyof typeof DIFF_MSE];
-  const top = [62, 69, 72], hh = [28, 14, 7];
+  const top = [62, 69, 73], hh = [28, 14, 7]; // every level centred on y 76
   const cy = (l: number) => top[l] + Math.floor(hh[l] / 2);
   const bwid = (n: number) => n * 2 - 1;
   return (
@@ -306,8 +312,8 @@ export function DiffusionCard({ theme, t }: { theme: Theme; t: number }) {
       <PText x={126} y={96} text="Ɛ_θ" fill={T.text} />
       <Wire pts={[[155, 76], [168, 76]]} fill={T.wire} />
       <Diamond cx={175} cy={76} r={5} theme={T} />
-      <PText x={176} y={85} text={mse.toFixed(2).replace(/^0/, "")} fill={T.loss} anchor="middle" />
-      <PText x={176} y={95} text="vs ε" fill={T.textDim} anchor="middle" />
+      <PText x={176} y={86} text={mse.toFixed(2).replace(/^0/, "")} fill={T.loss} anchor="middle" />
+      <PText x={176} y={96} text="vs ε" fill={T.textDim} anchor="middle" />
     </g>
   );
 }

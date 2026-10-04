@@ -26,13 +26,17 @@ const DATA: Record<UNetName, D> = {
 };
 
 const BW = 3, GAP = 2;
-const LV = [{ top: 26, h: 84 }, { top: 47, h: 42 }, { top: 57, h: 21 }];
+// every level centred on the spine (y 68); every channel label on LABEL_Y
+const LV = [{ top: 26, h: 84 }, { top: 47, h: 42 }, { top: 58, h: 21 }];
+const LABEL_Y = 113;
+const MAP_Y = 126; // the real-map row, clear of the label row
 const cyL = (l: number) => LV[l].top + Math.floor(LV[l].h / 2);
 const BLK = [
   { x: 92, bars: 2, l: 0, ch: 32 }, { x: 132, bars: 4, l: 1, ch: 64 }, { x: 180, bars: 8, l: 2, ch: 128 },
   { x: 246, bars: 4, l: 1, ch: 64 }, { x: 292, bars: 2, l: 0, ch: 32 },
 ];
 const bw = (n: number) => n * BW + (n - 1) * GAP;
+const bcx = (b: { x: number; bars: number }) => b.x + Math.floor(bw(b.bars) / 2);
 
 export function UNetDiagram({ theme, name }: { theme: Theme; name: UNetName }) {
   const T = theme;
@@ -52,13 +56,13 @@ export function UNetDiagram({ theme, name }: { theme: Theme; name: UNetName }) {
       {/* skip bridges: the whole point */}
       <Wire pts={[[BLK[0].x + 4, LV[0].top - 2], [BLK[0].x + 4, 12], [BLK[4].x + 4, 12], [BLK[4].x + 4, LV[0].top - 2]]} fill={T.wireHot} />
       <Wire pts={[[BLK[1].x + 9, LV[1].top - 2], [BLK[1].x + 9, 30], [BLK[3].x + 9, 30], [BLK[3].x + 9, LV[1].top - 2]]} fill={T.wireHot} />
-      <PText x={200} y={2} text="skip: copy + concat" fill={T.wireHot} anchor="middle" />
+      <PText x={(bcx(BLK[0]) + bcx(BLK[4])) / 2} y={2} text="skip: copy + concat" fill={T.wireHot} anchor="middle" />
       {BLK.map((b, i) => {
         const nx = BLK[i + 1];
         return (
           <g key={i}>
             <Bars x={b.x} y={LV[b.l].top} bars={b.bars} h={LV[b.l].h} theme={T} bw={BW} gap={GAP} />
-            <PText x={b.x} y={LV[b.l].top + LV[b.l].h + 3} text={`_{${b.ch}}`} fill={T.textDim} />
+            <PText x={bcx(b)} y={LABEL_Y} text={`_{${b.ch}}`} fill={T.textDim} anchor="middle" />
             {nx && <Wire pts={[[b.x + bw(b.bars) + 1, cyL(b.l)], [nx.x - 2, cyL(nx.l)]]} fill={T.accentLo} step={1} />}
           </g>
         );
@@ -70,18 +74,21 @@ export function UNetDiagram({ theme, name }: { theme: Theme; name: UNetName }) {
       <Thumb x={334} y={cyL(0) - 28} data={v.out[0]} theme={T} />
       <PText x={404} y={16} text={name === "segmentation" ? "true mask" : "target"} fill={T.textDim} />
       <Thumb x={404} y={cyL(0) - 28} data={v.tgt[0]} theme={T} />
-      <Wire pts={[[392, cyL(0) + 34], [392, cyL(0) + 44], [470, cyL(0) + 44], [470, cyL(0) + 34]]} fill={T.wire} />
+      {/* output and target both drop to one rail that rises into the diamond */}
+      <Wire pts={[[362, cyL(0) + 31], [362, cyL(0) + 40], [480, cyL(0) + 40], [480, cyL(0) + 8]]} fill={T.wire} />
+      <Wire pts={[[432, cyL(0) + 31], [432, cyL(0) + 40]]} fill={T.wire} />
       <Diamond cx={480} cy={cyL(0)} theme={T} r={5} />
       <PText x={490} y={cyL(0) - 6} text={name === "segmentation" ? "BCE+Dice" : "MSE"} fill={T.loss} />
       <PText x={490} y={cyL(0) + 4} text={name === "segmentation" ? `IoU ${fmt(d.metric[0])}` : fmt(d.metric[0])} fill={T.loss} />
       {/* real maps per level */}
-      <PText x={16} y={122} text="a real map" fill={T.textDim} />
-      <PText x={16} y={132} text="per level" fill={T.textDim} />
-      <Thumb x={86} y={122} data={v.maps[0]} n={28} px={1} theme={T} />
-      <Thumb x={128} y={122} data={v.maps[1]} n={14} px={2} theme={T} />
-      <Thumb x={186} y={122} data={v.maps[2]} n={7} px={4} theme={T} />
-      <PText x={216} y={126} text={name === "unet_ae" ? "the 7×7 bottleneck barely matters:" : "28 → 14 → 7 px, then back up"} fill={T.textDim} />
-      {name === "unet_ae" && <PText x={216} y={136} text="the skips hand detail straight across" fill={T.textDim} />}
+      {/* each level's real map centred under its encoder block */}
+      <PText x={16} y={MAP_Y} text="a real map" fill={T.textDim} />
+      <PText x={16} y={MAP_Y + 10} text="per level" fill={T.textDim} />
+      <Thumb x={bcx(BLK[0]) - 14} y={MAP_Y} data={v.maps[0]} n={28} px={1} theme={T} />
+      <Thumb x={bcx(BLK[1]) - 14} y={MAP_Y} data={v.maps[1]} n={14} px={2} theme={T} />
+      <Thumb x={bcx(BLK[2]) - 14} y={MAP_Y} data={v.maps[2]} n={7} px={4} theme={T} />
+      <PText x={bcx(BLK[2]) + 22} y={MAP_Y + 4} text={name === "unet_ae" ? "the 7×7 bottleneck barely matters:" : "28 → 14 → 7 px, then back up"} fill={T.textDim} />
+      {name === "unet_ae" && <PText x={bcx(BLK[2]) + 22} y={MAP_Y + 14} text="the skips hand detail straight across" fill={T.textDim} />}
 
       <rect x={10} y={158} width={540} height={148} fill={T.panel} />
       <Frame x={10} y={158} w={540} h={148} fill={T.frame} />

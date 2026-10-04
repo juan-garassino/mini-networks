@@ -62,7 +62,7 @@ function ResInset({ theme: T, x, y }: { theme: Theme; x: number; y: number }) {
       <PText x={x + 126} y={my + 25} text="F(x)" fill={T.text} />
       {/* shortcut: the skip */}
       <Wire pts={[[x + 40, y + 68], [x + 40, y + 107], [x + 124, y + 107]]} fill={T.wireHot} step={1} />
-      <PText x={x + 46} y={y + 94} text="skip, 1×1 s2" fill={T.wireHot} />
+      <PText x={x + 46} y={y + 95} text="skip, 1×1 s2" fill={T.wireHot} />
       <Thumb x={x + 126} y={y + 86} data={d.sc} n={14} px={3} theme={T} />
       {/* add + relu */}
       <Wire pts={[[x + 170, my], [x + 184, my], [x + 184, y + 64]]} fill={T.wire} />
@@ -353,6 +353,7 @@ export function VisionDiagram({ theme, name }: { theme: Theme; name: VisionName 
   let cx = 16 + 56 + gap;
   for (const s of S.stages) { cols.push({ x: cx, w: sizeFor(s.res) }); cx += sizeFor(s.res) + gap; }
   const SY = 26;
+  const CAP_Y = SY + 28 + Math.max(28, ...cols.map((c) => Math.ceil(c.w / 2))) + 4;
   const LX = Math.max(cx + 4, 420);
   return (
     <g>
@@ -367,8 +368,9 @@ export function VisionDiagram({ theme, name }: { theme: Theme; name: VisionName 
             <Wire pts={[[prevR + 2, SY + 28], [c.x - 3, SY + 28]]} fill={T.accentLo} step={1} />
             <PText x={c.x} y={SY - 12} text={s.label} fill={T.text} />
             <Thumb x={c.x} y={SY + 28 - Math.floor(c.w / 2)} data={maps[i]} n={s.res} px={pxFor(s.res)} theme={T} />
-            <PText x={c.x} y={SY + 28 + Math.ceil(c.w / 2) + 4} text={`${s.ch} ch`} fill={T.textDim} />
-            <PText x={c.x} y={SY + 28 + Math.ceil(c.w / 2) + 14} text={`${s.res} px`} fill={T.textDim} />
+            {/* every stage caption shares one row under the tallest (56 px) map */}
+            <PText x={c.x} y={CAP_Y} text={`${s.ch} ch`} fill={T.textDim} />
+            <PText x={c.x} y={CAP_Y + 10} text={`${s.res} px`} fill={T.textDim} />
           </g>
         );
       })}
@@ -377,7 +379,7 @@ export function VisionDiagram({ theme, name }: { theme: Theme; name: VisionName 
       <Logits theme={T} x={LX} y={SY - 2} logits={S.logits} />
       <Diamond cx={LX + 80} cy={SY + 28} theme={T} r={5} />
       <PText x={LX + 80} y={SY + 38} text={`CE ${ce.toFixed(2)}`} fill={T.loss} anchor="middle" />
-      <PText x={LX + 80} y={SY + 50} text={`${hits}/10 digits`} fill={T.textDim} anchor="middle" />
+      <PText x={LX + 80} y={SY + 48} text={`${hits}/10 digits`} fill={T.textDim} anchor="middle" />
       <PText x={16} y={SY + 90} text={S.arch} fill={T.textDim} />
 
       {/* the distinguishing block */}

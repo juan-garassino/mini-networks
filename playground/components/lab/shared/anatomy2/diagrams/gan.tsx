@@ -21,6 +21,8 @@ import type { Theme } from "../themes";
 
 export const GAN_VIEW = { w: 560, h: 316 };
 const CY = 150;
+// shared rows: block names, their resolution line, and every channel label
+const ROW_NAME = CY - 58, ROW_SUB = CY - 48, ROW_CH = CY + 46;
 const REAL_Y = 58, FAKE_Y = 184, COL_X = [182, 246, 310];
 const SHOW = [0, 1, 3]; // which of the six real / fake images to show (real: digits 0, 1, 3)
 
@@ -54,20 +56,20 @@ export function GANDiagram({ theme }: { theme: Theme }) {
       <rect x={0} y={0} width={GAN_VIEW.w} height={GAN_VIEW.h} fill={T.ground} />
 
       {/* ——— generator ——— */}
-      <PText x={16} y={CY - 44} text="noise z" fill={T.textDim} />
+      <PText x={16} y={ROW_NAME} text="noise z" fill={T.textDim} />
       {zd.map((p, i) => (p ? <path key={i} d={p} fill={T.ramp[i]} /> : null))}
-      <PText x={16} y={CY + 26} text="_{100}" fill={T.textDim} />
-      <PText x={70} y={CY - 58} text="generator" fill={T.text} />
+      <PText x={36} y={ROW_CH} text="_{100}" fill={T.textDim} anchor="middle" />
+      <PText x={70} y={ROW_NAME} text="generator" fill={T.text} />
       <Wire pts={[[58, CY], [68, CY]]} fill={T.accentLo} step={1} />
       <Bars x={70} y={CY - 10} bars={8} h={21} theme={T} bw={3} gap={2} />
       <Wire pts={[[109, CY], [118, CY]]} fill={T.accentLo} step={1} />
       <Bars x={120} y={CY - 21} bars={4} h={42} theme={T} bw={3} gap={2} />
       <Wire pts={[[139, CY], [148, CY]]} fill={T.accentLo} step={1} />
       <rect x={150} y={CY - 42} width={1} height={84} fill={T.accentHi} />
-      <PText x={72} y={CY + 16} text="_{256}" fill={T.textDim} />
-      <PText x={120} y={CY + 26} text="_{128}" fill={T.textDim} />
-      <PText x={149} y={CY + 47} text="_{1}" fill={T.textDim} />
-      <PText x={70} y={CY - 47} text="7→14→28 px" fill={T.textDim} />
+      <PText x={89} y={ROW_CH} text="_{256}" fill={T.textDim} anchor="middle" />
+      <PText x={129} y={ROW_CH} text="_{128}" fill={T.textDim} anchor="middle" />
+      <PText x={151} y={ROW_CH} text="_{1}" fill={T.textDim} anchor="middle" />
+      <PText x={70} y={ROW_SUB} text="7→14→28 px" fill={T.textDim} />
       <Wire pts={[[151, CY], [160, CY], [160, FAKE_Y + 28], [COL_X[0] - 3, FAKE_Y + 28]]} fill={T.accentLo} step={1} />
 
       {/* ——— the arena: real vs fake, each scored by D ——— */}
@@ -90,34 +92,34 @@ export function GANDiagram({ theme }: { theme: Theme }) {
       <Wire pts={[[COL_X[2] + 58, FAKE_Y + 28], [382, FAKE_Y + 28], [382, CY + 4], [388, CY + 4]]} fill={T.wire} />
 
       {/* ——— discriminator ——— */}
-      <PText x={390} y={CY - 58} text="discriminator" fill={T.text} />
+      <PText x={390} y={ROW_NAME} text="discriminator" fill={T.text} />
       <Bars x={390} y={CY - 21} bars={2} h={42} theme={T} bw={3} gap={2} />
       <Wire pts={[[399, CY], [406, CY]]} fill={T.accentLo} step={1} />
       <Bars x={408} y={CY - 10} bars={4} h={21} theme={T} bw={3} gap={2} />
       <Wire pts={[[427, CY], [438, CY]]} fill={T.accentLo} step={1} />
       <rect x={440} y={CY - 1} width={3} height={3} fill={T.accentHi} />
-      <PText x={390} y={CY + 26} text="_{64}" fill={T.textDim} />
-      <PText x={408} y={CY + 16} text="_{128}" fill={T.textDim} />
-      <PText x={390} y={CY - 47} text="14→7 px" fill={T.textDim} />
+      <PText x={394} y={ROW_CH} text="_{64}" fill={T.textDim} anchor="middle" />
+      <PText x={417} y={ROW_CH} text="_{128}" fill={T.textDim} anchor="middle" />
+      <PText x={390} y={ROW_SUB} text="14→7 px" fill={T.textDim} />
       <PText x={446} y={CY - 3} text="real?" fill={T.text} />
 
       {/* ——— losses (from the scores above) ——— */}
       <Wire pts={[[443, CY], [470, CY], [470, 96], [492, 96]]} fill={T.wire} />
       <Diamond cx={498} cy={96} theme={T} />
-      <PText x={508} y={80} text="D loss" fill={T.loss} />
-      <PText x={508} y={90} text={dLoss.toFixed(2)} fill={T.loss} />
+      <PText x={508} y={82} text="D loss" fill={T.loss} />
+      <PText x={508} y={92} text={dLoss.toFixed(2)} fill={T.loss} />
       <PText x={508} y={102} text="real→1" fill={T.textDim} />
       <PText x={508} y={112} text="fake→0" fill={T.textDim} />
       <Wire pts={[[470, CY], [470, 214], [492, 214]]} fill={T.wire} />
       <Diamond cx={498} cy={214} theme={T} />
-      <PText x={508} y={198} text="G loss" fill={T.loss} />
-      <PText x={508} y={208} text={gLoss.toFixed(2)} fill={T.loss} />
+      <PText x={508} y={200} text="G loss" fill={T.loss} />
+      <PText x={508} y={210} text={gLoss.toFixed(2)} fill={T.loss} />
       <PText x={508} y={220} text="fake→1" fill={T.textDim} />
 
       {/* G learns through D: its gradient flows back */}
       <Wire pts={[[498, 221], [498, 290], [110, 290], [110, CY + 72]]} fill={T.loss} step={3} />
       <PText x={110} y={CY + 64} text="↑" fill={T.loss} anchor="middle" />
-      <PText x={260} y={294} text="gradient of G loss flows back through D into G" fill={T.textDim} anchor="middle" />
+      <PText x={304} y={294} text="gradient of G loss flows back through D into G" fill={T.textDim} anchor="middle" />
     </g>
   );
 }

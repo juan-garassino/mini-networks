@@ -63,13 +63,15 @@ export function CLIPDiagram({ theme }: { theme: Theme }) {
           <Wire pts={[[colC(j), 22], [colC(j), M.y - 3]]} fill={T.wire} />
         </g>
       ))}
-      <PText x={M.x - 8} y={30} text="text encoder" fill={T.text} anchor="end" />
-      <PText x={M.x - 8} y={40} text="chars → 64" fill={T.textDim} anchor="end" />
-      <PText x={M.x - 8} y={54} text="2 layers, 2 heads" fill={T.textDim} anchor="end" />
-      <PText x={M.x - 8} y={72} text="mean → 128" fill={T.textDim} anchor="end" />
-      <PText x={M.x - 8} y={90} text="unit length" fill={T.textDim} anchor="end" />
+      {/* tower stages step by a constant 14 px; each label is centred on the
+          stage it names (the two layers share one label) */}
+      <PText x={M.x - 8} y={22} text="text encoder" fill={T.text} anchor="end" />
+      <PText x={M.x - 8} y={32} text="chars → 64" fill={T.textDim} anchor="end" />
+      <PText x={M.x - 8} y={52} text="2 layers, 2 heads" fill={T.textDim} anchor="end" />
+      <PText x={M.x - 8} y={78} text="mean → 128" fill={T.textDim} anchor="end" />
+      <PText x={M.x - 8} y={91} text="unit length" fill={T.textDim} anchor="end" />
       <HBars x={M.x} y={30} bars={2} w={N * C - 1} theme={T} />
-      <HBars x={M.x} y={46} bars={2} w={N * C - 1} theme={T} />
+      <HBars x={M.x} y={44} bars={2} w={N * C - 1} theme={T} />
       <HBars x={M.x} y={58} bars={2} w={N * C - 1} theme={T} />
       <HBars x={M.x} y={72} bars={4} w={N * C - 1} theme={T} />
       <rect x={M.x} y={94} width={N * C - 1} height={1} fill={T.accentHi} />
@@ -83,16 +85,16 @@ export function CLIPDiagram({ theme }: { theme: Theme }) {
           <Wire pts={[[48, rowC(i)], [M.x - 3, rowC(i)]]} fill={T.wire} />
         </g>
       ))}
+      {/* stages 14 px apart; every label centred under its stage on one row */}
       <Bars x={70} y={M.y} bars={1} h={N * C - 1} theme={T} bw={3} gap={2} />
-      <Bars x={90} y={M.y} bars={2} h={N * C - 1} theme={T} bw={3} gap={2} />
-      <Bars x={116} y={M.y} bars={4} h={N * C - 1} theme={T} bw={3} gap={2} />
-      <rect x={148} y={M.y} width={1} height={N * C - 1} fill={T.textDim} />
-      <Bars x={160} y={M.y} bars={4} h={N * C - 1} theme={T} bw={3} gap={2} />
-      <rect x={186} y={M.y} width={1} height={N * C - 1} fill={T.accentHi} />
-      {[["_{32}", 70], ["_{64}", 90], ["_{128}", 116], ["_{128}", 160]].map(([t, x]) => (
-        <PText key={`${t}${x}`} x={x as number} y={M.y + N * C + 3} text={t as string} fill={T.textDim} />
+      <Bars x={87} y={M.y} bars={2} h={N * C - 1} theme={T} bw={3} gap={2} />
+      <Bars x={109} y={M.y} bars={4} h={N * C - 1} theme={T} bw={3} gap={2} />
+      <rect x={141} y={M.y} width={1} height={N * C - 1} fill={T.textDim} />
+      <Bars x={156} y={M.y} bars={4} h={N * C - 1} theme={T} bw={3} gap={2} />
+      <rect x={188} y={M.y} width={1} height={N * C - 1} fill={T.accentHi} />
+      {[["_{32}", 71], ["_{64}", 91], ["_{128}", 118], ["_{avg}", 142], ["_{128}", 165]].map(([t, x]) => (
+        <PText key={`${t}${x}`} x={x as number} y={M.y + N * C + 3} text={t as string} fill={T.textDim} anchor="middle" />
       ))}
-      <PText x={146} y={M.y + N * C + 3} text="_{avg}" fill={T.textDim} />
 
       {/* ——— similarity matrix: cos(image_i, caption_j) ——— */}
       {CLIP_SIM.map((r, i) => r.map((s, j) => (
@@ -115,9 +117,9 @@ export function CLIPDiagram({ theme }: { theme: Theme }) {
       <PText x={M.x + N * C + 8} y={M.y + 2} text={`×${CLIP_LOGIT_SCALE.toFixed(1)}`} fill={T.text} />
       <PText x={M.x + N * C + 8} y={M.y + 12} text="learned" fill={T.textDim} />
       <PText x={M.x + N * C + 8} y={M.y + 22} text="scale" fill={T.textDim} />
-      <PText x={M.x + N * C + 8} y={M.y + 150} text={`${hits} of ${N}`} fill={T.text} />
-      <PText x={M.x + N * C + 8} y={M.y + 160} text="rows pick" fill={T.textDim} />
-      <PText x={M.x + N * C + 8} y={M.y + 170} text="their pair" fill={T.textDim} />
+      <PText x={M.x + N * C + 8} y={M.y + 152} text={`${hits} of ${N}`} fill={T.text} />
+      <PText x={M.x + N * C + 8} y={M.y + 162} text="rows pick" fill={T.textDim} />
+      <PText x={M.x + N * C + 8} y={M.y + 172} text="their pair" fill={T.textDim} />
     </g>
   );
 }

@@ -121,7 +121,7 @@ export function RecurDiagram({ theme, name }: { theme: Theme; name: RecurName })
           <g key={`o${t}`}>
             <rect x={cx(t)} y={outY} width={14} height={14} fill={ok ? T.accent : T.panel} />
             <Frame x={cx(t)} y={outY} w={14} h={14} fill={T.frame} />
-            <PText x={cx(t) + 7} y={outY + 4} text={show(o.pred[t])} fill={ok ? "#ffffff" : T.text} anchor="middle" />
+            <PText x={cx(t) + 7} y={outY + 4} text={show(o.pred[t])} fill={ok ? T.panel : T.text} anchor="middle" />
             <rect x={cx(t)} y={outY + 16} width={Math.max(1, Math.round(o.predP[t] * 14))} height={2} fill={ok ? T.accentHi : T.textDim} />
             <PText x={cx(t) + 7} y={outY + 22} text={truth === null ? "" : show(truth)} fill={T.textDim} anchor="middle" />
           </g>
@@ -157,7 +157,7 @@ export function RecurCard({ theme, name }: { theme: Theme; name: RecurName }) {
             {column(st[t], X0 + t * DX, 14, 10, 2, T.ramp)}
             {t < N - 1 && <rect x={X0 + t * DX + 10} y={14 + ch} width={4} height={1} fill={T.wireHot} />}
             <rect x={X0 + t * DX} y={18 + ch * 2} width={11} height={12} fill={ok ? T.accent : T.panel} />
-            <PText x={X0 + t * DX + 5} y={20 + ch * 2} text={show(o.pred[t])} fill={ok ? "#ffffff" : T.text} anchor="middle" />
+            <PText x={X0 + t * DX + 5} y={20 + ch * 2} text={show(o.pred[t])} fill={ok ? T.panel : T.text} anchor="middle" />
           </g>
         );
       })}

@@ -27,6 +27,8 @@ const PLANE = { x: 196, y: 70, s: 144 }; // square, centre = origin
 const OUT = { x: 436, y: 122 };
 const GEN = { x: 436, y: 232 };
 const CY = IN.y + 28;
+// shared rows: column headers, and every channel label under the 32-cell heads
+const ROW_HEAD = IN.y - 14, ROW_CH = CY + 52;
 
 function pca2(X: Float32Array[]) {
   const n = X.length, d = X[0].length;
@@ -107,16 +109,16 @@ export function VAEDiagram({ theme, still, keys }: { theme: Theme; still: boolea
       <rect x={0} y={0} width={VAE_VIEW.w} height={VAE_VIEW.h} fill={T.ground} />
 
       {/* ——— encoder: resolution 28 → 14 → 7, 1 bar = 16 channels ——— */}
-      <PText x={IN.x} y={IN.y - 14} text="image" fill={T.textDim} />
-      <PText x={84} y={IN.y - 14} text="encoder" fill={T.textDim} />
+      <PText x={IN.x} y={ROW_HEAD} text="image" fill={T.textDim} />
+      <PText x={86} y={ROW_HEAD} text="encoder" fill={T.textDim} />
       <Thumb x={IN.x} y={IN.y} data={model.X[f]} theme={T} />
       <PText x={IN.x} y={IN.y + 61} text={`test, a ${f}`} fill={T.textDim} />
       <Wire pts={[[IN.x + 58, CY], [84, CY]]} fill={T.accentLo} step={1} />
       <Bars x={86} y={CY - 21} bars={2} h={42} theme={T} bw={3} gap={2} />
       <Wire pts={[[95, CY], [104, CY]]} fill={T.accentLo} step={1} />
       <Bars x={106} y={CY - 10} bars={4} h={21} theme={T} bw={3} gap={2} />
-      <PText x={86} y={CY + 26} text="_{32}" fill={T.textDim} />
-      <PText x={108} y={CY + 26} text="_{64}" fill={T.textDim} />
+      <PText x={90} y={ROW_CH} text="_{32}" fill={T.textDim} anchor="middle" />
+      <PText x={115} y={ROW_CH} text="_{64}" fill={T.textDim} anchor="middle" />
       <Wire pts={[[125, CY], [140, CY]]} fill={T.accentLo} step={1} />
       {/* μ and log σ² heads: 32 numbers each (drawn as 32 cells) */}
       {[0, 1].map((h) => (
@@ -125,11 +127,11 @@ export function VAEDiagram({ theme, still, keys }: { theme: Theme; still: boolea
             <rect key={k} x={142 + h * 14} y={CY - 48 + k * 3} width={8} height={2}
               fill={k === 0 || k === 1 ? (h === 0 ? T.wireHot : T.accentHi) : h === 0 ? T.accent : T.accentLo} />
           ))}
-          <PText x={146 + h * 14} y={h === 0 ? CY - 60 : CY - 70} text={h === 0 ? "μ" : "logσ²"} fill={T.text} anchor="middle" />
+          <PText x={142 + h * 14} y={CY - 60} text={h === 0 ? "μ" : "logσ²"} fill={T.text} />
         </g>
       ))}
-      <PText x={142} y={CY + 52} text="_{32}" fill={T.textDim} />
-      <PText x={156} y={CY + 52} text="_{32}" fill={T.textDim} />
+      <PText x={146} y={ROW_CH} text="_{32}" fill={T.textDim} anchor="middle" />
+      <PText x={160} y={ROW_CH} text="_{32}" fill={T.textDim} anchor="middle" />
       <Wire pts={[[166, CY - 47], [PLANE.x - 4, CY - 47], [PLANE.x - 4, o.y], [PLANE.x, o.y]]} fill={T.wire} />
 
       {/* ——— the latent plane (2 of 32 dims) ——— */}
@@ -156,7 +158,7 @@ export function VAEDiagram({ theme, still, keys }: { theme: Theme; still: boolea
       <PText x={PLANE.x} y={PLANE.y + PLANE.s + 15} text="(a linear VAE learns exactly this)" fill={T.textDim} />
 
       {/* ——— decoder: 32 → 3136 → 7 → 14 → 28 ——— */}
-      <PText x={356} y={IN.y - 14} text="decoder" fill={T.textDim} />
+      <PText x={356} y={ROW_HEAD} text="decoder" fill={T.textDim} />
       <Wire pts={[[px(z[0]), py(z[1])], [PLANE.x + PLANE.s + 6, py(z[1])], [PLANE.x + PLANE.s + 6, CY], [354, CY]]} fill={T.wire} />
       <Bars x={356} y={CY - 10} bars={4} h={21} theme={T} bw={3} gap={2} />
       <Wire pts={[[375, CY], [384, CY]]} fill={T.accentLo} step={1} />
@@ -164,11 +166,11 @@ export function VAEDiagram({ theme, still, keys }: { theme: Theme; still: boolea
       <Wire pts={[[395, CY], [410, CY]]} fill={T.accentLo} step={1} />
       <rect x={412} y={CY - 42} width={1} height={84} fill={T.accentHi} />
       <Wire pts={[[413, CY], [OUT.x - 2, CY]]} fill={T.accentLo} step={1} />
-      <PText x={358} y={CY + 26} text="_{64}" fill={T.textDim} />
-      <PText x={388} y={CY + 26} text="_{32}" fill={T.textDim} />
-      <PText x={411} y={CY + 47} text="_{1}" fill={T.textDim} />
+      <PText x={365} y={ROW_CH} text="_{64}" fill={T.textDim} anchor="middle" />
+      <PText x={390} y={ROW_CH} text="_{32}" fill={T.textDim} anchor="middle" />
+      <PText x={413} y={ROW_CH} text="_{1}" fill={T.textDim} anchor="middle" />
 
-      <PText x={OUT.x} y={OUT.y - 12} text="reconstruction" fill={T.text} />
+      <PText x={OUT.x} y={ROW_HEAD} text="reconstruction" fill={T.text} />
       <Thumb x={OUT.x} y={OUT.y} data={recon} theme={T} />
       <PText x={OUT.x} y={OUT.y + 61} text="stand-in" fill={T.textDim} />
 

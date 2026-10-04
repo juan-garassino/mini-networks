@@ -218,7 +218,7 @@ function DeepseekInset({ theme: T, x, y }: { theme: Theme; x: number; y: number 
       {[...txt].map((ch, i) => (
         <g key={i}>
           <rect x={x + 30 + i * W} y={y + 6} width={W - 1} height={10} fill={i >= q - 15 ? T.accent : T.panel} />
-          <PText x={x + 30 + i * W + 2} y={y + 7} text={ch === "\n" ? "" : ch === " " ? "" : ch} fill={i >= q - 15 ? "#ffffff" : T.textDim} anchor="middle" s={1} />
+          <PText x={x + 30 + i * W + 2} y={y + 7} text={ch === "\n" ? "" : ch === " " ? "" : ch} fill={i >= q - 15 ? T.panel : T.textDim} anchor="middle" s={1} />
         </g>
       ))}
       <PText x={x + 30 + (q - 15) * W} y={y - 4} text="window: last 16 raw" fill={T.wireHot} />
@@ -353,7 +353,7 @@ function TDInset({ theme: T, x, y }: { theme: Theme; x: number; y: number }) {
               return (
                 <g key={i}>
                   <rect x={x + 204 + i * 10} y={y + 7 + r * 11} width={9} height={9} fill={vis ? (fresh ? T.accent : T.panel) : T.accentLo} />
-                  {vis && <PText x={x + 204 + i * 10 + 4} y={y + 8 + r * 11} text={show(ch)} fill={fresh ? "#ffffff" : T.text} anchor="middle" />}
+                  {vis && <PText x={x + 204 + i * 10 + 4} y={y + 8 + r * 11} text={show(ch)} fill={fresh ? T.panel : T.text} anchor="middle" />}
                 </g>
               );
             })}

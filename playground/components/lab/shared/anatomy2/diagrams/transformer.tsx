@@ -75,9 +75,9 @@ export function TransformerDiagram({ theme, still, keys }: { theme: Theme; still
       <PText x={16} y={18} text="char" fill={T.textDim} />
       <PText x={54} y={18} text="embed" fill={T.textDim} />
       {LAYER_X.map((x, l) => <PText key={l} x={x} y={18} text={`block ${l + 1}`} fill={l === s.layer ? T.wireHot : T.textDim} />)}
-      <PText x={OUT_X - 4} y={18} text="next char" fill={T.textDim} />
-      <PText x={OUT_X - 2} y={28} text="guess" fill={T.textDim} />
-      <PText x={OUT_X + 30} y={28} text="real" fill={T.textDim} />
+      <PText x={OUT_X} y={18} text="next char" fill={T.textDim} />
+      <PText x={OUT_X} y={28} text="guess" fill={T.textDim} />
+      <PText x={OUT_X + 32} y={28} text="real" fill={T.textDim} />
       {LAYER_X.map((x, l) => (
         <g key={`h${l}`}>
           <PText x={x} y={28} text="attn" fill={T.textDim} />
@@ -124,7 +124,7 @@ export function TransformerDiagram({ theme, still, keys }: { theme: Theme; still
 
       {/* final norm + lm_head (65-way) → next char vs truth */}
       <Bars x={HEAD_X} y={TOP} bars={2} h={BOT - TOP} theme={T} bw={BW} gap={GAP} dim />
-      <PText x={HEAD_X - 2} y={28} text="lm" fill={T.textDim} />
+      <PText x={HEAD_X} y={28} text="lm" fill={T.textDim} />
       {Array.from({ length: N }, (_, i) => {
         const truth = i + 1 < N ? TF_LINE[i + 1] : null;
         const ok = truth !== null && TF_PRED[i] === truth;
@@ -132,14 +132,14 @@ export function TransformerDiagram({ theme, still, keys }: { theme: Theme; still
           <g key={`o${i}`}>
             <rect x={OUT_X} y={ry(i)} width={14} height={14} fill={ok ? T.accent : T.panel} />
             <Frame x={OUT_X} y={ry(i)} w={14} h={14} fill={i === s.q ? T.wireHot : T.frame} />
-            <PText x={OUT_X + 7} y={ry(i) + 4} text={show(TF_PRED[i])} fill={ok ? "#ffffff" : T.text} anchor="middle" />
+            <PText x={OUT_X + 7} y={ry(i) + 4} text={show(TF_PRED[i])} fill={ok ? T.panel : T.text} anchor="middle" />
             <rect x={OUT_X + 16} y={ry(i) + 6} width={Math.max(1, Math.round(TF_PRED_P[i] * 12))} height={2} fill={ok ? T.accentHi : T.textDim} />
             <PText x={OUT_X + 32} y={ry(i) + 4} text={truth === null ? "" : show(truth)} fill={T.textDim} />
           </g>
         );
       })}
-      <Diamond cx={OUT_X + 10} cy={BOT + 14} theme={T} r={5} />
-      <PText x={OUT_X + 20} y={BOT + 11} text={`CE ${ce.toFixed(2)}`} fill={T.loss} />
+      <Diamond cx={OUT_X + 7} cy={BOT + 14} theme={T} r={5} />
+      <PText x={OUT_X + 16} y={BOT + 11} text={`CE ${ce.toFixed(2)}`} fill={T.loss} />
 
       {/* the selected head's full pattern: rows = query, cols = key; upper triangle = causal mask */}
       <PText x={GRID.x - 12} y={18} text={`block ${s.layer + 1}, head ${s.head + 1}`} fill={T.wireHot} />
@@ -215,7 +215,7 @@ export function TransformerCard({ theme }: { theme: Theme }) {
         return (
           <g key={`g${i}`}>
             <rect x={X0 + i * CW} y={Y0 + N * RH2 + 3} width={CW - 1} height={13} fill={ok ? T.accent : T.panel} />
-            <PText x={X0 + i * CW + 5} y={Y0 + N * RH2 + 6} text={show(TF_PRED[i])} fill={ok ? "#ffffff" : T.text} anchor="middle" />
+            <PText x={X0 + i * CW + 5} y={Y0 + N * RH2 + 6} text={show(TF_PRED[i])} fill={ok ? T.panel : T.text} anchor="middle" />
           </g>
         );
       })}
