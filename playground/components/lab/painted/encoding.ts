@@ -7,6 +7,7 @@ export const ENCODING = {
   "atom banner": "a root model (no parents); flag colour = evidence state",
   "road stone": "a derived model on the painted roads; stone colour = evidence state",
   "model ribbon": "the model's name; loud (inked) when selected, lit when hovered",
+  "paper plate": "paper map: the model's name over the painter's plate, one type size for all (long names break to two lines); 'no model yet' where the painter invented one",
   "lit road": "the selected model's lineage back to its root atom",
   "focus fade": "lands other than the focused one fade (dithered band = distance from it)",
   critter: "walks the lineage road from the root to the selected model",

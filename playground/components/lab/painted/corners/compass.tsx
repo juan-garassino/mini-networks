@@ -41,7 +41,7 @@ export function Compass({ m, unit, onPan, onWhole, onZoom, canIn, canOut, whole 
     // above never collides with it
     <div className="flex items-end gap-2" role="group" aria-label="Map navigation" style={{ paddingTop: Math.round(unit * 4) }}>
       <svg width={size} height={size} viewBox={`0 0 ${N} ${N}`} shapeRendering={m.crisp ? "crispEdges" : "geometricPrecision"}
-        style={{ display: "block", overflow: "visible", filter: m.crisp ? `drop-shadow(var(--ap) var(--ap) 0 ${m.shadow})` : `drop-shadow(1px 2px 0 ${m.shadow})` }}>
+        style={{ display: "block", overflow: "visible", filter: m.crisp ? `drop-shadow(var(--ap) var(--ap) 0 ${m.shadow})` : m.card ? "drop-shadow(2px 2px 0 rgba(58,38,22,.62))" : `drop-shadow(1px 2px 0 ${m.shadow})` }}>
         {/* the rose's ring: a parchment disc with an ink rim */}
         <circle cx={C} cy={C} r={7} fill={m.plate} stroke={ink} strokeWidth={m.crisp ? 1 : 0.7} />
         <circle cx={C} cy={C} r={5.5} fill="none" stroke={m.border} strokeWidth={m.crisp ? 0.5 : 0.4} strokeDasharray={m.crisp ? "1 1" : "0.6 0.9"} />

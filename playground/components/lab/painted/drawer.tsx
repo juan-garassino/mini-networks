@@ -8,7 +8,7 @@ import { useEffect, useRef, useState, type ReactNode } from "react";
 import { MechanismDiagram } from "@/components/lab/shared/anatomy2";
 import { displayName, type CardModel } from "@/components/lab/shared/card-model";
 import { CardBody, DiagramMat } from "./card";
-import { Btn } from "./corners/plate";
+import { Btn, sheetGround } from "./corners/plate";
 import type { Material } from "./material";
 
 export type Sheet = "peek" | "half" | "full";
@@ -48,7 +48,7 @@ export function Drawer(p: DrawerProps) {
   if (p.fullDiagram) {
     return (
       <div role="dialog" aria-label={`How ${displayName(card.name)} works`} className="absolute inset-0 z-30 overflow-auto"
-        style={{ background: m.plateHi, color: m.ink, fontFamily: m.bodyFont }}>
+        style={{ background: sheetGround(m), color: m.ink, fontFamily: m.bodyFont }}>
         <div className="flex items-center gap-3 px-5 pt-4">
           <Btn m={m} onClick={() => p.setFullDiagram(false)} label="Back to the map" style={{ fontSize: 14, minHeight: 26 }}>← Back to the map</Btn>
           <h2 className="leading-none" style={{ fontFamily: m.signFont, fontWeight: 700, fontSize: 24, color: m.crisp ? m.border : m.ink }}>
@@ -66,9 +66,9 @@ export function Drawer(p: DrawerProps) {
   if (!p.mobile) {
     return (
       <aside aria-label={`${displayName(card.name)} card`} className="absolute inset-y-0 right-0 z-20 flex flex-col overflow-y-auto"
-        style={{ width: DRAWER_W, background: m.plateHi, color: m.ink, fontFamily: m.bodyFont,
+        style={{ width: DRAWER_W, background: sheetGround(m), color: m.ink, fontFamily: m.bodyFont,
           borderLeft: `var(--ap, 2px) solid ${m.border}`,
-          boxShadow: m.crisp ? `inset var(--ap) 0 0 ${m.rule}, calc(var(--ap) * -1) 0 0 ${m.shadow}` : `-2px 0 0 ${m.shadow}` }}>
+          boxShadow: m.crisp ? `inset var(--ap) 0 0 ${m.rule}, calc(var(--ap) * -1) 0 0 ${m.shadow}` : `-3px 0 0 ${m.card ? "rgba(58,38,22,.62)" : m.shadow}` }}>
         <div className="flex-none px-6 pt-4">{back}</div>
         <div className="px-6 pb-8 pt-3">{body}</div>
       </aside>
@@ -99,7 +99,7 @@ function SheetShell(p: DrawerProps & { header: ReactNode; body: ReactNode }) {
   };
   return (
     <aside aria-label="Model card" className="absolute inset-x-0 bottom-0 z-20 flex flex-col"
-      style={{ height: h, background: m.plateHi, color: m.ink, borderTop: `var(--ap, 2px) solid ${m.border}`, boxShadow: `0 calc(var(--ap, 2px) * -1) 0 ${m.shadow}`, fontFamily: m.bodyFont,
+      style={{ height: h, background: sheetGround(m), color: m.ink, borderTop: `var(--ap, 2px) solid ${m.border}`, boxShadow: `0 calc(var(--ap, 2px) * -1) 0 ${m.shadow}`, fontFamily: m.bodyFont,
         transition: drag == null && !p.still ? "height 220ms ease" : "none" }}>
       <button type="button" aria-label={p.sheet === "full" ? "Collapse the card" : "Expand the card"}
         className="flex h-6 w-full flex-none touch-none items-center justify-center"

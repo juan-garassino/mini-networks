@@ -29,6 +29,9 @@ export interface Material {
   bodyFont: string;
   crisp: boolean;       // shape-rendering crispEdges + square caps
   radius: number;       // plate corner radius (image px at 1×)
+  /** cut cardstock (paper only): a hard offset drop + a printed laid-paper
+   * texture, both CSS-only, so every HTML plate reads as one stock */
+  card?: { drop: string; grain: string };
   evidence: Record<EvidenceState, { fill: string; stroke: string; dash?: string }>;
 }
 
@@ -118,6 +121,17 @@ export const MATERIALS: Record<MaterialId, Material> = {
     bodyFont: "var(--font-alegreya), Georgia, serif",
     crisp: false,
     radius: 3,
+    card: {
+      // hard, unblurred: a sheet lifted a few mm off the painting
+      drop: "3px 3px 0 rgba(58,38,22,.62)",
+      // laid lines (the wire marks of handmade stock) + a sparse fibre stipple + a soft sheet tone
+      grain: [
+        "repeating-linear-gradient(0deg, rgba(122,90,58,.055) 0 1px, transparent 1px 4px)",
+        "radial-gradient(rgba(90,62,36,.10) .6px, transparent 1px) 0 0 / 5px 5px",
+        "radial-gradient(rgba(90,62,36,.07) .6px, transparent 1px) 2px 3px / 7px 7px",
+        "linear-gradient(180deg, rgba(255,255,255,.35), rgba(201,165,112,.18))",
+      ].join(", "),
+    },
     evidence: {
       champion: { fill: "#e9b52c", stroke: "#4a3322" },
       provisional: { fill: "#f1ddb8", stroke: "#4a3322", dash: "2.5 2" },

@@ -36,7 +36,7 @@ export function DiagramMat({ m, children, className = "" }: { m: Material; child
     <div className={className} style={{
       background: THEMES[m.diagram].ground, padding: `${MAT_PAD}px ${MAT_PAD}px ${MAT_PAD - 2}px`,
       border: `var(--ap, 2px) solid ${m.border}`,
-      boxShadow: m.crisp ? `var(--ap) var(--ap) 0 ${m.shadow}` : `2px 3px 0 ${m.shadow}`,
+      boxShadow: m.crisp ? `var(--ap) var(--ap) 0 ${m.shadow}` : m.card ? m.card.drop : `2px 3px 0 ${m.shadow}`,
       borderRadius: m.radius,
     }}>
       {children}

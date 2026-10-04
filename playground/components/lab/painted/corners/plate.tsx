@@ -22,6 +22,22 @@ export function plateStyle(m: Material, opts: { loud?: boolean; shadow?: boolean
       ].filter(Boolean).join(", "),
     };
   }
+  if (m.card) {
+    // paper: a cut sheet of cardstock — printed laid texture, a pressed inner
+    // rule one hairline in from the edge, and a hard unblurred offset drop
+    const base = loud ? m.loud : m.plateHi;
+    return {
+      background: loud ? base : `${m.card.grain}, ${base}`,
+      color: loud ? m.loudInk : m.ink,
+      border: `2px solid ${m.border}`,
+      borderRadius: m.radius,
+      boxShadow: [
+        `inset 0 0 0 3px ${loud ? base : "rgba(255,248,230,.55)"}`,
+        `inset 0 0 0 4px ${loud ? m.loudInk : m.rule}`,
+        shadow ? m.card.drop : "",
+      ].filter(Boolean).join(", "),
+    };
+  }
   return {
     background: loud ? m.loud : m.plateHi,
     color: loud ? m.loudInk : m.ink,
@@ -30,6 +46,9 @@ export function plateStyle(m: Material, opts: { loud?: boolean; shadow?: boolean
     boxShadow: [`inset 0 0 0 3px ${m.plateHi}`, `inset 0 0 0 4px ${m.rule}`, shadow ? `2px 3px 0 ${m.shadow}` : ""].filter(Boolean).join(", "),
   };
 }
+
+/** A large sheet's ground (drawer, sheet, full diagram): the cardstock print on paper, flat elsewhere. */
+export const sheetGround = (m: Material) => (m.card ? `${m.card.grain}, ${m.plateHi}` : m.plateHi);
 
 export function Plate({ m, children, className = "", style, label, as: Tag = "section" }: {
   m: Material; children: ReactNode; className?: string; style?: CSSProperties; label?: string; as?: "section" | "div" | "nav" | "header" | "aside";

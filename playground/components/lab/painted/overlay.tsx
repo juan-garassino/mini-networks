@@ -36,29 +36,51 @@ export interface OverlayProps {
 
 const d = (pts: Pt[]) => pts.map((p, i) => `${i ? "L" : "M"}${p.x.toFixed(1)} ${p.y.toFixed(1)}`).join("");
 
+/** One type size for every model plate (image px): the painter lettered his
+ * plates at whatever size fit, so ours set one size and let the plate grow to
+ * the name instead — long two-word names break onto two lines. */
+const PLATE_FONT = 14;
+const EM = 0.5;                                  // Alegreya's mean advance, in em
+
+function plateLines(text: string, maxW: number): string[] {
+  if (text.length * PLATE_FONT * EM <= maxW || !text.includes(" ")) return [text];
+  const sp = [...text].flatMap((c, i) => (c === " " ? [i] : []));
+  const mid = sp.reduce((a, b) => (Math.abs(b - text.length / 2) < Math.abs(a - text.length / 2) ? b : a));
+  return [text.slice(0, mid), text.slice(mid + 1)];
+}
+
 /** Our plate laid over the painter's plate (padded so a few px of mapping
  * error never shows the old lettering): the real model name, or an honest
- * "no model yet" where the painter invented one. Acts as that model's tag. */
+ * "no model yet" where the painter invented one. Acts as that model's tag.
+ * Cut cardstock: a hard unblurred offset drop, a pressed inner rule. */
 function PaperPlate({ b, theme, sel, hov, dim, lit, onSelect, onHover }: {
   b: BakedText; theme: Material; sel: boolean; hov: boolean; dim: boolean; lit: boolean;
   onSelect: (n: string) => void; onHover: (n: string | null) => void;
 }) {
   const pad = 4;
-  const x = b.box.x - pad, y = b.box.y - pad, w = b.box.w + pad * 2, h = b.box.h + pad * 2;
-  const text = b.name ? displayName(b.name) : "no model yet";
-  const fit = Math.min(16, h * 0.5, (w - 12) / Math.max(4, text.length * 0.5));
-  const fill = sel ? theme.loud : hov ? theme.plateHi : "url(#pp-plate)";
   const name = b.name;
+  const text = name ? displayName(name) : "no model yet";
+  const f = name ? PLATE_FONT : PLATE_FONT * 0.78;
+  const lines = name ? plateLines(text, b.box.w * 1.15) : [text];
+  const textW = Math.max(...lines.map((l) => l.length)) * f * EM;
+  const lh = f * 1.12;
+  // the painter's plate, padded, is the floor; a long name widens it about its centre
+  const w = Math.max(b.box.w + pad * 2, textW + 16), h = Math.max(b.box.h + pad * 2, lines.length * lh + 12);
+  const cx = b.box.x + b.box.w / 2, cy = b.box.y + b.box.h / 2;
+  const x = cx - w / 2, y = cy - h / 2;
+  const fill = sel ? theme.loud : hov ? theme.plateHi : "url(#pp-plate)";
   return (
     // never dim with opacity: the painter's lettering underneath would show through
     <g className={name ? "cursor-pointer" : undefined} aria-hidden
       onClick={name ? (e) => { e.stopPropagation(); onSelect(name); } : undefined}
       onPointerEnter={name ? () => onHover(name) : undefined} onPointerLeave={name ? () => onHover(null) : undefined}>
-      <rect x={x + 1.5} y={y + 2} width={w} height={h} rx={3} fill="#2b1d12" opacity={0.25} />
+      <rect x={x + 2.5} y={y + 3} width={w} height={h} rx={3} fill="#3a2616" opacity={0.6} />
       <rect x={x} y={y} width={w} height={h} rx={3} fill={fill} stroke={lit && !sel ? theme.ring : "#3a2616"} strokeWidth={lit && !sel ? 3 : 2} filter={sel || hov ? undefined : "url(#pp-grain)"} />
       <rect x={x + 3} y={y + 3} width={w - 6} height={h - 6} rx={2} fill="none" stroke={sel ? theme.loudInk : "#7a5a3a"} strokeWidth={0.8} opacity={0.6} />
-      <text x={x + w / 2} y={y + h / 2 + 1} fontSize={name ? fit : Math.min(11, fit)} fontFamily={theme.tagFont} fontWeight={name ? 700 : 400}
-        fontStyle={name ? undefined : "italic"} fill={sel ? theme.loudInk : name ? theme.ink : theme.inkSoft} textAnchor="middle" dominantBaseline="central">{text}</text>
+      <text x={cx} y={cy - ((lines.length - 1) * lh) / 2 + 1} fontSize={f} fontFamily={theme.tagFont} fontWeight={name ? 700 : 400}
+        fontStyle={name ? undefined : "italic"} fill={sel ? theme.loudInk : name ? theme.ink : theme.inkSoft} textAnchor="middle" dominantBaseline="central">
+        {lines.map((l, i) => <tspan key={i} x={cx} dy={i ? lh : 0}>{l}</tspan>)}
+      </text>
       {dim && <rect x={x} y={y} width={w} height={h} rx={3} fill="#e9dcc4" opacity={0.55} />}
     </g>
   );
@@ -144,6 +166,7 @@ function Tag({ t, theme, font: font0, sel, hov, dim, lit, onSelect, onHover }: {
     <g opacity={dim ? 0.5 : 1} className="cursor-pointer" onClick={(e) => { e.stopPropagation(); onSelect(t.name); }}
       onPointerEnter={() => onHover(t.name)} onPointerLeave={() => onHover(null)} aria-hidden>
       {t.leader && <line x1={t.at.x} y1={t.at.y} x2={lx} y2={ly} stroke={theme.border} strokeWidth={bw} strokeDasharray={`${bw * 2} ${bw * 2}`} opacity={0.8} />}
+      {theme.card && <rect x={box.x + bw * 1.6} y={box.y + bw * 1.9} width={box.w} height={box.h} rx={font * 0.25} fill="#3a2616" opacity={0.6} />}
       <rect x={box.x} y={box.y} width={box.w} height={box.h} rx={theme.crisp ? 0 : font * 0.25}
         fill={fill} stroke={lit && !sel ? theme.ring : theme.border} strokeWidth={lit && !sel ? bw * 1.6 : bw}
         shapeRendering={theme.crisp ? "crispEdges" : undefined} />

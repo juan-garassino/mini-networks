@@ -90,7 +90,10 @@ playground/ (repo root)  Next.js 16 + React 19 + TS + Tailwind v4 + Recharts +
                      "four corners" layout (spec 2026-10-02-painted-four-corners):
                      the map owns the whole viewport (pixel sea extended to the
                      edges with the map's own sea furniture — stage.tsx +
-                     sea-furniture.ts; paper cover-cropped), chrome only in the
+                     sea-furniture.ts; paper cover-cropped and never framed
+                     past its edge; paper plates are cut cardstock — hard
+                     offset drop + a CSS-only laid-paper print, material
+                     `card` token), chrome only in the
                      corners (corners/: cartouche + search, Pixel/Paper sheet
                      tabs, compass navigation + scale bar of models by evidence,
                      legend↔minimap plate), a right drawer for the selected model

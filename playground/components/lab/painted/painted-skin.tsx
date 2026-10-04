@@ -331,16 +331,22 @@ export function PaintedSkin() {
         const cy = hv >= lb.h ? lb.y + lb.h / 2 : clamp(a[1], lb.y + hv / 2, lb.y + lb.h - hv / 2);
         return boxAt(cx, cy, k, true);
       }
-      return boxAt(lb.x + lb.w / 2, lb.y + lb.h / 2, k, true);
+      // paper on a phone, a model: the half-sheet leaves a short strip of map,
+      // and a coastal model clamped to the painting's edge lands under the
+      // compass — go in to node scale and centre on the model itself
+      if (mapId === "paper" && mobile && zoom === "node") return boxAt(a[0], a[1], levels.node);
+      // paper has no sea past its edge (it is cover-cropped): keep the painting
+      // filling the visible view and let the land sit off-centre instead
+      return boxAt(lb.x + lb.w / 2, lb.y + lb.h / 2, k, mapId !== "paper");
     }
     return isTrue ? boxAt(continent.x + continent.w / 2, continent.y + continent.h / 2, levels.overview) : boxAt(W / 2, H / 2, levels.overview);
-  }, [view, map, levels, family, landFrame, boxAt, visW, visH, isTrue, down, W, H, continent, mobile, uiHidden]);
+  }, [view, map, levels, family, landFrame, boxAt, visW, visH, isTrue, down, W, H, continent, mobile, uiHidden, mapId]);
 
   useEffect(() => { setManual(null); }, [view?.zoom, view?.focus, mapId, render, vp.w, vp.h, drawerPx]);
 
   const camClamp = useMemo(() => ({ right: drawerPx, bottom: sheetPx }), [drawerPx, sheetPx]);
   const framed = (view?.zoom ?? "overview") !== "overview";
-  const camWorld = useMemo(() => (framed ? { x: -W * 0.25, y: -H * 0.25, w: W * 1.5, h: H * 1.5 } : { x: 0, y: 0, w: W, h: H }), [framed, W, H]);
+  const camWorld = useMemo(() => (framed && mapId !== "paper" ? { x: -W * 0.25, y: -H * 0.25, w: W * 1.5, h: H * 1.5 } : { x: 0, y: 0, w: W, h: H }), [framed, W, H, mapId]);
   const cam = useCamera({ world: camWorld, target: manual ?? target, still, targetViewport: vp, minWidth: 40, clamp: camClamp });
   useEffect(() => {
     if (cam.size.w !== vp.w || cam.size.h !== vp.h) setVp({ w: cam.size.w, h: cam.size.h });
