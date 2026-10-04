@@ -47,6 +47,21 @@ const PRINTS: Record<string, string> = {
 const clamp = (v: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, v));
 const approxWidth = (t: string, px: number) => t.length * px * 0.62;
 
+/** A portal badge's offset from its child's centre (screen px): upper-left, stacked per extra parent. */
+function portalAt(k: number, kk: number, idx: number) {
+  const r = clamp(9 * Math.sqrt(k), 7, 12);
+  return { dx: -24 * kk - r, dy: -20 * kk - idx * (2 * r + 5), r };
+}
+
+/** A route cut where it first enters the badge (radius `r` around B) — or, if it only passes by, at its
+ *  closest approach — then ending AT B: the badge is the plug, the line never overshoots and doubles back. */
+function trimTo(pts: Pt[], B: Pt, r: number): Pt[] {
+  const d = pts.map((q) => Math.hypot(q.x - B.x, q.y - B.y));
+  let i = d.findIndex((v) => v <= r);
+  if (i < 0) i = d.indexOf(Math.min(...d));
+  return [...pts.slice(0, Math.max(1, i)), B];
+}
+
 type R = { x: number; y: number; w: number; h: number };
 const hit = (a: R, b: R, m = 0) => a.x < b.x + b.w + m && b.x < a.x + a.w + m && a.y < b.y + b.h + m && b.y < a.y + a.h + m;
 const shrink = (r: R, d: number): R => ({ x: r.x + d, y: r.y + d, w: r.w - 2 * d, h: r.h - 2 * d });
@@ -235,16 +250,22 @@ export function FlowBoard() {
   // ——— font measurement (name slots are sized from real glyph widths) ———
   const probe = useRef<HTMLSpanElement | null>(null);
   const measure = useRef(approxWidth);
+  // the body face at weight 700 (tab counts, chips) — measured, not guessed from the display face
+  const measureBody = useRef((t: string, px: number) => approxWidth(t, px) * 0.95);
   const [fontsReady, setFontsReady] = useState(false);
   useEffect(() => {
     const el = probe.current;
     if (!el) return;
     const family = getComputedStyle(el).fontFamily;
+    const bodyFamily = el.parentElement ? getComputedStyle(el.parentElement).fontFamily : family;
     const ctx = document.createElement("canvas").getContext("2d");
     let alive = true;
     const done = () => {
       if (!alive) return;
-      if (ctx) measure.current = (t, px) => { ctx.font = `${px}px ${family}`; return ctx.measureText(t).width; };
+      if (ctx) {
+        measure.current = (t, px) => { ctx.font = `${px}px ${family}`; return ctx.measureText(t).width; };
+        measureBody.current = (t, px) => { ctx.font = `700 ${px}px ${bodyFamily}`; return ctx.measureText(t).width; };
+      }
       setFontsReady(true);
     };
     document.fonts.load(`13px ${family}`).then(() => document.fonts.ready).then(done, done);
@@ -483,14 +504,24 @@ export function FlowBoard() {
     const tabs = showChrome ? trays.map(({ l, top }) => {
       const f = fam(l.family);
       const t1 = f.label, t2 = `${graph.laneCount.get(l.family) ?? 0} ${f.kind}`;
-      const w1 = measure.current(t1, 14), w2 = measure.current(t2, 13) * 0.82;
-      const tw = w1 + w2 + 30;
-      return { family: l.family, t1, t2, w1, r: { x: Math.max(top[0] + 6, top[1] - 14 - tw), y: top[2] - 12, w: tw, h: 24 } };
+      const w1 = measure.current(t1, 14), w2 = measureBody.current(t2, 13);
+      // the tab sits on the tray's top edge, right-aligned; it never runs past the tray
+      const room = top[1] - top[0] - 20;
+      // a narrow tray keeps the count and drops only the creature noun
+      const n = String(graph.laneCount.get(l.family) ?? 0), wn = measureBody.current(n, 13);
+      const full = w1 + w2 + 32 <= room;
+      const tw = full ? w1 + w2 + 32 : w1 + wn + 32;
+      return { family: l.family, t1, t2: full ? t2 : n, w1, r: { x: Math.max(top[0] + 6, top[1] - 14 - tw), y: top[2] - 12, w: tw, h: 24 } };
     }) : [];
     const heads = showChrome && z > 0.75 ? board.heads.flatMap((h) => {
       const text = h.depth === 0 ? "Atoms" : `Gen ${h.depth}`;
-      const x = X(h.x), y = Y(h.y) + 4;
-      const r: R = { x: x - 22, y: y - 9, w: 44, h: 18 };
+      const x = X(h.x);
+      let y = Y(h.y) + 4;
+      // a header never sits on a creature's hat: lift it clear of the first row it labels
+      const w = h.depth === 0 ? 50 : 44;
+      const under = nodes.filter((o) => hit({ x: x - w / 2, y: y - 9, w, h: 18 }, o.body, 2));
+      if (under.length) y = Math.min(...under.map((o) => o.body.y)) - 12;
+      const r: R = { x: x - w / 2, y: y - 9, w, h: 18 };
       if (tabs.some((t) => hit(r, t.r, 4))) return [];
       return [{ key: `${h.lane}:${h.depth}`, x, y, text }];
     }) : [];
@@ -508,9 +539,8 @@ export function FlowBoard() {
     const portals = pipes.filter((p) => p.crossLane).map((p) => {
       const q = nodes.find((o) => o.n.name === p.to)!;
       const idx = pipes.filter((o) => o.crossLane && o.to === p.to).findIndex((o) => o.id === p.id);
-      const r = clamp(9 * Math.sqrt(k), 7, 12);
-      const cx = q.cx - 24 * q.kk - r, cy = q.cy - 20 * q.kk - idx * (2 * r + 5);
-      return { id: p.id, from: p.from, to: p.to, cx, cy, r, ex: q.cx - 14 * q.kk, ey: q.cy - 10 * q.kk };
+      const { dx, dy, r } = portalAt(k, q.kk, idx);
+      return { id: p.id, from: p.from, to: p.to, cx: q.cx + dx, cy: q.cy + dy, r, ex: q.cx - 14 * q.kk, ey: q.cy - 10 * q.kk };
     });
 
     // name tags: every creature owns a slot to its right; fall back to a
@@ -581,10 +611,33 @@ export function FlowBoard() {
       }
       const cross = p.crossLane;
       const shown = !cross || (lit !== null && (p.from === lit || p.to === lit || role === "anc"));
-      const chev = (role === "anc" || role === "kid" || cross || scene.z >= 1.3) ? chevronsAlong(p.spts, 64, 22) : [];
-      return { id: p.id, d: cross ? p.spts.map((q, i) => `${i ? "L" : "M"}${q.x.toFixed(1)} ${q.y.toFixed(1)}`).join(" ") : roundedD(p.spts, 12), from: p.from, role, cross, shown, chev, spts: p.spts };
+      // a portal route ends AT its badge on the child (the badge is the plug), not in the child's belly
+      let spts = p.spts;
+      if (cross) {
+        const o = scene.portals.find((q) => q.id === p.id);
+        if (o) spts = trimTo(spts, { x: o.cx, y: o.cy }, o.r + 4);
+      }
+      const chev = cross ? chevronsAlong(spts, 90, 30) : (role === "anc" || role === "kid" || scene.z >= 1.3) ? chevronsAlong(spts, 64, 22) : [];
+      return { id: p.id, d: cross ? spts.map((q, i) => `${i ? "L" : "M"}${q.x.toFixed(1)} ${q.y.toFixed(1)}`).join(" ") : roundedD(spts, 12), from: p.from, to: p.to, role, cross, shown, chev, spts };
     });
   }, [scene, litHops, lit]);
+
+  // the parade rides exactly the drawn line: a portal route stops at its badge on the child
+  // (world px, keyed on the zoom only — panning never restarts the parade)
+  const zs = v?.sx ?? 0;
+  const paradeRoutes: ParadePipe[] = useMemo(() => {
+    if (!board || !zs) return paradePipes;
+    const k = clamp((zs / board.s0) * board.cpx / 44, 0.3, 1.9);
+    return paradePipes.map((pp) => {
+      const p = board.pipes.find((q) => q.id === pp.id);
+      if (!p?.crossLane) return pp;
+      const n = board.nodes.get(p.to)!;
+      const idx = board.pipes.filter((o) => o.crossLane && o.to === p.to).findIndex((o) => o.id === p.id);
+      const o = portalAt(k, k * (p.to === selected ? 1.3 : 1), idx);
+      const B = { x: n.x + o.dx / zs, y: n.y + o.dy / zs };
+      return { ...pp, points: trimTo(p.pts, B, (o.r + 4) / zs) };
+    });
+  }, [paradePipes, board, zs, selected]);
 
   const ferryDraw = useMemo(() => {
     if (!ferry || !scene || !taxonomy || !board) return null;
@@ -667,6 +720,31 @@ export function FlowBoard() {
     );
   };
 
+  // a portal route, lit: a quiet flight line (casing + thin core in the parent's family tone,
+  // sparse chevrons) — it reads as "this travels there" without out-shouting the brood combs
+  const renderCross = (p: (typeof pipeD)[number]) => {
+    if (!scene || !board) return null;
+    const f = fam(board.nodes.get(p.from)!.family);
+    const anc = p.role === "anc";
+    const w = clamp(scene.tube * 0.5, 2, 3.4);
+    const core = hexMix(f.deep, INK, 0.25);
+    return (
+      <g key={p.id} fill="none" strokeLinecap="round" strokeLinejoin="round">
+        {anc && <path d={p.d} stroke={hexMix(ACCENT, PAPER, 0.78)} strokeWidth={w + 9} />}
+        <path d={p.d} stroke="#fff" strokeWidth={w + 4} strokeOpacity={0.9} />
+        <path d={p.d} stroke={core} strokeWidth={w} strokeDasharray={`${w * 3.2} ${w * 2.2}`} />
+        {p.chev.map((c, i) => (
+          <path key={i} d="M-3 -3.6 L1.8 0 L-3 3.6" stroke="#fff" strokeWidth={w + 2.6}
+            transform={`translate(${c.x} ${c.y}) rotate(${(c.angle * 180) / Math.PI})`} />
+        ))}
+        {p.chev.map((c, i) => (
+          <path key={`c${i}`} d="M-3 -3.6 L1.8 0 L-3 3.6" stroke={core} strokeWidth={w * 0.9}
+            transform={`translate(${c.x} ${c.y}) rotate(${(c.angle * 180) / Math.PI})`} />
+        ))}
+      </g>
+    );
+  };
+
   return (
     <LabMotion still={still}>
       <div data-lab-ready={drawn ? "1" : undefined} data-names-placed={scene ? `${placedCount}/${scene.nodes.length}` : undefined}
@@ -720,11 +798,18 @@ export function FlowBoard() {
                 })}
 
                 {/* leftover packing cells: the map key cartouche (with a compass: generations run east) */}
-                {scene.slots.map((b, i) => (
-                  <foreignObject key={i} x={b.x} y={b.y} width={b.w} height={b.h}>
-                    <MapKey w={b.w} h={b.h} />
-                  </foreignObject>
-                ))}
+                {/* … a printed plate of the overview's size: close up it grows only a little and keeps to
+                    its cell's top-left corner, so a zoom never shows a vast empty card or poster-size type */}
+                {scene.slots.map((b, i) => {
+                  const close = scene.z > 1.15, z1 = close ? scene.z : 1, kz = close ? 1.25 : 1;
+                  return (
+                    <g key={i} transform={`translate(${b.x} ${b.y}) scale(${kz})`}>
+                      <foreignObject width={b.w / z1} height={b.h / z1}>
+                        <MapKey w={b.w / z1} h={b.h / z1} />
+                      </foreignObject>
+                    </g>
+                  );
+                })}
 
                 {/* generation headers, inside each tray above its columns */}
                 {scene.heads.map((h) => (
@@ -733,6 +818,9 @@ export function FlowBoard() {
 
                 {/* pipes = builds_on inside a family: one trunk per parent, branching at each child's row */}
                 {[...pipeD].filter((p) => !p.cross).sort((a, b) => Number(a.role !== "dim") - Number(b.role !== "dim")).map(renderPipe)}
+
+                {/* lit portal routes: under the creatures and their names, never over them */}
+                {pipeD.filter((p) => p.cross && p.shown).map(renderCross)}
 
                 {/* harbours: up to three moored ferries per family (+ how many more) */}
                 {scene.docks.map((d) => d.boats.length > 0 && (
@@ -798,8 +886,8 @@ export function FlowBoard() {
                 {scene.portals.map((o) => {
                   const pf = board.nodes.get(o.from)!.family;
                   const Icon = iconFor(o.from);
-                  if (pipeD.find((p) => p.id === o.id)?.shown) return null;
-                  const dim = litSet !== null && !litSet.has(o.to);
+                  const on = !!pipeD.find((p) => p.id === o.id)?.shown;
+                  const dim = !on && litSet !== null && !litSet.has(o.to);
                   return (
                     <g key={o.id} className="cursor-pointer" opacity={dim ? 0.4 : 1}
                       onPointerEnter={() => setHover(o.from)} onPointerLeave={() => setHover((h) => (h === o.from ? null : h))}
@@ -808,16 +896,15 @@ export function FlowBoard() {
                       <path d={`M${o.cx} ${o.cy} L${o.ex} ${o.ey}`} stroke={INK} strokeWidth={scene.tube + 3} strokeLinecap="round" />
                       <path d={`M${o.cx} ${o.cy} L${o.ex} ${o.ey}`} stroke={fam(pf).fill} strokeWidth={scene.tube} strokeLinecap="round" />
                       <circle cx={o.cx} cy={o.cy} r={o.r + 2} fill="#fff" />
+                      {on && <circle cx={o.cx} cy={o.cy} r={o.r + 4.5} fill="none" stroke={ACCENT} strokeWidth={2} />}
                       <circle cx={o.cx} cy={o.cy} r={o.r} fill={fam(pf).fill} stroke={INK} strokeWidth={1.8} />
                       {Icon && <Icon x={o.cx - o.r * 0.62} y={o.cy - o.r * 0.62} width={o.r * 1.24} height={o.r * 1.24} strokeWidth={2.4} color={INK} />}
                     </g>
                   );
                 })}
-                {/* … and the full route, above everything, once either end is lit */}
-                {pipeD.filter((p) => p.cross && p.shown).map(renderPipe)}
 
                 {selected && (
-                  <Parade pipes={paradePipes} view={v} size={clamp(scene.tube * 2.6, 11, 22)} still={still} runKey={runKey}
+                  <Parade pipes={paradeRoutes} view={v} size={clamp(scene.tube * 2.6, 11, 22)} still={still} runKey={runKey}
                     onLanded={() => setLanded(runKey)} />
                 )}
                 {ferryDraw && <Ferry path={ferryDraw.path} still={still} runKey={`${ferry?.name}:${ferry?.key}`} hull={ferryDraw.hull} />}

@@ -345,9 +345,15 @@ export function layoutBoard(
     // portal edges (drawn only when lit): cross-family, and same-family secondary parents
     for (const p of flow.pipes.filter((q) => laneIdx(q.from) !== laneIdx(q.to) || !isPrimary(q.from, q.to))) {
       const a = nodes.get(p.from)!, b = nodes.get(p.to)!;
-      const A = { x: a.slotEnd, y: a.y }, B = { x: b.x - R, y: b.y };
+      // eastward edges leave from the end of the parent's name slot; a westward one leaves from the
+      // parent's own west side (it never doubles back across its own name and lane) and comes in
+      // over the child's head to the portal badge on its upper-left
+      const west = b.x < a.x - u(40);
+      const A = west ? { x: a.x - R, y: a.y } : { x: a.slotEnd, y: a.y };
+      const B = west ? { x: b.x - R * 0.6, y: b.y - R * 1.1 } : { x: b.x - R, y: b.y };
       const dx = Math.max(u(80), Math.abs(B.x - A.x) * 0.45);
-      const c1 = { x: A.x + dx, y: A.y }, c2 = { x: B.x - dx, y: B.y };
+      const c1 = { x: A.x + (west ? -dx : dx), y: A.y };
+      const c2 = west ? { x: B.x + dx * 0.4, y: B.y - u(60) } : { x: B.x - dx, y: B.y };
       const pts: Pt[] = [];
       for (let i = 0; i <= 28; i++) {
         const t = i / 28, m = 1 - t;
