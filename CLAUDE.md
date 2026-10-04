@@ -126,12 +126,15 @@ playground/ (repo root)  Next.js 16 + React 19 + TS + Tailwind v4 + Recharts +
                      field stars + a meteor (≤10 fps, frame 0 under still/reduced
                      motion); reuses the painted four corners + drawer in the
                      `sky` material (material.ts).
-                     /lab/designs = every design apart (lib/designs.ts, seven links: periodic
-                     table ×3 skins via /?edition=<id>, atlas plates, Network Atlas,
-                     Kawaii flow, paper maps ×4, pixel maps ×2, star atlas, + the
-                     transit layout idea; anatomy as a component) with keep/drop verdicts (localStorage + posted
-                     to the feedback inbox as skin "designs"); thumbnails built by
-                     `node scripts/designs.mjs` into gitignored public/local/designs/.
+                     /lab/designs = the design board (lib/designs.ts: seven designs —
+                     periodic table ×3 skins via /?edition=<id>, paper maps ×4, pixel
+                     maps ×2 as full bands, then atlas plates, Network Atlas, Kawaii
+                     flow, star atlas as one 2-up grid — + the transit layout idea and
+                     anatomy as a component; 15 pages) with a verdict contact strip and
+                     per-page keep/drop (localStorage + posted to the feedback inbox as
+                     skin "designs"); thumbnails shot LIVE (still=1, one CDP Chrome
+                     slot) by `node scripts/designs.mjs` into gitignored
+                     public/local/designs/{<id>.jpg,shots.json}.
 infra/gcp/           Dockerfile.train (ARG TORCH_INDEX: cpu|cu121) + entrypoint.sh
                      (MODE=train|sweep-task) + terraform/ (train job, L4 sweep
                      job, topic, trigger, IAM) + function/ (see its README)
