@@ -114,10 +114,15 @@ playground/ (repo root)  Next.js 16 + React 19 + TS + Tailwind v4 + Recharts +
                      model = its card (drawer) + named lineage.
                      /lab/sky = the Celestial Zoo (spec 2026-10-02-sky-atlas): an
                      antique star atlas on lib/world positions — models are stars
-                     (glyph = evidence), families are constellations with figures
-                     (components/lab/sky/figures.ts), lineage = constellation lines,
-                     a selected star's pipelines = dotted arcs; reuses the painted
-                     four corners + drawer in the `sky` material (material.ts).
+                     (glyph = evidence), families are constellations whose engraved
+                     figures are built FROM their actual stars (components/lab/sky/
+                     figures.ts: eye, serpent, furnace, mirrors, lattice, arrow),
+                     lineage = constellation lines, a selected star's pipelines =
+                     one dotted arc per partner; a graduated neatline, conic
+                     graticule + ecliptic frame the plate; sky/life.tsx twinkles
+                     field stars + a meteor (≤10 fps, frame 0 under still/reduced
+                     motion); reuses the painted four corners + drawer in the
+                     `sky` material (material.ts).
                      /lab/designs = every design apart (lib/designs.ts, seven links: periodic
                      table ×3 skins via /?edition=<id>, atlas plates, Network Atlas,
                      Kawaii flow, paper maps ×4, pixel maps ×2, star atlas, + the
