@@ -47,7 +47,7 @@ export function TitleBlock({
         ))}
       </nav>
 
-      <div className="flex items-center gap-4 px-4 py-2 text-ink-dim">
+      <div className="flex items-center justify-end gap-3 px-3 py-2 text-ink-dim sm:gap-4 sm:px-4">
         <button
           onClick={() => setEdition(EDITIONS[(EDITIONS.indexOf(edition) + 1) % EDITIONS.length])}
           className="bp-stamp px-2 py-0.5 text-[9px] transition-transform hover:scale-105"
@@ -55,15 +55,16 @@ export function TitleBlock({
         >
           ed. {edition}
         </button>
-        <span>
+        <span className="whitespace-nowrap">
           runs <span className="text-ink">{runCount}</span>
         </span>
         <span className="flex items-center gap-1.5">
           <span
             className={`inline-block h-2 w-2 rounded-full ${ok ? "" : "bp-live"}`}
+            title={ok ? "api linked" : "api offline"}
             style={{ background: ok ? "var(--line)" : "var(--alert)" }}
           />
-          {ok ? "api linked" : "api offline"}
+          <span className="hidden sm:inline">{ok ? "api linked" : "api offline"}</span>
         </span>
         <span className="hidden lg:inline">rev 2026-07 · drawn by observatory</span>
       </div>

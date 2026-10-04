@@ -80,7 +80,7 @@ body::after {
   --paper: #050805; --paper-deep: #020302;
   --ink: #7dff9a; --ink-dim: #2e7a44;
   --line: #4ddc72; --line-faint: #123920;
-  --redline: #ffe14d;
+  --redline: #e9d47e;  /* soft amber cursor (was #ffe14d — too loud) */
 }
 [data-edition="terminal"] body, body[data-edition="terminal"] {
   background-image: repeating-linear-gradient(0deg, rgba(0, 0, 0, 0.35) 0 2px, transparent 2px 4px);
@@ -198,3 +198,85 @@ body::after {
 .flow-edge { stroke-dasharray: 3 7; animation: flowdash 1.1s linear infinite; }
 @keyframes nodepulse { 0%,100% { opacity: 0.75; } 50% { opacity: 1; } }
 .flow-node { animation: nodepulse 2.2s ease-in-out infinite; }
+
+/* ————— periodic table tiles (components/views/chart.tsx) —————
+   One type scale for every tile; the name block always reserves two lines so
+   symbols sit on one baseline across a period. */
+.pt-tile { padding: 4px 5px 5px; min-width: 0; container-type: inline-size; }
+.pt-tile .pt-z { font-size: 9px; letter-spacing: 0.02em; }
+.pt-tile .pt-icon { width: 13px; height: 13px; flex: none; }
+.pt-tile .pt-sym { font-size: 27px; padding-top: 2px; }
+.pt-tile[data-level="compound"] .pt-sym { font-size: 23px; }
+.pt-reaction .pt-sym { font-size: 18px; }
+.pt-tile .pt-name {
+  /* a 12-letter word (segmentation, distillation) always fits one line:
+     Martian Mono advances ~0.68em, so cap the size at 12cqi of the tile */
+  font-size: min(8.5px, 12cqi);
+  line-height: 1.2;
+  height: 2.4em;
+  letter-spacing: -0.02em;
+  overflow-wrap: break-word; /* breaks fall at underscores (<wbr>); only an over-long word splits */
+}
+.pt-reaction .pt-name { font-size: min(8px, 12cqi); }
+.pt-famhead { border-bottom: 1px solid var(--line-faint); position: relative; }
+/* end ticks: the bracket of a family block, flush with its outer tile edges */
+.pt-famhead::before, .pt-famhead::after {
+  content: ""; position: absolute; bottom: -1px; width: 1px; height: 5px; background: var(--line-faint);
+}
+.pt-famhead::before { left: 0; }
+.pt-famhead::after { right: 0; }
+
+/* still frames + reduced motion: every looping mark freezes */
+@media (prefers-reduced-motion: reduce) {
+  .bp-live, .bp-draw, .flow-edge, .flow-node { animation: none !important; }
+  .bp-draw { stroke-dashoffset: 0; }
+}
+html[data-still] .bp-live, html[data-still] .bp-draw,
+html[data-still] .flow-edge, html[data-still] .flow-node { animation: none !important; }
+html[data-still] .bp-draw { stroke-dashoffset: 0; }
+
+/* ————— wall chart: a printed classroom poster —————
+   Instrument Serif ships one weight: never fake-bold it. Families print as
+   soft pastel blocks (the classic periodic-table colour key); atoms carry the
+   full tint, compounds a lighter pull of the same ink. The family headers'
+   colour bands double as the legend. */
+[data-edition="wallchart"] { font-synthesis: none; }
+[data-edition="wallchart"] .bp-title { font-weight: 400 !important; }
+[data-edition="wallchart"] .pt-fam[data-family="perception"]     { --fam: #c9d5ab; }
+[data-edition="wallchart"] .pt-fam[data-family="sequence"]       { --fam: #b7cbd8; }
+[data-edition="wallchart"] .pt-fam[data-family="generative"]     { --fam: #e3bdb0; }
+[data-edition="wallchart"] .pt-fam[data-family="representation"] { --fam: #ead095; }
+[data-edition="wallchart"] .pt-fam[data-family="structure"]      { --fam: #cdc1db; }
+[data-edition="wallchart"] .pt-fam[data-family="decision"]       { --fam: #afd2c8; }
+[data-edition="wallchart"] .pt-tile.pt-fam[data-family] { background: var(--fam); }
+[data-edition="wallchart"] .pt-tile.pt-fam[data-level="compound"] {
+  background: color-mix(in srgb, var(--fam) 50%, var(--paper));
+  border-color: color-mix(in srgb, var(--line) 35%, var(--paper));
+}
+[data-edition="wallchart"] .pt-tile.pt-fam[data-level="compound"] .pt-sym { color: var(--ink); }
+/* a printed chart sets symbols in chemistry case (Cv, At); the blueprint keeps
+   drafting caps — Big Shoulders' l and I are the same stroke */
+[data-edition="wallchart"] .pt-tile .pt-sym,
+[data-edition="wallchart"] .pt-spec .bp-title { text-transform: none; }
+[data-edition="wallchart"] .pt-tile .pt-sym { font-size: 30px; letter-spacing: 0; }
+[data-edition="wallchart"] .pt-tile[data-level="compound"] .pt-sym { font-size: 26px; }
+[data-edition="wallchart"] .pt-reaction .pt-sym { font-size: 20px; }
+[data-edition="wallchart"] .pt-famhead { border-bottom: 0; }
+[data-edition="wallchart"] .pt-famhead::before, [data-edition="wallchart"] .pt-famhead::after { display: none; }
+[data-edition="wallchart"] .pt-famhead[data-family] { box-shadow: inset 0 -5px 0 var(--fam); }
+[data-edition="wallchart"] .pt-famhead span { color: var(--ink); }
+
+/* ————— terminal: phosphor, read at arm's length —————
+   VT323 sits ~25% smaller than Martian Mono at the same px; the chrome that
+   keeps Tailwind px sizes (footer, spec-sheet) zooms instead of re-sizing. */
+[data-edition="terminal"] { font-synthesis: none; }
+[data-edition="terminal"] .bp-title { font-weight: 400 !important; }
+[data-edition="terminal"] footer { zoom: 1.4; }
+[data-edition="terminal"] .pt-drawer-body { zoom: 1.3; }
+[data-edition="terminal"] .bp-stamp { transform: none; }
+[data-edition="wallchart"] .pt-tile:hover,
+[data-edition="wallchart"] .pt-tile:focus-visible { border-color: var(--redline); }
+/* terminal columns: name column wide enough for the deepest tree line, so
+   every # comment starts on one column */
+.term-sheet { --term-name: 34ch; --term-rx: 29ch; }
+@media (max-width: 640px) { .term-sheet { --term-name: 30ch; --term-rx: 22ch; } }

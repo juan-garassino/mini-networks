@@ -61,6 +61,15 @@ export const PLACEMENT: Record<string, { col: number; row: number }> = {
   grpo: { col: 14, row: 3 }, dpo: { col: 15, row: 3 },
 };
 
+/** Family of any placed model: atoms carry theirs; derived models inherit
+ * the family block their column sits under (the chart's own grouping). */
+export function familyOf(name: string): string | undefined {
+  if (ATOMS[name]) return ATOMS[name].family;
+  const col = PLACEMENT[name]?.col;
+  if (col === undefined) return undefined;
+  return FAMILY_BLOCKS.find((b) => col >= b.cols[0] && col <= b.cols[1])?.family;
+}
+
 export const TABLE_COLS = 16;
 export const TABLE_ROWS = 5;
 

@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { motion } from "motion/react";
+import { MotionConfig, motion } from "motion/react";
 import { getTaxonomy } from "@/lib/api";
 import type { TaxonomyResponse } from "@/lib/types";
 import { useRuns } from "@/hooks/use-runs";
@@ -22,6 +22,7 @@ export default function Page() {
   const [selected, setSelected] = useState<string | null>(null);
   const [taxonomy, setTaxonomy] = useState<TaxonomyResponse | null>(null);
   const [edition, setEdition] = useState<EditionId>("blueprint");
+  const [still, setStill] = useState(false);
   const { runs, ok } = useRuns();
 
   useEffect(() => {
@@ -41,6 +42,11 @@ export default function Page() {
     const saved = localStorage.getItem("mn-edition") as EditionId | null;
     const pick = fromUrl && EDITION_IDS.includes(fromUrl) ? fromUrl : saved;
     if (pick) setEdition(pick);
+    // ?still=1 freezes every loop for screenshots, as on the /lab skins
+    if (new URLSearchParams(window.location.search).get("still") === "1") {
+      document.documentElement.setAttribute("data-still", "");
+      setStill(true);
+    }
     return () => { alive = false; clearTimeout(timer); };
   }, []);
 
@@ -50,7 +56,7 @@ export default function Page() {
   }, [edition]);
 
   return (
-    <>
+    <MotionConfig reducedMotion={still ? "always" : "user"}>
       <main className="relative min-h-0">
         {/* Enter-only keyed remount. AnimatePresence mode="wait" froze to a blank
             sheet: the saved edition swaps the key right after hydration, the
@@ -87,6 +93,6 @@ export default function Page() {
         />
       </main>
       <TitleBlock sheet={sheet} setSheet={setSheet} ok={ok} runCount={runs.length} edition={edition} setEdition={setEdition} />
-    </>
+    </MotionConfig>
   );
 }
