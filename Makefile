@@ -1,4 +1,4 @@
-.PHONY: help install install-dev test test-ci clean list validate-s validate-m validate-l validate-models-s validate-compositions-s playground playground-dev playground-install lab-shoot lab-board
+.PHONY: help install install-dev test test-ci clean list validate-s validate-m validate-l validate-models-s validate-compositions-s playground playground-dev playground-ports playground-install lab-shoot lab-board
 
 UV_RUN = uv run
 PYTHON ?= $(UV_RUN) python
@@ -56,7 +56,11 @@ playground:
 	cd playground && npm run build   # → playground/out, served by `python main.py serve`
 
 playground-dev:
-	cd playground && NEXT_PUBLIC_API_BASE=http://localhost:8000 npm run dev  # :3000, hot reload
+	# :3000, hot reload; bound to the LAN so the owner's phone can open it too
+	cd playground && NEXT_PUBLIC_API_BASE=http://$$(ipconfig getifaddr en0 2>/dev/null || echo localhost):8000 npm run dev -- -H 0.0.0.0
+
+playground-ports:
+	cd playground && node scripts/ports.mjs  # one port per UI (3001..3010) over the :3000 dev server
 
 # --- lab bake-off (headless-Chrome shots of /lab/<skin> → playground/.lab-shots) ---
 lab-shoot:

@@ -220,7 +220,8 @@ Writes `runs/sweep/<ts>/report.{md,json}`; non-zero exit on any non-pass.
 - `python main.py serve` — FastAPI on :8000; playground at `/` (serves `playground/out`), API docs at `/docs`
 - `MN_MLFLOW_TRACKING_URI=<tracker> python main.py pull-champions [--models a,b]` — download every Production `mini-<model>` checkpoint to `runs/champions/`; `/infer/<model>` then serves them by default (needs the `cloud` extra + GCS read access)
 - `make playground` — build the Next.js UI to `playground/out` (rebuild after UI changes; CI builds it for deploy)
-- `make playground-dev` — Next dev server on :3000 with hot reload (proxies API to :8000 via `NEXT_PUBLIC_API_BASE`)
+- `make playground-dev` — Next dev server on :3000 with hot reload (proxies API to :8000 via `NEXT_PUBLIC_API_BASE`); bound to 0.0.0.0 with the API base on the Mac's LAN IP so a phone on the same network works (next.config.ts allows the Mac's private IPs as dev origins; the API's dev CORS accepts private-network origins). After a network change, restart it.
+- `make playground-ports` — one address per UI over the running dev server (playground/scripts/ports.mjs, `--list` prints the table): :3001 pixel map, :3002 paper map, :3003 star atlas, :3004 flow, :3005 transit, :3006–3008 periodic table blueprint/wall chart/terminal, :3009 diagram specimens, :3010 design board
 - `cd playground && npm test` — lib/world layout invariants (node --test + strip-types, no deps)
 - `make lab-shoot SKIN=<skin> ROUND=<n>` — headless screenshots of a /lab skin (4 states × desktop/mobile → gitignored `playground/.lab-shots/<skin>/r<n>/`; ≤2 Chrome at once; `--typecheck`/`--check-only`/`--dpr 2` (the owner's retina scale — use it for the pixel map) via `node scripts/shoot.mjs`; the painted skin's extra states live in `.lab-shots/painted/shoot-painted.mjs`)
 - `make lab-board` — build `playground/.lab-shots/board.html`, the round-by-round bake-off comparison page

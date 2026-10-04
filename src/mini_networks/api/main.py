@@ -12,6 +12,12 @@ from mini_networks.api.routers.training import router as training_router
 from mini_networks.api.routers.compositions import router as compositions_router
 from mini_networks.api.routers.web import router as web_router
 
+# localhost, 127.0.0.1 and the RFC 1918 private ranges, any port (dev only).
+DEV_ORIGIN_REGEX = (
+    r"http://(localhost|127\.0\.0\.1|10(\.\d{1,3}){3}|192\.168(\.\d{1,3}){2}"
+    r"|172\.(1[6-9]|2\d|3[01])(\.\d{1,3}){2}):\d+"
+)
+
 # The built Next.js playground (static export). Built from playground/ via
 # `npm run build`; FastAPI serves the static `out/` here. Absent until built
 # (or in CI before the build step) → skip the mount, the API still runs.
@@ -30,12 +36,14 @@ def create_app() -> FastAPI:
     )
 
     # The production SPA is served same-origin from "/" below, but the
-    # `make playground-dev` workflow runs the UI on :3000 fetching this API on
-    # :8000 — cross-origin. Allow the Next dev server's localhost origins so the
-    # playground can load /web data in dev.
+    # `make playground-dev` workflow runs the UI on :3000 (and one port per UI
+    # via `make playground-ports`) fetching this API on :8000 — cross-origin.
+    # Allow the dev server's localhost origins AND private-network origins, so
+    # the owner's phone on the same Wi-Fi/hotspot (http://192.168.x.y:3000)
+    # gets data too. Public origins stay refused.
     app.add_middleware(
         CORSMiddleware,
-        allow_origin_regex=r"http://(localhost|127\.0\.0\.1):\d+",
+        allow_origin_regex=DEV_ORIGIN_REGEX,
         allow_methods=["*"],
         allow_headers=["*"],
     )
