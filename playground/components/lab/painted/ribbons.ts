@@ -4,6 +4,10 @@
 // its tail points at its spot; ribbons never overlap if any candidate avoids
 // it; everything stays inside the visible part of the map. Greedy by
 // priority: the selected model, its lineage, atoms, then derived by depth.
+// `hard` boxes (the map plate + its leader) are never covered, not even in
+// part: a ribbon that cannot clear them is left out, unless it is `must`
+// (the selected model, its lineage) — those reach further out on longer
+// stems to clear them.
 import type { Box } from "./anchors";
 import { RIBBON_MARGIN, ribbonSize, type RibbonSpec, type TailSide } from "./pixel-art";
 
@@ -17,6 +21,8 @@ export interface RibbonItem {
   priority: number;
   loud?: boolean;
   hover?: boolean;
+  /** always shown, and never under a hard obstacle if any stem clears it */
+  must?: boolean;
 }
 
 export interface PlacedRibbon extends RibbonSpec { name: string; box: Box }
@@ -56,7 +62,9 @@ export function layoutRibbons(items: RibbonItem[], opts: {
   obstacles: Box[];      // family signs etc.
   bounds: Box;           // the visible part of the map
   clutter?: (b: Box) => number;
+  hard?: Box[];          // drawn OVER the map (the map plate, its leader): never partly covered
 }): PlacedRibbon[] {
+  const hard = opts.hard ?? [];
   const placed: PlacedRibbon[] = [];
   const taken: Box[] = [];
   const order = [...items].sort((a, b) => b.priority - a.priority);
@@ -66,7 +74,7 @@ export function layoutRibbons(items: RibbonItem[], opts: {
     const cands: { x: number; y: number; tail: TailSide; at: number; stem: number; cost: number }[] = [];
     // below / above / right / left of the spot, at the plain distance or with a
     // longer stem, sliding along the side so the ribbon can find open ground
-    for (const stem of [0, 3, 7]) {
+    for (const stem of it.must && hard.length ? [0, 3, 7, 12, 18, 26] : [0, 3, 7]) {
       const gap = 4 + stem;
       for (const f of [0.5, 0.25, 0.75, 0.1, 0.9]) {
         const lateral = Math.abs(f - 0.5) * 4;
@@ -81,6 +89,13 @@ export function layoutRibbons(items: RibbonItem[], opts: {
     }
     const B = opts.bounds;
     let best: (typeof cands)[number] & { score: number; box: Box } = { ...cands[0], score: Infinity, box: { x: 0, y: 0, w: 0, h: 0 } };
+    // the tail + stem as a thin column toward the spot (drawRibbon's pointer)
+    const tailBox = (c: (typeof cands)[number]): Box => {
+      const n = 3 + c.stem;
+      const tx = Math.max(c.x + 3, Math.min(c.x + w - 4, c.at)), ty = Math.max(c.y + 3, Math.min(c.y + h - 4, c.at));
+      return c.tail === "top" ? { x: tx - 2, y: c.y - n, w: 5, h: n } : c.tail === "bottom" ? { x: tx - 2, y: c.y + h - 1, w: 5, h: n + 1 }
+        : c.tail === "left" ? { x: c.x - n, y: ty - 2, w: n, h: 5 } : { x: c.x + w - 1, y: ty - 2, w: n + 1, h: 5 };
+    };
     for (const c of cands) {
       const box = { x: c.x - RIBBON_MARGIN, y: c.y - 1, w: w + RIBBON_MARGIN * 2, h: h + 3 };
       let score = c.cost;
@@ -89,9 +104,22 @@ export function layoutRibbons(items: RibbonItem[], opts: {
       for (const s of opts.spots) score += overlap(box, s) * 20;
       for (const o of opts.obstacles) score += overlap(box, o) * 30;
       if (opts.clutter) score += opts.clutter(box) * 0.8;
+      if (hard.length) {
+        // the whole ribbon, tail and stem included, stays off the plate; and
+        // its stem never crosses a placed ribbon (it would cut that one)
+        const tb = tailBox(c);
+        if (hard.some((o) => overlap(box, o) > 0 || overlap(tb, o) > 0)) score += 1e8;
+        for (const t of taken) score += overlap(tb, t) * 400;
+      }
       if (score < best.score) best = { ...c, score, box };
     }
+    // a label the plate would cut in half is left out instead (must-labels
+    // stay); with the plate up, so is one that would sit on, or be cut by, a
+    // placed ribbon (stems included)
+    const bestTail = tailBox(best);
+    if (!it.must && (best.score >= 1e8 || (hard.length && taken.some((t) => overlap(best.box, t) > 0 || overlap(bestTail, t) > 0)))) continue;
     taken.push(best.box);
+    if (hard.length) taken.push(bestTail);
     placed.push({
       name: it.name, text: it.text, x: best.x, y: best.y, g: opts.g, tail: best.tail, tailAt: best.at, stem: best.stem,
       loud: it.loud, hover: it.hover, box: best.box,

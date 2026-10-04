@@ -34,10 +34,10 @@ export const ENCODING = {
   "minimap frame": "the camera box on the whole map (shown only when zoomed in)",
   // the map plate (desktop): "How <model> works", hung beside the selected castle
   "map plate": "the selected model's full mechanism diagram at 1 art px = 1 CSS px (×2 with room), on a plate of the map's own material; follows the castle in map space, never scales; caption = how real the drawing is (the diagram's badge)",
-  "leader line": "ties the plate to its castle: 1 art px of the map's border ink, straight to the plate's nearest edge, a dot at the model's spot",
+  "leader line": "ties the plate to its castle: 2 art px of maroon ink in a 1-art-px cream halo, straight to the plate's nearest edge, a dot at the model's spot and a stepped notch where it docks into the plate; no name ever sits under it or the plate (they move, or hide)",
   // the drawer
   "drawer glyph": "the selected model's evidence state, as its own map sprite",
-  "mechanism diagram": "how the model works, drawn from the real champion's outputs (on a framed mat cut from the diagram's own ground); on the painted maps' desktop it is the map plate, and the drawer keeps only the text (+ 'Show how it works' when the plate is closed)",
+  "mechanism diagram": "how the model works, drawn from the real champion's outputs (on a framed mat cut from the diagram's own ground); on the painted maps' desktop it is the map plate, and the drawer keeps only the text in a narrower 336-px sheet (+ 'Show how it works' when the plate is closed)",
   "signpost chip": "a parent (built on) or child (leads to) model, with its evidence glyph",
   "metric line": "best gate metric vs the M bar, and run count",
 } as const;

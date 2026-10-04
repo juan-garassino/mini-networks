@@ -72,26 +72,58 @@ export const MapPlate = forwardRef<HTMLElement, {
   );
 });
 
-/** The leader: one straight line of map ink from the castle to the plate's
- * near edge, with a small dot at the castle end. Screen px; `t` = thickness. */
+/** The leader: one straight line from the castle to the plate's near edge,
+ * read at a glance on any terrain — a 2-art-px maroon core in a 1-art-px cream
+ * halo (the map's ribbon casing, so it holds over dark roofs and lava as well
+ * as over the parchment sea), a dot at the model's spot and a small stepped
+ * notch where it docks into the plate's border (drawn over the plate's hard
+ * shadow, so the skin paints the leader after the plate). Screen px; `t` = one
+ * art px; `edge` = the plate's outer border edge facing the castle. */
 export function Leader({ m, side, castle, edge, t }: { m: Material; side: PlateSide; castle: { x: number; y: number }; edge: number; t: number }) {
   const horiz = side === "right" || side === "left";
-  const a = horiz ? castle.x : castle.y;
-  const lo = Math.min(a, edge), len = Math.abs(edge - a);
-  const dot = m.crisp ? 3 * t : 7;
-  const line: CSSProperties = horiz
-    ? { left: lo, top: castle.y - t / 2, width: len, height: t }
-    : { left: castle.x - t / 2, top: lo, width: t, height: len };
+  // +1 when the plate lies toward larger x / y
+  const dir = side === "right" || side === "below" ? 1 : -1;
+  const ink = m.crisp ? m.border : m.loud;
+  const halo = m.plateHi;
+  // pixel: everything in whole art px (t); paper: a pen line at ~2.5 px
+  const u = m.crisp ? t : 1.25;
+  const a = horiz ? castle.x : castle.y;          // the castle end, along the line
+  const c = horiz ? castle.y : castle.x;          // the line's centre, across it
+  // a run along the line from `from` to `to`, `half` either side of the centre
+  const run = (from: number, to: number, half: number) => {
+    const lo = Math.min(from, to), len = Math.abs(to - from);
+    return horiz ? { x: lo, y: c - half, w: len, h: 2 * half } : { x: c - half, y: lo, w: 2 * half, h: len };
+  };
+  const dot = (half: number) => ({ x: castle.x - half, y: castle.y - half, w: 2 * half, h: 2 * half });
+  // the core and its pieces: the line, the notch's two steps at the plate's
+  // edge (3 then 2 art px either side), the dot (4 art px) at the castle
+  const core = [
+    run(a, edge, u),
+    run(edge - dir * u, edge, 3 * u),
+    run(edge - dir * 2 * u, edge - dir * u, 2 * u),
+  ];
+  const dotHalf = m.crisp ? 2 * u : 4.5;
+  type R = { x: number; y: number; w: number; h: number };
+  const rects = (list: R[], fill: string, grow: number) =>
+    list.map((r, i) => <rect key={i} x={r.x - grow} y={r.y - grow} width={r.w + 2 * grow} height={r.h + 2 * grow} fill={fill} />);
+  // the halo grows round the core, except into the plate (its border stays whole)
+  const haloOf = (r: R): R => {
+    const g = { x: r.x - u, y: r.y - u, w: r.w + 2 * u, h: r.h + 2 * u };
+    if (side === "right") { g.w -= u; }                 // plate to the right: no growth at the right end
+    else if (side === "left") { g.x += u; g.w -= u; }
+    else if (side === "below") { g.h -= u; }
+    else { g.y += u; g.h -= u; }
+    return g;
+  };
   return (
-    <div aria-hidden className="pointer-events-none absolute inset-0">
-      {/* a cream casing either side, like the map's ribbons, so the ink line
-          reads over dark roofs and lava as well as over the sea */}
-      <div className="absolute" style={{ ...line, background: m.border, boxShadow: `0 0 0 ${m.crisp ? t / 2 : 1}px ${m.plateHi}` }} />
-      <div className="absolute" style={{
-        left: castle.x - dot / 2, top: castle.y - dot / 2, width: dot, height: dot,
-        background: m.border, borderRadius: m.crisp ? 0 : "50%",
-        boxShadow: m.crisp ? `0 0 0 ${t}px ${m.plateHi}` : `0 0 0 1.5px ${m.plateHi}`,
-      }} />
-    </div>
+    <svg aria-hidden data-leader className="pointer-events-none absolute inset-0 h-full w-full overflow-visible" shapeRendering={m.crisp ? "crispEdges" : undefined}>
+      {/* halo pass under the core pass, so the cream never cuts the ink */}
+      {rects(core.map(haloOf), halo, 0)}
+      {m.crisp ? rects([dot(dotHalf)], halo, u) : <circle cx={castle.x} cy={castle.y} r={dotHalf + 2} fill={halo} />}
+      {rects(core, ink, 0)}
+      {m.crisp ? rects([dot(dotHalf)], ink, 0) : <circle cx={castle.x} cy={castle.y} r={dotHalf} fill={ink} />}
+      {/* the dot's bright pip: the model's spot, not just the line's end */}
+      {m.crisp ? rects([dot(u / 2)], halo, 0) : <circle cx={castle.x} cy={castle.y} r={1.6} fill={halo} />}
+    </svg>
   );
 }

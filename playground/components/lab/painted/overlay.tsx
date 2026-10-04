@@ -32,6 +32,10 @@ export interface OverlayProps {
   onSelect: (name: string) => void;
   onHover: (name: string | null) => void;
   onCritter: () => void;
+  /** image boxes drawn OVER the map (the "How it works" plate + its leader): a
+   * painter's plate partly under them keeps its blank cardstock (it hides the
+   * old lettering) but loses its name — never a half-covered label */
+  hard?: Box[];
 }
 
 const d = (pts: Pt[]) => pts.map((p, i) => `${i ? "L" : "M"}${p.x.toFixed(1)} ${p.y.toFixed(1)}`).join("");
@@ -53,8 +57,8 @@ function plateLines(text: string, maxW: number): string[] {
  * error never shows the old lettering): the real model name, or an honest
  * "no model yet" where the painter invented one. Acts as that model's tag.
  * Cut cardstock: a hard unblurred offset drop, a pressed inner rule. */
-function PaperPlate({ b, theme, sel, hov, dim, lit, onSelect, onHover }: {
-  b: BakedText; theme: Material; sel: boolean; hov: boolean; dim: boolean; lit: boolean;
+function PaperPlate({ b, theme, sel, hov, dim, lit, hard, onSelect, onHover }: {
+  b: BakedText; theme: Material; sel: boolean; hov: boolean; dim: boolean; lit: boolean; hard?: Box[];
   onSelect: (n: string) => void; onHover: (n: string | null) => void;
 }) {
   const pad = 4;
@@ -69,6 +73,8 @@ function PaperPlate({ b, theme, sel, hov, dim, lit, onSelect, onHover }: {
   const cx = b.box.x + b.box.w / 2, cy = b.box.y + b.box.h / 2;
   const x = cx - w / 2, y = cy - h / 2;
   const fill = sel ? theme.loud : hov ? theme.plateHi : "url(#pp-plate)";
+  const cut = !sel && !lit && (hard ?? []).some((o) => x < o.x + o.w && o.x < x + w && y < o.y + o.h && o.y < y + h);
+  if (cut) return <rect x={x} y={y} width={w} height={h} rx={3} fill="url(#pp-plate)" filter="url(#pp-grain)" aria-hidden />;
   return (
     // never dim with opacity: the painter's lettering underneath would show through
     <g className={name ? "cursor-pointer" : undefined} aria-hidden
@@ -295,7 +301,7 @@ export const PaintedOverlay = memo(function PaintedOverlay(p: OverlayProps) {
 
       {p.heal && map.baked.filter((b) => b.kind === "model" || b.kind === "invented").map((b, i) => (
         <PaperPlate key={`pl${i}`} b={b} theme={theme} sel={Boolean(b.name) && p.selected === b.name} hov={Boolean(b.name) && p.hovered === b.name}
-          dim={hasSel && !(b.name && p.lineageSet.has(b.name))} lit={hasSel && Boolean(b.name && p.lineageSet.has(b.name))}
+          dim={hasSel && !(b.name && p.lineageSet.has(b.name))} lit={hasSel && Boolean(b.name && p.lineageSet.has(b.name))} hard={p.hard}
           onSelect={p.onSelect} onHover={p.onHover} />
       ))}
 

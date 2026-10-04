@@ -4,7 +4,8 @@
 // sliding in from the right (the camera refits to the remaining width); phones:
 // the peek / half / full bottom sheet with a drag handle. "Open full diagram"
 // (or the map plate's Enlarge) takes over the whole stage with the mechanism
-// diagram and a way back. diagramOn="map": the desktop card is text only.
+// diagram and a way back. diagramOn="map": the desktop card is text only, so
+// the drawer narrows to DRAWER_W_MAP and the map gets the width back.
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { MechanismDiagram } from "@/components/lab/shared/anatomy2";
 import { displayName, type CardModel } from "@/components/lab/shared/card-model";
@@ -14,6 +15,11 @@ import type { Material } from "./material";
 
 export type Sheet = "peek" | "half" | "full";
 export const DRAWER_W = 440;
+/** diagramOn="map": the card is text only — 336 px keeps a ~290-px measure of
+ * 16-px body text (≈ 40 characters a line) and hands 104 px back to the map */
+export const DRAWER_W_MAP = 336;
+/** the desktop drawer's width for where the diagram lives (camera + plate placement read this) */
+export const drawerWidth = (diagramOn: "drawer" | "map" = "drawer") => (diagramOn === "map" ? DRAWER_W_MAP : DRAWER_W);
 
 const SNAP: Record<Sheet, number> = { peek: 0.2, half: 0.5, full: 0.88 };
 export function sheetHeight(s: Sheet, vh: number): number {
@@ -43,9 +49,11 @@ export interface DrawerProps {
 
 export function Drawer(p: DrawerProps) {
   const { m, card } = p;
+  const dw = drawerWidth(p.diagramOn);
+  const narrow = dw < DRAWER_W;
   const body = (
     <CardBody card={card} theme={m} still={p.still} onPick={p.onPick} stateOf={p.stateOf} isAtom={p.isAtom}
-      diagramWidth={p.mobile ? Math.max(240, Math.min(380, p.stageW - 40)) : DRAWER_W - 48}
+      diagramWidth={p.mobile ? Math.max(240, Math.min(380, p.stageW - 40)) : dw - 48}
       onOpenDiagram={() => p.setFullDiagram(true)}
       diagramOn={p.mobile ? "drawer" : p.diagramOn ?? "drawer"} onShowDiagram={p.onShowDiagram} />
   );
@@ -73,11 +81,11 @@ export function Drawer(p: DrawerProps) {
   if (!p.mobile) {
     return (
       <aside aria-label={`${displayName(card.name)} card`} className="absolute inset-y-0 right-0 z-20 flex flex-col overflow-y-auto"
-        style={{ width: DRAWER_W, background: sheetGround(m), color: m.ink, fontFamily: m.bodyFont,
+        style={{ width: dw, background: sheetGround(m), color: m.ink, fontFamily: m.bodyFont,
           borderLeft: `var(--ap, 2px) solid ${m.border}`,
           boxShadow: m.crisp ? `inset var(--ap) 0 0 ${m.rule}, calc(var(--ap) * -1) 0 0 ${m.shadow}` : `-3px 0 0 ${m.card ? "rgba(58,38,22,.62)" : m.shadow}` }}>
-        <div className="flex-none px-6 pt-4">{back}</div>
-        <div className="px-6 pb-8 pt-3">{body}</div>
+        <div className={`flex-none ${narrow ? "px-5" : "px-6"} pt-4`}>{back}</div>
+        <div className={`${narrow ? "px-5" : "px-6"} pb-8 pt-3`}>{body}</div>
       </aside>
     );
   }

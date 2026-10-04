@@ -4,9 +4,12 @@
 // Candidates: 8 compass slots next to the marker, then the same slots pushed
 // further out (drawn with a short leader). Score = overlap with placed tags,
 // markers and fixed plates; lowest wins, earlier (louder) tags choose first.
+// `hard` boxes (the map plate + its leader, drawn over the map) are never
+// covered, not even in part: a tag that cannot clear them is left out, unless
+// it is `must` (the selected model, its lineage), which reaches further out.
 import type { Box, Pt } from "./anchors";
 
-export interface TagSpec { name: string; text: string; at: Pt; w: number; h: number; priority: number }
+export interface TagSpec { name: string; text: string; at: Pt; w: number; h: number; priority: number; must?: boolean }
 export interface PlacedTag { name: string; text: string; box: Box; leader: boolean; at: Pt }
 
 const overlapArea = (a: Box, b: Box) =>
@@ -16,8 +19,10 @@ export function placeTags(specs: TagSpec[], opts: {
   markerR: number;
   obstacles: Box[];
   bounds: Box;
+  hard?: Box[];
 }): PlacedTag[] {
   const { markerR, obstacles, bounds } = opts;
+  const hard = opts.hard ?? [];
   const placed: PlacedTag[] = [];
   const markers: Box[] = specs.map((s) => ({ x: s.at.x - markerR, y: s.at.y - markerR, w: markerR * 2, h: markerR * 2 }));
   const order = [...specs].sort((a, b) => b.priority - a.priority);
@@ -29,7 +34,8 @@ export function placeTags(specs: TagSpec[], opts: {
       [g * 0.7 + s.w / 2, -(g * 0.7 + s.h / 2)], [-(g * 0.7 + s.w / 2), -(g * 0.7 + s.h / 2)],
     ];
     let best: { box: Box; score: number; leader: boolean } | null = null;
-    for (const [tier, push] of [[0, 1], [1, 1.9], [2, 2.8]] as const) {
+    const tiers: (readonly [number, number])[] = s.must && hard.length ? [[0, 1], [1, 1.9], [2, 2.8], [3, 3.8], [4, 5]] : [[0, 1], [1, 1.9], [2, 2.8]];
+    for (const [tier, push] of tiers) {
       for (const [i, [dx, dy]] of slots.entries()) {
         const px = dx === 0 ? 0 : Math.sign(dx) * (Math.abs(dx) + (push - 1) * s.h * 1.2);
         const py = dy === 0 ? 0 : Math.sign(dy) * (Math.abs(dy) + (push - 1) * s.h * 1.2);
@@ -39,10 +45,14 @@ export function placeTags(specs: TagSpec[], opts: {
         for (const p of placed) score += overlapArea(box, p.box) * 8;
         for (const [mi, m] of markers.entries()) if (specs[mi] !== s) score += overlapArea(box, m) * 12;
         for (const o of obstacles) score += overlapArea(box, o) * 4;
+        if (hard.some((o) => overlapArea(box, o) > 0)) score += 1e8;
         if (!best || score < best.score) best = { box, score, leader: tier > 0 };
       }
       if (best && best.score < 60) break; // clean slot found at this tier
     }
+    // the plate would cut it (or, with the plate up, it would sit on a placed
+    // tag): leave it out
+    if (!s.must && (best!.score >= 1e8 || (hard.length && placed.some((p) => overlapArea(best!.box, p.box) > 0)))) continue;
     placed.push({ name: s.name, text: s.text, box: best!.box, leader: best!.leader, at: s.at });
   }
   return placed;

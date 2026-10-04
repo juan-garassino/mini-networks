@@ -127,7 +127,12 @@ playground/ (repo root)  Next.js 16 + React 19 + TS + Tailwind v4 + Recharts +
                      side so the pair fits the visible map clear of the corner
                      plates and the lineage; Esc = enlarged → plate → deselect;
                      ?plate=0 starts closed; phones keep the diagram in the
-                     sheet; sky keeps it in its drawer via `diagramOn`);
+                     sheet; sky keeps it in its drawer via `diagramOn`; the
+                     text-only drawer is DRAWER_W_MAP 336 px, sky's 440 —
+                     camera + plate read drawerWidth(diagramOn); plate + leader
+                     + corner plates are HARD for labels: a name they would cut
+                     moves or is left out, except the selection + its lineage;
+                     paper keeps the plate off the painter's land titles);
                      one component tree, two materials (material.ts). The pixel
                      map is alive (life.ts → a 12-fps canvas above the focus
                      layer): water glints + foam, waterfalls, lava pulse with

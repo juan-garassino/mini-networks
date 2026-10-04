@@ -55,3 +55,19 @@ test("nothing fits → null; fixed still places the plate where it spills least"
   assert.deepEqual(p.at, { x: 80, y: 150 });
   assert.equal(p.side, "right");
 });
+
+test("block: the plate never touches a blocked map box when another placement fits", () => {
+  // a painted title right of the castle, where the plate would otherwise go
+  const block = [{ x: 110, y: 40, w: 300, h: 120 }];
+  const inp = base({ block });
+  const { p, r } = screenPlate(inp);
+  const b = { x: p.at.x + (block[0].x - inp.anchor.x) * p.k, y: p.at.y + (block[0].y - inp.anchor.y) * p.k, w: block[0].w * p.k, h: block[0].h * p.k };
+  assert.ok(!(r.x < b.x + b.w && b.x < r.x + r.w && r.y < b.y + b.h && b.y < r.y + r.h));
+});
+
+test("block: the leader never crosses a blocked box either (a name under the castle)", () => {
+  // a name plate just below the castle: the plate may not hang below it
+  const block = [{ x: 90, y: 104, w: 20, h: 10 }];
+  const p = composePlate(base({ block, keep: [{ pts: [{ x: 100, y: 60 }, { x: 160, y: 100 }, { x: 40, y: 100 }], weight: 5000 }] }))!;
+  assert.notEqual(p.side, "below");
+});

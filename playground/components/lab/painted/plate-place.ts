@@ -47,6 +47,9 @@ export interface PlateInput {
   keep: { pts: PPt[]; weight: number }[];
   /** leader length, CSS px */
   gap: number;
+  /** map-unit boxes the plate may not touch (paper: the painter's land titles,
+   * which can neither move nor hide); in `fixed` mode they count as spill */
+  block?: PBox[];
   /** paper: the camera may not show past the painting (map size, map units) */
   bounded?: { w: number; h: number };
   /** last resort: the camera is fixed and the castle sits here (CSS px); the
@@ -93,6 +96,8 @@ export function composePlate(inp: PlateInput): PlatePlan | null {
   inp.scales.forEach((k, step) => {
     // the castle where the land-centred framing puts it
     const c0 = { x: view.x + view.w / 2 + (a.x - lc.x) * k, y: view.y + view.h / 2 + (a.y - lc.y) * k };
+    // the blocked map boxes on screen, for a castle resting at (cx, cy)
+    const blocks = (cx: number, cy: number) => (inp.block ?? []).map((b) => ({ x: cx + (b.x - a.x) * k, y: cy + (b.y - a.y) * k, w: b.w * k, h: b.h * k }));
     const cb = { x: castle.x * k - inp.castlePad, y: castle.y * k - inp.castlePad, w: castle.w * k + 2 * inp.castlePad, h: castle.h * k + 2 * inp.castlePad };
     for (const side of SIDES) for (const slide of SLIDES) {
       const pr = plateRect(side, slide, castle, k, plate, gap);
@@ -123,13 +128,17 @@ export function composePlate(inp: PlateInput): PlatePlan | null {
           const ix = Math.max(0, Math.min(r.x + r.w, safe.x + safe.w) - Math.max(r.x, safe.x));
           const iy = Math.max(0, Math.min(r.y + r.h, safe.y + safe.h) - Math.max(r.y, safe.y));
           spill = (r.w * r.h - ix * iy) / 100;
-          for (const o of inp.avoid) {
+          for (const o of [...inp.avoid, ...blocks(cx, cy)]) {
             const ox = Math.max(0, Math.min(r.x + r.w, o.x + o.w) - Math.max(r.x, o.x)), oy = Math.max(0, Math.min(r.y + r.h, o.y + o.h) - Math.max(r.y, o.y));
             spill += (ox * oy) / 100;
           }
         } else {
           if (cx < lox - 1 || cx > hix + 1 || cy < loy - 1 || cy > hiy + 1) continue;
           if (inp.avoid.some((o) => hits(r, o, 8))) continue;
+          // the plate and its leader (castle → the plate's near edge)
+          const lead = side === "right" ? { x: cx, y: cy - 6, w: r.x - cx, h: 12 } : side === "left" ? { x: r.x + r.w, y: cy - 6, w: cx - r.x - r.w, h: 12 }
+            : side === "below" ? { x: cx - 6, y: cy, w: 12, h: r.y - cy } : { x: cx - 6, y: r.y + r.h, w: 12, h: cy - r.y - r.h };
+          if (blocks(cx, cy).some((o) => hits(r, o, 4) || hits(lead, o, 2))) continue;
         }
         // the castle (and its name) keeps off the corner plates too
         const cs = { x: cx + cb.x, y: cy + cb.y, w: cb.w, h: cb.h };
