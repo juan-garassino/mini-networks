@@ -5,7 +5,7 @@
 // sentence → animated anatomy + the idea → lineage mini-map (the party,
 // arrow-key navigable) → proof (gate, real curve, samples, Try it) →
 // pipelines (select one = its boat sails). Body 16px, ≤60ch.
-import { memo, useEffect, useState } from "react";
+import { memo, useEffect, useState, type CSSProperties } from "react";
 import type { CardModel } from "@/components/lab/shared/card-model";
 import { displayName, EVIDENCE_COPY } from "@/components/lab/shared/card-model";
 import { Anatomy } from "@/components/lab/shared/lesson/anatomy";
@@ -25,6 +25,14 @@ import { chromeSwatch, familyLabel, UI } from "./palette.ts";
 import s from "./hybrid.module.css";
 
 export interface PartyMember { name: string; role: "parent" | "child"; family: string; depth: number }
+
+/** Font size so the longest word of a title fits `room` px (pixel faces ≈ `em` px per char):
+ *  a model name never breaks inside a word. */
+function titleSize(text: string, room: number, em: number, max: number): CSSProperties {
+  const longest = Math.max(...text.split(/\s+/).map((w) => w.length));
+  const px = Math.max(18, Math.min(max, Math.floor(room / (em * longest))));
+  return { fontSize: px, lineHeight: `${px + 4}px`, overflowWrap: "normal", wordBreak: "normal" };
+}
 
 function fmt(v: number): string {
   if (Math.abs(v) >= 100) return v.toFixed(0);
@@ -160,7 +168,8 @@ export const LessonCard = memo(function LessonCard({
         <header className="flex items-start gap-3">
           <span className={s.portrait}><PixelEmblem name={card.name} scale={3} color={UI.gold} /></span>
           <div className="min-w-0 flex-1">
-            <h2 className={`${s.t30} break-words`}>{displayName(card.name)}</h2>
+            {/* the name never breaks inside a word: the longest word sets the size */}
+            <h2 className={s.t30} style={titleSize(displayName(card.name), 190, 0.66, 30)}>{displayName(card.name)}</h2>
             <p className={`${s.t14} ${card.state === "champion" ? s.lime : card.state === "provisional" ? s.gold : s.dim}`}>
               {EVIDENCE_COPY[card.state]}
             </p>

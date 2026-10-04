@@ -76,7 +76,9 @@ export const RegionMenu = memo(function RegionMenu({ title, rows, cursor, onPick
   /** one or two lines of help under the list (keyboard on desktop, map key on phone) */
   footer?: string;
   style?: React.CSSProperties;
-  /** phone overview: families as a two-column grid (the map gets the height) */
+  /** phone overview: families as a two-column grid (the map gets the height);
+   *  desktop lists them one per row so long names ("Representation") and their
+   *  counts line up in two clean columns */
   compact?: boolean;
   /** the header ribbon's cardstock colour (the family's, or gold for the family list) */
   ribbonColor?: string;
@@ -91,7 +93,7 @@ export const RegionMenu = memo(function RegionMenu({ title, rows, cursor, onPick
           return (
             <li key={r.key} role="none">
               <button type="button" role="menuitem"
-                className={`${s.row} ${touch ? s.rowTouch : ""} ${i === cursor ? s.rowHot : ""} ${compact ? s.t14 : r.kind === "family" ? s.t18 : s.t15} ${compact ? s.rowCompact : ""}`}
+                className={`${s.row} ${touch ? s.rowTouch : ""} ${i === cursor ? s.rowHot : ""} ${compact ? s.t14 : r.kind === "family" && !legend ? s.t18 : s.t15} ${compact ? s.rowCompact : ""}`}
                 onClick={() => onPick(r)} onMouseEnter={() => onHover(i)} onFocus={() => onHover(i)}>
                 {r.kind === "family" && <span className={s.swatch} style={{ background: chromeSwatch(r.family) }} />}
                 {r.kind === "model" && <PixelEmblem name={r.key} scale={1} color={r.atom ? UI.gold : UI.text} />}

@@ -44,7 +44,7 @@ function samplePts(pts: Pt[], step: number): Pt[] {
   if (pts.length) out.push(pts[pts.length - 1]);
   return out;
 }
-const MENU_W = 276;
+const MENU_W = 312;                     // fits "audio melspectrogram" + star + LV on one row
 const CARD_W = 380;
 const TITLE_H = 56;         // slim title plate incl. its card rim
 
@@ -772,10 +772,10 @@ export default function HybridPage() {
         )}
         {world && showMenu && landed && (
           <RegionMenu title={family ? familyLabel(family) : "Jump to a family"} ribbonColor={family ? chromeSwatch(family) : undefined} rows={menuRows} cursor={cursor}
-            onPick={pick} onHover={setCursor} touch={mobile} legend={!mobile && zoom === "overview" ? <MapKey /> : undefined} compact={zoom === "overview"}
+            onPick={pick} onHover={setCursor} touch={mobile} legend={!mobile && zoom === "overview" ? <MapKey /> : undefined} compact={zoom === "overview" && mobile}
             footer={mobile
               ? undefined
-              : family ? "Arrow keys choose, Enter opens, Esc goes back." : "Arrow keys choose a family, Enter visits it."}
+              : family ? "Arrow keys choose, Enter opens, Esc goes back." : "Arrow keys choose, Enter visits."}
             className={mobile
               ? zoom === "overview" ? "fixed inset-x-2 bottom-2 z-30 flex" : "fixed inset-x-2 bottom-2 z-30 flex max-h-[45%]"
               : "absolute left-4 z-20 flex max-h-[calc(100%-104px)]"}
