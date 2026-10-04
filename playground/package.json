@@ -7,7 +7,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "test": "node --test --experimental-strip-types --no-warnings \"lib/world/*.test.ts\" lib/lessons.test.ts \"components/lab/shared/eggs/*.test.ts\" \"components/lab/painted/*.test.ts\" \"components/lab/shared/anatomy2/diagrams/*.test.ts\""
+    "test": "node --test --experimental-strip-types --no-warnings \"lib/world/*.test.ts\" lib/lessons.test.ts \"components/lab/shared/eggs/*.test.ts\" \"components/lab/painted/*.test.ts\" \"components/lab/sky/*.test.ts\" \"components/lab/shared/anatomy2/diagrams/*.test.ts\""
   },
   "dependencies": {
     "@base-ui/react": "^1.6.0",

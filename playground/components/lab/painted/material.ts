@@ -28,6 +28,8 @@ export interface Material {
   signFont: string;
   bodyFont: string;
   crisp: boolean;       // shape-rendering crispEdges + square caps
+  /** the compass rose's outline + N (default: dark ink on pixel, the border on paper) */
+  roseInk?: string;
   radius: number;       // plate corner radius (image px at 1×)
   /** cut cardstock (paper only): a hard offset drop + a printed laid-paper
    * texture, both CSS-only, so every HTML plate reads as one stock */
@@ -35,35 +37,39 @@ export interface Material {
   evidence: Record<EvidenceState, { fill: string; stroke: string; dash?: string }>;
 }
 
-// The night material for /lab/sky: an antique celestial chart — indigo plates,
-// a gold rule, cream engraving ink, the paper map's typefaces.
+// The night material for /lab/sky: the pixel map's chrome after dark — the
+// same plates (1-art-px border, inner bevel, hard shadow, Pixelify, square
+// corners), cut from the night's own ramps (components/lab/sky/palette.ts):
+// indigo plates, a soft pastel-gold rim, cream ink. The evidence fills are the
+// sky's star sprites' mid tones, so the scale bar and legend speak the sky.
 const SKY: Material = {
   id: "sky",
   diagram: "pixel",
-  sea: "#0f1a3a",
-  plate: "#141f44",
-  plateHi: "#182650",
-  border: "#c9a24a",
-  ink: "#f2e8c9",
-  inkSoft: "#b7ad8f",
-  loud: "#c9a24a",
-  loudInk: "#121d3e",
-  road: "#e8c46a",
-  roadEdge: "#7a5a1a",
-  ring: "#ffd77a",
-  field: "#0c1430",
-  shadow: "rgba(0,0,0,.55)",
-  rule: "#3b4a7a",
-  tagFont: "var(--font-alegreya), Georgia, serif",
-  signFont: "var(--font-fell), Georgia, serif",
-  bodyFont: "var(--font-alegreya), Georgia, serif",
-  crisp: false,
-  radius: 2,
+  sea: "#100f2c",       // NIGHT[1], the open sky
+  plate: "#161838",
+  plateHi: "#191c42",
+  border: "#e2c48a",    // soft pastel gold
+  ink: "#ece6f6",
+  inkSoft: "#aaa6cc",
+  loud: "#e2c48a",
+  loudInk: "#141634",
+  road: "#f2d08e",      // pastel gold (compass points, highlights)
+  roadEdge: "#8a5a2c",
+  ring: "#ffe2b0",
+  field: "#0d0c26",
+  shadow: "#06051a",
+  rule: "#2c3068",      // the inner bevel: one step up the night ramp
+  roseInk: "#ece6f6",   // the compass's outline + N: cream, the night has no dark ink to spare
+  tagFont: "var(--font-pixel), ui-monospace, monospace",
+  signFont: "var(--font-pixel), ui-monospace, monospace",
+  bodyFont: "var(--font-pixel), ui-monospace, monospace",
+  crisp: true,
+  radius: 0,
   evidence: {
-    champion: { fill: "#ffd166", stroke: "#7a5a1a" },
-    provisional: { fill: "#141f44", stroke: "#c9a24a", dash: "2.5 2" },
-    trained: { fill: "#9fd3c7", stroke: "#3e7a70" },
-    untrained: { fill: "#5c6482", stroke: "#2a3150" },
+    champion: { fill: "#f2c25e", stroke: "#8a4e2c" },     // GOLD 3 · 1
+    provisional: { fill: "#191c42", stroke: "#aaa4e4", dash: "2 2" }, // LILAC 2
+    trained: { fill: "#8edcb4", stroke: "#246a6a" },      // MINT 3 · 1
+    untrained: { fill: "#8a8eb2", stroke: "#4a4e74" },    // GREY 2 · 1
   },
 };
 

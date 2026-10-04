@@ -120,17 +120,28 @@ playground/ (repo root)  Next.js 16 + React 19 + TS + Tailwind v4 + Recharts +
                      Labels open in three levels: whole map = land signs only
                      (hover names a model), in a land = that land's names, a
                      model = its card (drawer) + named lineage.
-                     /lab/sky = the Celestial Zoo (spec 2026-10-02-sky-atlas): an
-                     antique star atlas on lib/world positions — models are stars
-                     (glyph = evidence), families are constellations whose engraved
-                     figures are built FROM their actual stars (components/lab/sky/
-                     figures.ts: eye, serpent, furnace, mirrors, lattice, arrow),
-                     lineage = constellation lines, a selected star's pipelines =
-                     one dotted arc per partner; a graduated neatline, conic
-                     graticule + ecliptic frame the plate; sky/life.tsx twinkles
-                     field stars + a meteor (≤10 fps, frame 0 under still/reduced
-                     motion); reuses the painted four corners + drawer in the
-                     `sky` material (material.ts).
+                     /lab/sky = the Night Map (the Celestial Zoo; reworked
+                     2026-10-04 from the vector atlas): the zoo after dark as a
+                     pixel-art star chart on lib/world positions. sky/bake.ts bakes
+                     the sky once (1 sky px = 4 world px, pixelated): night ramp,
+                     dithered Milky Way margins, field stars, and one Bayer-dithered
+                     nebula per family on its hue-shifted ramp (palette.ts) — the
+                     nebula IS the family (bake.test.ts: every star inside its own).
+                     A screen canvas on a 2-px art grid (paint.ts) draws the evidence
+                     sprites (sprites.ts: sparkle/gem/broken ring/point, atoms large),
+                     1-px asterism lines stopping short of their stars (overview:
+                     primary in-family only; focus adds dashed secondary/cross),
+                     dotted pipeline arcs, the broken selection ring, and the 12-fps
+                     life (motion.ts: twinkle, champion glint, parent→child comets,
+                     meteor; frame 0 under still/reduced motion). Night sign plaques
+                     (16×16 emblem + FAMILY count) sit on each nebula's top-left
+                     (taken: the nearest free spot whose closest star is their own);
+                     off-screen pipeline partners get named edge chevrons. Portrait
+                     phones turn the chart a quarter and fit the stars, so the sky
+                     fills the screen. Chrome:
+                     the painted four corners + drawer in the `sky` material
+                     (Pixelify, crisp), Day | Night tabs. ?specimen=1 = the sprite /
+                     nebula / emblem specimen sheet.
                      /lab/designs = the design board (lib/designs.ts: seven designs —
                      periodic table ×3 skins via /?edition=<id>, paper maps ×4, pixel
                      maps ×2 as full bands, then atlas plates, Network Atlas, Kawaii

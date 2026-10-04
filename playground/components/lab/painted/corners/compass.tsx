@@ -22,7 +22,7 @@ export function Compass({ m, unit, onPan, onWhole, onZoom, canIn, canOut, whole 
   whole: boolean;
 }) {
   const size = N * unit;
-  const ink = m.crisp ? "#3a1d2a" : m.border;
+  const ink = m.roseInk ?? (m.crisp ? "#3a1d2a" : m.border);
   const dark = m.border;            // maroon / sepia halves
   const light = m.plateHi;          // cream halves
   const gold = m.road;

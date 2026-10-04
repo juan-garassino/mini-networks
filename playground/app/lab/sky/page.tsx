@@ -1,8 +1,9 @@
-import { SkySkin } from "@/components/lab/sky/sky-skin";
+import { SkyRoute } from "@/components/lab/sky/route";
 
-// /lab/sky — the Celestial Zoo: an antique star atlas of the model zoo.
-// Families are constellations (with figures), models are stars sized by
-// evidence, lineage is the constellation lines. ?zoom=…&focus=…&still=1&ui=0
+// /lab/sky — the Night Map (the Celestial Zoo): the model zoo after dark, as a
+// pixel-art star chart. Families are nebulae, models are stars (sprite =
+// evidence), lineage is the asterism lines. ?zoom=…&focus=…&still=1&ui=0,
+// ?specimen=1 for the specimen sheet.
 export default function SkyPage() {
-  return <SkySkin />;
+  return <SkyRoute />;
 }
