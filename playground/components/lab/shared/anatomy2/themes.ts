@@ -1,10 +1,10 @@
 // Two looks for the same truthful structure. Every diagram paints ONLY with
 // these tokens, so a theme is a palette swap plus a couple of flags.
 //
-// pixel — the owner's reference (2026-09-29): near-black ground, one royal-blue
-//         accent for the network, dim slate dotted wiring, a pink loss
-//         diamond. Data (images, noise, heat) uses an 8-step indigo→ember→cream
-//         ramp so it never competes with the blue of the network.
+// pixel — pastel on plum dusk (2026-10-04, was royal blue on near-black):
+//         periwinkle network, dim lilac dotted wiring, mint for the introduced
+//         idea, a rose loss diamond. Data (images, noise) uses an 8-step
+//         plum→rose→peach→cream ramp; attention/similarity a periwinkle heat.
 // paper — the same drawing on a cardboard panel: cut-paper blocks with a hard
 //         offset shadow, ink wiring, data printed in ink on cream stock.
 
@@ -33,22 +33,26 @@ export interface Theme {
 
 export const THEMES: Record<ThemeName, Theme> = {
   pixel: {
+    // 2026-10-04 owner: "a palette more pastel" — the same roles, softened:
+    // a plum-dusk ground, periwinkle network, mint for the one introduced
+    // idea, a rose loss, and a plum→rose→peach→cream data ramp that sits
+    // next to the painted map's parchment instead of shouting over it.
     name: "pixel",
-    ground: "#0a0c12",
-    panel: "#0e121c",
-    frame: "#26324d",
-    wire: "#2a3754",
-    wireHot: "#6f8fe8",
-    accent: "#1f45c4",
-    accentHi: "#4a78ff",
-    accentLo: "#132c85",
-    text: "#6a7898",
-    textDim: "#3d4966",
-    loss: "#e8315b",
-    lossHi: "#ff9ab2",
+    ground: "#1c1a2b",
+    panel: "#24223a",
+    frame: "#46435f",
+    wire: "#4b4868",
+    wireHot: "#9fe6cf",
+    accent: "#8c9fe6",
+    accentHi: "#c6d0fa",
+    accentLo: "#5d6aa8",
+    text: "#b3aecb",
+    textDim: "#726d8e",
+    loss: "#f4a0b0",
+    lossHi: "#ffd6de",
     shadow: null,
-    ramp: ["#0d0b24", "#271457", "#4f1a7a", "#86267a", "#c23d63", "#ec6a3f", "#f8a93f", "#fde9a8"],
-    heat: ["#0e121c", "#15214a", "#1c3187", "#2448c4", "#3d6cf5", "#79a0ff", "#b9ccff", "#eef3ff"],
+    ramp: ["#1f1b33", "#3b2f5c", "#5e4682", "#8a5f9e", "#b97fa8", "#e0a3a8", "#f4c9a8", "#fdeccb"],
+    heat: ["#24223a", "#2e3358", "#3c4a80", "#5267a8", "#7389cc", "#9eb0e6", "#cad5f6", "#eef2ff"],
   },
   paper: {
     name: "paper",

@@ -71,6 +71,32 @@ sits under the card. Inside the SVG only a footer legend (`"1 bar = 32
 channels   4 blocks, 4 heads…"`, `"map: dark = 0 after ReLU…"`) and short
 honesty notes. Prose paragraphs belong in `truth`, not in eight `PText` rows.
 
+## 3b. Alignment (owner, 2026-10-04: "things should be a bit more aligned")
+
+The drawing reads as a printed plate, not a scatter. Before shipping, every
+mark must sit on one of a few shared lines:
+
+- **Rows are shared.** Every label of the same kind in a view sits on ONE
+  baseline: all channel subscripts (`_{32}`, `_{128}`, `attn`) on one `LABEL_Y`
+  row, all thumb captions on one row under the thumbs, all column headers on
+  one header row. Never stagger a label to dodge a neighbour — move the
+  neighbour or shorten the text.
+- **Blocks share edges per level.** Bars at the same resolution share top AND
+  bottom; a U-Net's levels step by a constant `dy`, and encoder/decoder bars
+  of one level are mirror images on the same rows.
+- **Thumbs share a row.** Input and output thumbs (and their frames) have the
+  same `y`, the same size and the same caption row; a hot Frame is drawn at
+  exactly `x−2, y−2, TH+4` on every thumb that gets one.
+- **Captions start at their object's left edge** (or centre on it for a
+  column); never at an arbitrary x.
+- **Wires are orthogonal and land on centres.** Bus lines run on whole rows;
+  a branch drops vertically onto the centre of the block it feeds; skips are
+  rectangles, not slopes, unless the slope IS the data (a U-Net's descent).
+- **Spacing is a rhythm.** Gaps between consecutive blocks are equal unless a
+  gap means something (a resolution change); a size step is a constant.
+- Use named constants (`ROW_LABEL`, `ROW_THUMB`, `LEVEL_Y[l]`) instead of
+  per-mark literals, so alignment is structural.
+
 ## 4. Card vs full
 
 The card is the one memorable shape; the full view explains it.
@@ -136,7 +162,7 @@ this; `T.accent` + the note is the honest reading.
   none. The sole literal is the Diamond's 1-px `#ffffff` core. The other
   `"#ffffff"` uses (transformer/recur ok-glyphs, gnn labelled nodes, deepseek
   window text) are drift — on paper they are white boxes on cream.
-- Data uses `ramp` (−1..1, indigo→ember→cream) or `heat` (0..1); the network
+- Data uses `ramp` (−1..1, plum→rose→peach→cream in pixel) or `heat` (0..1); the network
   uses the `accent` trio; wiring the `wire` pair; `loss`/`lossHi` the
   objective. Never draw data in accent blue, never draw a block in the ramp.
   Accepted exception: gnn's four communities borrow `accentHi, loss, ramp[6],
@@ -216,3 +242,6 @@ expert's list):
     card does not animate.
 13. Honesty caveats that change the reading are `T.loss` text; provenance
     notes are `textDim` — and the same tier gets the same weight everywhere.
+14. Aligned (§3b): labels of a kind share one baseline, thumbs share a row,
+    same-level blocks share top and bottom, wires are orthogonal and land on
+    centres, block gaps are a constant rhythm.
