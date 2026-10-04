@@ -65,12 +65,12 @@ export interface Encoding { mark: string; encodes: string; source: string }
 
 export const ENCODING: Encoding[] = [
   // ── region view = the family's clearing scene (owner reference 2026-09-29) ──
-  { mark: "clearing scene (canopy frame, glowing stage, biome trees)", encodes: "the family you entered; tree kind + palette = its biome (meadow, palms, puff/lava, snowy pines, crystals, acacias)", source: "region family → biomeOf()" },
+  { mark: "clearing scene (canopy frame, glowing stage, biome trees)", encodes: "the family you entered; tree kind + palette = its biome (meadow, palms, puff/lava, snowy pines, crystals, acacias); no canopy ever stands over a model or its name", source: "region family → biomeOf()" },
   { mark: "little paper character on a disc", encodes: "a derived model; body = family colour, belly emblem = species; disc = evidence (gold+star champion, blue trained, white hollow untrained, pencil provisional)", source: "world.nodes + evidenceState()" },
   { mark: "mechanism landmark in the clearing", encodes: "an atom (its own landmark)", source: "AtomLandmark(name)" },
   { mark: "character positions", encodes: "the model's world position, squashed into the clearing (same map for all)", source: "sceneLayout(world, family).map" },
   { mark: "stepping stones", encodes: "builds-on roads inside the family (dotted stones = the walk back to the atom)", source: "world.roads (both ends in family)" },
-  { mark: "stones leaving through the trees + signpost 'To X'", encodes: "builds-on edges to another family, toward where it lies on the map; click to go there", source: "world.roads (cross-family) + camera.regions" },
+  { mark: "stones leaving through the trees + signpost 'To X'", encodes: "builds-on edges to another family, toward where it lies on the map (nudged along the rim so no board stands on a model; on a phone the boards stack under the clearing); click to go there", source: "world.roads (cross-family) + camera.regions" },
   { mark: "mushroom-tree, twin pines, hollow trunk, ferns, flowers, tufts", encodes: "nothing — clearing dressing in free space only (round-3 brief allows biome dressing)", source: "sceneLayout props" },
   { mark: "dark vignette", encodes: "nothing — frames the stage", source: "—" },
   // ── round 2/3 marks ──

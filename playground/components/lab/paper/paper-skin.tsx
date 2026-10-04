@@ -41,21 +41,46 @@ const MAX_NODE_SCALE = 1.6;           // screen px per world px in the node view
 const DIM = "rgba(24,32,52,0.27)";    // node view: everything off the family tree steps back one value
 
 /** Scene tags: below each member, else above it, else culled; focus first. */
+/** A scene name tag's width: Fredoka ≈ 0.47 em per glyph (0.53 for the bold 16px atom
+ *  names) + the chip's padding. The
+ *  chip is drawn at exactly this width, so the placer's boxes are what you see
+ *  (a tag beside a body hugs it, a tag below is centred on it). */
+const sceneTagW = (text: string, f: number) => Math.ceil((f >= 16 ? 0.53 : 0.47) * f * text.length + 22);
+
 function placeSceneTags(tags: { name: string; atom: boolean; at: Pt; text: string }[], toS: (p: Pt) => Pt,
   focus: string | null, vp: { w: number; h: number }, blocks: Box[] = []) {
   const out: { t: (typeof tags)[number]; p: Pt }[] = [];
   const boxes: Box[] = [...blocks];
+  const hits = (b: Box, o: Box) => b.x < o.x + o.w + 3 && o.x < b.x + b.w + 3 && b.y < o.y + o.h + 2 && o.y < b.y + b.h + 2;
+  // every member's standing body (critter or landmark) in screen px: a tag may
+  // never sit on another model (it would name the wrong one)
+  const body = (t: (typeof tags)[number]): Box => {
+    const foot = t.at.y - (t.atom ? 14 : 16), hw = t.atom ? 58 : 36, top = t.atom ? 140 : 88;
+    const a = toS({ x: t.at.x - hw, y: foot - top }), b = toS({ x: t.at.x + hw, y: foot + 4 });
+    return { x: a.x, y: a.y, w: b.x - a.x, h: b.y - a.y };
+  };
+  const bodies = new Map(tags.map((t) => [t.name, body(t)]));
   const order = [...tags].sort((a, b) => Number(b.name === focus) - Number(a.name === focus) || Number(b.atom) - Number(a.atom));
   for (const t of order) {
-    const f = t.atom ? 16 : 14, w = 0.56 * f * t.text.length + 18, h = 26;
-    const below = toS(t.at), above = toS({ x: t.at.x, y: t.at.y - (t.atom ? 150 : 84) });
-    for (const p of [below, above]) {
-      const b = { x: p.x - w / 2, y: p.y, w, h };
-      if (b.x < 8 || b.x + w > vp.w - 8 || b.y < 8 || b.y + h > vp.h - 8) continue;
-      if (boxes.some((o) => b.x < o.x + o.w + 3 && o.x < b.x + b.w + 3 && b.y < o.y + o.h + 2 && o.y < b.y + b.h + 2)) continue;
-      boxes.push(b); out.push({ t, p });
-      break;
-    }
+    const f = t.atom ? 16 : 14, w = sceneTagW(t.text, f), h = 26;
+    const own = bodies.get(t.name)!;
+    // below the foot first, then hugging the body's side at foot level, then above the head
+    const feet = own.y + own.h - h - 6;
+    const cands = [
+      { x: toS(t.at).x - w / 2, y: toS(t.at).y },
+      { x: own.x + own.w + 2, y: feet },
+      { x: own.x - w - 2, y: feet },
+      { x: own.x + own.w / 2 - w / 2, y: own.y - h - 4 },
+    ];
+    const fits = (b: Box) => b.x >= 8 && b.x + w <= vp.w - 8 && b.y >= 8 && b.y + h <= vp.h - 8;
+    const gap = (a: Box, o: Box) => Math.hypot(Math.max(0, o.x - (a.x + a.w), a.x - (o.x + o.w)), Math.max(0, o.y - (a.y + a.h), a.y - (o.y + o.h)));
+    // free of tags and bodies, and unmistakably closer to its own model than to any other
+    const free = (b: Box) => !boxes.some((o) => hits(b, o)) && ![...bodies].some(([n, o]) => n !== t.name && (hits(b, o) || gap(b, o) < gap(b, own) + 10));
+    const pick = cands.map((c) => ({ ...c, w, h })).find((b) => fits(b) && free(b))
+      // no clean spot: keep the name under its own model rather than drop it
+      ?? cands.map((c) => ({ ...c, w, h })).find((b) => fits(b) && !boxes.some((o) => hits(b, o)));
+    if (!pick) continue;
+    boxes.push(pick); out.push({ t, p: { x: pick.x + w / 2, y: pick.y } });
   }
   return out;
 }
@@ -608,13 +633,13 @@ export function PaperSkin() {
             })).map(({ t, p }) => {
               const hot = t.name === focus;
               const f = t.atom ? 16 : 14;
-              const w = 0.56 * f * t.text.length + 18;
+              const w = sceneTagW(t.text, f);
               const muted = zoom === "node" && kin && !kin.names.includes(t.name);
               return (
                 <button key={t.name} type="button" onClick={() => select(t.name)}
                   onFocus={() => setHovered(t.name)} onBlur={() => setHovered(null)}
                   className={`${styles.chip} absolute whitespace-nowrap rounded-md px-2 leading-6 focus-visible:outline-3 focus-visible:outline-[#2B2118]`}
-                  style={{ left: p.x - w / 2, top: p.y, fontSize: f, fontWeight: t.atom ? 600 : 500,
+                  style={{ left: p.x - w / 2, top: p.y, width: w, textAlign: "center", fontSize: f, fontWeight: t.atom ? 600 : 500,
                     background: hot ? PAPER.ink : PAPER.die, color: hot ? PAPER.die : PAPER.ink, opacity: muted ? 0.6 : 1 }}>
                   {t.text}
                 </button>

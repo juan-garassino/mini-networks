@@ -68,8 +68,8 @@ export interface SceneLayout {
 export function sceneLayout(world: World, family: string, aspect: number): SceneLayout {
   const H = SCENE_H, W = Math.round(H * Math.max(0.4, aspect));
   const phone = aspect < 0.8;
-  const cx = W / 2, cy = H * (phone ? 0.5 : 0.53);
-  const rx = W * (phone ? 0.44 : 0.36), ry = H * (phone ? 0.38 : 0.36);
+  const cx = W / 2, cy = H * (phone ? 0.44 : 0.53);
+  const rx = W * (phone ? 0.44 : 0.36), ry = H * (phone ? 0.35 : 0.36);
   const nodes = world.nodes.filter((n) => n.family === family);
   const xs = nodes.map((n) => n.center.x), ys = nodes.map((n) => n.center.y);
   let x0 = Math.min(...xs), x1 = Math.max(...xs), y0 = Math.min(...ys), y1 = Math.max(...ys);
@@ -118,13 +118,39 @@ export function sceneLayout(world: World, family: string, aspect: number): Scene
   }
   const home = world.camera.regions[family];
   const exits: SceneExit[] = [];
-  for (const [fam, from] of byFam) {
+  // a signboard's footprint (scene units; base at `at`), as paper-skin sizes it
+  const signHalf = (fam: string) => ((11.2 * (familyName(fam).length + 3) + 28) * 1.1) / 2;
+  const signBox = (fam: string, p: Pt) => ({ x0: p.x - signHalf(fam), x1: p.x + signHalf(fam), y0: p.y - 62, y1: p.y + 6 });
+  // a member's body + its name tag below (so a sign never stands on a model)
+  const onMember = (bx: { x0: number; x1: number; y0: number; y1: number }) => members.some((m) => {
+    const hw = m.node.atom ? 70 : 46;
+    return bx.x0 < m.at.x + hw && m.at.x - hw < bx.x1 && bx.y0 < m.at.y + 44 && m.at.y - (m.node.atom ? 150 : 96) < bx.y1;
+  });
+  const overlaps = (a: ReturnType<typeof signBox>, b: ReturnType<typeof signBox>) => a.x0 < b.x1 + 12 && b.x0 < a.x1 + 12 && a.y0 < b.y1 + 8 && b.y0 < a.y1 + 8;
+  const taken: ReturnType<typeof signBox>[] = [];
+  const fams = [...byFam.keys()].filter((f) => world.camera.regions[f] && home);
+  fams.forEach((fam, i) => {
+    const from = byFam.get(fam)!;
     const b = world.camera.regions[fam];
-    if (!b || !home) continue;
     const ang = Math.atan2((b.y + b.h / 2) - (home.y + home.h / 2), (b.x + b.w / 2) - (home.x + home.w / 2));
-    const raw = { x: cx + Math.cos(ang) * rx * 0.97, y: cy + Math.sin(ang) * ry * 0.95 };
+    const hw = signHalf(fam);
     // keep the whole signboard on screen and clear of the HUD corner
-    const at = { x: Math.max(120, Math.min(W - 120, raw.x)), y: Math.max(170, Math.min(H - 40, raw.y)) };
+    const clamp = (p: Pt) => ({ x: Math.max(hw + 16, Math.min(W - hw - 16, p.x)), y: Math.max(170, Math.min(H - 24, p.y)) });
+    let at: Pt;
+    if (phone) {
+      // a phone is too narrow for rim signs: they stand in a column under the clearing
+      at = { x: cx, y: H - 20 - i * 60 };
+    } else {
+      // the rim point toward that family, nudged along the rim (then outward) until
+      // the board stands clear of every model and every other board
+      const cands: Pt[] = [];
+      for (const e of [0.97, 1.08, 1.18]) for (const d of [0, 0.14, -0.14, 0.28, -0.28, 0.42, -0.42]) {
+        cands.push(clamp({ x: cx + Math.cos(ang + d) * rx * e, y: cy + Math.sin(ang + d) * ry * e }));
+      }
+      at = cands.find((p) => !onMember(signBox(fam, p)) && !taken.some((t) => overlaps(t, signBox(fam, p))))
+        ?? cands.find((p) => !taken.some((t) => overlaps(t, signBox(fam, p)))) ?? cands[0];
+    }
+    taken.push(signBox(fam, at));
     const pts: Pt[] = [];
     for (const m of [...new Set(from)]) {
       const src = members.find((x) => x.node.name === m)!.at;
@@ -132,7 +158,7 @@ export function sceneLayout(world: World, family: string, aspect: number): Scene
       for (let d = 34; d < s.length - 10; d += 32) pts.push(s.at(d / s.length));
     }
     exits.push({ family: fam, at, from, stones: pts });
-  }
+  });
 
   // canopy ring: fill the whole frame outside the stage, big near the edges
   const trees: SceneLayout["trees"] = [];
@@ -155,7 +181,11 @@ export function sceneLayout(world: World, family: string, aspect: number): Scene
   }
   // keep exit paths open: no tree on an exit
   const clearOf = (p: Pt) => exits.every((x) => Math.abs(p.x - x.at.x) > 150 || p.y < x.at.y - 150 || p.y > x.at.y + 190);
-  const keptTrees = trees.filter(clearOf).sort((a, b) => a.y - b.y);
+  // nor over a model: a canopy is ~150·s tall above its foot and ~120·s wide, and
+  // a model's body + tag must stay readable (the clearing opens a glade instead)
+  const clearOfMembers = (t: { x: number; y: number; s: number }) => members.every((m) =>
+    Math.abs(m.at.x - t.x) > 62 * t.s + 40 || m.at.y + 48 < t.y - 150 * t.s || m.at.y - 60 > t.y + 10);
+  const keptTrees = trees.filter((t) => clearOf(t) && clearOfMembers(t)).sort((a, b) => a.y - b.y);
 
   // dressing in free space near the rim (never on a member, stone or exit)
   const solids: Pt[] = [...members.map((m) => m.at), ...stones.flatMap((s) => s.pts), ...exits.flatMap((x) => [x.at, ...x.stones])];
