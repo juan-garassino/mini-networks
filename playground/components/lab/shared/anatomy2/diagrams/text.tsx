@@ -352,10 +352,15 @@ function Seq2SeqDiagram({ theme: T, still, keys: keysRef }: { theme: Theme; stil
       <rect x={0} y={0} width={TEXT_VIEW.w} height={TEXT_VIEW.h} fill={T.ground} />
 
       {/* headers: two shared rows */}
-      <PText x={EX.glyph} y={S_HDR1} text={`encoder: ${NE} src chars`} fill={T.textDim} />
+      <PText x={EX.glyph} y={S_HDR1} text={`encoder: ${NE} chars, no mask`} fill={T.textDim} />
       <PText x={EX.glyph} y={S_HDR2} text="src" fill={T.textDim} />
-      <PText x={EX.blocks[0]} y={S_HDR2} text="1" fill={T.textDim} />
-      <PText x={EX.blocks[0] + E_FFN} y={S_HDR2} text="2" fill={T.textDim} />
+      {/* encoder sub-layers numbered as the decoder's: 1 attn, 3 ffn (an encoder has no 2, no cross) */}
+      {EX.blocks.map((x) => (
+        <g key={x}>
+          <PText x={x} y={S_HDR2} text="1" fill={T.textDim} />
+          <PText x={x + E_FFN} y={S_HDR2} text="3" fill={T.textDim} />
+        </g>
+      ))}
       <PText x={EX.ln - 2} y={S_HDR2} text="LN" fill={T.textDim} />
       <PText x={EX.bus - 4} y={S_HDR2} text="mem" fill={T.wireHot} />
       <PText x={DX.glyph} y={S_HDR1} text={`decoder: tgt[0..${ND - 1}]`} fill={T.textDim} />

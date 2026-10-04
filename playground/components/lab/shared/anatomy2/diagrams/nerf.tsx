@@ -17,7 +17,8 @@
 // the 200 M samples (nerf-ray.ts, node-tested), and γ of its entry point. NOT
 // SHOWN (no local nerf checkpoint): the MLP's weights, its σ̂/ĉ, the predicted
 // view, the loss value. wireHot = only the introduced idea: the hot ray, its
-// sample strip's weights, the Σ compositing node and the one target pixel.
+// sample strip's weights (+ the σ>0 run bar and its Σw), the Σ compositing
+// node and the one target pixel.
 // The voxels feed ONLY the GT views — no wire runs from the slab to the model:
 // the MLP's input point comes off the ray (p = o + t·d).
 import { useMemo, type MutableRefObject, type ReactNode } from "react";
@@ -100,19 +101,21 @@ const sxT = (t: number) => EX + Math.round(t * H_DIR * K);
 const syT = (t: number) => EY + Math.round(t * V_DIR * K);
 // strip: sample i at x = SX + i (1 px = 1 of the 200 M samples)
 const SX = 232, LBL_X = 222;
-const ROW = { head: 10, axis: 20, tick: 29, ray: 34, wTop: 38, wBase: 61, tTop: 66, tBot: 79, a: 84, s: 94, c: 104, note: 112 };
+const ROW = { head: 10, axis: 20, tick: 29, ray: 34, wTop: 38, wBase: 61, run: 63, tTop: 66, tBot: 79, a: 84, s: 94, c: 104, note: 112 };
 const LANE = 6;
 const XE = SX + NERF_HOT.entry; // 319: the entry sample's column — the point p leaves the strip here
 const P_RUN_Y = 142; // p = o + t·d runs left along this row to the MLP's input cells
 // right: Σ, C, the GT view, the loss
-const SIG = { x: 447, y: 50 };
-const CC = { x: 458, y: 47 };
-const VIEW = { x: 470, y: 32 };
-const DIA = { x: 502, y: 112 };
+const SIG = { x: 445, y: 50 };
+const C_CELL = 11; // the payoff pixel: as big as Σ, so Σ → C reads as the result
+const CC = { x: 456, y: SIG.y - (C_CELL - 1) / 2 }; // centred on Σ's row
+const VIEW = { x: 472, y: 32 };
+const DIA = { x: VIEW.x + 32, y: 112 }; // under the view's centre
 const RAIL_X = 542, RAIL_Y = 236;
 // MLP lane
 const PT_X = 98, GAM_X = 118, CY2 = 200, LABEL_Y = 228;
 const PT_ROWS = [180, 194, 208];
+const GAM_H = 8, GAM_DY = (12 - GAM_H) / 2; // γ cells: 5×8, centred on the 12-px point cells' rows
 const PT_CX = PT_X + 6; // 104: centre of the point cells
 const GROUPS = [196, 222, 248, 274];
 const BAR_H = 36; // an MLP has no resolution: one constant height, quieter than the renderer
@@ -142,6 +145,10 @@ export function NerfDiagram({ theme, still }: { theme: Theme; still: boolean }) 
   const aRuns = runs(ray.alpha.map((a) => heatIndex(a)));
   const sRuns = runs(ray.sigma.map((s) => (s > 0 ? 5 : 0)));
   const cRuns = runs(ray.layer.map((l) => (l < 0 ? -1 : rampIndex(layerV(l)))));
+  // the σ>0 run: every sample that carries weight (87–123 on the hot ray), and how much it carries
+  const run0 = ray.sigma.findIndex((s) => s > 0);
+  const run1 = ray.sigma.length - 1 - [...ray.sigma].reverse().findIndex((s) => s > 0);
+  const runW = ray.w.slice(run0, run1 + 1).reduce((a, b) => a + b, 0);
   const eyeP = { x: RING.x + Math.round(RING.orbit * Math.cos((NERF_HOT.az * Math.PI) / 180)), y: RING.y - Math.round(RING.orbit * Math.sin((NERF_HOT.az * Math.PI) / 180)) };
   const entP = { x: RING.x + Math.round(NERF_HOT.p[0] * 14), y: RING.y - Math.round(NERF_HOT.p[1] * 14) };
   const orbitD = Array.from({ length: 60 }, (_, k) => {
@@ -184,6 +191,11 @@ export function NerfDiagram({ theme, still }: { theme: Theme; still: boolean }) 
       {/* w = T·α (hot): where the ray's colour comes from — its own track, drained by Σ */}
       <rect x={SX} y={ROW.wTop} width={S} height={ROW.wBase - ROW.wTop + 1} fill={T.panel} />
       <path d={wPath} fill={T.wireHot} />
+      {/* the run bar: all of w lives in the σ>0 samples — Σw is the whole pixel */}
+      <rect x={SX + run0} y={ROW.run} width={run1 - run0 + 1} height={1} fill={T.wireHot} />
+      {/* its caption sits just past the bar's end, bottom row on the track's base, clear of the →Σ wire */}
+      <PText x={SX + run1 + 5} y={ROW.wBase - 16} text={`Σw ${runW.toFixed(2)}`} fill={T.wireHot} />
+      <PText x={SX + run1 + 5} y={ROW.wBase - 6} text={`in ${run1 - run0 + 1} samples`} fill={T.wireHot} />
       {/* T: what is left of the ray */}
       <rect x={SX} y={ROW.tTop} width={S} height={ROW.tBot - ROW.tTop + 1} fill={T.panel} />
       <path d={tPath} fill={T.heat[5]} />
@@ -205,9 +217,9 @@ export function NerfDiagram({ theme, still }: { theme: Theme; still: boolean }) 
       <Wire pts={[[SX + S + 1, ROW.c + 2], [SIG.x, ROW.c + 2], [SIG.x, SIG.y + 8]]} fill={T.wire} step={2} />
       <Node cx={SIG.x} cy={SIG.y} glyph="Σ" theme={T} hot />
       <Wire pts={[[SIG.x + 7, SIG.y], [CC.x - 2, SIG.y]]} fill={T.wireHot} step={1} />
-      <Frame x={CC.x - 1} y={CC.y - 1} w={9} h={9} fill={T.frame} />
-      <rect x={CC.x} y={CC.y} width={7} height={7} fill={T.ramp[rampIndex(ray.v)]} />
-      <PText x={CC.x + 4} y={CC.y - 10} text="C" fill={T.text} anchor="middle" />
+      <Frame x={CC.x - 1} y={CC.y - 1} w={C_CELL + 2} h={C_CELL + 2} fill={T.frame} />
+      <rect x={CC.x} y={CC.y} width={C_CELL} height={C_CELL} fill={T.ramp[rampIndex(ray.v)]} />
+      <PText x={CC.x + (C_CELL - 1) / 2 + 1} y={CC.y - 10} text="C" fill={T.text} anchor="middle" />
 
       <PText x={VIEW.x} y={ROW.head} text="view az 36" fill={T.textDim} />
       <PText x={VIEW.x} y={ROW.axis} text="train, GT" fill={T.textDim} />
@@ -217,7 +229,7 @@ export function NerfDiagram({ theme, still }: { theme: Theme; still: boolean }) 
       <Frame x={px.x - 1} y={px.y - 1} w={4} h={4} fill={T.wireHot} />
 
       {/* ——— MSE: rendered pixel vs the training view's pixel ——— */}
-      <Wire pts={[[CC.x + 3, CC.y + 10], [CC.x + 3, DIA.y], [DIA.x - 8, DIA.y]]} fill={T.wire} />
+      <Wire pts={[[CC.x + (C_CELL - 1) / 2, CC.y + C_CELL + 2], [CC.x + (C_CELL - 1) / 2, DIA.y], [DIA.x - 8, DIA.y]]} fill={T.wire} />
       <Wire pts={[[DIA.x, VIEW.y + 67], [DIA.x, DIA.y - 9]]} fill={T.wire} />
       <Diamond cx={DIA.x} cy={DIA.y} theme={T} />
       <PText x={DIA.x + 1} y={DIA.y + 10} text="MSE" fill={T.loss} anchor="middle" />
@@ -237,9 +249,8 @@ export function NerfDiagram({ theme, still }: { theme: Theme; still: boolean }) 
           <rect x={PT_X} y={y} width={12} height={12} fill={T.ramp[rampIndex(NERF_HOT.p[k])]} />
           <PText x={GATE_X} y={y + 3} text={`${"xyz"[k]} ${fmt(NERF_HOT.p[k])}`} fill={T.textDim} anchor="end" />
           <Wire pts={[[PT_X + 14, y + 6], [GAM_X - 3, y + 6]]} fill={T.wire} />
-          <Frame x={GAM_X - 1} y={y - 1} w={73} h={14} fill={T.frame} />
           {Array.from({ length: 12 }, (_, j) => (
-            <rect key={j} x={GAM_X + 6 * j} y={y} width={5} height={12} fill={T.ramp[rampIndex(NERF_PE[k * 12 + j])]} />
+            <rect key={j} x={GAM_X + 6 * j} y={y + GAM_DY} width={5} height={GAM_H} fill={T.ramp[rampIndex(NERF_PE[k * 12 + j])]} />
           ))}
         </g>
       ))}

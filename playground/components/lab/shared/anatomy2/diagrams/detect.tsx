@@ -240,7 +240,7 @@ function DetectionDiagram({ theme: T, still, keys: keysRef }: { theme: Theme; st
       {/* honesty notes */}
       <PText x={DX.in} y={NOTE_Y} text="no grid, no anchors: one digit, one box" fill={T.textDim} />
       <PText x={DX.in} y={NOTE_Y + 10} text="both heads read the same 2048 numbers" fill={T.textDim} />
-      <PText x={DX.in} y={NOTE_Y + 20} text={`ch ${DET_MAP_CH} is off on the ink: the dark shape is the digit`} fill={T.textDim} />
+      <PText x={DX.in} y={NOTE_Y + 20} text={`ch ${DET_MAP_CH} is 0 on the ink: the digit is the gap`} fill={T.textDim} />
 
       {/* the 8-canvas strip: boxes land, classes mostly do not */}
       <rect x={PANEL.x} y={PANEL.y} width={PANEL.w} height={PANEL.h} fill={T.panel} />
@@ -266,7 +266,7 @@ function DetectionDiagram({ theme: T, still, keys: keysRef }: { theme: Theme; st
       <PText x={24} y={STRIP_CAP + 14} text="left: the class guess (wrong ones in the loss colour)   right: IoU" fill={T.textDim} />
       <PText x={24} y={STRIP_CAP + 26} text="champion, 500 test canvases (probe): class acc .62 (gate M .55, L .80), mean IoU .91" fill={T.textDim} />
 
-      <PText x={16} y={DETECT_VIEW.h - 14} text="1 bar = 32 ch, height = resolution   map: dark = 0 after ReLU   dotted = true box (28×28 window)   line = predicted" fill={T.textDim} />
+      <PText x={16} y={DETECT_VIEW.h - 14} text="1 bar = 32 ch, height = resolution   map: ground colour = 0 after ReLU   dotted = true 28×28 box   line = predicted" fill={T.textDim} />
     </g>
   );
 }

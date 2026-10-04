@@ -111,10 +111,15 @@ export const PIXELCNN_VIEW = { w: 560, h: 316 };
 // lane 1: sampling (diffusion's chain + the introduced lens)
 const TH = 56, CH_Y = 24;
 const CH_X = [16, 90, 164, 238];
-const CHAIN_K = [0, 196, 308, 412]; // k 140 is still blank — not a useful stop
+const CHAIN_K = [0, 196, 308, 467]; // k 140 is still blank — not a useful stop
 const LENS = { x: 320, y: 17, pitch: 8, cell: 7 };
 const TAPE_Y = 61, RO_X = 436, ROW_CAP1 = 84;
-const FRAMES = [412, 410, 411]; // frame 0 = the complete story: p ~ .66, coin → 0
+// frame 0 = the complete story: (16,19) p ~ .66, coin → 0; then (16,17) .78 → 1, (16,18) .84 → 1.
+// Row 16 sits under the stroke, so the 34-px field holds 13 lit pixels (rows 14–16).
+const FRAMES = [467, 465, 466];
+// the lens window: rows 12–16 (cursor row at the bottom), cols 11–23 = c−4 … c+4 for every frame
+const LENS_R0 = 12, LENS_C0 = 11;
+const LENS_ROW_Y = LENS.y + 4 * LENS.pitch + Math.floor(LENS.cell / 2); // centre of the cursor row (lens row 5)
 
 // lane 2: training (classifier's spine)
 const HEAD1 = 6, HEAD2 = 106, STAGE = 118, KER_Y = 132, BAR_TOP = 152, CY = BAR_TOP + 42;
@@ -184,14 +189,15 @@ export function PixelCNNDiagram({ theme, still }: { theme: Theme; still: boolean
       {/* the hot canvas: one Frame, the cursor column ticked above it */}
       <Frame x={HX - 2} y={CH_Y - 2} w={TH + 4} h={TH + 4} fill={T.wireHot} />
       <rect x={HX + 2 * cc} y={CH_Y - 6} width={2} height={2} fill={T.wireHot} />
-      <Wire pts={[[HX + TH + 4, CH_Y + 2 * cr], [LENS.x - 3, CH_Y + 2 * cr]]} fill={T.wireHot} />
+      {/* cursor row → the same row in the lens: an orthogonal dogleg onto the lens row's centre */}
+      <Wire pts={[[HX + TH + 4, CH_Y + 2 * cr], [LENS.x - 10, CH_Y + 2 * cr], [LENS.x - 10, LENS_ROW_Y], [LENS.x - 3, LENS_ROW_Y]]} fill={T.wireHot} />
 
-      {/* the lens: rows 10–14, cols 12–24 of the same canvas, the 34-px field outlined */}
-      <Lens x={LENS.x} y={LENS.y} pitch={LENS.pitch} cell={LENS.cell} canvas={d.s[0]} i={i} theme={T} />
+      {/* the lens: rows 12–16, cols 11–23 of the same canvas, the 34-px field outlined */}
+      <Lens x={LENS.x} y={LENS.y} pitch={LENS.pitch} cell={LENS.cell} canvas={d.s[0]} i={i} theme={T} r0={LENS_R0} c0={LENS_C0} />
       {/* the coin tape: p of every draw on this row so far, cursor included */}
       <PText x={LENS.x - 10} y={TAPE_Y} text="p" fill={T.textDim} />
-      {Array.from({ length: cc - 12 + 1 }, (_, k) => {
-        const c = 12 + k;
+      {Array.from({ length: cc - LENS_C0 + 1 }, (_, k) => {
+        const c = LENS_C0 + k;
         return <rect key={c} x={LENS.x + k * LENS.pitch} y={TAPE_Y} width={LENS.cell} height={LENS.cell} fill={T.heat[heatIndex(d.p0[cr * N + c])]} />;
       })}
       <PText x={LENS.x} y={ROW_CAP1} text="34 px seen: 4 masks stacked" fill={T.textDim} />
@@ -263,7 +269,7 @@ export function PixelCNNDiagram({ theme, still }: { theme: Theme; still: boolean
 
 // ————— card: canvas → lens staircase + coin tape, masks A/B, 4 samples, the stack —————
 export const PIXELCNN_CARD_VIEW = { w: 190, h: 104 };
-const CARD_I = 412;
+const CARD_I = 467;
 
 export function PixelCNNCard({ theme }: { theme: Theme }) {
   const T = theme;
@@ -285,10 +291,11 @@ export function PixelCNNCard({ theme }: { theme: Theme }) {
       <Thumb x={6} y={19} data={d.canvas} px={1} theme={T} />
       <rect x={2} y={19 + cr} width={2} height={1} fill={T.wireHot} />
       <rect x={6 + cc} y={15} width={1} height={2} fill={T.wireHot} />
-      <Wire pts={[[36, 19 + cr], [42, 19 + cr]]} fill={T.wireHot} />
-      <Lens x={44} y={7} pitch={6} cell={5} canvas={d.s[0]} i={CARD_I} theme={T} />
-      {Array.from({ length: cc - 12 + 1 }, (_, k) => (
-        <rect key={k} x={44 + k * 6} y={41} width={5} height={5} fill={T.heat[heatIndex(d.p0[cr * N + 12 + k])]} />
+      {/* thumb row → the lens's cursor row centre (lens row 5 at pitch 6: y 7 + 24 + 2) */}
+      <Wire pts={[[36, 19 + cr], [39, 19 + cr], [39, 33], [42, 33]]} fill={T.wireHot} />
+      <Lens x={44} y={7} pitch={6} cell={5} canvas={d.s[0]} i={CARD_I} theme={T} r0={LENS_R0} c0={LENS_C0} />
+      {Array.from({ length: cc - LENS_C0 + 1 }, (_, k) => (
+        <rect key={k} x={44 + k * 6} y={41} width={5} height={5} fill={T.heat[heatIndex(d.p0[cr * N + LENS_C0 + k])]} />
       ))}
       <MaskKernel x={136} y={10} data={d.kA} theme={T} />
       <MaskKernel x={160} y={10} data={d.kB} theme={T} />
