@@ -21,26 +21,23 @@ dust fills the margins. Everything else stays quiet so the sky reads first.
 | `GOLD` `MINT` `LILAC` `GREY` | evidence sprite ramps (sprite letters → colours) |
 | `INK` | marks over the sky: lit lineage, ring, cross lineage, pipeline aqua, names, outline |
 | `SKY_MATERIAL` | chrome for the shared corner components: indigo plates, brass rim, one filled gold |
-| `FONT`, `SIGN_FONT`, `TYPE` | text voice (Pixelify + clear pixel digits), sign voice (Jersey 15), the type scale `[desktop, phone]` |
+| `FONT`, `SIGN_FONT`, `TEXT_FONT`, `TYPE` | pixel voice (Pixelify + clear pixel digits), sign voice (Jersey 15), reading voice (Atkinson, sentences only), the type scale `[desktop, phone]` |
 | `GRID` | `ap` (CSS px per art px, 2), `cell` (world px per sky px, 4), phone breakpoint, bake padding |
-| `SPACE` | camera insets, node margin, word-to-edge gap, corner halo, plaque padding / spacing / reach, leader threshold, key plate |
-| `LINE` | gap at stars, fan ring, fade distances and mix, dash, pipeline dots, leader stop + dim |
+| `SPACE` | camera insets, node margin, word-to-edge gap, corner halo, plaque padding / spacing / reach, leader threshold, key plate, the tab strip's one height |
+| `LINE` | selection reticle (ring + ticks), gap at stars, fan ring, fade distances and mix, dash, pipeline dots, leader stop + dim |
 | `MOTION` | 12 fps, 120 s loop, twinkle / glint / comet / meteor periods |
 
-Colour rule: a ramp is hue-shifted (cold dark end, warm light end), never just
-darkened. A line or mark that has to recede is mixed toward its nebula's tone
-or toward the night (`paint.ts` `mix` / `dim`). It never gets alpha, so every
-pixel stays one flat colour.
+Colour rule: a ramp is hue-shifted (cold dark end, warm light end), never just darkened. A
+receding mark is mixed toward its nebula or the night (`mix` / `dim`), never given alpha.
 
 ## Type scale
 
-Three voices, loaded by `app/lab/sky/layout.tsx`. Text: Pixelify Sans, with
-the library's digit face over it for 0-9 (`lib/fonts.ts` `pixelDigits`, VT323 / Jersey 15;
-the numerals rule, `lib/numerals.ts` `withDigits`): numerals are data and Pixelify's 5 reads
-as S. Signs (cartouche title, tabs, plate titles): Jersey 15, whose C and Z
-stay legible. Never set prose in the sign voice. Sizes are whole CSS px. Star
-names 13 / 12 px (atom / derived; 11 / 10 on a phone), outlined 3 px in
-`NIGHT[0]`. Plaques 15 px bold, sentence case, a 12 px Latin line at region zoom.
+Four voices (`app/lab/sky/layout.tsx`). Sentences (drawer prose, notes, gate rows, the
+loading line): Atkinson Hyperlegible Next (`TEXT_FONT`, the material's `textFont`). Names,
+headings, buttons, numbers: Pixelify Sans with the library's digit face for 0-9
+(`pixelDigits`, `withDigits`: Pixelify's 5 reads as S). Signs (cartouche title, tabs, plate
+titles): Jersey 15, whose C and Z stay legible. Whole CSS px. Star names 13 / 12 px (atom /
+derived; 11 / 10 on a phone), outlined 3 px in `NIGHT[0]`. Plaques 15 px bold, sentence case.
 
 ## Grids
 
@@ -77,8 +74,9 @@ See `encoding.ts`. In short: nebula = group; sprite shape = evidence (gold
 sparkle champion, mint gem trained, lilac ring provisional, grey point
 untrained); large + always named = atom; line = builds_on edge; comet = its
 direction; gold = selected lineage; dashed = secondary (focus only); dotted aqua
-arc = pipeline partner; leader = a sign away from its stars. Field stars, Milky
-Way and meteors are decoration and say so.
+arc = pipeline partner; gold ring + four ticks = the selection (its own reticle,
+never the provisional broken ring); leader = a sign away from its stars. Field
+stars, Milky Way and meteors are decoration and say so.
 
 ## Motion
 
@@ -90,18 +88,20 @@ nothing moves; `?still=1`, `prefers-reduced-motion` and a hidden tab hold it.
 
 `?zoom=overview|region|node&focus=<name>&still=1&ui=0`. Region fits the
 group's nebula and ghosts the others. Node frames the selected star and its own
-nebula left of the drawer (the star keeps `SPACE.nodeMargin` from the edge);
-partners off screen are edge chevrons, which never slip under a corner plate. `data-lab-ready="1"` is set once the
-camera has landed and the bake is painted (`lib/lab-contract.ts`), and `window.__lab.{select,view}`
-drives it from scripts. Phone rule: the frame turns a quarter so a landscape
-graph fills the tall screen; a sign looks within `SPACE.signReach` of its stars
-first, else sits further out with a leader; the key folds behind a Key button.
+nebula left of the drawer (the star keeps `SPACE.nodeMargin` from the edge).
+Anything off screen ends in an edge chevron (pipeline partners in aqua, the far
+end of a drawn line in dashed lineage ink), never under a corner plate. The
+drawer is the painted kit's, with the star sprite as its glyph. Loading
+(`labLoading`): sky + tabs + one status line; stars, words and corners arrive
+together once taxonomy AND evidence are in. `data-lab-ready` follows, after the
+camera lands and the corners are measured. Phone: the frame turns a quarter; a
+sign looks within `SPACE.signReach` first, else sits out with a leader; the key
+folds behind a Key button.
 
 ## Lifting it into another project
 
-1. Copy `tokens.ts`, `bake.ts`, `paint.ts`, `sprites.ts`, `motion.ts`,
-   `layers.tsx`, `layout.ts` and `icon.tsx`. Bake, paint, sprites and motion
-   are pure, so they run under node (`bake.test.ts` shows how). `tokens.ts` reads `lib/numerals.ts`.
+1. Copy `tokens.ts`, `bake.ts`, `paint.ts`, `sprites.ts`, `motion.ts`, `layers.tsx`, `layout.ts`,
+   `icon.tsx` (bake, paint, sprites, motion are pure: `bake.test.ts`). Tokens read `lib/numerals.ts`.
 2. Feed it this shape. Positions can come from any layout (force, dagre, hand):
    ```ts
    stars: { name; family; x; y; atom: boolean; parents: string[]; state: "champion"|"trained"|"provisional"|"untrained" }[]
@@ -115,6 +115,5 @@ first, else sits further out with a leader; the key folds behind a Key button.
 4. Draw: `bakeSky` once per layout, then `<SkyCanvas>` for the sky and
    `<SkyMarks>` for the marks at your camera box. Call `placeWords` for names
    and signs, passing your own UI's rects as `corners`.
-5. `sky-skin.tsx` is this app's wiring (the lib/world graph, the URL view, the
-   painted map's corners and drawer). Use it as a reference, not a dependency.
-   `SKY_MATERIAL` is only needed if you reuse those shared corner components.
+5. `sky-skin.tsx` is this app's wiring (graph, URL view, the painted kit's corners and drawer):
+   a reference, not a dependency. `SKY_MATERIAL` only serves those shared components.

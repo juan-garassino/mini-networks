@@ -26,11 +26,14 @@
 // Positions come ONLY from lib/world. On a portrait phone the whole chart is
 // turned a quarter (frame coords), so the landscape zoo fills a tall screen.
 // /lab contract (lib/lab-contract.ts): URL view → useWorld → camera lands → paint
-// → data-lab-ready → window.__lab.
+// → data-lab-ready → window.__lab. Loading (labLoading): the night sky and the
+// Day | Night tabs at first paint with one status line; stars, words and the
+// corners arrive together once taxonomy AND evidence are in, so nothing moves
+// or recolours after it is drawn.
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import { useWorld } from "@/hooks/use-world";
 import { zooCounts } from "@/lib/copy";
-import { installLabHook, LabMotion, useLabReady, useLabView, useStill } from "@/lib/lab-contract";
+import { installLabHook, LabMotion, labLoading, loadPhase, useLabReady, useLabView, useStill } from "@/lib/lab-contract";
 import { useCamera, type CamBox } from "@/components/lab/shared/camera";
 import { cardModel, displayName, evidenceState, type EvidenceState } from "@/components/lab/shared/card-model";
 import { FAMILIES, type Family } from "@/components/lab/painted/anchors";
@@ -38,17 +41,30 @@ import { Cartouche } from "@/components/lab/painted/corners/cartouche";
 import { Compass } from "@/components/lab/painted/corners/compass";
 import { ScaleBar } from "@/components/lab/painted/corners/scale-bar";
 import { Drawer, DRAWER_W, sheetHeight, type Sheet } from "@/components/lab/painted/drawer";
+import type { CardGlyph } from "@/components/lab/painted/card";
 import { bakeSky, type Bake } from "./bake";
-import { FAMILY_INK, GRID, INK, LINE, SKY_MATERIAL as m, SPACE, TYPE } from "./tokens";
+import { FAMILY_INK, GRID, INK, LINE, SKY_MATERIAL as m, SPACE, TEXT_FONT, TYPE } from "./tokens";
 import { dim, mix } from "./paint";
 import { EVIDENCE_RUN, SkyCanvas, SkyMarks, type FStar, type Line } from "./layers";
 import { clamp, pad, placeWords, union, type Box } from "./layout";
 import { Chevron, NightTabs, ShowUi } from "./chrome";
 import { PhoneStarKey, StarKey } from "./key";
 import { Plaque } from "./plaque";
+import { SpriteIcon } from "./icon";
+import { starSprite } from "./sprites";
 
 const AP = GRID.ap;
 const DAY_HREF = "/lab/painted/?map=pixel";
+
+/** The drawer's evidence glyph: the star itself, as the sky draws it (never the day map's flag). */
+const STAR_GLYPH: CardGlyph = (state, atom, big) => <SpriteIcon s={starSprite(state, atom)} scale={big ? 3 : 2} />;
+
+/** The loading line, in the night's voice. */
+const LOADING = {
+  api: "Waiting for the zoo's API…",
+  offline: "The zoo's API is not answering. Start it with python main.py serve; the sky retries.",
+  layout: "Charting the sky…",
+} as const;
 
 /** Fit `b` into the screen rect the insets leave free; with `q`, snap the
  * scale so one sky px is a whole number of device px (crisp, even pixels) —
@@ -121,7 +137,7 @@ export function SkySkin() {
   // also pins the drawer's diagram at its still frame without controls.
   const still = useStill();
   const shot = view?.still ?? true;
-  const { world, taxonomy, evidence, runs, family, ready } = useWorld(view ? view.still : null);
+  const { world, taxonomy, evidence, runs, family, ready, online } = useWorld(view ? view.still : null);
   const { w: winW, dpr } = useWindow();
   const mobile = winW < GRID.mobileBp;
   const [sheet, setSheet] = useState<Sheet>("peek");
@@ -289,9 +305,10 @@ export function SkySkin() {
   }, [selected, nodes, taxonomy, evidence, runs]);
 
   // ——— ready + hooks: data in, the camera landed, the sky painted for the current bake
+  const corners = useCornerRects(rootRef);
   const [painted, setPainted] = useState<Bake | null>(null);
   const onPaint = useCallback(() => setPainted(bake), [bake]);
-  const labReady = useLabReady(Boolean(ready && bake && painted === bake && landed), rootRef);
+  const labReady = useLabReady(Boolean(ready && bake && painted === bake && landed && (uiHidden || corners.rects.length > 0)), rootRef);
   useEffect(() => (labReady ? installLabHook({
     select: (n: string) => onSelect(n),
     view: (v) => update({ zoom: v.zoom, focus: v.focus ?? null }),
@@ -334,12 +351,27 @@ export function SkySkin() {
   }, [camBox.x, camBox.y, S]);
   const zoomedIn = camBox.w < frameWorld.w * 0.75;
   const regionish = (view?.zoom ?? "overview") !== "overview" || zoomedIn;
-  const corners = useCornerRects(rootRef);
+  // a zoomed view: a line of the focused family (or the lit lineage) that leaves the screen from
+  // one of its own stars ends in a named edge plate (other families' faded lines just fade out)
+  const ends = useMemo(() => {
+    if (!regionish) return [];
+    const on = (p: { x: number; y: number }) => { const q = scr(p); return q.x > 18 && q.y > 18 && q.x < visW - 18 && q.y < visH - 18; };
+    const ours = (st: FStar) => st.family === focusFam || lineageSet.has(st.name);
+    return lines.flatMap((l) => {
+      if (on(l.a) === on(l.b)) return [];
+      const [inside, far] = on(l.a) ? [l.a, l.b] : [l.b, l.a];
+      return ours(inside) ? [{ name: far.name, from: inside.name }] : [];
+    });
+  }, [regionish, lines, scr, visW, visH, focusFam, lineageSet]);
   const layout = useMemo(() => placeWords({
-    stars, byName, families: [...FAMILIES], hulls, famCount, focusFam, selected, hovered, lineage: lineageSet, partners,
+    stars, byName, families: [...FAMILIES], hulls, famCount, focusFam, selected, hovered, lineage: lineageSet, partners, ends,
     scr, cam: camBox, S, bake, vw: vp.w, vh: vp.h, visW, visH, mobile, regionish, zoomedIn,
     corners: uiHidden ? [] : corners.rects,
-  }), [stars, byName, hulls, famCount, focusFam, selected, hovered, lineageSet, partners, scr, camBox, S, bake, vp.w, vp.h, visW, visH, mobile, regionish, zoomedIn, uiHidden, corners.rects]);
+  }), [stars, byName, hulls, famCount, focusFam, selected, hovered, lineageSet, partners, ends, scr, camBox, S, bake, vp.w, vp.h, visW, visH, mobile, regionish, zoomedIn, uiHidden, corners.rects]);
+  // the words wait for the corners they keep clear of (measured once they are drawn)
+  const wordsOn = ready && (uiHidden || corners.rects.length > 0);
+  // the line leaves as the stars and words arrive (ready then waits for the camera and the paint)
+  const phase = loadPhase(ready ? world : null, { offline: !online, laidOut: Boolean(bake && wordsOn) });
 
   const whole = !manual && (view?.zoom ?? "overview") === "overview";
   const corner = "pointer-events-auto absolute z-20";
@@ -354,9 +386,9 @@ export function SkySkin() {
           {bake && measured && (
             <>
               <SkyCanvas bake={bake} ghost={focusFam} box={camBox} vw={vw} vh={vh} dpr={dpr} sea={m.sea} onPaint={onPaint} />
-              <SkyMarks stars={stars} lines={lines} arcs={layout.arcs} leaders={uiHidden ? NO_LEADERS : layout.leaders} box={camBox} vw={vw} vh={vh} dpr={dpr} ap={AP} bake={bake}
-                selected={selected} hovered={hovered} dimFam={focusFam} still={still} />
-              <svg width={vw} height={vh} className="absolute inset-0 block" role="group" aria-label="The Night Map: the models as stars, the families as nebulae">
+              {ready && <SkyMarks stars={stars} lines={lines} arcs={layout.arcs} leaders={uiHidden ? NO_LEADERS : layout.leaders} box={camBox} vw={vw} vh={vh} dpr={dpr} ap={AP} bake={bake}
+                selected={selected} hovered={hovered} dimFam={focusFam} still={still} />}
+              {wordsOn && <svg width={vw} height={vh} className="absolute inset-0 block" role="group" aria-label="The Night Map: the models as stars, the families as nebulae">
                 {/* star names (Pixelify, outlined in the night) */}
                 <g pointerEvents="none">
                   {layout.labels.map(({ s, x, y, fs, anchor }) => {
@@ -384,33 +416,39 @@ export function SkySkin() {
                     </circle>
                   );
                 })}
-              </svg>
+              </svg>}
               {/* the night signs: one per nebula, at its top-left */}
-              {!uiHidden && layout.plaques.map(({ f, x, y }) => (
+              {wordsOn && !uiHidden && layout.plaques.map(({ f, x, y }) => (
                 <div key={f} className="absolute z-10" style={{ left: x, top: y }} onClick={(e) => e.stopPropagation()}>
                   <Plaque family={f} count={famCount[f] ?? 0} compact={mobile} latin={regionish && !mobile}
                     dimmed={focusFam !== null && f !== focusFam}
                     onClick={() => { if (!camDragged.current) jumpLand(f as Family); }} />
                 </div>
               ))}
-              {!uiHidden && layout.chevrons.map((c) => <Chevron key={c.name} {...c} compact={mobile} onPick={() => onSelect(c.name)} />)}
+              {wordsOn && !uiHidden && layout.chevrons.map((c) => <Chevron key={c.name} {...c} compact={mobile} onPick={() => onSelect(c.name)} />)}
             </>
           )}
         </div>
 
+        {phase && (
+          <p {...labLoading(phase)} className="pointer-events-none absolute inset-x-0 top-1/2 z-10 mx-auto max-w-[36ch] px-4 text-center"
+            style={{ fontFamily: TEXT_FONT, fontSize: TYPE.loading[mobile ? 1 : 0], color: INK.name, lineHeight: 1.4 }}>
+            {LOADING[phase]}
+          </p>
+        )}
         {uiHidden && <ShowUi onShow={() => setUiHidden(false)} />}
         {!uiHidden && (
           <div ref={corners.refFor("frame", false)} className="pointer-events-none absolute inset-0 z-20" style={{ right: drawerPx, bottom: sheetPx }}>
             {/* every corner plate registers its rect, so layout.ts keeps words out from under it */}
-            <div ref={corners.refFor("cartouche")} className={`${corner} left-3 top-3 sm:left-5 sm:top-5`}>
+            {ready && <div ref={corners.refFor("cartouche")} className={`${corner} left-3 top-3 sm:left-5 sm:top-5`}>
               <Cartouche m={m} title="The Celestial Zoo" noun="nebulae" counts={counts} names={names} focusFam={focusFam} famCount={famCount} famProven={famProven}
                 onPick={onSelect} onWhole={fitWhole} compact={mobile} />
-            </div>
+            </div>}
             <div ref={corners.refFor("tabs")} className={`${corner} right-3 top-0 sm:right-5`}>
               <NightTabs compact={mobile} dayHref={DAY_HREF} onHideUi={() => setUiHidden(true)} />
             </div>
             {/* the compass stands on the scale bar; scale bar + legend share the bottom margin (corners/plate.tsx) */}
-            <div className={`${corner} bottom-3 left-3 flex flex-col items-start gap-3 sm:bottom-5 sm:left-5`}>
+            {ready && <div className={`${corner} bottom-3 left-3 flex flex-col items-start gap-3 sm:bottom-5 sm:left-5`}>
               <div ref={corners.refFor("compass")}>
                 <Compass m={m} unit={mobile ? 3.5 : 5} onPan={panBy} onWhole={fitWhole} onZoom={stepZoom}
                   canIn={camBox.w > minW + 1} canOut={camBox.w < maxW - 1} whole={whole} />
@@ -421,8 +459,8 @@ export function SkySkin() {
                     selected={selected} onPick={onSelect} onLand={jumpLand} focusFam={focusFam} />
                 </div>
               )}
-            </div>
-            {!drawerPx && !sheetPx && (
+            </div>}
+            {ready && !drawerPx && !sheetPx && (
               <div ref={corners.refFor("legend")} className={`${corner} bottom-3 right-3 sm:bottom-5 sm:right-5`}>
                 {mobile ? <PhoneStarKey /> : <StarKey />}
               </div>
@@ -434,7 +472,7 @@ export function SkySkin() {
           <Drawer m={m} mobile={mobile} sheet={sheet === "peek" ? "half" : sheet} setSheet={setSheet} card={card} still={shot}
             onPick={onSelect} onBack={fitWhole}
             stateOf={(n) => states[n] ?? "untrained"} isAtom={(n) => atoms.has(n)}
-            fullDiagram={fullDiagram} setFullDiagram={setFullDiagram} stageW={vp.w} />
+            fullDiagram={fullDiagram} setFullDiagram={setFullDiagram} stageW={vp.w} glyph={STAR_GLYPH} />
         )}
       </div>
     </LabMotion>

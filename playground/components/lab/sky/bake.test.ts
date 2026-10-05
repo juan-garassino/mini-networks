@@ -6,7 +6,7 @@ import { readFileSync } from "node:fs";
 import type { TaxonomyResponse } from "../../../lib/types.ts";
 import { buildWorld, familyMapFromBlueprint } from "../../../lib/world/index.ts";
 import { bakeSky, ghostBake, skyPx, type BakeEdge, type BakeStar } from "./bake.ts";
-import { STAR_SPRITES, emblem, ringOffsets } from "./sprites.ts";
+import { STAR_SPRITES, emblem, reticleOffsets, ringOffsets } from "./sprites.ts";
 
 const tax: TaxonomyResponse = JSON.parse(readFileSync(new URL("../../../lib/world/__fixtures__/taxonomy.json", import.meta.url), "utf8"));
 const world = buildWorld(tax, familyMapFromBlueprint(tax), { preset: "pixel" });
@@ -64,5 +64,7 @@ test("sprites are rectangular and use only their own ink", () => {
     }
   }
   for (const f of ["perception", "sequence", "generative", "representation", "structure", "decision"]) assert.equal(emblem(f)!.w, 16);
-  assert.ok(ringOffsets(9, "broken").length < ringOffsets(9, "dotted").length * 2);
+  assert.ok(ringOffsets(9, "dotted").length < ringOffsets(9, "solid").length);
+  // the selection reticle is a whole ring plus four ticks: never the provisional sprite's broken ring
+  assert.equal(reticleOffsets(5, 3, 3).length, ringOffsets(8, "solid").length + 12);
 });

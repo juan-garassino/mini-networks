@@ -15,7 +15,7 @@ import { arcPixels } from "./paint";
 import { plaqueWidth } from "./plaque";
 import { chevronSize, type ChevronDir } from "./chrome";
 import { starRadius } from "./sprites";
-import { GRID, SPACE, TYPE } from "./tokens";
+import { GRID, LINE, SPACE, TYPE } from "./tokens";
 
 export type Box = { x: number; y: number; w: number; h: number };
 export const clamp = (v: number, a: number, b: number) => Math.max(a, Math.min(b, v));
@@ -39,6 +39,8 @@ export interface WordsInput {
   hovered: string | null;
   lineage: Set<string>;
   partners: { name: string; via: string[] }[];
+  /** drawn lineage lines with one end off screen: the far star and the star on screen */
+  ends: { name: string; from: string }[];
   /** frame px → screen px, snapped to the art grid */
   scr: (p: { x: number; y: number }) => { x: number; y: number };
   cam: CamBox;
@@ -60,7 +62,8 @@ export interface Placed {
   plaques: { f: string; x: number; y: number; w: number; h: number }[];
   labels: { s: FStar; x: number; y: number; fs: number; anchor: "middle" | "start" | "end" }[];
   arcs: { a: FStar; b: FStar }[];
-  chevrons: { name: string; x: number; y: number; dir: ChevronDir }[];
+  /** an off-screen end: a pipeline partner ("pipe") or the far end of a drawn lineage line ("line") */
+  chevrons: { name: string; x: number; y: number; dir: ChevronDir; kind: "pipe" | "line" }[];
   /** a sign set away from its stars → its nearest own star (screen px) */
   leaders: { f: string; x0: number; y0: number; x1: number; y1: number }[];
 }
@@ -73,13 +76,39 @@ export function placeWords(I: WordsInput): Placed {
   const partnerSet = new Set(I.partners.map((p) => p.name));
   for (const s of stars) {
     // the selection / hover ring sits 3 art px out: keep words clear of it too
-    const p = scr(s), r = (starRadius(s.state, s.atom) + (s.name === selected || s.name === hovered ? 5 : 2)) * AP;
+    const p = scr(s), r = (starRadius(s.state, s.atom) + (s.name === selected ? LINE.reticle.ring + LINE.reticle.tick + 2 : s.name === hovered ? 5 : 2)) * AP;
     obstacles.push({ x: p.x - r, y: p.y - r, w: 2 * r, h: 2 * r, star: s.name });
   }
 
   // ——— partners: on screen → an arc; off screen → a named chevron on the edge, toward it
   const arcs: Placed["arcs"] = [];
   const chevrons: Placed["chevrons"] = [];
+  /** a named plate hugging the screen edge (just inside it), on the ray from `a` toward `b` */
+  const chevronToward = (name: string, a: { x: number; y: number }, b: { x: number; y: number }, kind: "pipe" | "line") => {
+    const { w: cw, h: ch } = chevronSize(name, mobile);
+    const inner = { x0: 8 + cw / 2, y0: (mobile ? 140 : 70) + ch / 2, x1: visW - 8 - cw / 2, y1: visH - (mobile ? 110 : 80) - ch / 2 };
+    const dx = b.x - a.x, dy = b.y - a.y;
+    let t = 1;
+    if (dx > 0) t = Math.min(t, (inner.x1 - a.x) / dx); else if (dx < 0) t = Math.min(t, (inner.x0 - a.x) / dx);
+    if (dy > 0) t = Math.min(t, (inner.y1 - a.y) / dy); else if (dy < 0) t = Math.min(t, (inner.y0 - a.y) / dy);
+    t = Math.max(0, t);
+    const dir: ChevronDir = Math.abs(dx) > Math.abs(dy) ? (dx > 0 ? "r" : "l") : dy > 0 ? "d" : "u";
+    let c = { x: clamp(a.x + dx * t, inner.x0, inner.x1), y: clamp(a.y + dy * t, inner.y0, inner.y1) };
+    // a chevron never stacks on another or slips under a corner plate: it takes the nearest free
+    // spot along its own edge (across a top / bottom edge, down a side), either way
+    const cbox = (q: { x: number; y: number }) => ({ x: q.x - cw / 2, y: q.y - ch / 2, w: cw, h: ch });
+    const blocked = (q: { x: number; y: number }) => chevrons.some((o) => Math.abs(o.x - q.x) < (cw + chevronSize(o.name, mobile).w) / 2 + 6 && Math.abs(o.y - q.y) < ch + 4) || corners.some((o) => hit(cbox(q), o));
+    const along = dir === "u" || dir === "d" ? { x: 1, y: 0 } : { x: 0, y: 1 };
+    const step = (k: number) => ({ x: clamp(c.x + along.x * 24 * k, inner.x0, inner.x1), y: clamp(c.y + along.y * (ch + 6) * k, inner.y0, inner.y1) });
+    for (let k = 1; k <= 24 && blocked(c); k++) {
+      // the side toward the screen's middle first, then the other
+      const toward = (dir === "u" || dir === "d" ? c.x < visW / 2 : c.y < visH / 2) ? 1 : -1;
+      const q = [step(toward * k), step(-toward * k)].find((p) => !blocked(p));
+      if (q) c = q;
+    }
+    chevrons.push({ name, ...c, dir, kind });
+    obstacles.push({ x: c.x - cw / 2, y: c.y - ch / 2, w: cw, h: ch });
+  };
   const sel = selected ? byName.get(selected) : undefined;
   if (sel) {
     const a = scr(sel);
@@ -94,26 +123,14 @@ export function placeWords(I: WordsInput): Placed {
         arcPixels(art(a), art(b), starRadius(sel.state, sel.atom) + 3, starRadius(st.state, st.atom) + 3).forEach(([x, y], j) => { if (j % 3 === 0) obstacles.push({ x: x * AP - 2, y: y * AP - 2, w: AP + 4, h: AP + 4 }); });
         continue;
       }
-      const { w: cw, h: ch } = chevronSize(p.name, mobile);
-      // the chevron hugs the screen edge (its plate just inside it), on the ray toward the partner
-      const inner = { x0: 8 + cw / 2, y0: (mobile ? 140 : 70) + ch / 2, x1: visW - 8 - cw / 2, y1: visH - (mobile ? 110 : 80) - ch / 2 };
-      const dx = b.x - a.x, dy = b.y - a.y;
-      let t = 1;
-      if (dx > 0) t = Math.min(t, (inner.x1 - a.x) / dx); else if (dx < 0) t = Math.min(t, (inner.x0 - a.x) / dx);
-      if (dy > 0) t = Math.min(t, (inner.y1 - a.y) / dy); else if (dy < 0) t = Math.min(t, (inner.y0 - a.y) / dy);
-      t = Math.max(0, t);
-      const dir: ChevronDir = Math.abs(dx) > Math.abs(dy) ? (dx > 0 ? "r" : "l") : dy > 0 ? "d" : "u";
-      let c = { x: clamp(a.x + dx * t, inner.x0, inner.x1), y: clamp(a.y + dy * t, inner.y0, inner.y1) };
-      // a chevron never stacks on another or slips under a corner plate:
-      // step along its own edge (across a top / bottom edge, down a side),
-      // away from the corner it met
-      const cbox = (q: { x: number; y: number }) => ({ x: q.x - cw / 2, y: q.y - ch / 2, w: cw, h: ch });
-      const blocked = (q: { x: number; y: number }) => chevrons.some((o) => Math.abs(o.x - q.x) < cw && Math.abs(o.y - q.y) < ch) || corners.some((o) => hit(cbox(q), o));
-      const along = dir === "u" || dir === "d" ? { x: c.x < visW / 2 ? 1 : -1, y: 0 } : { x: 0, y: c.y < visH / 2 ? 1 : -1 };
-      for (let k = 0; k < 12 && blocked(c); k++) c = { x: clamp(c.x + along.x * 24, inner.x0, inner.x1), y: clamp(c.y + along.y * (ch + 6), inner.y0, inner.y1) };
-      chevrons.push({ name: p.name, ...c, dir });
-      obstacles.push({ x: c.x - cw / 2, y: c.y - ch / 2, w: cw, h: ch });
+      chevronToward(p.name, a, b, "pipe");
     }
+  }
+  // a drawn lineage line that leaves the screen ends in the same named plate (its far star)
+  for (const e of I.ends) {
+    const from = byName.get(e.from), far = byName.get(e.name);
+    if (!from || !far || chevrons.some((c) => c.name === e.name)) continue;
+    chevronToward(e.name, scr(from), scr(far), "line");
   }
 
   // ——— the night signs: one per nebula, anchored on its top-left (the focused family's first)

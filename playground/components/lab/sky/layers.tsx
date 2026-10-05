@@ -17,7 +17,7 @@ import type { EvidenceState } from "@/components/lab/shared/card-model";
 import { ghostBake, type Bake } from "./bake";
 import { FAMILY_INK, FIELD, GOLD, GREY, INK, LILAC, LINE, MINT } from "./tokens";
 import { Pix, arcPixels, asterism, bresenham, dim, mix, stamp } from "./paint";
-import { ringOffsets, starRadius, starSprite } from "./sprites";
+import { reticleOffsets, ringOffsets, starRadius, starSprite } from "./sprites";
 import { FPS, LOOP, comet, glint, meteor, twinkle } from "./motion";
 
 /** A model in FRAME coords (lib/world, turned a quarter on a portrait phone). */
@@ -177,9 +177,10 @@ export const SkyMarks = memo(function SkyMarks({ stars, lines, arcs, leaders, bo
           for (let k = 1; k <= g - 1; k++) for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) top.add(x + dx * (r + k), y + dy * (r + k), k === g - 1 ? GOLD["3"] : GOLD["4"]);
         }
       }
-      if (s.name === selected || s.name === hovered) {
-        const r = starRadius(s.state, s.atom) + 3;
-        for (const [dx, dy] of ringOffsets(r, s.name === selected ? "broken" : "dotted")) top.add(x + dx, y + dy, s.name === selected ? INK.ring : INK.name);
+      if (s.name === selected) {
+        for (const [dx, dy] of reticleOffsets(starRadius(s.state, s.atom), LINE.reticle.ring, LINE.reticle.tick)) top.add(x + dx, y + dy, INK.ring);
+      } else if (s.name === hovered) {
+        for (const [dx, dy] of ringOffsets(starRadius(s.state, s.atom) + LINE.reticle.ring, "dotted")) top.add(x + dx, y + dy, INK.name);
       }
     });
     // a meteor now and then (decoration)

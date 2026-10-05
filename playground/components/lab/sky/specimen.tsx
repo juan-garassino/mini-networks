@@ -8,7 +8,7 @@ import { useEffect, useMemo, useRef, type CSSProperties } from "react";
 import { bakeSky, type BakeStar } from "./bake";
 import { FAMILY_INK, FIELD, GOLD, GREY, GRID, INK, LILAC, LINE, MINT, NIGHT, SKY_MATERIAL as m, TYPE } from "./tokens";
 import { Pix, asterism, stamp } from "./paint";
-import { emblem, starSprite, ringOffsets, starRadius } from "./sprites";
+import { emblem, starSprite, reticleOffsets, starRadius } from "./sprites";
 import { SpriteIcon, StarPair } from "./icon";
 import { Plaque } from "./plaque";
 import type { EvidenceState } from "@/components/lab/shared/card-model";
@@ -54,7 +54,7 @@ export function SkySpecimen() {
     });
     for (const s of STARS) { const [x, y] = at(s); stamp(stars, starSprite(s.state, s.atom), x, y); }
     const [sx, sy] = at(STARS[0]);
-    for (const [dx, dy] of ringOffsets(starRadius("champion", true) + 3, "broken")) stars.add(sx + dx, sy + dy, INK.ring);
+    for (const [dx, dy] of reticleOffsets(starRadius("champion", true), LINE.reticle.ring, LINE.reticle.tick)) stars.add(sx + dx, sy + dy, INK.ring);
     lines.flush(ctx); stars.flush(ctx);
   }, [bake]);
 

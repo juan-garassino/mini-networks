@@ -238,9 +238,9 @@ export const CONSTELLATION: Record<string, { latin: string; gloss: string }> = {
   decision: { latin: "Sagitta", gloss: "the Arrow" },
 };
 
-/** A broken ring of radius r (art px) as offsets: four arcs, cut at the
- * diagonals (the selection mark), or every other pixel (dotted: hover). */
-export function ringOffsets(r: number, style: "broken" | "dotted"): [number, number][] {
+/** A ring of radius r (art px) as offsets: whole (the selection reticle's
+ * ring), or every other pixel (dotted: hover). */
+export function ringOffsets(r: number, style: "solid" | "dotted"): [number, number][] {
   const out: [number, number][] = [];
   const seen = new Set<string>();
   // midpoint circle, one octant mirrored eight ways
@@ -257,13 +257,20 @@ export function ringOffsets(r: number, style: "broken" | "dotted"): [number, num
       const k = `${px},${py}`;
       if (seen.has(k)) continue;
       seen.add(k);
-      const ang = Math.atan2(py, px);
-      // distance (radians) to the nearest diagonal
-      const toDiag = Math.abs(((ang - Math.PI / 4) % (Math.PI / 2) + Math.PI / 2) % (Math.PI / 2) - Math.PI / 4);
-      if (style === "broken" && toDiag > Math.PI / 4 - 0.3) continue;
       out.push([px, py]);
     }
   }
   out.sort((p, q) => Math.atan2(p[1], p[0]) - Math.atan2(q[1], q[0]));
   return style === "dotted" ? out.filter((_, i) => i % 2 === 0) : out;
+}
+
+/** The selection reticle around a star of sprite radius `sr` (art px offsets):
+ * a whole ring `ring` px out and four ticks of `tick` px beyond it at N/E/S/W.
+ * Its own mark: the provisional sprite is a BROKEN ring, so the selection never
+ * reads as "provisional". */
+export function reticleOffsets(sr: number, ring: number, tick: number): [number, number][] {
+  const r = sr + ring;
+  const out = ringOffsets(r, "solid");
+  for (let k = 2; k <= tick + 1; k++) out.push([r + k, 0], [-r - k, 0], [0, r + k], [0, -r - k]);
+  return out;
 }

@@ -78,9 +78,10 @@ export const GREY = { k: "#0b0a20", "1": "#4a4e74", "2": "#8a8eb2" } as const;
 /** Lines and marks over the sky. */
 export const INK = {
   lit: "#ffd98a",       // the selected lineage (pastel gold, the comets' trail)
-  ring: "#ffe2b0",      // the selection ring
+  ring: "#ffe2b0",      // the selection reticle (a solid ring + four ticks)
   cross: "#8c8fbe",     // secondary + cross-family lineage, shown on focus only (dashed)
   pipe: "#a6e2dc",      // pipeline arcs + off-screen partner plates (dotted pastel aqua)
+  // an off-screen lineage end's plate borrows INK.cross (the dashed line it ends)
   name: "#ece6f6",      // star names
   nameSoft: "#b0abd0",  // derived names, unselected
   outline: NIGHT[0],    // text outlines
@@ -117,6 +118,10 @@ export const FONT = withDigits("var(--font-pixel), ui-monospace, monospace");
  * capital C stays open and whose Z is square; Pixelify's bold C closes into
  * an O and its Z reads as 2. */
 export const SIGN_FONT = "var(--font-sky-sign, var(--font-pixel)), var(--font-pixel), ui-monospace, monospace";
+/** The reading voice: Atkinson Hyperlegible Next for sentences (the drawer's prose, notes, gate
+ * rows, the loading line). Pixel type stays the voice of names, headings, buttons and numbers;
+ * a sentence at 13-15 px needs open counters. */
+export const TEXT_FONT = "var(--font-text), ui-sans-serif, system-ui, sans-serif";
 
 /** The type scale in CSS px, [desktop, phone]. Pixelify reads best on whole
  * px; the steps follow a 1.2 ratio from the 12 px derived name. */
@@ -126,13 +131,14 @@ export const TYPE = {
   plaque: [15, 12],       // family name on its sign
   plaqueSub: [12, 10],    // the Latin constellation line
   chevron: [13, 12],      // off-screen partner plate
-  tab: [20, 14],          // Day | Night
+  tab: [20, 14],          // Day | Night | sky only (one size: the active tab differs by fill only)
   /** the star key plate (bottom-right; the phone opens it from a Key button):
    * title, rows, note — the painted kit's corner-plate sizes */
   keyTitle: 15,
   keyRow: 14,
   keyNote: 13,
   button: [14, 12],       // sky only / UI
+  loading: [15, 13],      // the loading line (TEXT_FONT)
   /** the specimen sheet (?specimen=1): title, section heads, captions */
   sheet: { title: 28, head: 16, body: 14 },
   /** em width of a Pixelify glyph, for placing words before they are drawn */
@@ -181,11 +187,15 @@ export const SPACE = {
   /** the star key plate: width and padding, [desktop, phone] (the painted kit's corner plate) */
   keyW: [324, 260],
   keyPad: [12, 10],
+  /** the Day | Night | sky only strip: one height and side padding for all three, [desktop, phone] */
+  tab: { h: [38, 28], x: [16, 8] },
 } as const;
 
 // ——— lines (art px) ——————————————————————————————————————————————————————
 
 export const LINE = {
+  /** the selection reticle (art px): its ring sits this far out of the sprite, its ticks are this long */
+  reticle: { ring: 3, tick: 3 },
   /** gap between a line's end and its star's sprite */
   gap: 2,
   /** a parent with a fan of children keeps a wider clear ring: +1 art px per this many lines */
@@ -254,6 +264,7 @@ export const SKY_MATERIAL: Material = {
   tagFont: FONT,
   signFont: SIGN_FONT,
   bodyFont: FONT,
+  textFont: TEXT_FONT,
   crisp: true,
   radius: 0,
   evidence: {
