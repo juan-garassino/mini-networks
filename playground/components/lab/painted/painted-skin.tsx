@@ -32,6 +32,7 @@ import { useWorld } from "@/hooks/use-world";
 import { useLabView, type LabView } from "@/components/lab/shared/url-state";
 import { LabMotion } from "@/components/lab/shared/still";
 import { installLabHook, useLabReady } from "@/lib/lab-contract";
+import { zooCounts } from "@/lib/copy";
 import { useCamera, type CamBox } from "@/components/lab/shared/camera";
 import { cardModel, displayName, evidenceState, type EvidenceState } from "@/components/lab/shared/card-model";
 import { CRITTER } from "@/components/lab/shared/critter";
@@ -243,12 +244,11 @@ export function PaintedSkin() {
   }, [names, family, states]);
   const familyOf = useCallback((n: string) => family?.[n], [family]);
   const pipelines = useMemo(() => taxonomy?.compositions.map((c) => c.name) ?? [], [taxonomy]);
-  const counts = useMemo(() => ({
-    models: names.length,
-    pipelines: taxonomy?.compositions.length ?? 0,
-    champions: Object.values(states).filter((s) => s === "champion").length,
-    lands: Object.keys(famCount).length,
-  }), [names, taxonomy, states, famCount]);
+  // the library's one count of the zoo (lib/copy.ts), in the cartouche's words
+  const counts = useMemo(() => {
+    const z = zooCounts(taxonomy, evidence, family);
+    return { models: z.models, pipelines: z.pipelines, champions: z.proven, lands: z.families };
+  }, [taxonomy, evidence, family]);
 
   const graph = useMemo(() => buildRoadGraph(map), [map]);
   const selected = view?.zoom === "node" && view.focus && map.anchors[view.focus] ? view.focus : null;

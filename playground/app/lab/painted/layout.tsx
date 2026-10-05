@@ -1,5 +1,11 @@
+import type { Metadata } from "next";
 import { Alegreya, Atkinson_Hyperlegible_Next, IM_Fell_English_SC, Pixelify_Sans } from "next/font/google";
 import localFont from "next/font/local";
+
+export const metadata: Metadata = {
+  title: "The Model Zoo map",
+  description: "The 44-model zoo as an illustrated map: six lands, every model on its road, its card and how it works one tap away.",
+};
 
 // The painted skin's typefaces, scoped to this route via CSS variables:
 // Pixelify Sans for the pixel map (crisp, native to the art), IM Fell English

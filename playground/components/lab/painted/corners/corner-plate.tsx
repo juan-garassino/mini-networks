@@ -13,15 +13,13 @@ import { CHROME, CORNER, TYPE, type Material } from "../material";
 import { EvidenceIcon } from "../pixel-icon";
 import { MarkIcon } from "../marker";
 import { plateStyle, plateTitle } from "./plate";
+import { KEY, PAPER_KEY } from "../encoding";
 
 export type MinimapSource = { canvas: HTMLCanvasElement | null; version: number } | { img: string; pixelated: boolean };
 
-const LEGEND: { s: EvidenceState; t: string }[] = [
-  { s: "champion", t: "champion, passed the gate" },
-  { s: "trained", t: "trained, no champion yet" },
-  { s: "provisional", t: "new, bar still provisional" },
-  { s: "untrained", t: "not trained yet" },
-];
+// the legend's rows come from encoding.ts (KEY / PAPER_KEY): each names the
+// mark it explains and the evidence state it draws, so the key cannot drift
+type LegendKey = typeof KEY | typeof PAPER_KEY;
 
 export function CornerPlate({ m, face, world, box, source, onCenter, width = CORNER.w, note, glyph, quiet = false }: {
   m: Material; face: "legend" | "minimap"; world: { w: number; h: number }; box: CamBox; source: MinimapSource; onCenter: (x: number, y: number) => void; width?: number;
@@ -42,22 +40,26 @@ export function CornerPlate({ m, face, world, box, source, onCenter, width = COR
 }
 
 function Legend({ m, note, glyph }: { m: Material; note?: string; glyph?: (s: EvidenceState) => ReactNode }) {
+  const key: LegendKey = m.crisp ? KEY : PAPER_KEY;
   return (
     <>
-    <h2 className="mb-2.5" style={plateTitle(m)}>Map key</h2>
+    <h2 className="mb-2.5" style={plateTitle(m)}>{key.title}</h2>
     <ul className="space-y-1.5" style={{ fontSize: TYPE.link }}>
-      {LEGEND.map(({ s, t }) => (
-        <li key={s} className="flex items-center gap-2">
-          {glyph ? glyph(s) : m.crisp
-            // banner + stone; an untrained model has no banner (atom or not it is
-            // the same grey stone on the map), so its row shows the stone alone
-            ? <span className="flex w-10 items-center justify-center gap-1">{s !== "untrained" && <EvidenceIcon state={s} atom scale={1} />}<EvidenceIcon state={s} atom={false} scale={2} /></span>
-            : <MarkIcon m={m} state={s} size={16} />}
-          <span>{t}</span>
-        </li>
-      ))}
+      {key.rows.map(({ mark, sample, label }) => {
+        const s = sample as EvidenceState;
+        return (
+          <li key={sample} className="flex items-center gap-2">
+            {glyph ? glyph(s) : mark === "atom banner" || mark === "road stone"
+              // banner + stone; an untrained model has no banner (atom or not it is
+              // the same grey stone on the map), so its row shows the stone alone
+              ? <span className="flex w-10 items-center justify-center gap-1">{mark === "atom banner" && <EvidenceIcon state={s} atom scale={1} />}<EvidenceIcon state={s} atom={false} scale={2} /></span>
+              : <MarkIcon m={m} state={s} size={16} />}
+            <span>{label}</span>
+          </li>
+        );
+      })}
       <li className="pt-1 leading-snug" style={{ color: m.inkSoft, fontSize: TYPE.note }}>
-        {note ?? (m.crisp ? "Banners mark atoms; stones, models built on them." : "Signs mark atoms; markers, models built on them.")}
+        {note ?? key.notes?.join(" ")}
       </li>
     </ul>
     </>

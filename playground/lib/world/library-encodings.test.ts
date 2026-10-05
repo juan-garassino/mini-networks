@@ -10,6 +10,7 @@ import * as metro from "../../components/metro/encoding.ts";
 import * as sky from "../../components/lab/sky/encoding.ts";
 import * as flow from "../../components/lab/flow/encoding.ts";
 import * as anatomy from "../../components/lab/shared/anatomy2/encoding.ts";
+import * as painted from "../../components/lab/painted/encoding.ts";
 
 const DESIGNS: [string, Encoding, MarkKey[]][] = [
   ["periodic", periodic.ENCODING, [periodic.KEY_PARTS, periodic.KEY_LEVELS]],
@@ -18,6 +19,7 @@ const DESIGNS: [string, Encoding, MarkKey[]][] = [
   ["kawaii flow", flow.ENCODING, []],
   ["kawaii flow eggs", flow.EGGS, []],
   ["pixel diagrams", anatomy.ENCODING, []],
+  ["painted maps", painted.ENCODING, [painted.KEY, painted.PAPER_KEY]],
 ];
 
 for (const [name, enc, keys] of DESIGNS) {

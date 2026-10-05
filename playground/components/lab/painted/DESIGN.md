@@ -120,7 +120,11 @@ it freezes under `?still=1` and reduced motion.
 
 ## Marks → data
 
-`encoding.ts` lists every mark and its datum; a mark not in it does not belong.
+`encoding.ts` lists every mark and its datum in the library's shape
+(`defineEncoding`, lib/encoding.ts); a mark not in it does not belong. The
+corner legend renders `KEY` / `PAPER_KEY` (`defineKey`), so it cannot drift.
+Counts come from lib/copy.ts `zooCounts`, pixel digits from lib/numerals.ts
+`withDigits`, ready + the test hook from lib/lab-contract.ts.
 
 ## Lifting it into another project
 

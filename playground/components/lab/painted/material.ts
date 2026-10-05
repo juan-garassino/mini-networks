@@ -14,6 +14,7 @@
 import { createElement, Fragment, type ReactNode } from "react";
 import type { EvidenceState } from "@/components/lab/shared/card-model";
 import type { MapId } from "./anchors";
+import { withDigits } from "../../../lib/numerals.ts";
 
 export type MaterialId = MapId | "sky";
 
@@ -205,7 +206,7 @@ export const howItWorks = (m: Material, name: string): ReactNode =>
 // 15 bold; app/lab/painted/layout.tsx): Pixelify's 5 reads as S and its 8 as
 // B, and numbers are data. Where a route does not load the digits family
 // (the var is unset), this falls back to Pixelify alone.
-const PIXEL_FONT = "var(--font-pixel-digits, var(--font-pixel)), var(--font-pixel), ui-monospace, monospace";
+const PIXEL_FONT = withDigits("var(--font-pixel), ui-monospace, monospace");
 // The pixel map's reading face: Atkinson Hyperlegible Next (layout.tsx
 // --font-text), the face the pixel diagrams' prose already uses — open
 // counters and distinct 1 / l / I at 13-15 px, where Pixelify's wide-tracked
