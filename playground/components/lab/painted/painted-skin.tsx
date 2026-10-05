@@ -50,7 +50,7 @@ import { ScaleBar } from "./corners/scale-bar";
 import { CornerPlate, PhoneKey } from "./corners/corner-plate";
 import { PhoneBar } from "./corners/phone-bar";
 import { plateStyle } from "./corners/plate";
-import { EdgeSigns, type EdgeSign } from "./corners/edge-signs";
+import { EdgeSigns, placeEdgeSigns, type EdgeSign } from "./corners/edge-signs";
 import { UNROLL_KEYFRAMES, Unrolling } from "./corners/unrolling";
 import { SeaCanvas, useSeaFurniture } from "./stage";
 import { TrueMapLayers, spotClear, useTrueMap } from "./true-map";
@@ -942,12 +942,48 @@ export function PaintedSkin() {
     return out;
   }, [heal, visible, map, chrome, labelHard, famCount, focusFam, levels.overview, layoutS]);
 
+  // paper on a phone: a land whose title lies off the screen (the cover crop
+  // shows the centre strip) is signed on the edge nearest it, as the pixel
+  // map's lands are (offView); so is one whose title is in view but could not
+  // be set (under the top bar, with no clear spot to step to): every land is
+  // named, on the map or on the edge
+  const paperOff: EdgeSign[] = useMemo(() => {
+    if (!mobile || !heal || selected) return [];
+    const V = visible, shown = new Set(paperSigns.map((p) => p.fam)), out: EdgeSign[] = [];
+    const fams = Object.keys(PAPER_TITLE) as Family[];
+    for (const b of map.baked) {
+      if (b.kind !== "family") continue;
+      const f = fams.find((q) => PAPER_TITLE[q] === b.text);
+      if (!f || f === focusFam || shown.has(f)) continue;
+      const cx = b.box.x + b.box.w / 2, cy = b.box.y + b.box.h / 2;
+      const gaps = { l: cx - V.x, r: V.x + V.w - cx, u: cy - V.y, d: V.y + V.h - cy };
+      const side = cx < V.x ? "l" : cx > V.x + V.w ? "r" : cy < V.y ? "u" : cy > V.y + V.h ? "d"
+        : (["l", "r", "u", "d"] as const).reduce((a, b) => (gaps[b] < gaps[a] ? b : a));
+      out.push({ f, side, at: side === "l" || side === "r" ? (cy - restBox.y) * layoutS : (cx - restBox.x) * layoutS, count: famCount[f] ?? 0 });
+    }
+    return out;
+  }, [mobile, heal, selected, visible, paperSigns, map, focusFam, restBox.x, restBox.y, layoutS, famCount]);
+
+  // the edge signs, laid out as EdgeSigns draws them (screen px), and the
+  // same boxes in map units at rest: a name or a painter's plate half under
+  // a chip reads as cut, so the chips are hard for them too
+  const edgeSigns: EdgeSign[] = useMemo(() => (selected ? [] : [...[...offView].map(([f, v]) => ({ f, side: v.side, at: v.at, count: famCount[f] ?? 0 })), ...paperOff]),
+    [selected, offView, paperOff, famCount]);
+  const edgeTop = 12 + PHONE.bar + 10;
+  const chipHard: Box[] = useMemo(() => {
+    if (!mobile || !edgeSigns.length) return [];
+    const air = 4;
+    return placeEdgeSigns(edgeSigns, heal ? PAPER_TITLE : FAMILY_TITLE, vp.w, vp.h - sheetPx, edgeTop, PHONE.reserveBottom).map((c) => ({
+      x: restBox.x + (c.x - air) / layoutS, y: restBox.y + (c.y - air) / layoutS, w: (c.w + 2 * air) / layoutS, h: (c.h + 2 * air) / layoutS,
+    }));
+  }, [mobile, edgeSigns, heal, vp.w, vp.h, sheetPx, edgeTop, restBox.x, restBox.y, layoutS]);
+
   // phones have no map plate, so labelHard is empty there; the corner
   // furniture (the condensed cartouche, the tabs, the compass rail) is hard
   // for the model names instead, as the corner plates are on desktop: a name
   // half under the cartouche ("…CNN" peeking out) reads as cut. The land
   // signs join them: pushed off the cartouche, a name must not land on a sign
-  const ribbonHard: Box[] = useMemo(() => (mobile ? [...labelHard, ...chrome, ...signs.map((s) => s.box)] : labelHard), [mobile, labelHard, chrome, signs]);
+  const ribbonHard: Box[] = useMemo(() => (mobile ? [...labelHard, ...chrome, ...chipHard, ...signs.map((s) => s.box)] : labelHard), [mobile, labelHard, chrome, chipHard, signs]);
   const ribbons: PlacedRibbon[] = useMemo(() => {
     if (!isTrue || !td || !taxonomy) return [];
     const inView = (n: string) => {
@@ -1185,7 +1221,6 @@ export function PaintedSkin() {
   // phones: the bottom-left stack steps away while the card is pulled up full
   // (it would meet the top bar); off-screen lands keep an edge sign
   const sheetFull = mobile && selected !== null && sheet === "full";
-  const edgeSigns: EdgeSign[] = selected ? [] : [...offView].map(([f, v]) => ({ f, side: v.side, at: v.at, count: famCount[f] ?? 0 }));
 
   return (
     <LabMotion still={still}>
@@ -1218,7 +1253,7 @@ export function PaintedSkin() {
                   className="absolute inset-0 block h-full w-full max-w-none"
                   style={{ imageRendering: mapId === "pixel" ? "pixelated" : "auto" }} />
                 {taxonomy && (
-                  <PaintedOverlay map={map} theme={m} scale={S} heal={heal} ours={ours} hard={[...paperHard, ...edgeHard]} steady={steadyNames} paperSigns={paperSigns} focusFam={focusFam} familyOf={familyOf}
+                  <PaintedOverlay map={map} theme={m} scale={S} heal={heal} ours={ours} hard={[...paperHard, ...edgeHard, ...chipHard]} steady={steadyNames} namesOpen={focusFam !== null || zoomedIn} paperSigns={paperSigns} focusFam={focusFam} familyOf={familyOf}
                     tags={tags} tagFont={tagFont} markerR={markerR} states={states} famCount={famCount}
                     selected={selected} hovered={hovered} lineage={lineage} lineageSet={lineageSet}
                     critter={critter} still={still} onSelect={onSelect} onHover={setHovered} onCritter={onCritter} />
@@ -1265,7 +1300,8 @@ export function PaintedSkin() {
         {/* ——— the four corners (the map stays draggable between them) */}
         {opts && uiHidden && (
           // "map only": one small plate of the map's own stock brings the panels back
-          <button type="button" onClick={() => setUiHidden(false)} aria-label="Show the panels (h)" title="Show the panels (h)"
+          // (a corner like any other: the land signs keep clear of it)
+          <button type="button" data-corner="tr" onClick={() => setUiHidden(false)} aria-label="Show the panels (h)" title="Show the panels (h)"
             className="absolute right-3 top-3 z-20 px-2.5 leading-none opacity-80 hover:opacity-100 focus-visible:opacity-100 focus-visible:outline-2 focus-visible:outline-offset-2 sm:right-5 sm:top-5"
             style={{ ...plateStyle(m), height: PHONE.control, fontFamily: m.signFont, fontWeight: 700, fontSize: TYPE.asideSmall, color: m.crisp ? m.border : m.ink }}>
             Show panels
@@ -1293,7 +1329,7 @@ export function PaintedSkin() {
               </>
             )}
             {mobile && edgeSigns.length > 0 && (
-              <EdgeSigns m={m} signs={edgeSigns} w={vp.w} h={vp.h - sheetPx} top={12 + PHONE.bar + 10} bottom={PHONE.reserveBottom} onLand={jumpLand} />
+              <EdgeSigns m={m} signs={edgeSigns} titles={heal ? PAPER_TITLE : FAMILY_TITLE} w={vp.w} h={vp.h - sheetPx} top={edgeTop} bottom={PHONE.reserveBottom} onLand={jumpLand} />
             )}
             {/* the compass stands on the scale bar, as on a printed map: the
                 scale bar and the legend share the bottom margin */}

@@ -47,6 +47,8 @@ export interface OverlayProps {
   paperSigns?: PaperSign[];
   /** zoomed in: names at one screen size, the painter's plates painted out */
   steady?: boolean;
+  /** a land's names are open beside the live tags: the plates take the tags' size */
+  namesOpen?: boolean;
   /** the land in focus (region / node): the rest of the painting is washed */
   focusFam?: Family | null;
   familyOf?: (name: string) => string | undefined;
@@ -75,8 +77,10 @@ function plateLines(text: string, maxW: number, f: number): string[] {
 
 /** A sheet of cardstock in SVG: the hard drop, the stock (or the loud fill),
  * the pressed inner rule, and its lines of type. `u` = one stroke unit. */
-function Card({ box, m, sel, hov, lit, lines, f, bold, italic, u, rx }: {
-  box: Box; m: MapMaterial; sel: boolean; hov: boolean; lit: boolean; lines: string[]; f: number; bold: boolean; italic?: boolean; u: number; rx: number;
+function Card({ box, m, sel, hov, lit, lines, f, u, rx, weight = 700 }: {
+  box: Box; m: MapMaterial; sel: boolean; hov: boolean; lit: boolean; lines: string[]; f: number; u: number; rx: number;
+  /** the type's weight: a plate's own (700), or the live tags' (500) when it stands among them */
+  weight?: number;
 }) {
   const { x, y, w, h } = box;
   const cx = x + w / 2, cy = y + h / 2, lh = f * 1.12;
@@ -88,8 +92,8 @@ function Card({ box, m, sel, hov, lit, lines, f, bold, italic, u, rx }: {
         filter={sel || hov ? undefined : "url(#pp-grain)"} />
       <rect x={x + 1.5 * u} y={y + 1.5 * u} width={Math.max(0, w - 3 * u)} height={Math.max(0, h - 3 * u)} rx={rx * 0.66} fill="none"
         stroke={sel ? m.loudInk : m.rule} strokeWidth={0.4 * u} opacity={0.6} />
-      <text x={cx} y={cy - ((lines.length - 1) * lh) / 2 + f * 0.07} fontSize={f} fontFamily={m.tagFont} fontWeight={bold ? 700 : 400}
-        fontStyle={italic ? "italic" : undefined} fill={sel ? m.loudInk : bold ? m.ink : m.inkSoft} textAnchor="middle" dominantBaseline="central">
+      <text x={cx} y={cy - ((lines.length - 1) * lh) / 2 + f * 0.07} fontSize={f} fontFamily={m.tagFont} fontWeight={sel ? 700 : weight}
+        fill={sel ? m.loudInk : m.ink} textAnchor="middle" dominantBaseline="central">
         {lines.map((l, i) => <tspan key={i} x={cx} dy={i ? lh : 0}>{l}</tspan>)}
       </text>
     </>
@@ -98,20 +102,33 @@ function Card({ box, m, sel, hov, lit, lines, f, bold, italic, u, rx }: {
 
 /** A painter's plate under labels=ours (his lettering is already painted
  * out). At the whole-sheet view: our plate where his hung, at his plate's size
- * or more, carrying the real model name, or an honest "no model yet" where the
- * painter invented one. Zoomed in (steady): the name is a screen-size card on
- * the same spot; an invented landmark carries none. Half under the map plate
- * or a corner plate: left off. */
-function PaperPlate({ b, theme: m, S, steady, sel, hov, dim, lit, hard, onSelect, onHover }: {
-  b: BakedText; theme: MapMaterial; S: number; steady: boolean; sel: boolean; hov: boolean; dim: boolean; lit: boolean;
+ * or more, carrying the real model name. With a land's names open beside the
+ * live tags: the same plate at the tags' size, so a land reads at one label
+ * size. Zoomed in (steady): the name is a screen-size card on the same spot.
+ * A board the painter invented (no such model) carries nothing. Half under
+ * the map plate or a corner plate: left off. */
+function PaperPlate({ b, theme: m, S, steady, tagF, sel, hov, dim, lit, hard, onSelect, onHover }: {
+  b: BakedText; theme: MapMaterial; S: number; steady: boolean;
+  /** names open in a land beside the live tags: set at the tags' size (image px), one label size per land */
+  tagF?: number;
+  sel: boolean; hov: boolean; dim: boolean; lit: boolean;
   hard?: Box[]; onSelect: (n: string) => void; onHover: (n: string | null) => void;
 }) {
   const name = b.name;
-  const text = name ? displayName(name) : "no model yet";
+  // a board the painter lettered for a model the zoo does not have is painted
+  // out (heal.ts) and left as painting: "no model yet" read as missing data
+  if (!name) return null;
+  const text = displayName(name);
   const cx = b.box.x + b.box.w / 2, cy = b.box.y + b.box.h / 2;
   let box: Box, f: number, lines: string[], u: number, rx: number;
-  if (steady) {
-    if (!name) return null;
+  if (!steady && tagF) {
+    // the live tag's size and padding (labels.ts specs), on the plate's stock
+    f = tagF;
+    lines = [text];
+    const w = text.length * f * EM * 1.08 + 2 * f * 0.45, h = f * 1.55;
+    box = { x: cx - w / 2, y: cy - h / 2, w, h };
+    u = f / 14; rx = f * 0.25;
+  } else if (steady) {
     f = STEADY_FONT / S;
     lines = plateLines(text, 150 / S, f);
     const tw = Math.max(...lines.map((l) => l.length)) * f * EM * 1.08;
@@ -120,8 +137,8 @@ function PaperPlate({ b, theme: m, S, steady, sel, hov, dim, lit, hard, onSelect
     u = 2 / S; rx = 3 / S;
   } else {
     const pad = 4;
-    f = name ? PLATE_FONT : PLATE_FONT * 0.78;
-    lines = name ? plateLines(text, b.box.w * 1.15, f) : [text];
+    f = PLATE_FONT;
+    lines = plateLines(text, b.box.w * 1.15, f);
     const textW = Math.max(...lines.map((l) => l.length)) * f * EM;
     // the painter's plate, padded, is the floor; a long name widens it about its centre
     const w = Math.max(b.box.w + pad * 2, textW + 16), h = Math.max(b.box.h + pad * 2, lines.length * f * 1.12 + 12);
@@ -133,10 +150,10 @@ function PaperPlate({ b, theme: m, S, steady, sel, hov, dim, lit, hard, onSelect
   return (
     <>
       {/* dimmed with the stock's veil, not opacity: one plate never shows the map through it */}
-      <g className={name ? "cursor-pointer" : undefined} aria-hidden
-        onClick={name ? (e) => { e.stopPropagation(); onSelect(name); } : undefined}
-        onPointerEnter={name ? () => onHover(name) : undefined} onPointerLeave={name ? () => onHover(null) : undefined}>
-        <Card box={box} m={m} sel={sel} hov={hov} lit={lit} lines={lines} f={f} bold={Boolean(name)} italic={!name} u={u} rx={rx} />
+      <g className="cursor-pointer" aria-hidden
+        onClick={(e) => { e.stopPropagation(); onSelect(name); }}
+        onPointerEnter={() => onHover(name)} onPointerLeave={() => onHover(null)}>
+        <Card box={box} m={m} sel={sel} hov={hov} lit={lit} lines={lines} f={f} u={u} rx={rx} weight={!steady && tagF ? 500 : 700} />
         {dim && <rect x={box.x} y={box.y} width={box.w} height={box.h} rx={rx} fill={m.marks.veil} opacity={m.marks.veilAlpha} />}
       </g>
     </>
@@ -365,7 +382,7 @@ export const PaintedOverlay = memo(function PaintedOverlay(p: OverlayProps) {
       })()}
 
       {p.heal && map.baked.map((b, i) => (b.kind === "model" || b.kind === "invented") && (
-        <PaperPlate key={`pl${i}`} b={b} theme={theme} S={S} steady={steady} sel={Boolean(b.name) && p.selected === b.name} hov={Boolean(b.name) && p.hovered === b.name}
+        <PaperPlate key={`pl${i}`} b={b} theme={theme} S={S} steady={steady} tagF={p.namesOpen ? p.tagFont : undefined} sel={Boolean(b.name) && p.selected === b.name} hov={Boolean(b.name) && p.hovered === b.name}
           dim={offFocus(b)} lit={hasSel && Boolean(b.name && p.lineageSet.has(b.name))} hard={p.hard}
           onSelect={p.onSelect} onHover={p.onHover} />
       ))}
