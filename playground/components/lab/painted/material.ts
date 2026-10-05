@@ -38,6 +38,10 @@ export interface Material {
   tagFont: string;
   signFont: string;
   bodyFont: string;
+  /** running text in the reading panels (the card's prose, notes, gate rows,
+   * the map plate's caption); default bodyFont. A pixel face is a voice for
+   * names, buttons and headings, not for sentences */
+  textFont?: string;
   crisp: boolean;       // shape-rendering crispEdges + square caps
   /** the compass rose's outline + N (default: dark ink on pixel, the border on paper) */
   roseInk?: string;
@@ -141,6 +145,20 @@ export const CORNER = {
   stack: 12,         // compass above the scale bar
   stackQuiet: 8,
   wPhone: 168,       // the phone cartouche
+  // the sheet tabs: one height for every tab (Pixel, Paper, map only, dev),
+  // the open sheet's lowered by `drop`; quiet = focus mode's compact tabs
+  tab: 36, tabQuiet: 26, tabDrop: 6, tabDropQuiet: 4,
+} as const;
+
+/** Phones (< 640 px wide): one top bar instead of two top corners, and the
+ * room the overview leaves the chrome when it frames the map by its height. */
+export const PHONE = {
+  bar: 44,           // the top bar's height (cartouche + sheets + map only)
+  control: 28,       // every control in it, and an edge sign's height
+  searchW: 300,      // the unfolded search field (the sheets step aside)
+  reserveTop: 64,    // overview framing: the bar + its margin + air
+  reserveBottom: 124, // overview framing: compass + zoom rail + slim scale bar
+  edgeGap: 6,        // between two edge signs stacked on one edge
 } as const;
 
 /** The reading panel. */
@@ -169,6 +187,8 @@ export const CHROME = {
   minimapVeil: "rgba(34,19,22,.35)",   // what lies outside the minimap's view box
 } as const;
 
+/** the material's reading face (running text) */
+export const textFace = (m: Material) => m.textFont ?? m.bodyFont;
 /** a size in the material's sign voice */
 export const sign = (m: Material, px: number) => Math.round(px * (m.signScale ?? 1));
 /** a model's name inside a sign-voice title: its own face, its own case */
@@ -186,6 +206,11 @@ export const howItWorks = (m: Material, name: string): ReactNode =>
 // B, and numbers are data. Where a route does not load the digits family
 // (the var is unset), this falls back to Pixelify alone.
 const PIXEL_FONT = "var(--font-pixel-digits, var(--font-pixel)), var(--font-pixel), ui-monospace, monospace";
+// The pixel map's reading face: Atkinson Hyperlegible Next (layout.tsx
+// --font-text), the face the pixel diagrams' prose already uses — open
+// counters and distinct 1 / l / I at 13-15 px, where Pixelify's wide-tracked
+// sentences read like a terminal
+const TEXT_FONT = "var(--font-text), ui-sans-serif, system-ui, sans-serif";
 // The paper map's two faces: IM Fell English SC for signs, Alegreya to read.
 // Fell's figures are old-style, its 1 a small-cap I ("Champion vi"), so its
 // digits come from Alegreya's (unicode-range, layout.tsx) and the whole skin
@@ -228,6 +253,7 @@ export const MATERIALS: Record<MapId, MapMaterial> = {
     tagFont: PIXEL_FONT,
     signFont: PIXEL_FONT,
     bodyFont: PIXEL_FONT,
+    textFont: TEXT_FONT,
     crisp: true,
     radius: 0,
     evidence: {

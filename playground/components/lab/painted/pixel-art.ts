@@ -228,7 +228,7 @@ export interface RibbonSpec {
   tail: TailSide;
   tailAt: number;       // x (top/bottom) or y (left/right) of the tail tip
   stem?: number;        // extra 1-px stem beyond the 3-px pointer, toward the spot
-  loud?: boolean;       // selected: gold edge, brighter plate, wider margin
+  loud?: boolean;       // selected: inked (maroon plate, cream caps), gold edge, wider margin
   hover?: boolean;
   sign?: { count: number } | null; // family sign: count badge on the right
   dim?: boolean;        // outside the focused land: drawn in the dimmed palette
@@ -293,17 +293,21 @@ export function drawRibbon(r: Raster, s: RibbonSpec) {
   for (const k of plate.keys()) {
     const [px, py] = unkey(k);
     if (ring.has(k)) { r.set(px, py, edge); continue; }
-    const inner = py === y + 1 ? (s.loud || s.hover ? INK.white : INK.parchHi) : py === y + h - 2 ? INK.parchLo : s.loud || s.hover ? INK.parchHi : INK.parchment;
+    // selected = INKED: the plate filled with the map's maroon (as the
+    // drawer's "you are here" chip), a warm bevel on top, a deep one below
+    const inner = s.loud
+      ? (py === y + 1 ? INK.goldDeep : py === y + h - 2 ? INK.maroonDeep : INK.maroon)
+      : py === y + 1 ? (s.hover ? INK.white : INK.parchHi) : py === y + h - 2 ? INK.parchLo : s.hover ? INK.parchHi : INK.parchment;
     r.set(px, py, inner);
   }
   if (s.loud) {
-    // gold edge gets a maroon keyline outside it: the loudest plate on the map
+    // the gold edge gets a dark keyline outside it: the loudest plate on the map
     for (const k of ring) {
       const [px, py] = unkey(k);
-      for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) if (!all.has(key(px + dx, py + dy))) r.set(px + dx, py + dy, INK.maroon);
+      for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) if (!all.has(key(px + dx, py + dy))) r.set(px + dx, py + dy, INK.ink);
     }
   }
-  paintText(r, s.text, x + 1 + padX, y + 1 + padY, s.g, s.loud ? INK.maroon : INK.ink);
+  paintText(r, s.text, x + 1 + padX, y + 1 + padY, s.g, s.loud ? INK.parchHi : INK.ink);
   if (s.sign) {
     const bx = x + w - 1 - badge, by = y + 1, bh = h - 2;
     r.rect(bx, by, badge, bh, INK.maroon);

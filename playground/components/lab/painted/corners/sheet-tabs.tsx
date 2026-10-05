@@ -5,7 +5,7 @@
 // ?dev=1 a third tab opens the render / labels tray (image variants + baked
 // labels — the owner's comparison tools, not part of the learner's UI).
 import type { MapId } from "../anchors";
-import { TYPE, type Material } from "../material";
+import { CORNER, TYPE, type Material } from "../material";
 import { Btn, plateStyle } from "./plate";
 
 export type Render = "true" | "clean" | "grid" | "baked";
@@ -18,16 +18,19 @@ export function SheetTabs({ m, mapId, dev, render, labels, setOpts, devOpen, set
   setOpts: (next: Partial<{ map: MapId; render: Render; labels: Labels }>) => void;
   devOpen: boolean; setDevOpen: (v: boolean) => void;
 }) {
+  // every tab hangs to one height and sets its words on one bottom line;
+  // the open sheet's tab hangs lower by the drop
+  const H = compact ? CORNER.tabQuiet : CORNER.tab;
+  const drop = compact ? CORNER.tabDropQuiet : CORNER.tabDrop;
+  const hang = (on: boolean) => ({ height: H + (on ? drop : 0), display: "inline-flex", alignItems: "flex-end", borderTop: "none" } as const);
   const tab = (id: MapId, text: string) => {
     const on = mapId === id;
     return (
       <button key={id} type="button" role="tab" aria-selected={on} onClick={() => setOpts({ map: id })}
         className={`${compact ? "px-2 pb-1.5" : "px-4 pb-2"} leading-none focus-visible:outline-2 focus-visible:outline-offset-2`}
         style={{
-          ...plateStyle(m, { loud: on, shadow: on }),
-          borderTop: "none", paddingTop: on ? (compact ? 10 : 14) : (compact ? 6 : 8),
+          ...plateStyle(m, { loud: on, shadow: on }), ...hang(on),
           fontFamily: m.signFont, fontWeight: 700, fontSize: compact ? TYPE.tabSmall : TYPE.tab,
-          marginTop: 0,
         }}>
         {text}
       </button>
@@ -39,14 +42,14 @@ export function SheetTabs({ m, mapId, dev, render, labels, setOpts, devOpen, set
         {tab("pixel", "Pixel")}
         {tab("paper", "Paper")}
         {mapOnly && <button type="button" onClick={onHideUi} aria-label="Map only: hide the UI (h)" title="Map only (h)"
-          className={`${compact ? "px-1.5 pb-1.5 pt-1.5" : "px-3 pb-2 pt-2"} leading-none focus-visible:outline-2`}
-          style={{ ...plateStyle(m, { shadow: true }), borderTop: "none", fontFamily: m.bodyFont, fontSize: compact ? TYPE.asideSmall : TYPE.aside }}>
+          className={`${compact ? "px-1.5 pb-1.5" : "px-3 pb-2"} leading-none focus-visible:outline-2`}
+          style={{ ...plateStyle(m, { shadow: true }), ...hang(false), fontFamily: m.bodyFont, fontSize: compact ? TYPE.asideSmall : TYPE.aside }}>
           map only
         </button>}
         {dev && (
           <button type="button" aria-expanded={devOpen} onClick={() => setDevOpen(!devOpen)}
-            className="px-3 pb-2 pt-2 leading-none focus-visible:outline-2"
-            style={{ ...plateStyle(m, { loud: devOpen, shadow: true }), borderTop: "none", fontFamily: m.bodyFont, fontSize: TYPE.aside }}>
+            className="px-3 pb-2 leading-none focus-visible:outline-2"
+            style={{ ...plateStyle(m, { loud: devOpen, shadow: true }), ...hang(false), fontFamily: m.bodyFont, fontSize: TYPE.aside }}>
             dev
           </button>
         )}

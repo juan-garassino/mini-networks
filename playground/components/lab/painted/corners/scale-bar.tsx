@@ -6,8 +6,8 @@
 // by its evidence (gold champion, green trained, hatched when the bar is still
 // provisional, grey untrained). Under the baseline hang the minor graduations:
 // one per pipeline. Hover names the model, click focuses it, double-click a
-// segment opens that land. The counts are the plate's title, in the sign voice
-// every corner plate shares. slim (focus mode): the cells alone, at 4 px, on
+// segment opens that land. Its title is the scale's key ("1 cell = 1 model", in
+// the sign voice every corner plate shares); the counts live in the cartouche. slim (focus mode): the cells alone, at 4 px, on
 // half padding — still a key to the zoo (the selected model's cell rings),
 // no longer a headline.
 import { useState } from "react";
@@ -55,7 +55,8 @@ export function ScaleBar({ m, names, family, states, atoms, pipelines, counts, s
       {!slim && (
         // tabular figures: the counts change as runs land; the line must not jitter
         <p className="mb-2.5 flex items-baseline justify-between gap-4" style={{ fontVariantNumeric: "tabular-nums" }}>
-          <span style={plateTitle(m)}>{counts.models} models, {counts.champions} proven</span>
+          {/* the scale's key, as a printed map states "1 cm = 1 km" (the counts live in the cartouche) */}
+          <span style={plateTitle(m)}>1 cell = 1 model</span>
           <span style={{ fontSize: TYPE.note, lineHeight: 1, color: m.inkSoft }}>{counts.pipelines} pipelines</span>
         </p>
       )}

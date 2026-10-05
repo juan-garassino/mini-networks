@@ -72,14 +72,27 @@ export function Plate({ m, children, className = "", style, label, as: Tag = "se
   );
 }
 
+/** A control that cannot act right now (zoomed all the way out, say): sunk
+ * flat into the page — no lift, the plate's own parchment, rim and glyph in
+ * the soft ink. Still legible at a glance (half ink, not a ghost), clearly off. */
+export function disabledStyle(m: Material): CSSProperties {
+  return {
+    background: m.plate,
+    color: m.inkSoft,
+    border: m.crisp ? `var(--ap) solid ${m.inkSoft}` : `2px solid ${m.inkSoft}`,
+    borderRadius: m.crisp ? undefined : m.radius,
+    boxShadow: m.crisp ? `inset var(--ap) var(--ap) 0 ${m.rule}` : "none",
+  };
+}
+
 export function Btn({ m, children, onClick, disabled, pressed, label, className = "", title, style }: {
   m: Material; children: ReactNode; onClick: () => void; disabled?: boolean; pressed?: boolean; label?: string; className?: string; title?: string; style?: CSSProperties;
 }) {
   return (
     <button type="button" onClick={onClick} disabled={disabled} aria-pressed={pressed} aria-label={label} title={title}
-      className={`inline-flex items-center justify-center px-2 leading-none focus-visible:outline-2 focus-visible:outline-offset-2 disabled:opacity-40 ${className}`}
+      className={`inline-flex items-center justify-center px-2 leading-none focus-visible:outline-2 focus-visible:outline-offset-2 disabled:cursor-default ${className}`}
       style={{
-        ...plateStyle(m, { loud: pressed, shadow: !pressed }),
+        ...(disabled ? disabledStyle(m) : plateStyle(m, { loud: pressed, shadow: !pressed })),
         fontFamily: m.bodyFont, fontSize: TYPE.lead, minHeight: 28,
         transform: pressed ? "translate(var(--ap, 1px), var(--ap, 1px))" : undefined,
         ...style,
@@ -109,12 +122,19 @@ export function MagnifierIcon({ m, size = 14 }: { m: Material; size?: number }) 
 /** Find a model: the cartouche's bottom row. "/" focuses it from anywhere.
  * collapsed (focus mode): a magnifier button until it is pressed (or "/"), then
  * the field unfolds in place and folds back when it is left empty. */
-export function Search({ m, names, onPick, compact = false, collapsed = false }: { m: Material; names: string[]; onPick: (n: string) => void; compact?: boolean; collapsed?: boolean }) {
+export function Search({ m, names, onPick, compact = false, collapsed = false, onFold, width }: {
+  m: Material; names: string[]; onPick: (n: string) => void; compact?: boolean; collapsed?: boolean;
+  /** collapsed: told when the field unfolds (true) and folds back (false), so a tight bar can make room */
+  onFold?: (open: boolean) => void;
+  /** collapsed: the unfolded field's width (default 150 compact / 196) */
+  width?: number;
+}) {
   const [q, setQ] = useState("");
   const [open, setOpen] = useState(false);
   const [unfolded, setUnfolded] = useState(false);
   const ref = useRef<HTMLInputElement | null>(null);
   const folded = collapsed && !unfolded && !q;
+  useEffect(() => { if (collapsed) onFold?.(!folded); }, [collapsed, folded, onFold]);
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "/" && document.activeElement?.tagName !== "INPUT") { e.preventDefault(); setUnfolded(true); requestAnimationFrame(() => ref.current?.focus()); }
@@ -140,7 +160,7 @@ export function Search({ m, names, onPick, compact = false, collapsed = false }:
     );
   }
   return (
-    <div className="relative" style={collapsed ? { width: compact ? 150 : 196 } : undefined}>
+    <div className="relative" style={collapsed ? { width: width ?? (compact ? 150 : 196) } : undefined}>
       <label className="sr-only" htmlFor="painted-search">Find a model</label>
       <input id="painted-search" ref={ref} value={q} placeholder={compact || collapsed ? "Find a model" : "Find a model, press /"} autoComplete="off"
         onChange={(e) => { setQ(e.target.value); setOpen(true); }}

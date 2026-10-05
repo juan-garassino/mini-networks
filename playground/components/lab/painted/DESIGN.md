@@ -33,7 +33,7 @@ chrome: they carry the pixel map's own palette ramps beside their sprites.
 | `ink` / `inkSoft` | `#3a1d2a` / `#715755` | `#2b1d12` / `#6a5139` |
 | `loud` / `loudInk` (selected) | `#7a2424` / `#fdf4c1` | `#7a2e1c` / `#fff4dc` |
 | `road` / `ring` | `#fdc771` / `#e91c1d` | `#f4b73e` / `#c0392b` |
-| faces | Pixelify Sans, digits VT323 / Jersey 15 | Fell English SC signs, Alegreya text, digits Alegreya lining |
+| faces | Pixelify Sans (digits + Z: VT323 / Jersey 15); sentences Atkinson Hyperlegible Next (`textFont`) | Fell English SC signs, Alegreya text, digits Alegreya lining |
 | `signScale` / `nameFont` | 1 / — | 1.2 (small caps run small) / Alegreya (a name keeps its case) |
 | border | `--ap` (1 art px) solid | 2 px solid, radius 3 |
 | shadow | `--ap --ap 0 #221316`, hard | `card.drop` 3 px hard sepia + laid-paper `card.grain` |
@@ -48,19 +48,29 @@ critter) per map.
 Card: name 28 · section head 14 · body 15/1.4 · note 13/1.35 · meta 12 ·
 chip 14 · stamp 13 · badge 11. Chrome: display 32 (20, 16 when quiet/phone) ·
 lead 16 · plate title 15 · link 14 · tab 20 (14) · aside 14 (12) · button 13 ·
-sheet title 24 · caption 12. The sign voice runs at `sign(m, px)` =
-`px × signScale`. Running text keeps `DRAWER.measure` (19 em ≈ 38 chars).
-Numbers are data: a face whose figures misread (Pixelify's 5 = S, Fell's
-1 = I) gets a digits-only `unicode-range` face (`app/lab/painted/layout.tsx`).
+sheet title 24 · caption 12. Sentences (card prose, notes, gate rows, the
+plate's caption) use `textFace(m)`; the pixel face voices names, buttons and
+headings. Signs run at `sign(m, px)`; running text keeps `DRAWER.measure`
+(19 em). A face whose figures misread (Pixelify's 5 = S, its Z = 2; Fell's
+1 = I) gets a `unicode-range` override face (`app/lab/painted/layout.tsx`).
 
 ## Corners, margins, spacing
 
-`CORNER`: one outer margin (12 phone / 20 desktop), one inner padding (12),
-one side column (324) for cartouche and legend/minimap; compass stands
-`stack` (12, 8 quiet) above the scale bar; scale bar and legend share the
-bottom edge. `SPACE` (card): section 24 · header→content 10 · sub-label 6 ·
-lede 16. `DRAWER`: 440 with the diagram, 336 text-only, phone snaps
-0.2 / 0.5 / 0.88 of the height.
+`CORNER`: one outer margin (12 phone / 20 desktop), one padding (12), one side
+column (324) for cartouche and legend/minimap; the compass stands `stack`
+(12, 8 quiet) on the scale bar; scale bar and legend share the bottom edge;
+every sheet tab hangs to `tab` (36, 26 quiet; the open one `tabDrop` lower).
+A control that cannot act is sunk flat (`disabledStyle`), never a ghost.
+`SPACE` (card): section 24 · header→content 10 · sub-label 6 · lede 16.
+`DRAWER`: 440 with the diagram, 336 text-only, phone snaps 0.2 / 0.5 / 0.88.
+
+**Phones** (`PHONE`, < 640 px): one top bar in every view
+(`corners/phone-bar.tsx`). The overview frames the map by its height between
+bar and compass at a whole crisp scale; the continent pans sideways from its
+middle ("−" steps out to all of it). Lands go in at whole crisp scales too
+(between two, names drop to 7.5 px). An off-screen land keeps an edge sign
+(`corners/edge-signs.tsx`), none while a card is open. The sheet's top is the
+corners' floor; pulled up full, the bottom stack steps away.
 
 ## Focus mode
 
@@ -88,6 +98,15 @@ yields, the plate never clips.
 - Openness has three levels: whole map = land signs only (hover names a
   model); in a land = that land's names; a model = its card + named lineage.
 
+## Loading a view
+
+A view opens framed. Until everything its framing depends on is in (data,
+picture, fonts, the corners and the plate measured — each re-plans it) and its
+target has held for `SETTLE_MS`, the page is veiled (the sea alone) and the
+camera jumps; then the veil lifts in one cut, already in focus mode, and the
+corners stamp on. `data-lab-ready` (lib/lab-contract.ts `useLabReady`) waits for
+the reveal, the camera's `landed` and the stamp-on.
+
 ## Motion and life
 
 `MOTION`: corners stamp on in turn (160 ms, `steps(2)`, 90 ms stagger),
@@ -101,35 +120,24 @@ it freezes under `?still=1` and reduced motion.
 
 ## Marks → data
 
-`encoding.ts` lists every mark and the datum it encodes; a mark not in that
-table does not belong on the screen.
+`encoding.ts` lists every mark and its datum; a mark not in it does not belong.
 
 ## Lifting it into another project
 
 Files: `material.ts`, `corners/*`, `drawer.tsx`, `card.tsx`, `map-plate.tsx`,
 `plate-place.ts`, `labels.ts`, `roads.ts`, `overlay.tsx`, `marker.tsx`,
 `heal.ts`, `painted-skin.tsx`, `anchors.ts` (+ `app/lab/painted/layout.tsx`
-for the faces). The pixel-only art modules come along only for a pixel map.
+for the faces); the pixel art modules only for a pixel map.
 
 1. Put your painting in `public/` and add it to `IMAGES`.
-2. Map it in `anchors.ts` as a `PaintedMap` (image px):
-   - `anchors: { name: [x, y, why] }`, one spot per item, the why kept beside
-     the number;
-   - `junctions` + `roads: { a, b, via?, kind? }`, the painted roads, joining
-     every anchor (lineage routes run on them);
-   - `lands: { group: polygon }` and `signs: { group: [x, y] }`;
-   - `baked: { kind, text, name?, box }`, the painter's own lettering:
-     `family` titles to redraw, `model`/`invented` plates to re-letter,
-     `chrome` (his compass, cartouche, scale bar) to paint out.
-3. Write a `Material` in `material.ts` for your sheet: inks, faces (+ a
-   digits face if its figures misread), plate construction (`crisp` for pixel
-   art, `card` for cardstock), `marks`.
-4. Replace the data: `useWorld` (taxonomy, evidence) feeds names, groups and
-   evidence; the card reads `cardModel`; `FAMILY_TITLE` / `PAPER_*` hold the
-   group words.
-5. Swap the diagram plate's content (`MechanismDiagram`) for yours; the
-   placement (`plate-place.ts`) only needs its size.
-6. Rewrite `encoding.ts` for your marks.
-
-Skins that reuse the corners pass their own `Material` and, for the card, an
-optional `glyph` to the Drawer.
+2. Map it in `anchors.ts` as a `PaintedMap` (image px): `anchors` (one spot
+   per item, its why beside it), `junctions` + `roads` joining every anchor,
+   `lands` polygons + `signs`, and `baked` (the painter's lettering: titles to
+   redraw, plates to re-letter, his chrome to paint out).
+3. Write a `Material`: inks, faces (+ a digits face if its figures misread,
+   a `textFont` for sentences), plate construction (`crisp` / `card`), `marks`.
+4. Replace the data: `useWorld` feeds names, groups, evidence; the card reads
+   `cardModel`; `FAMILY_TITLE` / `PAPER_*` hold the group words.
+5. Swap the plate's `MechanismDiagram` for yours (placement needs its size).
+6. Rewrite `encoding.ts`. Skins reusing the corners pass their own `Material`
+   and, for the card, an optional `glyph` to the Drawer.

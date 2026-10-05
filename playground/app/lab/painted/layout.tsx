@@ -1,4 +1,4 @@
-import { Alegreya, IM_Fell_English_SC, Pixelify_Sans } from "next/font/google";
+import { Alegreya, Atkinson_Hyperlegible_Next, IM_Fell_English_SC, Pixelify_Sans } from "next/font/google";
 import localFont from "next/font/local";
 
 // The painted skin's typefaces, scoped to this route via CSS variables:
@@ -6,10 +6,15 @@ import localFont from "next/font/local";
 // SC for the paper map's signs and titles, Alegreya for its tags and card text.
 const pixel = Pixelify_Sans({ subsets: ["latin"], weight: ["400", "500", "700"], variable: "--font-pixel", display: "block" });
 const fell = IM_Fell_English_SC({ subsets: ["latin"], weight: "400", variable: "--font-fell", display: "block" });
+// The pixel map's reading face (material.ts textFont): the card's sentences,
+// notes and gate rows, the map plate's caption. Pixel type stays the voice of
+// names, buttons and headings; sentences need open counters at 13-15 px.
+const text = Atkinson_Hyperlegible_Next({ subsets: ["latin"], variable: "--font-text", display: "block" });
 const alegreya = Alegreya({ subsets: ["latin"], weight: ["400", "500", "700"], variable: "--font-alegreya", display: "block" });
 
 // Pixelify draws 5 as S and 8 as B at chrome sizes ("0.1S0"), and numbers are
-// data. So the digits 0-9, and only those (unicode-range), come from two
+// data; its capital Z has a 2's hook ("The Model 2oo"). So the digits 0-9 and
+// the capital Z, and only those (unicode-range), come from two
 // clearer pixel faces, and every other character falls through to Pixelify
 // (material.ts lists this family first). Chosen from a specimen at 13-28 px,
 // dpr 2, against Tiny5, Silkscreen, Jersey 10, Micro 5, Handjet, Bytesized:
@@ -31,7 +36,7 @@ const digits = localFont({
   display: "block",
   adjustFontFallback: false,
   declarations: [
-    { prop: "unicode-range", value: "U+0030-0039" },
+    { prop: "unicode-range", value: "U+0030-0039, U+005A" },
     { prop: "size-adjust", value: "115%" },
   ],
 });
@@ -51,5 +56,5 @@ const paperDigits = localFont({
 });
 
 export default function PaintedLayout({ children }: Readonly<{ children: React.ReactNode }>) {
-  return <div className={`${pixel.variable} ${digits.variable} ${paperDigits.variable} ${fell.variable} ${alegreya.variable} h-full w-full`}>{children}</div>;
+  return <div className={`${pixel.variable} ${digits.variable} ${text.variable} ${paperDigits.variable} ${fell.variable} ${alegreya.variable} h-full w-full`}>{children}</div>;
 }

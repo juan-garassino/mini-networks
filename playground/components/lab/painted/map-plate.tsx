@@ -15,7 +15,7 @@ import { MechanismDiagram, diagramFor } from "@/components/lab/shared/anatomy2";
 import { THEMES } from "@/components/lab/shared/anatomy2/themes";
 import { displayName } from "@/components/lab/shared/card-model";
 import { Btn, plateStyle } from "./corners/plate";
-import { TYPE, howItWorks, sign, type Material } from "./material";
+import { TYPE, howItWorks, sign, textFace, type Material } from "./material";
 import type { PlateSide } from "./plate-place";
 
 export const ART_W = 560;
@@ -67,7 +67,7 @@ export const MapPlate = forwardRef<HTMLElement, {
       <div style={{ background: th.ground, padding: MAT, border: `var(--ap, 2px) solid ${m.border}`, borderRadius: m.radius, lineHeight: 0 }}>
         <MechanismDiagram name={name} theme={m.diagram} variant="full" still={still} width={ART_W * zoom} fit={false} caption={false} />
       </div>
-      <p className="truncate" title={def?.truth} style={{ height: FOOT, paddingTop: 6, fontSize: TYPE.caption, lineHeight: 1.2, color: m.inkSoft, maxWidth: ART_W * zoom + 2 * MAT }}>
+      <p className="truncate" title={def?.truth} style={{ height: FOOT, paddingTop: 6, fontFamily: textFace(m), fontSize: TYPE.caption, lineHeight: 1.2, color: m.inkSoft, maxWidth: ART_W * zoom + 2 * MAT }}>
         {def ? sentence(def.badge) : "A generic sketch, not this model's own diagram."}
         {def && " Enlarge for what is computed and what is drawn."}
       </p>

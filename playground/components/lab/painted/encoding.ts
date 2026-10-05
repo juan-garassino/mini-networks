@@ -3,10 +3,11 @@
 // painting; the live layer only adds what is listed here.)
 export const ENCODING = {
   // on the map
-  "land sign": "family name + number of models in that land (count badge)",
+  "land sign": "family name + number of models in that land (count badge); a land out of focus signs at the names' size, never louder",
+  "edge sign": "phones: a land whose sign spot is off the screen — its name + count on the nearest screen edge, at the land's height, a stepped chevron toward it; press = open that land (none while a card is open)",
   "atom banner": "a root model (no parents); flag colour = evidence state",
   "road stone": "a derived model on the painted roads; stone colour = evidence state",
-  "model ribbon": "the model's name; loud (inked) when selected, lit when hovered",
+  "model ribbon": "the model's name; inked when selected (maroon plate, cream caps, gold edge + dark keyline — the drawer's 'you are here' chip), lit when hovered",
   "paper plate": "paper map: the model's name where the painter hung his plate (his lettering is retouched out of the painting), one type size for all at the whole-sheet view (long names break to two lines), one screen size once zoomed in; 'no model yet' where the painter invented one",
   "paper land title": "paper map: a land's name and the painter's subline, redrawn on our stock at his plate's size, set to fit; stays whole in view (steps clear of the corners) and keeps its whole-sheet screen size when zoomed in",
   "paper seal": "the number of models in that land (wax seal on the title's corner)",
@@ -29,11 +30,13 @@ export const ENCODING = {
   // in a land = that land's names; a model = its card + named lineage
   // the four corners
   "cartouche sentence": "live counts: models, lands, proven champions (or the focused land's)",
-  "sheet tab": "which owner map is open (pixel / paper)",
+  "sheet tab": "which owner map is open (pixel / paper); every tab one height (CORNER.tab), the open one lowered",
+  "phone bar": "phones: the two top corners as one row — title, find-a-model magnifier, the Pixel / Paper pair (pressed = open), map only (framed-corners icon)",
+  "disabled control": "a control that cannot act now (zoomed all the way out): sunk flat, parchment fill, soft-ink rim and glyph, no shadow",
   "compass points": "pan direction; hub = whole map (filled gold when at the whole map)",
   "scale bar cell": "one model, in land order (atoms first); fill = evidence state (hatched = provisional); one framed segment = one land",
   "pipeline tick": "one composition (pipeline): a graduation hanging under the scale bar's baseline",
-  "scale bar title": "the zoo's counts: models and proven champions (sign voice), pipelines (right)",
+  "scale bar title": "the scale's key, '1 cell = 1 model' (sign voice), pipelines count (right); the zoo's counts live in the cartouche only",
   "legend title": "'Map key': the corner plates' one title treatment (sign voice, border ink)",
   "search magnifier": "focus mode: the find-a-model field, folded; pressing it (or '/') unfolds the field in place",
   "legend row": "the evidence vocabulary (banner + stone per state; 'not trained yet' is the grey stone alone — an untrained atom flies no banner)",
@@ -47,8 +50,11 @@ export const ENCODING = {
   // (title, Whole map, magnifier), the scale bar a slim strip of 4-px cells (no
   // ticks, no title), the minimap a 176-px inset, the compass two thirds size,
   // the tabs compact — they re-stamp in place (two frames) on the change;
-  // phones with a model open drop "map only" and the cartouche's Whole map
-  // (the sheet has its own). No mark changes meaning, only size.
+  // with a model open the cartouche drops its Whole map (the drawer has one).
+  // Phones: one top bar in every view; the overview frames the map by its
+  // height at a whole crisp scale (the continent pans sideways); a land goes
+  // in at a whole crisp scale too; the compass + slim scale bar step away
+  // while the card is pulled up full. No mark changes meaning, only size.
   "land sign clearance": "a land sign that would sit under the corner furniture steps to the nearest clear spot",
   // the map plate (desktop): "How <model> works", hung beside the selected castle
   "map plate": "the selected model's full mechanism diagram at 1 art px = 1 CSS px (×1.5 / ×2 only when that is whole device px and the plate keeps to half the visible width, 60 % of its height), in a compact frame (8-px padding, 22-px buttons), on a plate of the map's own material; follows the castle in map space, never scales; caption = how real the drawing is (the diagram's badge)",
@@ -58,7 +64,7 @@ export const ENCODING = {
   "drawer glyph": "the selected model's evidence state, as its own map sprite (paper: its marker); a skin may pass its own (Drawer glyph prop)",
   "drawer place line": "the model's land, and atom or its generation (depth)",
   "evidence stamp": "the evidence state in the colours the map paints it (dashed = provisional), + the champion's registry version",
-  "introduces box": "a mechanism the model adds to the zoo (gold square = the taxonomy's 'introduces')",
+  "introduces box": "a mechanism the model adds to the zoo (gold cog = the taxonomy's 'introduces')",
   "card road": "the Lineage section, as the map draws it: 'Built on' signposts, a dashed road, the model itself (inked, 'you are here'), a dashed road, leads-to signposts; an atom has no road in; a dashed empty sign = nobody builds on it yet",
   "count badge": "how many pipelines (the land signs' badge, beside the section header)",
   "section header": "one of the card's three sections (Lineage, Pipelines, Quality gate; + How it works on phones): sign voice, ruled out to the edge",

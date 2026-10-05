@@ -24,7 +24,7 @@ import { createContext, useContext, type CSSProperties, type ReactNode } from "r
 import { displayName, EVIDENCE_COPY, type CardModel, type EvidenceState } from "@/components/lab/shared/card-model";
 import { MechanismDiagram } from "@/components/lab/shared/anatomy2";
 import { THEMES } from "@/components/lab/shared/anatomy2/themes";
-import { DRAWER, FAMILY_TITLE, SPACE, TYPE, nameFace, sign, type Material } from "./material";
+import { DRAWER, FAMILY_TITLE, SPACE, TYPE, nameFace, sign, textFace, type Material } from "./material";
 import { EvidenceIcon } from "./pixel-icon";
 import { MarkIcon } from "./marker";
 import { plateStyle } from "./corners/plate";
@@ -59,6 +59,22 @@ function Label({ m, children, count, id }: { m: Material; children: ReactNode; c
       )}
       <span aria-hidden className="block flex-1" style={{ height: "var(--ap, 2px)", background: m.crisp ? m.rule : m.inkSoft, opacity: m.crisp ? 1 : 0.35 }} />
     </h3>
+  );
+}
+
+/** The taxonomy's "introduces": a gold cog (a mechanism), drawn on a 7-unit
+ * grid so it lands on art pixels on the pixel map — never an empty square
+ * that reads as an unchecked box. */
+function MechanismGlyph({ m, size = 14 }: { m: Material; size?: number }) {
+  return (
+    <svg aria-hidden width={size} height={size} viewBox="0 0 7 7" shapeRendering={m.crisp ? "crispEdges" : undefined} style={{ display: "block", flex: "none" }}>
+      <g fill={m.border}>
+        <rect x="3" y="0" width="1" height="7" /><rect x="0" y="3" width="7" height="1" />
+        <rect x="1" y="1" width="5" height="5" />
+      </g>
+      <rect x="2" y="2" width="3" height="3" fill={m.road} />
+      <rect x="3" y="3" width="1" height="1" fill={m.border} />
+    </svg>
   );
 }
 
@@ -147,8 +163,10 @@ function CardBodyInner({ card, theme: m, still, onPick, stateOf, isAtom, diagram
   const head = m.crisp ? m.border : m.ink;
   const section: CSSProperties = { marginTop: SPACE.section };
   const pipes = card.compositions;
-  const text: CSSProperties = { maxWidth: DRAWER.measure };
-  const note: CSSProperties = { fontSize: TYPE.note, lineHeight: 1.35, color: m.inkSoft, maxWidth: DRAWER.measure };
+  // sentences in the reading face; names, chips, headings stay in the map's voice
+  const prose = textFace(m);
+  const text: CSSProperties = { maxWidth: DRAWER.measure, fontFamily: prose };
+  const note: CSSProperties = { fontSize: TYPE.note, lineHeight: 1.35, color: m.inkSoft, maxWidth: DRAWER.measure, fontFamily: prose };
   return (
     <section aria-label={`${name} lesson card`} style={{ color: m.ink, fontFamily: m.bodyFont, fontSize: TYPE.body, lineHeight: 1.4 }}>
       {/* where it is, then who, then how far it has got */}
@@ -169,12 +187,12 @@ function CardBodyInner({ card, theme: m, still, onPick, stateOf, isAtom, diagram
         <div key={i.key} className="mt-3 px-2.5 py-2" style={m.card ? plateStyle(m, { shadow: false })
           : { background: m.plate, border: `var(--ap, 2px) solid ${m.crisp ? m.rule : m.border}`, borderRadius: m.radius, boxShadow: m.crisp ? `inset 0 0 0 1px ${m.rule}` : undefined }}>
           <p className="flex items-center gap-2 leading-none" style={{ fontSize: TYPE.meta, fontWeight: 500, color: m.inkSoft }}>
-            <span aria-hidden className="inline-block h-2 w-2 flex-none" style={{ background: m.road, boxShadow: `0 0 0 1px ${m.border}` }} />
+            <MechanismGlyph m={m} />
             Introduces
           </p>
           <p className="mt-1.5" style={{ fontSize: TYPE.chip, lineHeight: 1.35, maxWidth: DRAWER.measure }}>
             <b style={{ fontWeight: 700, color: head }}>{displayName(i.key)}</b>
-            {i.description ? <span>: {i.description}</span> : null}
+            {i.description ? <span style={{ fontFamily: prose }}>: {i.description}</span> : null}
           </p>
         </div>
       ))}
@@ -264,7 +282,7 @@ function CardBodyInner({ card, theme: m, still, onPick, stateOf, isAtom, diagram
             </div>
           )}
           {/* tabular figures: the bar and the best score stack in one column, digit over digit */}
-          <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1" style={{ fontSize: TYPE.note, lineHeight: 1.35, fontVariantNumeric: "tabular-nums" }}>
+          <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1" style={{ fontSize: TYPE.note, lineHeight: 1.35, fontVariantNumeric: "tabular-nums", fontFamily: prose }}>
             <dt style={{ color: m.inkSoft }}>Judged on</dt>
             <dd>{displayName(ev.gate_metric)}, {ev.higher_is_better ? "higher is better" : "lower is better"}</dd>
             {ev.threshold_m != null && (
