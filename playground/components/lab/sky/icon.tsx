@@ -4,8 +4,8 @@
 // drawn into a canvas at art resolution and shown pixelated at a CSS scale.
 import { useEffect, useRef } from "react";
 import type { EvidenceState } from "@/components/lab/shared/card-model";
-import { hex } from "./palette";
-import { emblem, starSprite, type Sprite } from "./sprites";
+import { hex } from "./tokens";
+import { starSprite, type Sprite } from "./sprites";
 
 export function SpriteIcon({ s, scale = 2, label, pad = 0 }: { s: Sprite; scale?: number; label?: string; pad?: number }) {
   const ref = useRef<HTMLCanvasElement | null>(null);
@@ -36,9 +36,4 @@ export function StarPair({ state, scale = 2 }: { state: EvidenceState; scale?: n
       <SpriteIcon s={starSprite(state, false)} scale={scale} />
     </span>
   );
-}
-
-export function Emblem({ family, scale = 2 }: { family: string; scale?: number }) {
-  const s = emblem(family);
-  return s ? <SpriteIcon s={s} scale={scale} /> : null;
 }

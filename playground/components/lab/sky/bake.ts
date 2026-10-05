@@ -16,9 +16,9 @@
 //
 // Pure (no DOM): bake.test.ts runs it under node; the skin puts the RGBA into
 // a canvas and shows it pixelated under the marks.
-import { FAMILY_INK, FIELD, NIGHT, hex, type Rgb } from "./palette.ts";
+import { FAMILY_INK, FIELD, GRID, NIGHT, hex, type Rgb } from "./tokens.ts";
 
-export const CELL = 4;
+export const CELL = GRID.cell;
 
 export interface BakeStar { name: string; family: string; x: number; y: number; atom: boolean }
 export interface BakeEdge { from: { x: number; y: number }; to: { x: number; y: number }; family: string }

@@ -2,7 +2,7 @@
 // px, snapped to the device grid): sprites, 1-px Bresenham lines that stop
 // short of the stars they join, dotted pipeline arcs, broken rings. Every mark
 // lands on whole art pixels — no antialiased stroke anywhere on the sky.
-import { NIGHT, hex } from "./palette.ts";
+import { NIGHT, hex } from "./tokens.ts";
 import type { Sprite } from "./sprites.ts";
 
 export type Pt = { x: number; y: number };

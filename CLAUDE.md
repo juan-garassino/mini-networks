@@ -181,23 +181,31 @@ playground/ (repo root)  Next.js 16 + React 19 + TS + Tailwind v4 + Recharts +
                      pixel-art star chart on lib/world positions. sky/bake.ts bakes
                      the sky once (1 sky px = 4 world px, pixelated): night ramp,
                      dithered Milky Way margins, field stars, and one Bayer-dithered
-                     nebula per family on its hue-shifted ramp (palette.ts) — the
+                     nebula per family on its hue-shifted ramp (tokens.ts) — the
                      nebula IS the family (bake.test.ts: every star inside its own).
                      A screen canvas on a 2-px art grid (paint.ts) draws the evidence
                      sprites (sprites.ts: sparkle/gem/broken ring/point, atoms large),
-                     1-px asterism lines stopping short of their stars (overview:
-                     primary in-family only; focus adds dashed secondary/cross),
+                     1-px asterism lines stopping short of their stars (a fan parent
+                     keeps a wider ring; long lines sink into their nebula's tone
+                     mid-run; overview: primary in-family only; focus adds dashed
+                     secondary/cross),
                      dotted pipeline arcs, the broken selection ring, and the 12-fps
                      life (motion.ts: twinkle, champion glint, parent→child comets,
                      meteor; frame 0 under still/reduced motion). Night sign plaques
-                     (16×16 emblem + FAMILY count) sit on each nebula's top-left
-                     (taken: the nearest free spot whose closest star is their own);
+                     (16×16 emblem + Family count, sentence case) sit on each
+                     nebula's top-left (taken: the free spot nearest their stars on
+                     no neighbour's cloud, with a dotted leader when set away);
                      off-screen pipeline partners get named edge chevrons. Portrait
                      phones turn the chart a quarter and fit the stars, so the sky
                      fills the screen. Chrome:
-                     the painted four corners + drawer in the `sky` material
-                     (Pixelify, crisp), Day | Night tabs. ?specimen=1 = the sprite /
-                     nebula / emblem specimen sheet.
+                     the painted four corners + drawer fed tokens.ts SKY_MATERIAL
+                     (Pixelify, crisp, brass rim), Day | Night tabs; words keep out
+                     of the corner plates' measured rects. ?specimen=1 = the sprite /
+                     nebula / emblem specimen sheet. Boilerplate: sky/tokens.ts is
+                     the one value source; layers.tsx (canvases), layout.ts (word
+                     placement), plaque.tsx / chrome.tsx (HTML furniture);
+                     sky/DESIGN.md = tokens, grids, mark table, how to bake any
+                     graph into a night chart.
                      /lab/designs = the design board (lib/designs.ts: seven designs —
                      periodic table ×3 skins via /?edition=<id>, paper maps ×4, pixel
                      maps ×2 as full bands, then atlas plates, Network Atlas, Kawaii

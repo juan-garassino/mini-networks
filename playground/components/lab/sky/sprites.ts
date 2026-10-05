@@ -1,9 +1,9 @@
 // The Night Map's hand-authored pixel sprites: the four evidence stars (in an
 // atom size and a derived size), the six family emblems for the sign plaques,
-// and the broken selection ring. Letters index a ramp in palette.ts; "." is
+// and the broken selection ring. Letters index a ramp in tokens.ts; "." is
 // transparent. Pure data + tiny pure helpers (node tests import this).
 import type { EvidenceState } from "@/components/lab/shared/card-model";
-import { FAMILY_INK, GOLD, GREY, INK, LILAC, MINT } from "./palette.ts";
+import { FAMILY_INK, GOLD, GREY, INK, LILAC, MINT } from "./tokens.ts";
 
 export interface Sprite {
   w: number;
