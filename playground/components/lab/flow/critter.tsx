@@ -5,18 +5,18 @@
 // No hats, pennants, badges or stickers — the box carries the rest.
 import { memo } from "react";
 import type { EvidenceState } from "@/components/lab/shared/card-model";
-import { fam, GOLD, INK } from "./palette";
+import { COLOR, fam, STROKE } from "./tokens";
 
-const SW = 1.3;
+const SW = STROKE.critter;
 
 /** Body outline per family, drawn in a 24×24 cell; returns the face centre. */
 function Body({ family, fill }: { family: string; fill: string }) {
-  const p = { fill, stroke: INK, strokeWidth: SW, strokeLinejoin: "round" as const };
+  const p = { fill, stroke: COLOR.ink, strokeWidth: SW, strokeLinejoin: "round" as const };
   switch (family) {
     case "perception": // an eyeball with three lashes
       return (
         <>
-          <path d="M7.6 6.4 L6.4 3.6 M12 5.4 V2.4 M16.4 6.4 L17.6 3.6" stroke={INK} strokeWidth={SW} strokeLinecap="round" />
+          <path d="M7.6 6.4 L6.4 3.6 M12 5.4 V2.4 M16.4 6.4 L17.6 3.6" stroke={COLOR.ink} strokeWidth={SW} strokeLinecap="round" />
           <circle cx={12} cy={14} r={8.6} {...p} />
         </>
       );
@@ -25,7 +25,7 @@ function Body({ family, fill }: { family: string; fill: string }) {
         <>
           <circle cx={4.6} cy={18} r={3.2} {...p} />
           <circle cx={8.4} cy={17} r={3.8} {...p} />
-          <path d="M11.4 7.4 L9.8 3.8 M16.6 7.4 L18.2 3.8" stroke={INK} strokeWidth={SW} strokeLinecap="round" />
+          <path d="M11.4 7.4 L9.8 3.8 M16.6 7.4 L18.2 3.8" stroke={COLOR.ink} strokeWidth={SW} strokeLinecap="round" />
           <circle cx={14} cy={14.2} r={7.6} {...p} />
         </>
       );
@@ -36,7 +36,7 @@ function Body({ family, fill }: { family: string; fill: string }) {
         <>
           <circle cx={7.6} cy={14.4} r={6.4} {...p} />
           <circle cx={16.4} cy={14.4} r={6.4} {...p} />
-          <path d="M12 9.6 V19.2" stroke={INK} strokeWidth={0.9} strokeDasharray="1.4 1.4" />
+          <path d="M12 9.6 V19.2" stroke={COLOR.ink} strokeWidth={0.9} strokeDasharray="1.4 1.4" />
         </>
       );
     case "structure": // a crystal
@@ -44,8 +44,8 @@ function Body({ family, fill }: { family: string; fill: string }) {
     case "decision": // a dice bot with an antenna
       return (
         <>
-          <path d="M12 7.2 V3.6" stroke={INK} strokeWidth={SW} strokeLinecap="round" />
-          <circle cx={12} cy={3.2} r={1.5} fill={INK} />
+          <path d="M12 7.2 V3.6" stroke={COLOR.ink} strokeWidth={SW} strokeLinecap="round" />
+          <circle cx={12} cy={3.2} r={1.5} fill={COLOR.ink} />
           <rect x={4} y={7.2} width={16} height={15} rx={3.4} {...p} />
         </>
       );
@@ -60,26 +60,26 @@ const FACE_X: Record<string, number> = { sequence: 14 };
 /** The face IS the evidence: happy arcs + open smile = champion, dot eyes + smile = trained,
  * dot eyes + wobbly mouth + sweat drop = provisional bar, closed eyes = not trained yet. */
 function Face({ x, y, state }: { x: number; y: number; state: EvidenceState }) {
-  const s = { fill: "none", stroke: INK, strokeWidth: 1.2, strokeLinecap: "round" as const };
+  const s = { fill: "none", stroke: COLOR.ink, strokeWidth: STROKE.face, strokeLinecap: "round" as const };
   return (
     <g transform={`translate(${x} ${y})`}>
       {state === "champion" && (
         <>
           <path d="M-4.4 -0.6 Q-3 -2.6 -1.6 -0.6 M1.6 -0.6 Q3 -2.6 4.4 -0.6" {...s} />
-          <path d="M-2 1.8 Q0 4.6 2 1.8 Z" fill={INK} stroke={INK} strokeWidth={0.8} strokeLinejoin="round" />
+          <path d="M-2 1.8 Q0 4.6 2 1.8 Z" fill={COLOR.ink} stroke={COLOR.ink} strokeWidth={0.8} strokeLinejoin="round" />
         </>
       )}
       {(state === "trained" || state === "provisional") && (
         <>
-          <circle cx={-3} cy={-1} r={1.15} fill={INK} />
-          <circle cx={3} cy={-1} r={1.15} fill={INK} />
+          <circle cx={-3} cy={-1} r={1.15} fill={COLOR.ink} />
+          <circle cx={3} cy={-1} r={1.15} fill={COLOR.ink} />
         </>
       )}
       {state === "trained" && <path d="M-1.8 1.9 Q0 3.4 1.8 1.9" {...s} />}
       {state === "provisional" && (
         <>
           <path d="M-2.2 2.4 q0.7 -0.9 1.4 0 t1.4 0 t1.4 0" {...s} strokeWidth={1} />
-          <path d="M6.4 -6.2 q-1.6 2.1 -1.6 3.1 a1.6 1.6 0 0 0 3.2 0 q0 -1 -1.6 -3.1z" fill="#9CC4F2" stroke={INK} strokeWidth={0.8} />
+          <path d="M6.4 -6.2 q-1.6 2.1 -1.6 3.1 a1.6 1.6 0 0 0 3.2 0 q0 -1 -1.6 -3.1z" fill={COLOR.sweat} stroke={COLOR.ink} strokeWidth={0.8} />
         </>
       )}
       {state === "untrained" && <path d="M-4.2 -0.8 H-1.8 M1.8 -0.8 H4.2 M-1 2.2 H1" {...s} />}
@@ -105,10 +105,10 @@ export const Critter = memo(function Critter({ family, state, x = 0, y = 0, size
 export function EvidenceMark({ state, x = 0, y = 0 }: { state: EvidenceState; x?: number; y?: number }) {
   return (
     <g transform={`translate(${x} ${y})`} aria-hidden>
-      {state === "champion" && <path d="M0 -4.4 L1.3 -1.4 L4.4 -1.2 L2 0.9 L2.7 4 L0 2.4 L-2.7 4 L-2 0.9 L-4.4 -1.2 L-1.3 -1.4 Z" fill={GOLD} stroke={INK} strokeWidth={0.8} strokeLinejoin="round" />}
-      {state === "trained" && <circle r={3.1} fill={INK} />}
-      {state === "provisional" && (<><circle r={3.1} fill="#fff" stroke={INK} strokeWidth={1} /><path d="M0 -3.1 A3.1 3.1 0 0 1 0 3.1 Z" fill={INK} /></>)}
-      {state === "untrained" && <circle r={3.1} fill="none" stroke={INK} strokeWidth={1} strokeDasharray="1.6 1.3" />}
+      {state === "champion" && <path d="M0 -4.4 L1.3 -1.4 L4.4 -1.2 L2 0.9 L2.7 4 L0 2.4 L-2.7 4 L-2 0.9 L-4.4 -1.2 L-1.3 -1.4 Z" fill={COLOR.gold} stroke={COLOR.ink} strokeWidth={0.8} strokeLinejoin="round" />}
+      {state === "trained" && <circle r={3.1} fill={COLOR.ink} />}
+      {state === "provisional" && (<><circle r={3.1} fill={COLOR.card} stroke={COLOR.ink} strokeWidth={1} /><path d="M0 -3.1 A3.1 3.1 0 0 1 0 3.1 Z" fill={COLOR.ink} /></>)}
+      {state === "untrained" && <circle r={3.1} fill="none" stroke={COLOR.ink} strokeWidth={1} strokeDasharray="1.6 1.3" />}
     </g>
   );
 }

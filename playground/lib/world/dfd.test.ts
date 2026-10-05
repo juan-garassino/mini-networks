@@ -7,7 +7,10 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import type { TaxonomyResponse } from "../types.ts";
 import { familyMapFromBlueprint } from "./index.ts";
-import { auditDfd, buildDfd, DFD_G, DFD_OFFSHEET_MAX, elbowD, type DfdLayout, type DfdMode } from "./dfd.ts";
+import {
+  auditDfd, buildDfd, detourRatio, DFD_BOX_TALL, DFD_DETOUR_MAX, DFD_G, DFD_INDENT, DFD_OFFSHEET_MAX, DFD_SHORT,
+  elbowD, routeLength, type DfdLayout, type DfdMode,
+} from "./dfd.ts";
 import { mulberry32, shuffle } from "./rng.ts";
 
 const tax: TaxonomyResponse = JSON.parse(readFileSync(new URL("./__fixtures__/taxonomy.json", import.meta.url), "utf8"));
@@ -20,6 +23,9 @@ function clean(l: DfdLayout, what: string) {
   assert.equal(a.boxHits, 0, `${what}: box hits`);
   assert.equal(a.nonOrthogonal, 0, `${what}: diagonal runs`);
   assert.equal(a.labelHits, 0, `${what}: label hits`);
+  // a detour may remain only once the connector budget is spent (shuffled perturbations can
+  // exhaust it; the real zoo never does — asserted below)
+  assert.ok(l.audit.detours === 0 || l.offSheet.length === DFD_OFFSHEET_MAX, `${what}: a routed line is a detour with budget left`);
   assert.ok(l.offSheet.length <= DFD_OFFSHEET_MAX, `${what}: off-sheet budget`);
   // every routed edge ends ON its target's edge, its last run perpendicular to it
   const by = new Map(l.boxes.map((b) => [b.name, b]));
@@ -48,16 +54,18 @@ for (const mode of ["desktop", "mobile"] as DfdMode[]) {
   test(`${mode}: the real graph routes with zero crossings, overlaps and box hits`, () => {
     const l = buildDfd(tax, fam, { mode });
     clean(l, mode);
+    assert.equal(l.audit.detours, 0, `${mode}: no detour`);
     assert.equal(l.boxes.length, 44);
     assert.equal(l.edges.length, edgeCount(tax));
     // every cross-family edge carries its inline label on desktop
     if (mode === "desktop") {
-      assert.equal(l.offSheet.length, 0, "desktop: everything routes on the sheet");
       assert.equal(l.audit.unlabelled, 0, "desktop: every cross-family edge labelled");
-      // the grid: a generation column shares one left x in its stack
+      // the grid: a generation column shares one left x in its stack (island chips ride the
+      // lane's title row, each left-aligned to one of those column x's)
       const xs = new Map<string, Set<number>>();
-      for (const b of l.boxes) { const k = `${b.stack}:${b.col}`; if (!xs.has(k)) xs.set(k, new Set()); xs.get(k)!.add(b.x); }
+      for (const b of l.boxes) if (!b.chip) { const k = `${b.stack}:${b.col}`; if (!xs.has(k)) xs.set(k, new Set()); xs.get(k)!.add(b.x); }
       for (const [k, s] of xs) assert.equal(s.size, 1, `column ${k} is aligned`);
+      for (const b of l.boxes) if (b.chip) assert.ok(xs.get(`${b.stack}:${b.col}`)?.has(b.x), `${b.name}: chip on a column x`);
     }
   });
 
@@ -83,34 +91,96 @@ for (const mode of ["desktop", "mobile"] as DfdMode[]) {
   });
 }
 
-// ——— wire quality (critic pass 1): no hub line runs the long way round the page, the phone
-// sheet stays compact, and every cross-family edge carries its parent's name
-const reachRatio = (l: DfdLayout, e: DfdLayout["edges"][number]) => {
-  const by = new Map(l.boxes.map((b) => [b.name, b]));
-  const s = by.get(e.from)!, t = by.get(e.to)!;
-  let len = 0;
-  for (let k = 1; k < e.points.length; k++) len += Math.abs(e.points[k].x - e.points[k - 1].x) + Math.abs(e.points[k].y - e.points[k - 1].y);
-  return len / (Math.abs(t.x - (s.x + s.w)) + Math.abs(t.y - s.y) + 6 * DFD_G);
-};
+// ——— route quality (design pass 2): the detour rule, connector pairs, one label per trunk,
+// island chips, the balanced sheet, the phone's file tree
 
-test("desktop: no cross-family line detours past 2× its reach (+ 6 tracks)", () => {
+test("desktop: no routed line is a detour; each connector pair replaced one", () => {
   const l = buildDfd(tax, fam, { mode: "desktop" });
-  for (const e of l.edges) if (e.cross) assert.ok(reachRatio(l, e) <= 2, `${e.from}->${e.to} runs ${reachRatio(l, e).toFixed(2)}× its reach`);
+  const by = new Map(l.boxes.map((b) => [b.name, b]));
+  for (const e of l.edges) {
+    if (e.offSheet) continue;
+    const r = detourRatio(e.points, by.get(e.from)!, by.get(e.to)!);
+    assert.ok(r <= DFD_DETOUR_MAX, `${e.from}->${e.to} runs ${r.toFixed(2)}× the distance between its boxes`);
+  }
+  // the trade is measured: a pair only ever replaces a line that was a detour (or had no route)
+  for (const o of l.offSheet) assert.ok(o.why === "unroutable" || o.ratio > DFD_DETOUR_MAX, `${o.from}->${o.to}: replaced a ${o.ratio}× line`);
+  // the zoo's one hopeless line: a backward edge between the stacks
+  assert.ok(l.offSheet.some((o) => o.from === "audio_spectrogram" && o.to === "audio_transformer"), "audio spectrogram → audio transformer is a pair");
 });
 
-test("mobile: compact sheet, every cross-family edge labelled with its parent's full name", () => {
-  const l = buildDfd(tax, fam, { mode: "mobile" });
-  assert.ok(l.height <= 44 * 48 + 6 * 48 + 64, `phone sheet ${l.height} px`);
-  assert.equal(l.audit.unlabelled, 0);
-  for (const lab of l.labels) {
-    if (lab.turn) assert.ok(lab.w === 12 && lab.h > lab.w, `${lab.text}: a turned label is a 12-px gap along its line`);
+for (const mode of ["desktop", "mobile"] as DfdMode[]) {
+  test(`${mode}: every connector tag names the far end and sits on a stub out of its own box`, () => {
+    const l = buildDfd(tax, fam, { mode });
+    const by = new Map(l.boxes.map((b) => [b.name, b]));
+    for (const o of l.offSheet) {
+      for (const [tag, far, own] of [[o.out, o.to, o.from], [o.in, o.from, o.to]] as const) {
+        assert.ok(tag.text.startsWith(`${tag.address} `) && tag.text.endsWith(far.replace(/_/g, " ")), `${tag.text}: address + name of ${far}`);
+        assert.equal(tag.address, l.boxes.find((x) => x.name === far)!.address, `${tag.text}: the far end's address`);
+        const b = by.get(own)!;
+        const port = tag === o.out ? tag.stub[0] : tag.stub[tag.stub.length - 1];
+        const onEdge = port.x === b.x || port.x === b.x + b.w || port.y === b.y || port.y === b.y + b.h;
+        assert.ok(onEdge, `${tag.text}: stub starts on ${own}'s edge`);
+        assert.ok(routeLength(tag.stub) >= 12, `${tag.text}: a visible stub`);
+      }
+    }
+  });
+
+  test(`${mode}: one inline label per trunk, never a bare address`, () => {
+    const l = buildDfd(tax, fam, { mode });
+    const edges = new Map(l.edges.map((e) => [`${e.from}->${e.to}`, e]));
+    const trunks = new Set<string>();
+    for (const lab of l.labels) {
+      assert.match(lab.text, /^\S+ \S/, `"${lab.text}" carries the parent's name`);
+      const cross = lab.edges.map((k) => edges.get(k)!).filter((e) => e.cross);
+      assert.ok(cross.length > 0, `"${lab.text}" names a cross-family line`);
+      const keys = new Set(cross.map((e) => `${e.from}@${e.points[0].x},${e.points[0].y}`));
+      assert.equal(keys.size, 1, `"${lab.text}" names one trunk`);
+      const k = [...keys][0];
+      assert.ok(!trunks.has(k), `"${lab.text}": its trunk is labelled twice`);
+      trunks.add(k);
+    }
+    // a line too short for its label needs none; every longer one has its trunk's
+    const labelled = new Set(l.labels.flatMap((x) => x.edges));
+    for (const e of l.edges) if (e.cross && !e.offSheet && routeLength(e.points) > DFD_SHORT) assert.ok(labelled.has(`${e.from}->${e.to}`), `${e.from}->${e.to} unlabelled`);
+    if (mode === "desktop") assert.equal(l.labels.filter((x) => x.text === "4 transformer").length, 1, "4 transformer once");
+  });
+}
+
+test("desktop: island atoms are chips on their lane's title row; the stacks balance", () => {
+  const l = buildDfd(tax, fam, { mode: "desktop" });
+  const linked = new Set(l.edges.flatMap((e) => [e.from, e.to]));
+  for (const b of l.boxes) {
+    assert.equal(b.chip, b.atom && !linked.has(b.name), `${b.name}: a chip exactly when it has no edges`);
+    if (!b.chip) continue;
+    const lane = l.lanes[b.lane];
+    const grid = l.boxes.filter((o) => o.lane === b.lane && !o.chip);
+    assert.ok(b.y > lane.y && grid.every((o) => o.y >= b.y + b.h + 16), `${b.name}: above its lane's grid`);
   }
-  assert.ok(l.labels.filter((x) => x.text.includes(" ")).length >= l.labels.length - 1, "at most one bare-address label");
-  // an off-sheet tag hangs in the gap above its box: that gap must hold it (13 px + air)
+  // the grid keeps only boxes that carry lines, so the tall boxes fit the 848-px envelope
+  assert.ok(l.boxes.filter((b) => !b.chip).every((b) => b.h === DFD_BOX_TALL), "tall boxes");
+  assert.ok(l.height <= 848 && l.width <= 1424, `sheet ${l.width}×${l.height}`);
+  assert.ok(l.boxes.filter((b) => b.lines.length > 1).length <= 8, "at most 8 two-line names");
+  const bottom = (s: number) => Math.max(...l.lanes.filter((x) => x.stack === s).map((x) => x.y + x.h));
+  assert.ok(Math.abs(bottom(0) - bottom(1)) <= 2 * (DFD_BOX_TALL + 16), `stacks end at ${bottom(0)} / ${bottom(1)}`);
+  // the margins are the 16-px gutter: nothing runs round the outside of the sheet
+  for (const e of l.edges) for (const p of e.points) assert.ok(p.x >= 16 && p.x <= l.width - 16, `${e.from}->${e.to} runs in the margin`);
+});
+
+test("mobile: a file tree indented by generation, a ruler for it, a compact sheet", () => {
+  const l = buildDfd(tax, fam, { mode: "mobile" });
+  const x0 = Math.min(...l.boxes.map((b) => b.x)), right = l.boxes[0].x + l.boxes[0].w;
+  for (const b of l.boxes) {
+    assert.equal(b.x, x0 + Math.min(b.depth, 4) * DFD_INDENT, `${b.name}: indent = generation`);
+    assert.equal(b.x + b.w, right, `${b.name}: right edges aligned`);
+  }
+  assert.deepEqual(l.headers.map((h) => [h.text, h.x]), [0, 1, 2, 3].map((d) => [String(d), x0 + d * DFD_INDENT]));
+  assert.ok(l.height <= 44 * 48 + 6 * 48 + 64, `phone sheet ${l.height} px`);
+  for (const lab of l.labels) if (lab.turn) assert.ok(lab.w === 12 && lab.h > lab.w, `${lab.text}: a turned label is a 12-px gap along its line`);
+  // a connector's tag hangs in the gap above its box: that gap must hold tag + stub
   for (const o of l.offSheet) for (const n of [o.from, o.to]) {
     const b = l.boxes.find((x) => x.name === n)!;
     const above = l.boxes.filter((x) => x.y < b.y && x.x < b.x + b.w && b.x < x.x + x.w).map((x) => x.y + x.h);
-    if (above.length) assert.ok(b.y - Math.max(...above) >= 20, `${n}: room for its off-sheet tag`);
+    if (above.length) assert.ok(b.y - Math.max(...above) >= 32, `${n}: room for its connector tag`);
   }
 });
 

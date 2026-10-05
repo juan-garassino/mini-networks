@@ -1,50 +1,80 @@
-// buildDfd — the "Kawaii DFD" sheet for /lab/flow: every model is a box on a
-// strict grid (desktop: two stacks of family lanes × 4 generation columns;
-// phone: one stack, generations top → bottom, two box columns), and every
-// builds_on edge is routed ORTHOGONALLY on an 8-px track grid so that no two
-// edges of different sources cross, touch or run on top of each other, and no
-// edge passes within 8 px of a box. The router is a maze router (A* over the
-// track grid, bend-penalised) that grows one Steiner tree per source: a
-// source's fan-out shares one trunk and splits on T-junctions. Vertical runs
-// are only allowed in the gutters between box columns (plus the last two
-// steps into a top port); horizontal runs only where no box is. An edge that
-// still cannot be routed becomes an off-sheet connector pair (budget 2).
+// buildDfd — the "Kawaii DFD" sheet for /lab/flow (and the router behind any directed graph
+// drawn as a data-flow sheet; see components/lab/flow/DESIGN.md). Every node is a box on a
+// strict grid (desktop: two stacks of group lanes × generation columns; phone: one stack, a
+// file tree indented by generation), and every edge is routed ORTHOGONALLY on an 8-px track
+// grid so that no two edges of different sources cross, touch or run on top of each other,
+// and no edge passes within 8 px of a box. The router is a maze router (A* over the track
+// grid, bend-penalised) that grows one Steiner tree per out-port: a fan-out shares one trunk
+// and splits on T-junctions. Vertical runs only in the gutters between box columns (plus the
+// last two steps into a top port); horizontal runs only where no box is.
 //
-// Pure and deterministic: models are sorted by name before anything happens,
-// so the input order never matters. No DOM — the caller passes `measure`.
-import type { TaxonomyResponse } from "../types.ts";
-import type { FamilyMap, Pt } from "./types.ts";
+// Route quality is a rule, not a hope: an edge whose route is a DETOUR (longer than
+// DFD_DETOUR_MAX × the Manhattan distance between its box centres, or straying outside the stacks of its
+// two ends) — or that cannot be routed at all — becomes an off-sheet connector pair: a short
+// stub out of each box ending in a tag that names the far end (budget DFD_OFFSHEET_MAX; each
+// pair is priced as CONNECTOR_COST px of wire when layouts are compared).
+//
+// Atoms with no edges at all ("islands") leave the grid: they are compact chips beside their
+// lane's name, so the grid holds only boxes that carry lines and its whitespace is deliberate.
+//
+// Pure and deterministic: models are sorted by name before anything happens, so the input
+// order never matters. No DOM — the caller passes `measure`.
 import { buildGraph, type Graph } from "./graph.ts";
+import type { FamilyMap, Pt } from "./types.ts";
 import { mulberry32 } from "./rng.ts";
 
 /** Track grid pitch (px at the overview): the gap between parallel tracks and the box clearance. */
 export const DFD_G = 8;
 /** The one elbow radius of every edge (≤ G/2, so two bends one track apart never clamp it). */
 export const DFD_R = 4;
+/** Desktop box height when the sheet fits `maxHeight` (12-px strip + 36-px body: two-line names breathe). */
+export const DFD_BOX_TALL = 48;
+/** Compact box height: the phone, and a desktop sheet that would not fit with tall boxes. */
 export const DFD_BOX_H = 40;
-/** Header strip height inside a box (address + evidence glyph). */
+/** Island chip height (a compact store beside its lane's name). */
+export const DFD_CHIP_H = 40;
+/** Header strip height inside a derived box (address + evidence glyph). */
 export const DFD_STRIP = 12;
-export const DFD_NAME_PX = 13;
-export const DFD_LABEL_PX = 11;
-/** Off-sheet connector budget (edges that could not be routed crossing-free). */
-export const DFD_OFFSHEET_MAX = 2;
-
 /** An atom is drawn as a DFD store: its index cell (the atom number) sits left of the creature. */
 export const DFD_ATOM_CELL = 24;
+/** Box padding: left pad · creature · gap · right pad (the evidence mark rides in the strip / corner). */
+export const DFD_PAD = { left: 6, gap: 6, right: 8, chipMark: 10 };
+/** Creature size inside a box of height h. */
+export const critterPx = (h: number) => (h >= DFD_BOX_TALL ? 24 : 22);
+export const DFD_NAME_PX = 13;
+export const DFD_LABEL_PX = 11;
+export const DFD_TAG_PX = 12;
+export const DFD_TAG_H = 16;
+/** Length of a connector tag's pointed tip (the flow direction): sideways / up-or-down. */
+export const DFD_TAG_TIP = 6;
+export const DFD_TAG_NOTCH = 4;
+/** Phone: indent per generation (the file tree's step). */
+export const DFD_INDENT = 16;
+/** Off-sheet connector budget (detours + edges that could not be routed crossing-free). */
+export const DFD_OFFSHEET_MAX = 2;
+/** A route longer than this × the Manhattan distance between its box centres is a detour → connector pair. */
+export const DFD_DETOUR_MAX = 1.6;
+/** A cross-family line at most this long needs no inline label: its parent sits at the other end. */
+export const DFD_SHORT = 160;
+/** A connector pair is priced as this much wire when two layouts are compared. */
+const CONNECTOR_COST = 600;
+/** …plus this much per other line of the same parent (cutting one line out of a hub's comb leaves a gap in it). */
+const HUB_GAP = 40;
 
 const G = DFD_G;
-// box chrome around the name: left pad · creature · gap · right pad (atoms add their index cell)
-const BOX_CHROME = 6 + 24 + 6 + 8;
+const BOX_CHROME = DFD_PAD.left + 24 + DFD_PAD.gap + DFD_PAD.right;
+const CHIP_CHROME = DFD_ATOM_CELL + DFD_PAD.left + 22 + DFD_PAD.gap + DFD_PAD.right + DFD_PAD.chipMark;
 
 // desktop sheet
 const D = {
-  rowPitch: 56, // box 40 + row gap 16 (one track at the gap's centre line)
-  laneHead: 24, // swim-lane label band above a lane's first row
+  rowGap: 16, // one track at the gap's centre line
+  laneHead: 24, // swim-lane label band above a lane's first row (no chips)
+  chipRow: DFD_CHIP_H + 8,
   headRow: 16, // the column header row (Atoms / Gen 1 …)
   topChan: 16,
-  bottom: 16,
+  bottom: 0, // the last lane already ends one row gap below its last box
   gutter: 40, // 4 tracks between generation columns
-  margin: 32,
+  margin: 16, // 2 tracks: nothing routes round the outside (that would be a detour)
   corridor: 48, // between the two stacks: 5 tracks
 };
 // phone sheet (one box column between two routing gutters)
@@ -53,8 +83,9 @@ const M = {
   rowPitch: 48, // box 40 + 8: no line ever runs between two phone rows (only beside them)
   laneHead: 32,
   laneGap: 16,
-  tagRoom: 16, // extra gap above a box that carries an off-sheet tag (the 8-px row gap cannot hold it)
+  tagRoom: 32, // extra gap above a box that carries a connector tag (tag 20 + stub 12 + air; a multiple of the track pitch)
   top: 8,
+  maxIndent: 4, // generations deeper than this share the last indent
   iters: 3000,
 };
 
@@ -62,16 +93,21 @@ export type DfdMode = "desktop" | "mobile";
 export type DfdSide = "left" | "right" | "top" | "bottom";
 type Rect = { x: number; y: number; w: number; h: number };
 
+/** The one input the router needs: nodes with the names of the nodes they build on. */
+export interface DfdGraphInput { models: { name: string; builds_on: string[] }[] }
+
 export interface DfdBox extends Rect {
   name: string;
   family: string;
   depth: number;
   atom: boolean;
+  /** an island (atom with no edges), drawn as a compact chip beside its lane's name */
+  chip: boolean;
   stack: number;
   lane: number;
-  /** generation column (desktop) / box column 0–1 (phone) */
+  /** generation column (desktop) / 0 (phone) */
   col: number;
-  /** row inside the lane (desktop) or inside the generation band (phone) */
+  /** row inside the lane (desktop grid; chips: their chip row) or inside the lane (phone) */
   row: number;
   /** the name as 1–2 lines, as measured */
   lines: string[];
@@ -97,22 +133,42 @@ export interface DfdEdge {
 }
 export interface DfdLabel extends Rect {
   text: string;
-  /** "from->to" of every edge that runs through the label's gap */
+  /** "from->to" of every edge the label names (its whole trunk) */
   edges: string[];
   /** the run the gap is cut in: horizontal (text on the line) or vertical (text across it) */
   along: "h" | "v";
   /** on a vertical run: the text turned to read up the line (where there is no room across it) */
   turn?: boolean;
 }
-export interface DfdOffSheet { from: string; to: string; outText: string; inText: string; out: Rect; in: Rect; stubOut: Pt[]; stubIn: Pt[] }
+/** One end of an off-sheet connector: a tag (pointing along the flow) on a short stub. */
+export interface DfdTag extends Rect {
+  text: string;
+  /** the address part of `text` (drawn bolder) */
+  address: string;
+  /** which way the tag's tip points (the flow direction) */
+  tip: DfdSide;
+  /** out: box port → tag; in: tag → box port (the arrowhead sits on the box) */
+  stub: Pt[];
+}
+export interface DfdOffSheet {
+  from: string;
+  to: string;
+  out: DfdTag;
+  in: DfdTag;
+  why: "detour" | "unroutable";
+  /** the detour ratio of the route this pair replaced (0 when the edge could not be routed) */
+  ratio: number;
+}
 export interface DfdAudit {
   crossings: number;
   overlaps: number;
   boxHits: number;
   labelHits: number;
-  /** cross-family edges without an inline label */
+  /** cross-family edges longer than DFD_SHORT without an inline label */
   unlabelled: number;
   nonOrthogonal: number;
+  /** routed edges that are detours (should always be 0: they become connector pairs) */
+  detours: number;
 }
 export interface DfdLayout {
   mode: DfdMode;
@@ -138,11 +194,26 @@ export interface DfdOptions {
   measure?: (text: string, px: number) => number;
   /** widest the desktop sheet may be (default 1424) */
   maxWidth?: number;
+  /** tallest the desktop sheet may be with tall boxes (default 848); taller → compact boxes */
+  maxHeight?: number;
 }
 
-const approxMeasure = (t: string, px: number) => t.length * px * 0.6;
+// the default measure: M PLUS Rounded 1c 700 advance widths (em) for the glyphs model names use,
+// measured in the browser; anything else counts as 0.62 em (capitals) / 0.6 em
+const EM_GLYPHS = " -.0123456789_abcdefghijklmnopqrstuvwxyz";
+const EM_WIDTHS = [284,482,338,640,640,640,640,640,640,640,640,640,640,590,561,607,508,607,546,526,591,601,338,383,563,338,819,597,574,601,601,485,518,523,591,540,787,526,540,558];
+const approxMeasure = (t: string, px: number) => {
+  let em = 0;
+  for (const ch of t) { const i = EM_GLYPHS.indexOf(ch); em += i >= 0 ? EM_WIDTHS[i] / 1000 : ch >= "A" && ch <= "Z" ? 0.65 : 0.6; }
+  return em * px;
+};
 const words = (n: string) => n.replace(/_/g, " ");
 const up8 = (v: number) => Math.ceil(v / G) * G;
+const byAddress = (addr: Map<string, string>) => (a: string, b: string) => addr.get(a)!.localeCompare(addr.get(b)!, "en", { numeric: true });
+const depthCount = (g: Graph) => 1 + Math.max(0, ...g.names.map((n) => g.depth.get(n)!));
+export const columnTitle = (c: number) => (c === 0 ? "Atoms" : `Gen ${c}`);
+/** An atom nothing builds on (no edges in or out). */
+const isIsland = (g: Graph, n: string) => g.atom.get(n)! && g.children.get(n)!.length === 0;
 
 /** A name as one line, or as the two-line split with the shortest longest line. */
 export function wrapName(text: string): string[][] {
@@ -150,6 +221,23 @@ export function wrapName(text: string): string[][] {
   const w = text.split(" ");
   for (let i = 1; i < w.length; i++) out.push([w.slice(0, i).join(" "), w.slice(i).join(" ")]);
   return out;
+}
+
+export function routeLength(pts: Pt[]): number {
+  let len = 0;
+  for (let k = 1; k < pts.length; k++) len += Math.abs(pts[k].x - pts[k - 1].x) + Math.abs(pts[k].y - pts[k - 1].y);
+  return len;
+}
+/** Manhattan gap between two boxes (0 on an axis where they overlap). */
+export function boxGap(s: Rect, t: Rect): number {
+  const dx = Math.max(0, t.x - (s.x + s.w), s.x - (t.x + t.w));
+  const dy = Math.max(0, t.y - (s.y + s.h), s.y - (t.y + t.h));
+  return dx + dy;
+}
+/** Routed length ÷ the Manhattan distance between the two box centres (at least 4 tracks). */
+export function detourRatio(pts: Pt[], s: Rect, t: Rect): number {
+  const d = Math.abs(s.x + s.w / 2 - (t.x + t.w / 2)) + Math.abs(s.y + s.h / 2 - (t.y + t.h / 2));
+  return routeLength(pts) / Math.max(4 * G, d);
 }
 
 // ———————————————————————————————————————— addresses
@@ -185,13 +273,24 @@ export function lineageAddresses(g: Graph): Map<string, string> {
 
 // ———————————————————————————————————————— ordering (rows inside lanes)
 
-type Cells = Map<string, string[][]>; // family → [depth] → names in order
+type Cells = Map<string, string[][]>; // family → [depth] → grid names in order
 
 function cellsOf(g: Graph, depthCount: number): Cells {
   const cells: Cells = new Map();
   for (const f of g.families) cells.set(f, Array.from({ length: depthCount }, () => []));
-  for (const n of g.names) cells.get(g.family.get(n)!)![g.depth.get(n)!].push(n);
+  for (const n of g.names) if (!isIsland(g, n)) cells.get(g.family.get(n)!)![g.depth.get(n)!].push(n);
   return cells;
+}
+/** Grid rows a lane needs (its islands live in the lane head, not on the grid). */
+function laneRows(g: Graph, f: string): number {
+  const counts = new Map<number, number>();
+  for (const n of g.membersOf.get(f)!) if (!isIsland(g, n)) counts.set(g.depth.get(n)!, (counts.get(g.depth.get(n)!) ?? 0) + 1);
+  return Math.max(0, ...counts.values());
+}
+/** A lane's height in row pitches: grid rows + its head (with or without a chip shelf). */
+function laneUnits(g: Graph, f: string, pitch: number): number {
+  const chips = g.membersOf.get(f)!.some((n) => isIsland(g, n));
+  return laneRows(g, f) + (chips ? D.chipRow + D.rowGap : D.laneHead) / pitch;
 }
 
 /** Strictly increasing integer rows in [0, R) for desired positions d (in order), minimising Σ|r − d|. */
@@ -219,16 +318,20 @@ function assignSlots(d: number[], R: number): number[] {
 interface Arrangement { stacks: string[][] }
 
 /** Desktop rows: barycentric sweeps with slot assignment, scored by straight-line crossings. */
-function orderDesktop(g: Graph, arr: Arrangement, sweeps: number): Map<string, number> {
-  const cells = cellsOf(g, 4);
-  const R = new Map<string, number>();
-  for (const f of g.families) R.set(f, Math.max(1, ...cells.get(f)!.map((c) => c.length)));
+function orderDesktop(g: Graph, arr: Arrangement, sweeps: number, pitch: number): Map<string, number> {
+  const nD = depthCount(g);
+  const cells = cellsOf(g, nD);
+  const R = new Map<string, number>(g.families.map((f) => [f, laneRows(g, f)]));
   const laneStart = new Map<string, number>();
   const stackOf = new Map<string, number>();
-  arr.stacks.forEach((st, s) => { let y = 0; for (const f of st) { laneStart.set(f, y); stackOf.set(f, s); y += R.get(f)! + 0.45; } });
+  arr.stacks.forEach((st, s) => {
+    let y = 0;
+    for (const f of st) { y += laneUnits(g, f, pitch) - R.get(f)!; laneStart.set(f, y); stackOf.set(f, s); y += R.get(f)!; }
+  });
   const row = new Map<string, number>();
   const yIdx = (n: string) => laneStart.get(g.family.get(n)!)! + row.get(n)!;
-  // seed: atoms by descendant fan-out, derived grouped by primary parent
+  const gridEdges = g.edges.filter((e) => !isIsland(g, e.from) && !isIsland(g, e.to));
+  // seed: grouped by primary parent
   for (const f of g.families) {
     for (const cell of cells.get(f)!) {
       cell.sort((a, b) => {
@@ -249,8 +352,8 @@ function orderDesktop(g: Graph, arr: Arrangement, sweeps: number): Map<string, n
     cell.forEach((n, i) => row.set(n, rows[i]));
   };
   const score = () => {
-    // straight segments in (column, row) space, adjacent-or-long, same stack only
-    const segs = g.edges.filter((e) => stackOf.get(g.family.get(e.from)!) === stackOf.get(g.family.get(e.to)!))
+    // straight segments in (column, row) space, same stack only
+    const segs = gridEdges.filter((e) => stackOf.get(g.family.get(e.from)!) === stackOf.get(g.family.get(e.to)!))
       .map((e) => ({ e, a: { x: g.depth.get(e.from)! + 0.5, y: yIdx(e.from) }, b: { x: g.depth.get(e.to)!, y: yIdx(e.to) } }));
     let k = 0;
     for (let i = 0; i < segs.length; i++) {
@@ -262,17 +365,18 @@ function orderDesktop(g: Graph, arr: Arrangement, sweeps: number): Map<string, n
     }
     // keep each parent level with its children: Σ |row(parent) − row(child)|
     let L = 0;
-    for (const e of g.edges) L += Math.abs(yIdx(e.from) - yIdx(e.to));
+    for (const e of gridEdges) L += Math.abs(yIdx(e.from) - yIdx(e.to));
     return k * 100 + L;
   };
   let best = new Map(row), bestS = score();
+  const fwdOrder = [...Array.from({ length: nD - 1 }, (_, i) => i + 1), 0];
+  const backOrder = [...Array.from({ length: Math.max(0, nD - 1) }, (_, i) => nD - 2 - i), nD - 1];
   for (let s = 0; s < sweeps; s++) {
     const fwd = s % 2 === 0;
-    const ds = fwd ? [1, 2, 3, 0] : [2, 1, 0, 3];
-    for (const d of ds) {
+    for (const d of fwd ? fwdOrder : backOrder) {
       for (const f of g.families) {
         const cell = cells.get(f)![d];
-        if (!cell.length) continue;
+        if (!cell || !cell.length) continue;
         place(f, cell, (n) => {
           const ps = g.parents.get(n)!, ks = g.children.get(n)!;
           if (fwd && d > 0 && ps.length) return mean(ps);
@@ -298,28 +402,32 @@ interface Sheet {
   colBands: [number, number][];
   /** extra obstacles (labels, header text) */
   blocks: Rect[];
+  /** x extent of each stack (a line may not stray outside the stacks of its two ends) */
+  stackX: [number, number][];
+  /** bottom of the last lane (nothing routes below it) */
+  contentBottom: number;
 }
 
-const COL_TITLES = ["Atoms", "Gen 1", "Gen 2", "Gen 3", "Gen 4", "Gen 5"];
-
-function lanePx(px: number) { return px; }
-
 function sheetDesktop(g: Graph, arr: Arrangement, rows: Map<string, number>, addr: Map<string, string>,
-  measure: (t: string, px: number) => number, maxWidth: number): Sheet {
-  const nCols = 4;
-  // per stack, per column: the boxes; widths measured (wrap only when the sheet would be too wide)
+  measure: (t: string, px: number) => number, maxWidth: number, boxH: number): Sheet {
+  const pitch = boxH + D.rowGap;
+  const grid = g.names.filter((n) => !isIsland(g, n));
+  const famIn = (st: string[]) => (n: string) => st.includes(g.family.get(n)!);
+  // each stack shows the generation columns its own grid boxes use
+  const nCols = arr.stacks.map((st) => 1 + Math.max(0, ...grid.filter(famIn(st)).map((n) => g.depth.get(n)!)));
+  // widths measured; wrap only when the sheet would be too wide
   const need = (n: string, lines: string[]) => up8(Math.max(...lines.map((l) => measure(l, DFD_NAME_PX))) + BOX_CHROME + (g.atom.get(n) ? DFD_ATOM_CELL : 0));
   const choice = new Map<string, string[]>();
   for (const n of g.names) choice.set(n, [words(n)]);
-  const colW = () => arr.stacks.map((st) => Array.from({ length: nCols }, (_, c) => {
-    const ns = g.names.filter((n) => st.includes(g.family.get(n)!) && g.depth.get(n) === c);
-    const minW = up8(measure(COL_TITLES[c], 12) + 8);
+  const colW = () => arr.stacks.map((st, s) => Array.from({ length: nCols[s] }, (_, c) => {
+    const ns = grid.filter((n) => famIn(st)(n) && g.depth.get(n) === c);
+    const minW = up8(measure(columnTitle(c), 12) + 8);
     return Math.max(minW, 96, ...ns.map((n) => need(n, choice.get(n)!)));
   }));
-  const total = (w: number[][]) => D.margin * 2 + D.corridor * (arr.stacks.length - 1) + w.reduce((s, ws) => s + ws.reduce((a, b) => a + b, 0) + D.gutter * (nCols - 1), 0);
+  const total = (w: number[][]) => D.margin * 2 + D.corridor * (arr.stacks.length - 1) + w.reduce((s, ws) => s + ws.reduce((a, b) => a + b, 0) + D.gutter * (ws.length - 1), 0);
   let widths = colW();
   // wrap the names that save the most width first, until the sheet fits
-  const cands = g.names.filter((n) => words(n).includes(" ")).map((n) => {
+  const cands = grid.filter((n) => words(n).includes(" ")).map((n) => {
     const opts = wrapName(words(n)).slice(1);
     const best = opts.reduce((a, b) => (Math.max(...a.map((l) => measure(l, DFD_NAME_PX))) <= Math.max(...b.map((l) => measure(l, DFD_NAME_PX))) ? a : b));
     return { n, best, save: need(n, [words(n)]) - need(n, best) };
@@ -329,23 +437,20 @@ function sheetDesktop(g: Graph, arr: Arrangement, rows: Map<string, number>, add
     choice.set(c.n, c.best);
     widths = colW();
   }
-  const R = new Map<string, number>();
-  for (const f of g.families) {
-    const cs = [0, 1, 2, 3].map((d) => g.names.filter((n) => g.family.get(n) === f && g.depth.get(n) === d).length);
-    R.set(f, Math.max(1, ...cs));
-  }
   const boxes: DfdBox[] = [], lanes: DfdLane[] = [], headers: DfdHeader[] = [], blocks: Rect[] = [];
   const colBands: [number, number][] = [];
+  const stackX: [number, number][] = [];
   let x = D.margin;
-  let height = 0;
+  let height = 0, contentBottom = 0;
   arr.stacks.forEach((st, s) => {
     const colX: number[] = [];
-    widths[s].forEach((w, c) => { colX.push(x); colBands.push([x, x + w]); x += w + (c < nCols - 1 ? D.gutter : 0); });
-    const stackW = x - colX[0];
+    widths[s].forEach((w, c) => { colX.push(x); colBands.push([x, x + w]); x += w + (c < nCols[s] - 1 ? D.gutter : 0); });
+    const x0 = colX[0], x1 = x;
+    stackX.push([x0, x1]);
     x += D.corridor;
     colX.forEach((cx, c) => {
-      const w = up8(measure(COL_TITLES[c], 12));
-      headers.push({ text: COL_TITLES[c], x: cx, y: 4, w, depth: c, stack: s });
+      const w = up8(measure(columnTitle(c), 12));
+      headers.push({ text: columnTitle(c), x: cx, y: 4, w, depth: c, stack: s });
       blocks.push({ x: cx - 2, y: 0, w: w + 4, h: 18 });
     });
     let y = D.headRow + D.topChan;
@@ -353,34 +458,53 @@ function sheetDesktop(g: Graph, arr: Arrangement, rows: Map<string, number>, add
       const laneIdx = lanes.length;
       const count = g.membersOf.get(f)!.length;
       const lw = up8(measure(f, 13) + measure(` ${count}`, 12) + 16);
-      const label = { x: colX[0], y: y + 3, w: lw, h: 16 };
-      blocks.push(label);
-      const top = y + D.laneHead;
-      const h = D.laneHead + R.get(f)! * D.rowPitch;
-      lanes.push({ family: f, stack: s, count, x: colX[0], y, w: stackW, h, label });
-      for (const n of g.names.filter((m) => g.family.get(m) === f)) {
-        const c = g.depth.get(n)!;
-        const r = rows.get(n)!;
+      // islands: compact chips on the lane's title row, beside its name, each left-aligned to a
+      // generation column (so the shelf keeps the grid's verticals); a chip wider than its column
+      // spans into the next one; overflow starts a new chip row under the name
+      const islands = g.membersOf.get(f)!.filter((n) => isIsland(g, n)).sort(byAddress(addr));
+      let cell = colX.findIndex((cx) => cx >= x0 + lw + G), chipRow = 0;
+      if (cell < 0) { cell = 0; chipRow = 1; }
+      for (const n of islands) {
+        const w = up8(measure(words(n), DFD_NAME_PX) + CHIP_CHROME);
+        if (cell >= colX.length) { chipRow++; cell = 0; }
         boxes.push({
-          name: n, family: f, depth: c, atom: g.atom.get(n)!, stack: s, lane: laneIdx, col: c, row: r,
-          x: colX[c], y: top + r * D.rowPitch, w: widths[s][c], h: DFD_BOX_H, lines: choice.get(n)!, address: addr.get(n)!,
+          name: n, family: f, depth: 0, atom: true, chip: true, stack: s, lane: laneIdx, col: cell, row: chipRow,
+          x: colX[cell], y: y + G + chipRow * D.chipRow, w, h: DFD_CHIP_H, lines: [words(n)], address: addr.get(n)!,
+        });
+        // the next free column whose left edge clears this chip
+        const end = colX[cell] + w + G;
+        cell = colX.findIndex((cx) => cx >= end);
+        if (cell < 0) cell = colX.length;
+      }
+      const chipRows = islands.length ? chipRow + 1 : 0;
+      const head = chipRows ? chipRows * D.chipRow + D.rowGap : D.laneHead;
+      const label = { x: x0, y: chipRows ? y + G + (DFD_CHIP_H - 16) / 2 : y + 3, w: lw, h: 16 };
+      blocks.push(label);
+      const top = y + head;
+      const R = laneRows(g, f);
+      lanes.push({ family: f, stack: s, count, x: x0, y, w: x1 - x0, h: head + R * pitch, label });
+      for (const n of grid.filter((m) => g.family.get(m) === f)) {
+        const c = g.depth.get(n)!;
+        boxes.push({
+          name: n, family: f, depth: c, atom: g.atom.get(n)!, chip: false, stack: s, lane: laneIdx, col: c, row: rows.get(n)!,
+          x: colX[c], y: top + rows.get(n)! * pitch, w: widths[s][c], h: boxH, lines: choice.get(n)!, address: addr.get(n)!,
         });
       }
-      y = top + R.get(f)! * D.rowPitch;
+      y = top + R * pitch;
     }
+    contentBottom = Math.max(contentBottom, y);
     height = Math.max(height, y + D.bottom);
   });
   const width = x - D.corridor + D.margin;
-  void lanePx;
-  return { width, height: up8(height), boxes, lanes, headers, colBands, blocks };
+  return { width, height: up8(height), boxes, lanes, headers, colBands, blocks, stackX, contentBottom };
 }
 
 // ———————————————————————————————————————— the phone sheet: a two-page channel router
 //
 // One box column; lanes stacked. Inside a lane the rows are a FILE TREE: the pre-order
-// walk of the primary-parent tree, each model directly followed by its brood. Every
-// edge runs in one of the two gutters ("pages"): out of its parent's side, along a
-// vertical track, into its child's SAME side. A parent's edges on one page share one
+// walk of the primary-parent tree, each model directly followed by its brood, indented by
+// generation. Every edge runs in one of the two gutters ("pages"): out of its parent's side,
+// along a vertical track, into its child's SAME side. A parent's edges on one page share one
 // trunk (its net). On one page two nets can only meet where a stub of one passes the
 // trunk of another that rides a track nearer the boxes — so the score counts exactly
 // that. A seeded annealer picks the lane order, the sibling order, the page of every
@@ -416,18 +540,16 @@ class PhoneSearch {
   /** edges drawn as an off-sheet connector pair instead of a route */
   off: Uint8Array;
   m: number;
-  g: Graph;
   constructor(g: Graph, addr: Map<string, string>) {
-    this.g = g;
     this.names = g.names;
     this.n = g.names.length;
     const id = new Map(g.names.map((s, i) => [s, i]));
     const fams = g.families;
     this.laneOf = new Int32Array(this.n);
     g.names.forEach((s, i) => { this.laneOf[i] = fams.indexOf(g.family.get(s)!); });
-    const byAddr = (a: string, b: string) => addr.get(a)!.localeCompare(addr.get(b)!, "en", { numeric: true });
-    this.kids = g.names.map((s) => g.primaryChildren.get(s)!.filter((c) => g.family.get(c) === g.family.get(s)).sort(byAddr).map((c) => id.get(c)!));
-    this.roots = fams.map((f) => g.membersOf.get(f)!.filter((s) => { const p = g.primary.get(s); return !p || g.family.get(p) !== f; }).sort(byAddr).map((s) => id.get(s)!));
+    const order = byAddress(addr);
+    this.kids = g.names.map((s) => g.primaryChildren.get(s)!.filter((c) => g.family.get(c) === g.family.get(s)).sort(order).map((c) => id.get(c)!));
+    this.roots = fams.map((f) => g.membersOf.get(f)!.filter((s) => { const p = g.primary.get(s); return !p || g.family.get(p) !== f; }).sort(order).map((s) => id.get(s)!));
     this.lanes = fams.map((_, i) => i);
     const es = [...g.edges].sort((a, b) => (a.from < b.from ? -1 : a.from > b.from ? 1 : a.to < b.to ? -1 : 1));
     this.m = es.length;
@@ -441,7 +563,7 @@ class PhoneSearch {
   rows(): { top: Int32Array; laneY: [number, number][]; bottom: number } {
     const top = new Int32Array(this.n).fill(-1);
     const laneY: [number, number][] = [];
-    // an off-sheet connector's tag sits in the gap above its box: those rows get TAG_ROOM more
+    // an off-sheet connector's tag sits in the gap above its box: those rows get tagRoom more
     const tagged = new Uint8Array(this.n);
     for (let i = 0; i < this.m; i++) if (this.off[i]) { tagged[this.ef[i]] = 1; tagged[this.et[i]] = 1; }
     let y = M.top;
@@ -572,7 +694,7 @@ class PhoneSearch {
     let snap = this.snapshot();
     const lists: number[][] = [...this.roots, ...this.kids].filter((l) => l.length > 1);
     const srcs = [...new Set(this.ef)];
-    for (let it = 0; it < iters && best.faults + 0 >= 0; it++) {
+    for (let it = 0; it < iters; it++) {
       const T = 6 * (1 - it / iters) + 0.05;
       const r = rnd();
       let undo: () => void;
@@ -621,14 +743,14 @@ class PhoneSearch {
   }
 }
 
-interface PhoneResult { sheet: Sheet; edges: DfdEdge[]; faults: number; lanes: string[]; off: { from: string; to: string }[] }
+interface PhoneResult { sheet: Sheet; edges: DfdEdge[]; lanes: string[]; off: { from: string; to: string }[] }
 
 function phoneSheet(g: Graph, addr: Map<string, string>, measure: (t: string, px: number) => number): PhoneResult {
   const S = new PhoneSearch(g, addr);
   // lane order seed: islets (no cross-family edge) last, then the shortest cross-family reach
   const size = g.families.map((f) => g.membersOf.get(f)!.length);
   let bestP: number[] = S.lanes, bestC = Infinity;
-  for (const p of permute(g.families.map((_, i) => i))) {
+  for (const p of permute(g.families.map((_, i) => i), 7)) {
     let y = 0;
     const mid: number[] = [];
     for (const f of p) { mid[f] = y + size[f] / 2; y += size[f] + 1; }
@@ -655,11 +777,12 @@ function phoneSheet(g: Graph, addr: Map<string, string>, measure: (t: string, px
     ev = S.anneal(Math.floor(M.iters / 3), 0xf1a7);
   }
   const { top, laneY, bottom, tracks } = ev;
-  const colX = G * tracks[0] + 2 * G, colR = M.width - G * tracks[1] - 2 * G, colW = colR - colX;
+  const colX = G * tracks[0] + 2 * G, colR = M.width - G * tracks[1] - 2 * G;
+  const indent = (d: number) => Math.min(d, M.maxIndent) * DFD_INDENT;
   const widest = (ls: string[]) => Math.max(...ls.map((l) => measure(l, DFD_NAME_PX)));
-  const fit = (s: string) => {
+  const fit = (s: string, w: number) => {
     const all = wrapName(words(s));
-    for (const lines of all) if (widest(lines) + BOX_CHROME + (g.atom.get(s) ? DFD_ATOM_CELL : 0) <= colW) return lines;
+    for (const lines of all) if (widest(lines) + BOX_CHROME + (g.atom.get(s) ? DFD_ATOM_CELL : 0) <= w) return lines;
     return all.reduce((a, b) => (widest(a) <= widest(b) ? a : b));
   };
   const boxes: DfdBox[] = [], lanesOut: DfdLane[] = [], blocks: Rect[] = [];
@@ -674,28 +797,36 @@ function phoneSheet(g: Graph, addr: Map<string, string>, measure: (t: string, px
     lanesOut.push({ family: f, stack: 0, count, x: 0, y: y0, w: M.width, h: y1 - y0, label });
     const mine = g.names.map((s, i) => ({ s, i })).filter((q) => S.laneOf[q.i] === l).sort((a, b) => top[a.i] - top[b.i]);
     mine.forEach(({ s, i }, r) => {
+      const bx = colX + indent(g.depth.get(s)!);
       boxes.push({
-        name: s, family: f, depth: g.depth.get(s)!, atom: g.atom.get(s)!, stack: 0, lane: li, col: 0, row: r,
-        x: colX, y: top[i], w: colW, h: DFD_BOX_H, lines: fit(s), address: addr.get(s)!,
+        name: s, family: f, depth: g.depth.get(s)!, atom: g.atom.get(s)!, chip: false, stack: 0, lane: li, col: 0, row: r,
+        x: bx, y: top[i], w: colR - bx, h: DFD_BOX_H, lines: fit(s, colR - bx), address: addr.get(s)!,
       });
     });
   });
+  // the generation ruler: one tick per indent step (drawn by the board, sticky under the bar)
+  const nD = Math.min(depthCount(g), M.maxIndent + 1);
+  const headers: DfdHeader[] = Array.from({ length: nD }, (_, d) => ({ text: String(d), x: colX + indent(d), y: 0, w: DFD_INDENT, depth: d, stack: 0 }));
   // geometry: every edge leaves its parent's side, rides its net's track, enters the child's same side
+  const byName = new Map(boxes.map((b) => [b.name, b]));
   const edges: DfdEdge[] = [];
   const offEdges: { from: string; to: string }[] = [];
   for (let i = 0; i < S.m; i++) {
-    if (S.off[i]) { offEdges.push({ from: g.names[S.ef[i]], to: g.names[S.et[i]] }); continue; }
-    const pg = S.page[i], t = ev.track[i];
-    const sideX = pg === 0 ? colX : colR;
-    const tx = pg === 0 ? colX - G * (t + 1) : colR + G * (t + 1);
     const from = g.names[S.ef[i]], to = g.names[S.et[i]];
+    if (S.off[i]) { offEdges.push({ from, to }); continue; }
+    const pg = S.page[i], t = ev.track[i];
+    const tx = pg === 0 ? colX - G * (t + 1) : colR + G * (t + 1);
+    const xs = pg === 0 ? byName.get(from)!.x : colR, xt = pg === 0 ? byName.get(to)!.x : colR;
     edges.push({
       from, to, cross: g.family.get(from) !== g.family.get(to), side: pg === 0 ? "left" : "right", offSheet: false,
-      points: [{ x: sideX, y: ev.ys[i] }, { x: tx, y: ev.ys[i] }, { x: tx, y: ev.yt[i] }, { x: sideX, y: ev.yt[i] }],
+      points: [{ x: xs, y: ev.ys[i] }, { x: tx, y: ev.ys[i] }, { x: tx, y: ev.yt[i] }, { x: xt, y: ev.yt[i] }],
     });
   }
-  const sheet: Sheet = { width: M.width, height: up8(bottom + M.top), boxes, lanes: lanesOut, headers: [], colBands: [[colX, colR]], blocks };
-  return { sheet, edges, faults: ev.faults, lanes: order, off: offEdges };
+  const sheet: Sheet = {
+    width: M.width, height: up8(bottom + M.top), boxes, lanes: lanesOut, headers, colBands: [[colX, colR]], blocks,
+    stackX: [[0, M.width]], contentBottom: bottom,
+  };
+  return { sheet, edges, lanes: order, off: offEdges };
 }
 
 // ———————————————————————————————————————— the router
@@ -711,6 +842,8 @@ const MAX_RIPS = 3;
 const ARR_QUICK = 4;
 const ARR_FULL = 2;
 const PORT_LANE = 1.5;
+/** a backward out-port (the parent's LEFT side) costs this much more than its right one */
+const BACK_PORT = 1;
 
 interface PortOpt { pre: number; prepre: number; port: Pt; side: DfdSide; dir: number; cost: number }
 interface OutOpt { start: number; port: Pt; side: DfdSide; dir: number; cost: number }
@@ -787,12 +920,10 @@ class Router {
   came: Int32Array;
   touched: number[] = [];
   sheet: Sheet;
-  mode: DfdMode;
   byName: Map<string, DfdBox>;
 
-  constructor(sheet: Sheet, mode: DfdMode) {
+  constructor(sheet: Sheet) {
     this.sheet = sheet;
-    this.mode = mode;
     this.nx = sheet.width / G + 1;
     this.ny = sheet.height / G + 1;
     this.N = this.nx * this.ny;
@@ -826,14 +957,15 @@ class Router {
       const x = i * G;
       this.vBand[i] = sheet.colBands.every(([a, b]) => x <= a - G || x >= b + G) ? 1 : 0;
     }
-    // every box keeps its own doorways: the track just outside each in-port side and its out-port start
+    // every grid box keeps its own doorways: the track just outside each in-port side and its
+    // out-port start (island chips have no lines, so they keep no doors)
     sheet.boxes.forEach((b, k) => {
+      if (b.chip) return;
       const tag = (x: number, y: number) => { const p = this.at(x, y); if (p >= 0 && p < this.N && !this.blocked[p] && !this.resv[p]) this.resv[p] = k + 1; };
       tag(b.x + b.w + G, b.y + 24);
       const lane = (x: number, y: number) => { const p = this.at(x, y); if (p >= 0 && p < this.N && !this.blocked[p]) this.portLane[p] = k + 1; };
-      for (let y = b.y; y <= b.y + b.h; y += G) { lane(b.x - 2 * G, y); if (mode === "mobile") lane(b.x + b.w + 2 * G, y); }
-      if (mode === "desktop") for (let y = b.y + G; y <= b.y + b.h - G; y += G) tag(b.x - G, y);
-      else for (let y = b.y + G; y <= b.y + b.h - G; y += G) { tag(b.x - G, y); tag(b.x + b.w + G, y); }
+      for (let y = b.y; y <= b.y + b.h; y += G) lane(b.x - 2 * G, y);
+      for (let y = b.y + G; y <= b.y + b.h - G; y += G) tag(b.x - G, y);
     });
   }
 
@@ -841,36 +973,32 @@ class Router {
   xy(p: number): Pt { return { x: (p % this.nx) * G, y: Math.floor(p / this.nx) * G }; }
   free(p: number) { return p >= 0 && p < this.N && !this.blocked[p] && !this.owner[p]; }
 
-  outOpts(b: DfdBox): OutOpt[] {
+  /** Out-ports: the right side's middle; for a child wholly to the LEFT, also the left side
+   * (a second root), so a backward line crosses straight over instead of hooking round. */
+  outOpts(b: DfdBox, back: boolean): OutOpt[] {
     const midY = b.y + 24;
-    const cx = Math.round((b.x + b.w / 2) / G) * G;
-    const opts: OutOpt[] = [];
-    if (this.mode === "desktop") {
-      opts.push({ start: this.at(b.x + b.w + G, midY), port: { x: b.x + b.w, y: midY }, side: "right", dir: 0, cost: 0 });
-    } else {
-      // phone: out of the bottom, near the left (a file-tree elbow), or out of the right side
-      // phone: lineage inside a family runs down the left gutter (a file tree), cross-family down the right
-      opts.push({ start: this.at(b.x - G, b.y + 4 * G), port: { x: b.x, y: b.y + 4 * G }, side: "left", dir: 2, cost: 0 });
-      opts.push({ start: this.at(b.x + b.w + G, midY), port: { x: b.x + b.w, y: midY }, side: "right", dir: 0, cost: 0 });
-      void cx;
+    const opts: OutOpt[] = [{ start: this.at(b.x + b.w + G, midY), port: { x: b.x + b.w, y: midY }, side: "right", dir: 0, cost: 0 }];
+    if (back) {
+      for (const dy of [0, -G, G, -2 * G, 2 * G]) {
+        const y = midY + dy;
+        if (y < b.y + G || y > b.y + b.h - G) continue;
+        opts.push({ start: this.at(b.x - G, y), port: { x: b.x, y }, side: "left", dir: 2, cost: BACK_PORT + Math.abs(dy) / G * 0.6 });
+      }
     }
     return opts.filter((o) => this.free(o.start));
   }
 
-  inOpts(b: DfdBox, net: number, own?: Uint8Array, soft = false, crossEdge = false, fromRight = false): PortOpt[] {
+  inOpts(b: DfdBox, own: Uint8Array, soft: boolean, fromRight: boolean): PortOpt[] {
     const opts: PortOpt[] = [];
+    const foreignOk = (p: number) => !this.owner[p] || own[p] === 1 || (soft && !this.locked[this.owner[p] - 1]);
     const ok = (p: number) => p >= 0 && p < this.N && !this.blocked[p] && foreignOk(p) && (!this.resv[p] || this.resv[p] === this.idx.get(b.name)! + 1);
-    void net;
-    const foreignOk = (p: number) => !this.owner[p] || (own !== undefined && own[p] === 1) || (soft && !this.locked[this.owner[p] - 1]);
     const side = (s: DfdSide, cost: number) => {
       if (s === "left" || s === "right") {
         const sx = s === "left" ? b.x : b.x + b.w;
         const dx = s === "left" ? -G : G;
         for (let y = b.y + G; y <= b.y + b.h - G; y += G) {
           const pre = this.at(sx + dx, y), prepre = this.at(sx + 2 * dx, y);
-          // desktop doors centre on the body; the phone's sit high (its out-port leaves low on the left)
-          const home = this.mode === "desktop" ? b.y + 24 : b.y + G;
-          if (ok(pre) && ok(prepre)) opts.push({ pre, prepre, port: { x: sx, y }, side: s, dir: s === "left" ? 0 : 2, cost: cost + Math.abs(y - home) / G * 0.6 });
+          if (ok(pre) && ok(prepre)) opts.push({ pre, prepre, port: { x: sx, y }, side: s, dir: s === "left" ? 0 : 2, cost: cost + Math.abs(y - (b.y + 24)) / G * 0.6 });
         }
       } else {
         const sy = s === "top" ? b.y : b.y + b.h;
@@ -885,8 +1013,8 @@ class Router {
     // a line from a parent RIGHT of the box (another stack) may enter a childless box on its
     // right side instead of hooking over it into its top; a parent to the left never does
     // (two arrowheads meeting nose to nose read as a two-way edge)
-    if (this.mode === "desktop") { side("left", 0); side("top", 6); side("bottom", 6); if (fromRight && !this.sources.has(b.name)) side("right", 6); }
-    else { side("left", crossEdge ? 6 : 0); side("right", crossEdge ? 0 : 6); }
+    side("left", 0); side("top", 6); side("bottom", 6);
+    if (fromRight && !this.sources.has(b.name)) side("right", 6);
     return opts;
   }
 
@@ -896,7 +1024,7 @@ class Router {
   }
 
   /** A* from start states to any port option; returns the grid points start → pre-port. */
-  search(net: number, starts: { p: number; d: number; c: number }[], goals: PortOpt[], own: Uint8Array, keys: [number, number], soft = 0): { pts: number[]; goal: PortOpt; cost: number } | null {
+  search(starts: { p: number; d: number; c: number }[], goals: PortOpt[], own: Uint8Array, keys: [number, number], soft = 0): { pts: number[]; goal: PortOpt; cost: number } | null {
     this.reset();
     const heap = this.heap;
     heap.clear();
@@ -982,9 +1110,11 @@ class Router {
    * Rip-up and reroute: nets are routed one after another; when an edge finds
    * no free path, it searches again with other sources' lines passable at a
    * high price, takes that path, and the sources it went through are ripped up
-   * and queued again. A source ripped MAX_RIPS times is locked in place.
+   * and queued again. A source ripped MAX_RIPS times is locked in place, and so is a
+   * `pinned` source from the start (one whose line detoured last time: it keeps its direct
+   * route and the line that pushed it round has to give way instead).
    */
-  routeAll(nets: { src: string; targets: string[] }[], cross: (a: string, b: string) => boolean): RouteResult {
+  routeAll(nets: { src: string; targets: string[] }[], cross: (a: string, b: string) => boolean, pinned: Set<string> = new Set()): RouteResult {
     this.owner.fill(0);
     this.sources = new Set(nets.map((n) => n.src));
     const K = nets.length;
@@ -1008,7 +1138,7 @@ class Router {
       queued[ni] = 0;
       this.locked[ni] = 1; // never rip the net being routed
       this.routeNet(ni, nets[ni], cross, netPts, netEdges, netFailed, netCost, rip);
-      this.locked[ni] = rips[ni] >= MAX_RIPS ? 1 : 0;
+      this.locked[ni] = rips[ni] >= MAX_RIPS || pinned.has(nets[ni].src) ? 1 : 0;
     }
     let cost = 0;
     for (let i = 0; i < K; i++) cost += netCost[i];
@@ -1023,7 +1153,9 @@ class Router {
     const joinable: number[] = [];
     const reserved = new Set<number>();
     const rootAt = new Map<number, OutOpt>();
-    let root: OutOpt | null = null;
+    const rootSides = new Set<DfdSide>();
+    /** which out-port's tree each grid point belongs to */
+    const treeSide = new Map<number, DfdSide>();
     const pathTo = (p: number) => {
       const out: number[] = [];
       let q: number | undefined = p;
@@ -1037,18 +1169,20 @@ class Router {
     });
     for (const t of sorted) {
       const keys: [number, number] = [this.idx.get(net.src)! + 1, this.idx.get(t)! + 1];
+      const tb = this.byName.get(t)!;
+      const back = tb.x + tb.w <= sb.x - G;
       let res: { pts: number[]; goal: PortOpt; cost: number } | null = null;
       let outs: OutOpt[] = [];
       for (const soft of [0, SOFT]) {
-        const tb = this.byName.get(t)!;
-        const goals = this.inOpts(tb, ni, own, soft > 0, cross(net.src, t), sb.x > tb.x + tb.w).filter((o) => !own[o.pre] && (!own[o.prepre] || (root !== null && !reserved.has(o.prepre))));
-        // a fresh out-port (only one on desktop; the phone's second side), or any joinable tree point
-        outs = this.outOpts(sb).filter((o) => !rootAt.has(o.start) && !own[o.start] && (!root || this.mode === "mobile"));
+        const goals = this.inOpts(tb, own, soft > 0, sb.x > tb.x + tb.w).filter((o) => !own[o.pre] && (!own[o.prepre] || (rootAt.size > 0 && !reserved.has(o.prepre))));
+        // a fresh out-port (one per side), or any joinable tree point
+        outs = this.outOpts(sb, back).filter((o) => !rootAt.has(o.start) && !own[o.start] && !rootSides.has(o.side));
         const starts: { p: number; d: number; c: number }[] = [
-          ...outs.map((o) => ({ p: o.start, d: o.dir, c: o.cost + (root ? 2 : 0) })),
-          ...joinable.filter((p) => !reserved.has(p)).map((p) => ({ p, d: 4, c: JOIN })),
+          ...outs.map((o) => ({ p: o.start, d: o.dir, c: o.cost + (rootAt.size ? 2 : 0) })),
+          // a child to the right never hangs off the backward (left-side) trunk
+          ...joinable.filter((p) => !reserved.has(p) && (back || treeSide.get(p) !== "left")).map((p) => ({ p, d: 4, c: JOIN })),
         ];
-        res = goals.length && starts.length ? this.search(ni, starts, goals, own, keys, soft) : null;
+        res = goals.length && starts.length ? this.search(starts, goals, own, keys, soft) : null;
         if (res) break;
       }
       if (!res) { netFailed[ni].push({ from: net.src, to: t }); continue; }
@@ -1059,9 +1193,11 @@ class Router {
       netCost[ni] += res.cost;
       const first = res.pts[0];
       const fresh = outs.find((o) => o.start === first && !own[first]);
-      if (fresh) { rootAt.set(first, fresh); parent.set(first, -1); root = root ?? fresh; }
+      if (fresh) { rootAt.set(first, fresh); rootSides.add(fresh.side); parent.set(first, -1); }
       const prefix = pathTo(first);
-      const rootPort = rootAt.get(prefix[0])!.port;
+      const root = rootAt.get(prefix[0])!;
+      const rootPort = root.port;
+      for (const p of res.pts) treeSide.set(p, root.side);
       for (let k = 1; k < res.pts.length; k++) parent.set(res.pts[k], res.pts[k - 1]);
       for (const p of res.pts) { own[p] = 1; this.owner[p] = ni + 1; netPts[ni].push(p); }
       for (const p of res.pts) if (p !== res.goal.pre && p !== res.goal.prepre) joinable.push(p);
@@ -1114,12 +1250,14 @@ function segOverlap(s: { a: Pt; b: Pt }, t: { a: Pt; b: Pt }): boolean {
   if (s.a.x !== t.a.x) return false;
   return Math.min(Math.max(s.a.y, s.b.y), Math.max(t.a.y, t.b.y)) - Math.max(Math.min(s.a.y, s.b.y), Math.min(t.a.y, t.b.y)) > 0;
 }
+/** Does segment s come within m px of rect r? */
 function segRect(s: { a: Pt; b: Pt }, r: Rect, m: number): boolean {
   const x0 = Math.min(s.a.x, s.b.x), x1 = Math.max(s.a.x, s.b.x), y0 = Math.min(s.a.y, s.b.y), y1 = Math.max(s.a.y, s.b.y);
   return x0 < r.x + r.w + m && x1 > r.x - m && y0 < r.y + r.h + m && y1 > r.y - m;
 }
+const diag = (r: Rect) => ({ a: { x: r.x, y: r.y }, b: { x: r.x + r.w, y: r.y + r.h } });
 
-export function segmentsOf(edges: DfdEdge[]): Seg[] {
+export function segmentsOf(edges: { from: string; points: Pt[] }[]): Seg[] {
   const out: Seg[] = [];
   edges.forEach((e, i) => {
     for (let k = 1; k < e.points.length; k++) out.push({ a: e.points[k - 1], b: e.points[k], e: i, src: e.from });
@@ -1127,9 +1265,29 @@ export function segmentsOf(edges: DfdEdge[]): Seg[] {
   return out;
 }
 
+/** The two stubs of every connector pair, as edges (the out stub ends at a tag, not a box). */
+function stubEdges(off: DfdOffSheet[]): DfdEdge[] {
+  return off.flatMap((o) => [
+    { from: o.from, to: `${o.to}#tag`, cross: false, points: o.out.stub, side: "left" as DfdSide, offSheet: false },
+    { from: o.from, to: o.to, cross: false, points: o.in.stub, side: "left" as DfdSide, offSheet: false },
+  ]);
+}
+
+/** Is an edge a detour: too long for the gap it spans, or straying outside its two stacks? */
+function isDetour(e: DfdEdge, sheet: Pick<Sheet, "stackX" | "contentBottom">, by: Map<string, DfdBox>): boolean {
+  if (e.points.length < 2) return false;
+  const s = by.get(e.from)!, t = by.get(e.to)!;
+  if (detourRatio(e.points, s, t) > DFD_DETOUR_MAX) return true;
+  const [ax0, ax1] = sheet.stackX[s.stack], [bx0, bx1] = sheet.stackX[t.stack];
+  const x0 = Math.min(ax0, bx0), x1 = Math.max(ax1, bx1);
+  return e.points.some((p) => p.x < x0 || p.x > x1 || p.y > sheet.contentBottom);
+}
+
 /** The sheet's own proof: crossings / overlaps between different sources, box hits, label hits. */
-export function auditDfd(l: { boxes: DfdBox[]; edges: DfdEdge[]; labels: DfdLabel[] }): DfdAudit {
-  const segs = segmentsOf(l.edges);
+export function auditDfd(l: { boxes: DfdBox[]; edges: DfdEdge[]; labels: DfdLabel[]; offSheet?: DfdOffSheet[] }, sheet?: Pick<Sheet, "stackX" | "contentBottom">): DfdAudit {
+  const off = l.offSheet ?? [];
+  const all = [...l.edges.filter((e) => e.points.length), ...stubEdges(off)];
+  const segs = segmentsOf(all);
   let crossings = 0, overlaps = 0, boxHits = 0, labelHits = 0, nonOrthogonal = 0;
   for (const s of segs) if (s.a.x !== s.b.x && s.a.y !== s.b.y) nonOrthogonal++;
   for (let i = 0; i < segs.length; i++) {
@@ -1146,7 +1304,7 @@ export function auditDfd(l: { boxes: DfdBox[]; edges: DfdEdge[]; labels: DfdLabe
     }
   }
   const byName = new Map(l.boxes.map((b) => [b.name, b]));
-  l.edges.forEach((e) => {
+  all.forEach((e) => {
     const n = e.points.length;
     for (let k = 1; k < n; k++) {
       const s = { a: e.points[k - 1], b: e.points[k] };
@@ -1170,134 +1328,219 @@ export function auditDfd(l: { boxes: DfdBox[]; edges: DfdEdge[]; labels: DfdLabe
   });
   for (const lab of l.labels) {
     const own = new Set(lab.edges);
-    for (const b of l.boxes) if (segRect({ a: { x: lab.x, y: lab.y }, b: { x: lab.x + lab.w, y: lab.y + lab.h } }, b, 0)) labelHits++;
+    for (const b of l.boxes) if (segRect(diag(lab), b, 0)) labelHits++;
     for (const s of segs) {
-      const e = l.edges[s.e];
+      const e = all[s.e];
       // the line the gap is cut in
       if (own.has(`${e.from}->${e.to}`) && (lab.along === "h" ? horiz(s) && s.a.y === lab.y + lab.h / 2 : !horiz(s) && s.a.x === lab.x + lab.w / 2)) continue;
       if (segRect(s, lab, 1)) labelHits++;
     }
-    for (const o of l.labels) if (o !== lab && segRect({ a: { x: o.x, y: o.y }, b: { x: o.x + o.w, y: o.y + o.h } }, lab, 2)) labelHits += 0.5;
+    for (const o of l.labels) if (o !== lab && segRect(diag(o), lab, 2)) labelHits += 0.5;
+  }
+  // connector tags: clear of every box, every line but their own stub, every label and tag
+  const tags = off.flatMap((o) => [o.out, o.in]);
+  for (const t of tags) {
+    for (const b of l.boxes) if (segRect(diag(t), b, 0)) labelHits++;
+    for (const s of segs) {
+      const e = all[s.e];
+      if (e.points === t.stub) continue;
+      if (segRect(s, t, 1)) labelHits++;
+    }
+    for (const o of [...l.labels, ...tags]) if (o !== t && segRect(diag(o), t, 2)) labelHits += 0.5;
   }
   const labelled = new Set(l.labels.flatMap((x) => x.edges));
-  const unlabelled = l.edges.filter((e) => e.cross && !e.offSheet && !labelled.has(`${e.from}->${e.to}`)).length;
-  return { crossings, overlaps, boxHits, labelHits: Math.round(labelHits), unlabelled, nonOrthogonal };
+  const unlabelled = l.edges.filter((e) => e.cross && !e.offSheet && routeLength(e.points) > DFD_SHORT && !labelled.has(`${e.from}->${e.to}`)).length;
+  const detours = sheet ? l.edges.filter((e) => isDetour(e, sheet, byName)).length : 0;
+  return { crossings, overlaps, boxHits, labelHits: Math.round(labelHits), unlabelled, nonOrthogonal, detours };
 }
 
-// ———————————————————————————————————————— inline labels
+// ———————————————————————————————————————— inline labels: one per trunk
 
 /** Width of a turned label's gap: clears the line's neighbours one track (8 px) away with 1.5 px to spare. */
 const TURN_W = 12;
+const edgeKey = (e: { from: string; to: string }) => `${e.from}->${e.to}`;
 
-function placeLabels(edges: DfdEdge[], boxes: DfdBox[], addr: Map<string, string>, measure: (t: string, px: number) => number, width = Infinity, height = Infinity, lanes: DfdLane[] = []): DfdLabel[] {
+/**
+ * Inline labels name the PARENT of a cross-family line ("4 transformer"), once per trunk (the
+ * tree of lines leaving one out-port). The gap is cut where most of the trunk's cross-family
+ * lines run together, preferring a run no same-family line of that parent shares (on the
+ * parent's own comb the name is redundant). A line too short to need one (≤ DFD_SHORT) gets
+ * none; a bare address is never printed.
+ */
+function placeLabels(edges: DfdEdge[], boxes: DfdBox[], addr: Map<string, string>, measure: (t: string, px: number) => number,
+  width: number, height: number, lanes: DfdLane[], avoid: Rect[] = []): DfdLabel[] {
   // a label laid level never sits on a swim-lane rule (it would read as the lane's own caption);
   // a turned one may cut through a rule like the line it is cut into
   const rules: Rect[] = lanes.map((l) => ({ x: l.x, y: l.y, w: l.w, h: 1 }));
   const labels: DfdLabel[] = [];
   const segs = segmentsOf(edges);
   const H = DFD_LABEL_PX + 3;
-  const key = (e: DfdEdge) => `${e.from}->${e.to}`;
-  const done = new Set<string>();
-  const rectHit = (r: Rect, m: number) => (s: { a: Pt; b: Pt }) => segRect(s, r, m);
+  const trunks = new Map<string, DfdEdge[]>();
   for (const e of edges) {
-    if (!e.cross || e.offSheet || done.has(key(e))) continue;
-    // the label names the source (every line it cuts comes from that same source);
-    // where the full "4 transformer" finds no gap, the bare address "4" is tried
-    let placed: DfdLabel | null = null;
-    for (const text of [`${addr.get(e.from)} ${words(e.from)}`, addr.get(e.from)!]) {
-    const w = Math.ceil(measure(text, DFD_LABEL_PX)) + 8;
-    // turn: on a vertical run the text reads up the line in a gap TURN_W wide, so it stays
-    // clear of the neighbouring tracks (a label laid across a gutter line hits them)
-    const runs: { a: Pt; b: Pt; k: number; h: boolean; turn: boolean }[] = [];
-    for (let k = 1; k < e.points.length; k++) {
-      const a = e.points[k - 1], b = e.points[k];
-      if (a.y === b.y && Math.abs(a.x - b.x) >= w + 2 * DFD_R + 4) runs.push({ a, b, k, h: true, turn: false });
-      if (a.x === b.x && Math.abs(a.y - b.y) >= H + 2 * DFD_R + 8) runs.push({ a, b, k, h: false, turn: false });
-    }
-    for (const r of [...runs]) if (!r.h && Math.abs(r.a.y - r.b.y) >= w + 2 * DFD_R + 8) runs.push({ ...r, turn: true });
-    // horizontal runs first (a gap cut along the line), longest first; then vertical runs with
-    // the text across the line; then vertical runs with the text turned along it
-    const rank = (r: { h: boolean; turn: boolean }) => (r.h ? 0 : r.turn ? 2 : 1);
-    runs.sort((p, q) => rank(p) - rank(q) || (q.h ? Math.abs(q.a.x - q.b.x) - Math.abs(p.a.x - p.b.x) : Math.abs(q.a.y - q.b.y) - Math.abs(p.a.y - p.b.y)) || q.k - p.k);
-    for (const r of runs) {
-      const lo = r.h ? Math.min(r.a.x, r.b.x) + DFD_R + 2 : Math.min(r.a.y, r.b.y) + DFD_R + 4;
-      const hi = r.h ? Math.max(r.a.x, r.b.x) - DFD_R - 2 : Math.max(r.a.y, r.b.y) - DFD_R - 4;
-      const len = r.h || r.turn ? w : H;
-      const mid = Math.round((lo + hi) / 2);
-      const tries = [0];
-      for (let s = G; s < (hi - lo) / 2; s += G) tries.push(s, -s);
-      for (const d of tries) {
-        const c0 = mid + d - len / 2;
-        if (c0 < lo || c0 + len > hi) continue;
-        const rect: Rect = r.h ? { x: c0, y: r.a.y - H / 2, w, h: H } : r.turn ? { x: r.a.x - TURN_W / 2, y: c0, w: TURN_W, h: w } : { x: r.a.x - w / 2, y: c0, w, h: H };
-        if (rect.x < 2 || rect.y < 2 || rect.x + rect.w > width - 2 || rect.y + rect.h > height - 2) continue; // stays on the sheet
-        // the lines the gap cuts: runs of this same source along this line through the rect
-        const own = new Set<string>();
-        let bad = false;
-        for (const s of segs) {
-          if (!segRect(s, rect, 1.5)) continue;
-          const o = edges[s.e];
-          const along = r.h ? s.a.y === r.a.y && s.b.y === r.a.y : s.a.x === r.a.x && s.b.x === r.a.x;
-          if (o.from === e.from && along) { own.add(key(o)); continue; }
-          bad = true; break;
-        }
-        if (bad) continue;
-        if (boxes.some((b) => rectHit({ x: b.x, y: b.y, w: b.w, h: b.h }, 0.5)({ a: { x: rect.x, y: rect.y }, b: { x: rect.x + rect.w, y: rect.y + rect.h } }))) continue;
-        if (labels.some((o) => segRect({ a: { x: o.x, y: o.y }, b: { x: o.x + o.w, y: o.y + o.h } }, rect, 3))) continue;
-        if (!r.turn && rules.some((u) => segRect({ a: { x: u.x, y: u.y }, b: { x: u.x + u.w, y: u.y + u.h } }, rect, 2))) continue;
-        // a vertical gap must cut the line where it fully crosses the rect (no elbow inside)
-        placed = { text, ...rect, edges: [...own], along: r.h ? "h" : "v", ...(r.turn ? { turn: true } : {}) };
-        break;
-      }
-      if (placed) break;
-    }
-    if (placed) break;
-    }
-    if (placed) { labels.push(placed); for (const k of placed.edges) done.add(k); }
+    if (!e.cross || e.offSheet || e.points.length < 2) continue;
+    const k = `${e.from}@${e.points[0].x},${e.points[0].y}`;
+    if (!trunks.has(k)) trunks.set(k, []);
+    trunks.get(k)!.push(e);
   }
-  // a cross edge with no room of its own that is only a BRANCH of a labelled line of the same
-  // parent (every run but its last lies on that line, which carries the parent's name) shares
-  // that label: the phone's short transformer → clip stub off the labelled transformer → vit trunk
-  const on = (s: { a: Pt; b: Pt }, f: DfdEdge) => {
-    for (let k = 1; k < f.points.length; k++) {
-      const t = { a: f.points[k - 1], b: f.points[k] };
-      if (horiz(s) !== horiz(t) && !(s.a.x === s.b.x && s.a.y === s.b.y)) continue;
-      const inX = Math.min(s.a.x, s.b.x) >= Math.min(t.a.x, t.b.x) && Math.max(s.a.x, s.b.x) <= Math.max(t.a.x, t.b.x);
-      const inY = Math.min(s.a.y, s.b.y) >= Math.min(t.a.y, t.b.y) && Math.max(s.a.y, s.b.y) <= Math.max(t.a.y, t.b.y);
-      if (inX && inY) return true;
+  for (const trunk of trunks.values()) {
+    if (trunk.every((e) => routeLength(e.points) <= DFD_SHORT)) continue;
+    const src = trunk[0].from;
+    const crossKeys = new Set(trunk.map(edgeKey));
+    const text = `${addr.get(src)} ${words(src)}`;
+    const w = Math.ceil(measure(text, DFD_LABEL_PX)) + 8;
+    let best: { lab: DfdLabel; score: number } | null = null;
+    const seen = new Set<string>();
+    for (const e of trunk) {
+      for (let k = 1; k < e.points.length; k++) {
+        const a = e.points[k - 1], b = e.points[k];
+        const h = a.y === b.y;
+        const len = h ? Math.abs(a.x - b.x) : Math.abs(a.y - b.y);
+        // horizontal: a gap cut along the line; vertical: text across it, or turned to read up it
+        const modes: ("h" | "v" | "turn")[] = h ? (len >= w + 2 * DFD_R + 4 ? ["h"] : []) : [
+          ...(len >= H + 2 * DFD_R + 8 ? ["v" as const] : []), ...(len >= w + 2 * DFD_R + 8 ? ["turn" as const] : []),
+        ];
+        for (const mode of modes) {
+          const lo = h ? Math.min(a.x, b.x) + DFD_R + 2 : Math.min(a.y, b.y) + DFD_R + 4;
+          const hi = h ? Math.max(a.x, b.x) - DFD_R - 2 : Math.max(a.y, b.y) - DFD_R - 4;
+          const span = mode === "v" ? H : w;
+          const mid = Math.round((lo + hi) / 2);
+          const tries = [0];
+          for (let s = G; s < (hi - lo) / 2; s += G) tries.push(s, -s);
+          for (const d of tries) {
+            const c0 = mid + d - span / 2;
+            if (c0 < lo || c0 + span > hi) continue;
+            const rect: Rect = mode === "h" ? { x: c0, y: a.y - H / 2, w, h: H } : mode === "turn" ? { x: a.x - TURN_W / 2, y: c0, w: TURN_W, h: w } : { x: a.x - w / 2, y: c0, w, h: H };
+            const id = `${mode}:${rect.x},${rect.y}`;
+            if (seen.has(id)) continue;
+            seen.add(id);
+            if (rect.x < 2 || rect.y < 2 || rect.x + rect.w > width - 2 || rect.y + rect.h > height - 2) continue;
+            // the lines the gap cuts: runs of this same source along this line through the rect
+            const own = new Set<string>();
+            let bad = false;
+            for (const s of segs) {
+              if (!segRect(s, rect, 1.5)) continue;
+              const o = edges[s.e];
+              const along = h ? s.a.y === a.y && s.b.y === a.y : s.a.x === a.x && s.b.x === a.x;
+              if (o.from === src && along) { own.add(edgeKey(o)); continue; }
+              bad = true; break;
+            }
+            if (bad) continue;
+            if (boxes.some((bx) => segRect(diag(rect), bx, 0.5))) continue;
+            if (labels.some((o) => segRect(diag(o), rect, 3))) continue;
+            if (avoid.some((o) => segRect(diag(o), rect, 3))) continue;
+            if (mode !== "turn" && rules.some((u) => segRect(diag(u), rect, 2))) continue;
+            const cover = [...own].filter((k2) => crossKeys.has(k2)).length;
+            const shared = [...own].some((k2) => !crossKeys.has(k2));
+            const score = (shared ? 1000 : 0) - cover * 100 + (mode === "h" ? 0 : mode === "v" ? 10 : 20) - Math.min(len, 400) * 0.02 + Math.abs(d) * 0.01;
+            if (!best || score < best.score - 1e-9) {
+              best = { lab: { text, ...rect, edges: [...new Set([...own, ...crossKeys])], along: h ? "h" : "v", ...(mode === "turn" ? { turn: true } : {}) }, score };
+            }
+          }
+        }
+      }
     }
-    return false;
-  };
-  for (const e of edges) {
-    if (!e.cross || e.offSheet || done.has(key(e)) || e.points.length < 3) continue;
-    const lab = labels.find((l) => l.edges.some((k) => {
-      const f = edges.find((x) => key(x) === k);
-      if (!f || f.from !== e.from) return false;
-      for (let i = 1; i < e.points.length - 1; i++) if (!on({ a: e.points[i - 1], b: e.points[i] }, f)) return false;
-      return true;
-    }));
-    if (lab) { lab.edges.push(key(e)); done.add(key(e)); }
+    if (best) labels.push(best.lab);
   }
   return labels;
 }
 
+// ———————————————————————————————————————— connector tags
+
+interface TagCtx {
+  boxes: DfdBox[];
+  segs: { a: Pt; b: Pt }[];
+  rects: Rect[];
+  rules: Rect[];
+  width: number;
+  height: number;
+  measure: (t: string, px: number) => number;
+}
+const UNIT: Record<DfdSide, Pt> = { left: { x: -1, y: 0 }, right: { x: 1, y: 0 }, top: { x: 0, y: -1 }, bottom: { x: 0, y: 1 } };
+const OPPOSITE: Record<DfdSide, DfdSide> = { left: "right", right: "left", top: "bottom", bottom: "top" };
+
+/** Width of a connector tag for `text` (padding + the pointed tip). */
+const tagWidth = (text: string, measure: (t: string, px: number) => number) => Math.ceil(measure(text, DFD_TAG_PX)) + 12 + DFD_TAG_TIP;
+
+/**
+ * One end of a connector pair: a stub straight out of a free port on box `b`, ending in a
+ * tag beyond it. Candidates: every side in `sides` (preference order), every port position on
+ * it, stub lengths 12–40 px and three tag alignments; the first clean one by score wins.
+ */
+function placeTag(b: DfdBox, role: "out" | "in", text: string, address: string, sides: DfdSide[], ctx: TagCtx): DfdTag | null {
+  const tw = tagWidth(text, ctx.measure);
+  let best: { tag: DfdTag; score: number } | null = null;
+  sides.forEach((side, si) => {
+    const u = UNIT[side];
+    const along = side === "left" || side === "right";
+    // a tag on a vertical stub carries its tip below / above its text: 4 px taller
+    const th = along ? DFD_TAG_H : DFD_TAG_H + DFD_TAG_NOTCH;
+    const pos: number[] = [];
+    if (along) for (let y = b.y + G; y <= b.y + b.h - G; y += G) pos.push(y);
+    else for (let x = Math.ceil((b.x + 2 * G) / G) * G; x <= b.x + b.w - 2 * G; x += G) pos.push(x);
+    const pref = along ? b.y + 24 : b.x + b.w / 2;
+    for (const p of pos) {
+      const P = along ? { x: side === "left" ? b.x : b.x + b.w, y: p } : { x: p, y: side === "top" ? b.y : b.y + b.h };
+      for (const L of [12, 16, 24, 32, 40]) {
+        const Q = { x: P.x + u.x * L, y: P.y + u.y * L };
+        const rects: Rect[] = along
+          ? [{ x: u.x > 0 ? Q.x : Q.x - tw, y: P.y - th / 2, w: tw, h: th }]
+          : [0, 1, 2].map((k) => ({ x: k === 0 ? P.x - tw / 2 : k === 1 ? P.x - 12 : P.x - tw + 12, y: u.y > 0 ? Q.y : Q.y - th, w: tw, h: th }));
+        rects.forEach((r, align) => {
+          const score = si * 1000 + L * 3 + Math.abs(p - pref) * 0.5 + align * 4;
+          if (best && score >= best.score) return;
+          const stub = { a: P, b: Q };
+          if (r.x < 2 || r.y < 2 || r.x + r.w > ctx.width - 2 || r.y + r.h > ctx.height - 2) return;
+          for (const o of ctx.boxes) {
+            if (o !== b && segRect(stub, o, G - 0.5)) return;
+            if (segRect(diag(r), o, 3)) return;
+          }
+          const sb = { x: Math.min(P.x, Q.x), y: Math.min(P.y, Q.y), w: Math.abs(P.x - Q.x), h: Math.abs(P.y - Q.y) };
+          for (const s of ctx.segs) if (segRect(s, sb, 3) || segRect(s, r, 3)) return;
+          for (const o of ctx.rects) if (segRect(diag(o), r, 3) || segRect(stub, o, 2)) return;
+          for (const o of ctx.rules) if (segRect(diag(o), r, 2) || segRect(stub, o, 0)) return;
+          const tip = role === "out" ? side : OPPOSITE[side];
+          best = { tag: { ...r, text, address, tip, stub: role === "out" ? [P, Q] : [Q, P] }, score };
+        });
+      }
+    }
+  });
+  return best ? (best as { tag: DfdTag }).tag : null;
+}
+
+/** A connector pair for edge from → to, or null where either end finds no clean spot. */
+function placePair(from: string, to: string, why: DfdOffSheet["why"], ratio: number, mode: DfdMode, ctx: TagCtx, by: Map<string, DfdBox>, addr: Map<string, string>): DfdOffSheet | null {
+  const s = by.get(from)!, t = by.get(to)!;
+  const outSides: DfdSide[] = mode === "desktop" ? ["right", "bottom", "top", "left"] : ["top"];
+  const inSides: DfdSide[] = mode === "desktop" ? ["left", "top", "bottom", "right"] : ["top"];
+  // the full "address name"; where no spot holds it, the address alone (still unambiguous)
+  const tag = (b: DfdBox, role: "out" | "in", far: string, sides: DfdSide[], c: TagCtx) =>
+    placeTag(b, role, `${addr.get(far)} ${words(far)}`, addr.get(far)!, sides, c) ?? placeTag(b, role, addr.get(far)!, addr.get(far)!, sides, c);
+  const out = tag(s, "out", to, outSides, ctx);
+  if (!out) return null;
+  const ctx2 = { ...ctx, segs: [...ctx.segs, { a: out.stub[0], b: out.stub[1] }], rects: [...ctx.rects, out] };
+  const inn = tag(t, "in", from, inSides, ctx2);
+  return inn ? { from, to, out, in: inn, why, ratio: +ratio.toFixed(3) } : null;
+}
+
 // ———————————————————————————————————————— the whole pass
 
-function permute<T>(xs: T[]): T[][] {
+function permute<T>(xs: T[], cap = Infinity): T[][] {
   if (xs.length <= 1) return [xs.slice()];
+  // beyond `cap` items the order is kept (an exhaustive search would explode)
+  if (xs.length > cap) return [xs.slice()];
   const out: T[][] = [];
   xs.forEach((x, i) => { for (const p of permute([...xs.slice(0, i), ...xs.slice(i + 1)])) out.push([x, ...p]); });
   return out;
 }
 
-/** Candidate stack arrangements, best first by a cheap proxy (rows balance, backward and long cross-lane edges). */
-function arrangements(g: Graph): Arrangement[] {
+/** Candidate stack arrangements, best first by a cheap proxy (stack balance, backward and long cross-lane edges). */
+function arrangements(g: Graph, pitch: number): Arrangement[] {
   const fams = g.families;
-  const rows = new Map(fams.map((f) => [f, Math.max(1, ...[0, 1, 2, 3, 4, 5].map((d) => g.membersOf.get(f)!.filter((n) => g.depth.get(n) === d).length))]));
-  const cands: { a: Arrangement; s: number }[] = [];
+  const units = new Map(fams.map((f) => [f, laneUnits(g, f, pitch)]));
+  if (fams.length === 1) return [{ stacks: [fams] }];
   const proxy = (stacks: string[][]) => {
     const pos = new Map<string, { s: number; y: number }>();
-    stacks.forEach((st, s) => { let y = 0; for (const f of st) { pos.set(f, { s, y: y + rows.get(f)! / 2 }); y += rows.get(f)! + 0.5; } });
+    stacks.forEach((st, s) => { let y = 0; for (const f of st) { pos.set(f, { s, y: y + units.get(f)! / 2 }); y += units.get(f)!; } });
     let c = 0;
     for (const e of g.edges) {
       if (!e.cross) continue;
@@ -1307,22 +1550,32 @@ function arrangements(g: Graph): Arrangement[] {
     }
     // a family with no cross-family edge sits at the bottom of its stack
     stacks.forEach((st) => st.forEach((f, i) => { if (g.islet.has(f) && i !== st.length - 1) c += 4; }));
-    return c;
+    // balance: the taller stack sets the sheet's height
+    const h = stacks.map((st) => st.reduce((s, f) => s + units.get(f)!, 0));
+    return c + Math.abs(h[0] - h[1]) * 2;
   };
-  {
-    const total = fams.reduce((s, f) => s + rows.get(f)!, 0);
+  const cands: { a: Arrangement; s: number }[] = [];
+  const height = (A: string[]) => A.reduce((s, f) => s + units.get(f)!, 0);
+  const splits: [string[], string[]][] = [];
+  if (fams.length <= 8) {
     let bestH = Infinity;
-    const splits: [string[], string[]][] = [];
+    const all: { A: string[]; B: string[]; h: number }[] = [];
     for (let mask = 1; mask < (1 << fams.length) - 1; mask++) {
       const A = fams.filter((_, i) => mask & (1 << i)), B = fams.filter((_, i) => !(mask & (1 << i)));
-      const h = Math.max(A.reduce((s, f) => s + rows.get(f)! + 0.45, 0), B.reduce((s, f) => s + rows.get(f)! + 0.45, 0));
-      if (h < bestH - 1e-9) { bestH = h; splits.length = 0; }
-      if (Math.abs(h - bestH) < 1e-9) splits.push([A, B]);
+      const h = Math.max(height(A), height(B));
+      all.push({ A, B, h });
+      bestH = Math.min(bestH, h);
     }
-    void total;
-    for (const [A, B] of splits) {
-      for (const pa of permute(A)) for (const pb of permute(B)) cands.push({ a: { stacks: [pa, pb] }, s: proxy([pa, pb]) });
-    }
+    // near-balanced splits (within one row of the best) compete on wire
+    for (const s of all) if (s.h <= bestH + 1 + 1e-9) splits.push([s.A, s.B]);
+  } else {
+    // many groups: greedy balance, tallest first
+    const A: string[] = [], B: string[] = [];
+    for (const f of [...fams].sort((p, q) => units.get(q)! - units.get(p)! || (p < q ? -1 : 1))) (height(A) <= height(B) ? A : B).push(f);
+    splits.push([A, B]);
+  }
+  for (const [A, B] of splits) {
+    for (const pa of permute(A, 5)) for (const pb of permute(B, 5)) cands.push({ a: { stacks: [pa, pb] }, s: proxy([pa, pb]) });
   }
   cands.sort((p, q) => p.s - q.s || JSON.stringify(p.a.stacks).localeCompare(JSON.stringify(q.a.stacks)));
   return cands.map((c) => c.a);
@@ -1339,17 +1592,16 @@ export function wireQuality(edges: DfdEdge[], boxes: DfdBox[]): number {
   let q = 0;
   for (const e of edges) {
     if (e.points.length < 2) continue;
-    let len = 0;
-    for (let k = 1; k < e.points.length; k++) len += Math.abs(e.points[k].x - e.points[k - 1].x) + Math.abs(e.points[k].y - e.points[k - 1].y);
+    const len = routeLength(e.points);
     const s = by.get(e.from)!, t = by.get(e.to)!;
-    const reach = Math.abs(t.x - (s.x + s.w)) + Math.abs(t.y - s.y);
+    const reach = boxGap(s, t) + 2 * G;
     q += len + 16 * (e.points.length - 2) + 3 * Math.max(0, len - 1.3 * reach - 6 * G);
   }
   return q;
 }
 
-function routeSheet(sheet: Sheet, g: Graph, mode: DfdMode, budget: number): { res: RouteResult; tries: number } {
-  const router = new Router(sheet, mode);
+function routeSheet(sheet: Sheet, g: Graph, budget: number, score: (r: RouteResult) => number): { res: RouteResult; tries: number } {
+  const router = new Router(sheet);
   const cross = (a: string, b: string) => g.family.get(a) !== g.family.get(b);
   const nets0 = g.names.filter((n) => g.children.get(n)!.length).map((n) => ({ src: n, targets: [...g.children.get(n)!].sort() }));
   const byName = new Map(sheet.boxes.map((b) => [b.name, b]));
@@ -1369,108 +1621,159 @@ function routeSheet(sheet: Sheet, g: Graph, mode: DfdMode, budget: number): { re
   let tries = 0;
   for (const start of orders.slice(0, budget > 1 ? orders.length : 1)) {
     let order = start;
+    const pinned = new Set<string>();
     for (let it = 0; it < 3 && tries < budget; it++) {
       tries++;
-      const res = router.routeAll(order, cross);
-      res.cost = wireQuality(res.edges, sheet.boxes);
-      if (!best || res.failed.length < best.failed.length || (res.failed.length === best.failed.length && res.cost < best.cost)) best = res;
-      if (!res.failed.length) break;
-      const bad = new Set(res.failed.map((f) => f.from));
+      const res = router.routeAll(order, cross, pinned);
+      res.cost = score(res);
+      if (!best || res.cost < best.cost) best = res;
+      // a source with an unroutable edge or a detour goes first next time, pinned (never
+      // ripped): its line takes the direct channel and the others find their way round it
+      const bad = new Set([...res.failed.map((f) => f.from), ...res.edges.filter((e) => isDetour(e, sheet, byName)).map((e) => e.from)]);
+      if (!bad.size) break;
+      for (const b of bad) pinned.add(b);
       order = [...order.filter((n) => bad.has(n.src)), ...order.filter((n) => !bad.has(n.src))];
     }
   }
   return { res: best!, tries };
 }
 
-function offSheetPairs(failed: { from: string; to: string }[], sheet: Sheet, addr: Map<string, string>): { edges: DfdEdge[]; pairs: DfdOffSheet[] } {
+interface Finished { edges: DfdEdge[]; labels: DfdLabel[]; offSheet: DfdOffSheet[]; score: number }
+
+/**
+ * From routes to a finished sheet: detours (worst first) and unroutable edges become connector
+ * pairs within the budget; then inline labels are cut, one per trunk. Scored for comparison:
+ * unplaced edges ≫ unlabelled ≫ wire quality + CONNECTOR_COST per pair.
+ */
+function finish(sheet: Sheet, routed: DfdEdge[], failed: { from: string; to: string }[], mode: DfdMode,
+  addr: Map<string, string>, measure: (t: string, px: number) => number): Finished {
   const by = new Map(sheet.boxes.map((b) => [b.name, b]));
-  const edges: DfdEdge[] = [];
-  const pairs: DfdOffSheet[] = [];
-  for (const f of failed) {
-    const s = by.get(f.from)!, t = by.get(f.to)!;
-    const outText = `to ${addr.get(f.to)} ${words(f.to)}`;
-    const inText = `from ${addr.get(f.from)} ${words(f.from)}`;
-    pairs.push({
-      from: f.from, to: f.to, outText, inText,
-      out: { x: s.x + s.w + 4, y: s.y - 14, w: outText.length * 6, h: 13 },
-      in: { x: t.x - inText.length * 6 - 4, y: t.y - 14, w: inText.length * 6, h: 13 },
-      stubOut: [{ x: s.x + s.w, y: s.y + 8 }, { x: s.x + s.w + G, y: s.y + 8 }],
-      stubIn: [{ x: t.x - G, y: t.y + 8 }, { x: t.x, y: t.y + 8 }],
-    });
-    edges.push({ from: f.from, to: f.to, cross: s.family !== t.family, points: [], side: "left", offSheet: true });
+  // the phone's channel router cannot detour (every line is out → track → in); only the maze router can
+  const detours = routed.filter((e) => mode === "desktop" && isDetour(e, sheet, by))
+    .map((e) => ({ e, r: detourRatio(e.points, by.get(e.from)!, by.get(e.to)!) }))
+    .sort((a, b) => b.r - a.r || (edgeKey(a.e) < edgeKey(b.e) ? -1 : 1));
+  const want: { from: string; to: string; why: DfdOffSheet["why"]; ratio: number; e?: DfdEdge }[] = [
+    ...failed.map((f) => ({ ...f, why: "unroutable" as const, ratio: 0 })),
+    ...detours.map((d) => ({ from: d.e.from, to: d.e.to, why: "detour" as const, ratio: d.r, e: d.e })),
+  ].slice(0, DFD_OFFSHEET_MAX);
+  const cut = new Set(want.filter((w) => w.e).map((w) => w.e!));
+  let edges = routed.filter((e) => !cut.has(e));
+  const rules = sheet.lanes.map((l) => ({ x: l.x, y: l.y, w: l.w, h: 1 }));
+  const offSheet: DfdOffSheet[] = [];
+  let unplaced = failed.length - want.filter((w) => w.why === "unroutable").length;
+  for (const w of want) {
+    const segs = [...segmentsOf(edges), ...stubEdges(offSheet).flatMap((e) => segmentsOf([e]))];
+    const ctx: TagCtx = { boxes: sheet.boxes, segs, rects: [...sheet.blocks, ...offSheet.flatMap((o) => [o.out, o.in])], rules, width: sheet.width, height: sheet.height, measure };
+    const pair = placePair(w.from, w.to, w.why, w.ratio, mode, ctx, by, addr);
+    if (pair) offSheet.push(pair);
+    else if (w.e) edges = [...edges, w.e]; // no clean spot for its tags: the line stays (a detour)
+    else unplaced++;
   }
-  return { edges, pairs };
+  edges.sort((a, b) => (edgeKey(a) < edgeKey(b) ? -1 : 1));
+  const labels = placeLabels(edges, sheet.boxes, addr, measure, sheet.width, sheet.height, sheet.lanes, offSheet.flatMap((o) => [o.out, o.in]));
+  const unl = auditDfd({ boxes: sheet.boxes, edges, labels }).unlabelled;
+  // a pair cut out of a hub's comb leaves a gap in it: each sibling line of the source adds HUB_GAP
+  const siblings = (src: string) => routed.filter((e) => e.from === src).length - 1;
+  const score = unplaced * 1e6 + unl * 1e4 + wireQuality(edges, sheet.boxes) + offSheet.reduce((s2, o) => s2 + CONNECTOR_COST + HUB_GAP * siblings(o.from), 0);
+  const offEdges: DfdEdge[] = offSheet.map((o) => ({ from: o.from, to: o.to, cross: by.get(o.from)!.family !== by.get(o.to)!.family, points: [], side: "left", offSheet: true }));
+  return { edges: [...edges, ...offEdges].sort((a, b) => (edgeKey(a) < edgeKey(b) ? -1 : 1)), labels, offSheet, score };
 }
 
-export function buildDfd(tax: TaxonomyResponse, fam: FamilyMap, opts: DfdOptions): DfdLayout {
-  const g = buildGraph(tax, fam);
+/** Lay out and route a directed graph as a DFD sheet. `fam` maps every node to its group (lane). */
+export function buildDfd(input: DfdGraphInput, fam: FamilyMap, opts: DfdOptions): DfdLayout {
+  // the graph builder reads only names and builds_on; the rest of a taxonomy is not needed
+  const g = buildGraph({ mechanisms: {}, compositions: [], models: input.models.map((m) => ({ name: m.name, builds_on: m.builds_on, level: "derived", introduces: [], note: "", description: "" })) }, fam);
   const measure = opts.measure ?? approxMeasure;
   const addr = lineageAddresses(g);
+  const layoutOf = (mode: DfdMode, sheet: Sheet, f: Finished, stacks: string[][], attempts: number): DfdLayout => {
+    const layout: DfdLayout = {
+      mode, width: sheet.width, height: sheet.height, grid: G, radius: DFD_R,
+      boxes: sheet.boxes, lanes: sheet.lanes, headers: sheet.headers, edges: f.edges, labels: f.labels, offSheet: f.offSheet,
+      stacks, audit: { crossings: 0, overlaps: 0, boxHits: 0, labelHits: 0, unlabelled: 0, nonOrthogonal: 0, detours: 0 }, attempts,
+    };
+    layout.audit = auditDfd(layout, mode === "desktop" ? sheet : undefined);
+    return layout;
+  };
   if (opts.mode === "mobile") {
     const ph = phoneSheet(g, addr, measure);
-    const off = offSheetPairs(ph.off, ph.sheet, addr);
-    const edges = [...ph.edges, ...off.edges].sort((a, b) => (a.from < b.from ? -1 : a.from > b.from ? 1 : a.to < b.to ? -1 : 1));
-    const labels = placeLabels(ph.edges, ph.sheet.boxes, addr, measure, ph.sheet.width, ph.sheet.height, ph.sheet.lanes);
-    const layout: DfdLayout = {
-      mode: "mobile", width: ph.sheet.width, height: ph.sheet.height, grid: G, radius: DFD_R,
-      boxes: ph.sheet.boxes, lanes: ph.sheet.lanes, headers: ph.sheet.headers, edges, labels, offSheet: off.pairs,
-      stacks: [ph.lanes], audit: { crossings: 0, overlaps: 0, boxHits: 0, labelHits: 0, unlabelled: 0, nonOrthogonal: 0 }, attempts: 1,
-    };
-    layout.audit = auditDfd(layout);
-    return layout;
+    return layoutOf("mobile", ph.sheet, finish(ph.sheet, ph.edges, ph.off, "mobile", addr, measure), [ph.lanes], 1);
   }
   // Two rounds: every one of the ARR_QUICK best arrangements (by the cheap proxy) is routed
-  // once; the ARR_FULL best of those by wire quality (more, while none routes cleanly) get the
-  // full routing search, and the winner is the cleanest, then the best labelled, then the
-  // shortest and straightest.
-  const arrs = arrangements(g);
-  let attempts = 0;
-  const quick = arrs.slice(0, ARR_QUICK).map((arr) => {
-    const sheet = sheetDesktop(g, arr, orderDesktop(g, arr, 8), addr, measure, opts.maxWidth ?? 1424);
-    const { res, tries } = routeSheet(sheet, g, "desktop", 1);
-    attempts += tries;
-    return { arr, sheet, score: res.failed.length * 1e6 + res.cost };
-  }).sort((a, b) => a.score - b.score);
-  let best: { sheet: Sheet; res: RouteResult; labels: DfdLabel[]; arr: Arrangement; score: number } | null = null;
-  for (const [i, { arr, sheet }] of quick.entries()) {
-    // past the first ARR_FULL, only while nothing has routed cleanly yet
-    if (i >= ARR_FULL && best && best.res.failed.length === 0) break;
-    const { res, tries } = routeSheet(sheet, g, "desktop", 6);
-    attempts += tries;
-    const labels = placeLabels(res.edges, sheet.boxes, addr, measure, sheet.width, sheet.height, sheet.lanes);
-    const unl = auditDfd({ boxes: sheet.boxes, edges: res.edges, labels }).unlabelled;
-    const score = res.failed.length * 1e6 + unl * 1e4 + res.cost;
-    if (!best || score < best.score) best = { sheet, res, labels, arr, score };
-  }
-  const { sheet, res, labels, arr } = best!;
-  const off = offSheetPairs(res.failed, sheet, addr);
-  const edges = [...res.edges, ...off.edges].sort((a, b) => (a.from < b.from ? -1 : a.from > b.from ? 1 : a.to < b.to ? -1 : 1));
-  const layout: DfdLayout = {
-    mode: opts.mode, width: sheet.width, height: sheet.height, grid: G, radius: DFD_R,
-    boxes: sheet.boxes, lanes: sheet.lanes, headers: sheet.headers, edges, labels, offSheet: off.pairs,
-    stacks: arr.stacks, audit: { crossings: 0, overlaps: 0, boxHits: 0, labelHits: 0, unlabelled: 0, nonOrthogonal: 0 }, attempts,
+  // once; the ARR_FULL best of those (more, while none places every edge) get the full routing
+  // search; the winner has the best finished score (connector pairs priced in).
+  const maxW = opts.maxWidth ?? 1424, maxH = opts.maxHeight ?? 848;
+  const sheetFor = (arr: Arrangement) => {
+    for (const boxH of [DFD_BOX_TALL, DFD_BOX_H]) {
+      const pitch = boxH + D.rowGap;
+      const sh = sheetDesktop(g, arr, orderDesktop(g, arr, 8, pitch), addr, measure, maxW, boxH);
+      if (sh.height <= maxH || boxH === DFD_BOX_H) return sh;
+    }
+    throw new Error("unreachable");
   };
-  layout.audit = auditDfd(layout);
-  return layout;
+  const scoreOf = (sheet: Sheet) => (r: RouteResult) => finish(sheet, r.edges, r.failed, "desktop", addr, measure).score;
+  let attempts = 0;
+  const quick = arrangements(g, DFD_BOX_TALL + D.rowGap).slice(0, ARR_QUICK).map((arr) => {
+    const sheet = sheetFor(arr);
+    const { res, tries } = routeSheet(sheet, g, 1, scoreOf(sheet));
+    attempts += tries;
+    return { arr, sheet, score: res.cost };
+  }).sort((a, b) => a.score - b.score);
+  let best: { sheet: Sheet; f: Finished; arr: Arrangement } | null = null;
+  for (const [i, { arr, sheet }] of quick.entries()) {
+    // past the first ARR_FULL, only while nothing has placed every edge yet
+    if (i >= ARR_FULL && best && best.f.score < 1e6) break;
+    const { res, tries } = routeSheet(sheet, g, 6, scoreOf(sheet));
+    attempts += tries;
+    const f = finish(sheet, res.edges, res.failed, "desktop", addr, measure);
+    if (!best || f.score < best.f.score) best = { sheet, f, arr };
+  }
+  return layoutOf("desktop", best!.sheet, best!.f, best!.arr.stacks, attempts);
 }
 
-// ———————————————————————————————————————— drawing helper
+// ———————————————————————————————————————— drawing helpers (shared by every renderer)
+
+const fmt = (v: number) => (Math.round(v * 100) / 100).toString();
 
 /** An orthogonal polyline as an SVG path of straight runs and quarter arcs of ONE radius (no Béziers). */
 export function elbowD(pts: Pt[], r = DFD_R): string {
   if (!pts.length) return "";
-  const f = (v: number) => (Math.round(v * 100) / 100).toString();
-  let d = `M${f(pts[0].x)} ${f(pts[0].y)}`;
+  let d = `M${fmt(pts[0].x)} ${fmt(pts[0].y)}`;
   for (let i = 1; i < pts.length - 1; i++) {
     const a = pts[i - 1], b = pts[i], c = pts[i + 1];
     const ux = Math.sign(b.x - a.x), uy = Math.sign(b.y - a.y), vx = Math.sign(c.x - b.x), vy = Math.sign(c.y - b.y);
     const p1 = { x: b.x - ux * r, y: b.y - uy * r }, p2 = { x: b.x + vx * r, y: b.y + vy * r };
     const sweep = ux * vy - uy * vx > 0 ? 1 : 0;
-    d += ` L${f(p1.x)} ${f(p1.y)} A${r} ${r} 0 0 ${sweep} ${f(p2.x)} ${f(p2.y)}`;
+    d += ` L${fmt(p1.x)} ${fmt(p1.y)} A${r} ${r} 0 0 ${sweep} ${fmt(p2.x)} ${fmt(p2.y)}`;
   }
   const z = pts[pts.length - 1];
-  return `${d} L${f(z.x)} ${f(z.y)}`;
+  return `${d} L${fmt(z.x)} ${fmt(z.y)}`;
+}
+
+/** Filled arrowhead whose tip sits on the last point, pointing along the last run. */
+export function arrowD(pts: Pt[], len = 7, half = 3.6): string {
+  const z = pts[pts.length - 1], y = pts[pts.length - 2];
+  const ux = Math.sign(z.x - y.x), uy = Math.sign(z.y - y.y);
+  const bx = z.x - ux * len, by = z.y - uy * len;
+  return `M${fmt(z.x)} ${fmt(z.y)} L${fmt(bx - uy * half)} ${fmt(by + ux * half)} L${fmt(bx + uy * half)} ${fmt(by - ux * half)} Z`;
+}
+
+/** The polyline stopped `d` px short of its end, so an arrowhead keeps a clean point. */
+export function trimEnd(pts: Pt[], d = 5): Pt[] {
+  const z = pts[pts.length - 1], y = pts[pts.length - 2];
+  const ux = Math.sign(z.x - y.x), uy = Math.sign(z.y - y.y);
+  return [...pts.slice(0, -1), { x: z.x - ux * d, y: z.y - uy * d }];
+}
+
+/** A connector tag's outline: a rectangle with a pointed tip on its `tip` side (the off-page connector shape). */
+export function tagD(t: Rect & { tip: DfdSide }, tip = DFD_TAG_TIP): string {
+  const { x, y, w, h } = t, x1 = x + w, y1 = y + h, my = y + h / 2, mx = x + w / 2;
+  switch (t.tip) {
+    case "right": return `M${x} ${y} H${x1 - tip} L${x1} ${my} L${x1 - tip} ${y1} H${x} Z`;
+    case "left": return `M${x1} ${y} H${x + tip} L${x} ${my} L${x + tip} ${y1} H${x1} Z`;
+    case "bottom": return `M${x} ${y} H${x1} V${y1 - DFD_TAG_NOTCH} H${mx + 5} L${mx} ${y1} L${mx - 5} ${y1 - DFD_TAG_NOTCH} H${x} Z`;
+    case "top": return `M${x} ${y + DFD_TAG_NOTCH} H${mx - 5} L${mx} ${y} L${mx + 5} ${y + DFD_TAG_NOTCH} H${x1} V${y1} H${x} Z`;
+  }
 }
 
 /** Internals for the router's own tests and dumps (not part of the skin contract). */
-export const __dfd = { Router, sheetDesktop, orderDesktop, arrangements, routeSheet, placeLabels, phoneSheet, PhoneSearch };
+export const __dfd = { Router, sheetDesktop, orderDesktop, arrangements, routeSheet, placeLabels, phoneSheet, PhoneSearch, isDetour, finish };

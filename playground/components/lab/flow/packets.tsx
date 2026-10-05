@@ -8,11 +8,12 @@
 // ?still=1 / reduced motion the packets hold frame 0 (each at its route's start).
 import { useEffect, useMemo, useRef } from "react";
 import type { Pt } from "@/lib/world";
+import { COLOR, MOTION } from "./tokens";
 
 export interface PacketRoute { id: string; points: Pt[]; color: string; hop: number }
 
-const HOP_MS = 900;
-const REST_MS = 900;
+const HOP_MS = MOTION.packetHop;
+const REST_MS = MOTION.packetRest;
 
 function sampler(pts: Pt[]) {
   const seg: number[] = [0];
@@ -63,7 +64,7 @@ export function Packets({ routes, frozen, runKey, size = 7 }: { routes: PacketRo
         const visible = r.hop === H;
         return (
           <rect key={`${runKey}:${r.id}`} ref={(el) => { refs.current[i] = el; }} x={p0.x - size / 2} y={p0.y - size / 2} width={size} height={size} rx={2}
-            fill={r.color} stroke="#fff" strokeWidth={1.2} style={{ opacity: visible ? 1 : 0 }} />
+            fill={r.color} stroke={COLOR.card} strokeWidth={1.2} style={{ opacity: visible ? 1 : 0 }} />
         );
       })}
     </g>
