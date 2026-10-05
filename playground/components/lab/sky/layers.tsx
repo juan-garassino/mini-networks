@@ -38,12 +38,12 @@ export const EVIDENCE_RUN: Record<EvidenceState, string[]> = {
 const clamp = (v: number, a: number, b: number) => Math.max(a, Math.min(b, v));
 const canvasStyle = (vw: number, vh: number) => ({ width: vw, height: vh, imageRendering: "pixelated" as const });
 
-/** A frame counter at FPS, frozen at 0 when still / reduced motion / hidden tab. */
+/** A frame counter at FPS, frozen at 0 when still (the lab contract's useStill:
+ * ?still=1 or reduced motion) or the tab is hidden. */
 function useSkyTick(still: boolean): number {
   const [frame, setFrame] = useState(0);
   useEffect(() => {
     if (still || typeof window === "undefined") return;
-    const mq = window.matchMedia?.("(prefers-reduced-motion: reduce)") ?? null;
     let raf = 0, last = performance.now(), acc = 0;
     const period = 1000 / FPS;
     const loop = (now: number) => {
@@ -53,12 +53,10 @@ function useSkyTick(still: boolean): number {
     };
     const start = () => { last = performance.now(); acc = 0; raf = requestAnimationFrame(loop); };
     const stop = () => cancelAnimationFrame(raf);
-    const onVis = () => { stop(); if (!document.hidden && !mq?.matches) start(); };
-    const onMq = () => { stop(); if (mq?.matches) setFrame(0); else start(); };
-    if (!mq?.matches) start();
+    const onVis = () => { stop(); if (!document.hidden) start(); };
+    start();
     document.addEventListener("visibilitychange", onVis);
-    mq?.addEventListener?.("change", onMq);
-    return () => { stop(); document.removeEventListener("visibilitychange", onVis); mq?.removeEventListener?.("change", onMq); };
+    return () => { stop(); document.removeEventListener("visibilitychange", onVis); };
   }, [still]);
   return still ? 0 : frame;
 }

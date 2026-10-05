@@ -25,11 +25,11 @@
 //
 // Positions come ONLY from lib/world. On a portrait phone the whole chart is
 // turned a quarter (frame coords), so the landscape zoo fills a tall screen.
-// /lab contract: URL view → useWorld → camera → paint → data-lab-ready → window.__lab.
+// /lab contract (lib/lab-contract.ts): URL view → useWorld → camera lands → paint
+// → data-lab-ready → window.__lab.
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import { useWorld } from "@/hooks/use-world";
-import { useLabView, type LabView } from "@/components/lab/shared/url-state";
-import { LabMotion } from "@/components/lab/shared/still";
+import { installLabHook, LabMotion, useLabReady, useLabView, useStill } from "@/lib/lab-contract";
 import { useCamera, type CamBox } from "@/components/lab/shared/camera";
 import { cardModel, displayName, evidenceState, type EvidenceState } from "@/components/lab/shared/card-model";
 import { FAMILIES, type Family } from "@/components/lab/painted/anchors";
@@ -116,7 +116,10 @@ const NO_LEADERS: never[] = [];
 export function SkySkin() {
   const rootRef = useRef<HTMLDivElement | null>(null);
   const { view, update } = useLabView();
-  const still = view?.still ?? true;
+  // still (the lab contract): frame 0, no camera flight. `shot` (?still=1 alone)
+  // also pins the drawer's diagram at its still frame without controls.
+  const still = useStill();
+  const shot = view?.still ?? true;
   const { world, taxonomy, evidence, runs, family, ready } = useWorld(view ? view.still : null);
   const { w: winW, dpr } = useWindow();
   const mobile = winW < GRID.mobileBp;
@@ -231,7 +234,7 @@ export function SkySkin() {
   }, [world, view, measured, frameWorld, mobile, hulls, nebBox, focusFam, focusStar, vp.w, vp.h, visW, visH, q]);
   useEffect(() => { setManual(null); }, [view?.zoom, view?.focus, vp.w, vp.h, drawerPx]);
   const camClamp = useMemo(() => ({ right: drawerPx, bottom: sheetPx }), [drawerPx, sheetPx]);
-  const { ref: camRef, box: camBox, size: camSize, handlers: camHandlers, dragged: camDragged } = useCamera({ world: skyBox, target: manual ?? target, still, targetViewport: vp, minWidth: 120, clamp: camClamp });
+  const { ref: camRef, box: camBox, size: camSize, handlers: camHandlers, dragged: camDragged, landed } = useCamera({ world: skyBox, target: manual ?? target, still, targetViewport: vp, minWidth: 120, clamp: camClamp });
   useEffect(() => { if (camSize.w !== vp.w || camSize.h !== vp.h) setVp({ w: camSize.w, h: camSize.h }); }, [camSize.w, camSize.h, vp.w, vp.h]);
   const S = vp.w / camBox.w; // screen px per frame px
   const minW = frameWorld.w * 0.08, maxW = frameWorld.w * (portrait ? 1.2 : 1.4);
@@ -283,16 +286,14 @@ export function SkySkin() {
     return n && taxonomy ? cardModel(n.name, { taxonomy, evidence, runs, family: n.family, depth: n.depth }) : null;
   }, [selected, nodes, taxonomy, evidence, runs]);
 
-  // ——— ready + hooks: data in, the sky painted for the current bake
+  // ——— ready + hooks: data in, the camera landed, the sky painted for the current bake
   const [painted, setPainted] = useState<Bake | null>(null);
   const onPaint = useCallback(() => setPainted(bake), [bake]);
-  const drawn = Boolean(ready && bake && painted === bake);
-  useEffect(() => {
-    if (!drawn) return;
-    const w = window as unknown as { __lab?: unknown };
-    w.__lab = { select: (n: string) => onSelect(n), view: (v: { zoom: LabView["zoom"]; focus?: string }) => update({ zoom: v.zoom, focus: v.focus ?? null }) };
-    return () => { delete w.__lab; };
-  }, [drawn, onSelect, update]);
+  const labReady = useLabReady(Boolean(ready && bake && painted === bake && landed), rootRef);
+  useEffect(() => (labReady ? installLabHook({
+    select: (n: string) => onSelect(n),
+    view: (v) => update({ zoom: v.zoom, focus: v.focus ?? null }),
+  }) : undefined), [labReady, onSelect, update]);
 
   // ——— the lines: primary lineage in the overview; a focused family adds its
   // secondary + cross-family lines (dashed); a selection lights its lineage
@@ -344,7 +345,7 @@ export function SkySkin() {
 
   return (
     <LabMotion still={still}>
-      <div ref={rootRef} data-lab-ready={drawn ? "1" : undefined} className="relative h-full w-full select-none overflow-hidden"
+      <div ref={rootRef} data-lab-ready={labReady} className="relative h-full w-full select-none overflow-hidden"
         style={{ background: m.sea, fontFamily: m.bodyFont, ["--ap" as string]: `${AP}px` } as CSSProperties}>
         <div ref={camRef} {...camHandlers} onWheel={onWheel}
           onClick={() => { if (!camDragged.current && (view?.zoom ?? "overview") !== "overview") fitWhole(); }} className="absolute inset-0 touch-none cursor-grab active:cursor-grabbing">
@@ -428,7 +429,7 @@ export function SkySkin() {
         )}
 
         {card && !uiHidden && (
-          <Drawer m={m} mobile={mobile} sheet={sheet === "peek" ? "half" : sheet} setSheet={setSheet} card={card} still={still}
+          <Drawer m={m} mobile={mobile} sheet={sheet === "peek" ? "half" : sheet} setSheet={setSheet} card={card} still={shot}
             onPick={onSelect} onBack={fitWhole}
             stateOf={(n) => states[n] ?? "untrained"} isAtom={(n) => atoms.has(n)}
             fullDiagram={fullDiagram} setFullDiagram={setFullDiagram} stageW={vp.w} />

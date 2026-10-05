@@ -4,8 +4,9 @@
 // view.ts. Wide screens: a shelved index column beside the plate drawn at ×2;
 // narrow screens: a header + one select, the plate at the largest integer
 // scale that fits (1× scrolls sideways below 560 px). Sets data-lab-ready="1"
-// once the diagram has painted (scripts/shoot.mjs contract).
-import { useEffect, useMemo, useState } from "react";
+// once the diagram has painted (lib/lab-contract.ts).
+import { useEffect, useMemo, useRef, useState } from "react";
+import { useLabReady } from "@/lib/lab-contract";
 import { PixelLabel } from "../prims";
 import { diagramFor } from "../registry";
 import { ART, BORDER, PIXEL, SPACE, THEMES, TYPE, type ThemeName } from "../tokens";
@@ -24,7 +25,7 @@ const WIDE_MIN = SPACE.index + SPACE.xl + DRAWING_W + 2 * SPACE.gutter;
 export function Specimen() {
   const [view, setView] = useState<View | null>(null);
   const [vw, setVw] = useState(1440);
-  const [drawn, setDrawn] = useState(false);
+  const mainRef = useRef<HTMLElement>(null);
   const groups = useMemo(() => shelves(), []);
   const order = useMemo(() => readingOrder(groups), [groups]);
 
@@ -37,12 +38,7 @@ export function Specimen() {
     return () => { window.removeEventListener("popstate", sync); window.removeEventListener("resize", size); };
   }, []);
 
-  useEffect(() => {
-    if (!view) return;
-    const id = requestAnimationFrame(() => setDrawn(true));
-    const to = setTimeout(() => setDrawn(true), 250);
-    return () => { cancelAnimationFrame(id); clearTimeout(to); };
-  }, [view]);
+  const labReady = useLabReady(view !== null, mainRef);
 
   if (!view) return <div style={{ position: "absolute", inset: 0, background: THEMES.pixel.ground }} />;
 
@@ -88,7 +84,7 @@ export function Specimen() {
   );
 
   return (
-    <main id="anx-main" className="anx" data-lab-ready={drawn ? "1" : undefined}
+    <main ref={mainRef} id="anx-main" className="anx" data-lab-ready={labReady}
       style={{ position: "absolute", inset: 0, overflow: "auto", background: th.ground, color: th.text, fontFamily: TYPE.prose }}>
       <style>{specimenCss(th)}</style>
       {wide ? (

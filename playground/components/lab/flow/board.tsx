@@ -12,8 +12,7 @@ import type { ModelEvidence } from "@/lib/types";
 import type { DfdLayout } from "@/lib/world/dfd";
 import { useWorld } from "@/hooks/use-world";
 import { useLesson } from "@/hooks/use-lesson";
-import { useLabView } from "@/components/lab/shared/url-state";
-import { LabMotion } from "@/components/lab/shared/still";
+import { installLabHook, LabMotion, useLabReady, useLabView, useStill } from "@/lib/lab-contract";
 import { cardModel, evidenceState } from "@/components/lab/shared/card-model";
 import { forwardPassOrder, forwardPassSchedule, GROKKING_EGG, useCritterClicks, useKonami, useLongFocus, useRealLossCurve } from "@/components/lab/shared/eggs";
 import { FlowDrawer } from "./drawer";
@@ -25,16 +24,17 @@ import { PipelineCaption, PipelinesPanel } from "./pipelines";
 import { GenerationRuler, RULER_H } from "./ruler";
 import { edgeKey, Sheet, type SheetState } from "./sheet";
 import { TopBar } from "./top-bar";
-import { useCamera, useReducedMotion, useStage } from "./use-camera";
+import { useCamera, useStage } from "./use-camera";
 import { useDfd, useFlowFont } from "./use-dfd";
 import { COLOR, fam, FLOW_CSS_VARS, MOTION, RADIUS, SHADOW, SPACE, TYPE } from "./tokens";
 import s from "./flow.module.css";
 
 export function FlowBoard() {
   const { view, update } = useLabView();
+  // `still` = ?still=1 (the screenshot flag: no polling, no keeper run);
+  // `frozen` = the lab contract's still (?still=1 or reduced motion): frame 0, no flight
   const still = view?.still ?? true;
-  const reduced = useReducedMotion();
-  const frozen = still || reduced;
+  const frozen = useStill();
   const { taxonomy, runs, evidence, family, ready } = useWorld(view ? view.still : null);
   const { ref: rootRef, size } = useStage();
   const mobile = size.w > 0 && size.w < 640;
@@ -102,7 +102,7 @@ export function FlowBoard() {
 
   // ——— camera (desktop) ———
   const stage = { w: size.w, h: size.h - SPACE.barDesktop };
-  const { cam, svgRef, handlers } = useCamera({
+  const { cam, svgRef, handlers, landed } = useCamera({
     layout, g, active: !mobile, stage, zoom, focus: focusBox, frozen,
     onBackground: () => { if (selected || pipe) { setPipe(null); if (selected) close(); } },
   });
@@ -144,28 +144,16 @@ export function FlowBoard() {
     pipeline: lineage ? null : pipeline,
   }), [states, selected, wave, lineage, pipeline]);
 
-  // ——— ready marker (scripts/shoot.mjs waits for it) ———
-  const [paintedOnce, setPaintedOnce] = useState(false);
-  const placed = !!layout && (mobile || !!cam);
-  useEffect(() => {
-    if (!ready || !placed) return;
-    let a = 0, b = 0;
-    a = requestAnimationFrame(() => { b = requestAnimationFrame(() => setPaintedOnce(true)); });
-    return () => { cancelAnimationFrame(a); cancelAnimationFrame(b); };
-  }, [ready, placed]);
-  const drawn = paintedOnce && ready && placed;
+  // ——— ready marker (lib/lab-contract.ts; scripts/shoot.mjs waits for it) ———
+  const placed = !!layout && (mobile || (!!cam && landed));
+  const labReady = useLabReady(ready && placed, rootRef);
 
   // ——— test hook for scripts/shoot.mjs --motion ———
-  useEffect(() => {
-    if (!drawn) return;
-    const w = window as unknown as { __lab?: unknown };
-    w.__lab = {
-      select: (name: string) => select(name),
-      view: (nv: { zoom: "overview" | "region" | "node"; focus?: string }) => update(nv.focus !== undefined ? { zoom: nv.zoom, focus: nv.focus } : { zoom: nv.zoom }),
-      critterClick: (n: number) => { for (let i = 0; i < n; i++) keeper.click(); },
-    };
-    return () => { delete w.__lab; };
-  }, [drawn, select, update, keeper]);
+  useEffect(() => (labReady ? installLabHook({
+    select: (name: string) => select(name),
+    view: (nv) => update(nv.focus !== undefined ? { zoom: nv.zoom, focus: nv.focus } : { zoom: nv.zoom }),
+    critterClick: (n: number) => { for (let i = 0; i < n; i++) keeper.click(); },
+  }) : undefined), [labReady, select, update, keeper]);
 
   const comps = taxonomy?.compositions ?? [];
   const pipeInfo = pipe ? comps.find((c) => c.name === pipe) : null;
@@ -198,9 +186,9 @@ export function FlowBoard() {
   );
 
   return (
-    <LabMotion still={still}>
+    <LabMotion still={frozen}>
       <div ref={rootRef} data-flow-root className={`${s.page} relative h-full w-full overflow-hidden`} style={{ ...FLOW_CSS_VARS, background: COLOR.sheet }}
-        data-lab-ready={drawn ? "1" : undefined} data-flow-mode={layout?.mode} data-box-hits={layout?.audit.boxHits} {...audit}
+        data-lab-ready={labReady} data-flow-mode={layout?.mode} data-box-hits={layout?.audit.boxHits} {...audit}
         data-names-placed={layout ? `${layout.boxes.length}/${layout.boxes.length}` : undefined}>
         {!mobile && header}
         {!layout && (

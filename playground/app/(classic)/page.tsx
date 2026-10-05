@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { MotionConfig, motion } from "motion/react";
+import { motion } from "motion/react";
+import { LabMotion, useStill, useStillParam } from "@/lib/lab-contract";
 import { getTaxonomy } from "@/lib/api";
 import type { TaxonomyResponse } from "@/lib/types";
 import { useRuns } from "@/hooks/use-runs";
@@ -25,7 +26,10 @@ export default function Page() {
   const [selected, setSelected] = useState<string | null>(null);
   const [taxonomy, setTaxonomy] = useState<TaxonomyResponse | null>(null);
   const [edition, setEdition] = useState<EditionId>("blueprint");
-  const [still, setStill] = useState(false);
+  // the lab contract: no sheet entrance under still; ?still=1 also freezes the
+  // blueprint.css loops via html[data-still]
+  const still = useStill();
+  const stillParam = useStillParam();
   const { runs, ok } = useRuns();
 
   useEffect(() => {
@@ -45,13 +49,14 @@ export default function Page() {
     const saved = localStorage.getItem("mn-edition") as EditionId | null;
     const pick = fromUrl && EDITION_IDS.includes(fromUrl) ? fromUrl : saved;
     if (pick) setEdition(pick);
-    // ?still=1 freezes every loop for screenshots, as on the /lab skins
-    if (new URLSearchParams(window.location.search).get("still") === "1") {
-      document.documentElement.setAttribute("data-still", "");
-      setStill(true);
-    }
     return () => { alive = false; clearTimeout(timer); };
   }, []);
+
+  useEffect(() => {
+    if (!stillParam) return;
+    document.documentElement.setAttribute("data-still", "");
+    return () => document.documentElement.removeAttribute("data-still");
+  }, [stillParam]);
 
   useEffect(() => {
     document.documentElement.setAttribute("data-edition", edition);
@@ -69,7 +74,7 @@ export default function Page() {
   usePageTitle(edition === "metro" ? METRO_TITLE : null);
 
   return (
-    <MotionConfig reducedMotion={still ? "always" : "user"}>
+    <LabMotion still={still}>
       <main className="relative min-h-0">
         {/* Enter-only keyed remount. AnimatePresence mode="wait" froze to a blank
             sheet: the saved edition swaps the key right after hydration, the
@@ -78,7 +83,7 @@ export default function Page() {
         <motion.div
           key={`${sheet}-${edition}`}
           className="absolute inset-0"
-          initial={{ opacity: 0, x: 24 }}
+          initial={still ? false : { opacity: 0, x: 24 }}
           animate={{ opacity: 1, x: 0 }}
           transition={{ duration: 0.22, ease: "easeOut" }}
         >
@@ -109,6 +114,6 @@ export default function Page() {
       {edition === "metro"
         ? <MetroTabs sheet={sheet} setSheet={setSheet} editions={EDITION_IDS} edition={edition} setEdition={setEdition} />
         : <TitleBlock sheet={sheet} setSheet={setSheet} ok={ok} runCount={runs.length} edition={edition} setEdition={setEdition} />}
-    </MotionConfig>
+    </LabMotion>
   );
 }

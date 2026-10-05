@@ -4,9 +4,10 @@
 // phone, the in-map cartouche on desktop, the under-construction list, and the
 // through services. The drafting lives in layout.ts, the engine in system.ts,
 // every value in tokens.ts, every mark in encoding.ts (DESIGN.md has the map).
-import { useEffect, useMemo, useState, type CSSProperties } from "react";
+import { useMemo, useRef, useState, type CSSProperties } from "react";
 import type { TaxonomyResponse } from "@/lib/types";
-import { usePrefersReducedMotion, useQueryFlag } from "./hooks";
+import { useLabReady, useStill } from "@/lib/lab-contract";
+import { useQueryFlag } from "./hooks";
 import { Cartouche, PhoneKey } from "./key";
 import { COLS, G, buildMetro, labelOf } from "./layout";
 import { MetroMap } from "./map";
@@ -25,35 +26,22 @@ function openOnTheKnot(el: HTMLDivElement | null) {
   }
 }
 
-/** The /lab readiness contract: true once the map is in the DOM, its face has
- * loaded and two frames have painted it (the edition has no entrance motion of
- * its own; the page's sheet fade is off under ?still=1). */
-function useDrawn(mounted: boolean) {
-  const [drawn, setDrawn] = useState(false);
-  useEffect(() => {
-    if (!mounted) return;
-    let alive = true, raf = 0;
-    document.fonts.ready.then(() => {
-      raf = requestAnimationFrame(() => { raf = requestAnimationFrame(() => { if (alive) setDrawn(true); }); });
-    });
-    return () => { alive = false; cancelAnimationFrame(raf); };
-  }, [mounted]);
-  return drawn;
-}
-
 export function ChartMetro({ taxonomy, onSelect }: { taxonomy: TaxonomyResponse | null; onSelect: (name: string) => void }) {
   const layout = useMemo(() => (taxonomy ? buildMetro(taxonomy) : null), [taxonomy]);
   const [lit, setLit] = useState<string[] | null>(null);
   const specimen = useQueryFlag("specimen");
-  const still = useQueryFlag("still");
-  const reduced = usePrefersReducedMotion();
-  const drawn = useDrawn(!!layout);
+  // the lab contract (lib/lab-contract.ts): the edition has no entrance of its
+  // own, so it is ready once the map is laid out, its face is in, the page's
+  // sheet transition has finished and the map has painted
+  const still = useStill();
+  const rootRef = useRef<HTMLDivElement>(null);
+  const drawn = useLabReady(!!layout, rootRef) === "1";
   if (!taxonomy || !layout) return null;
-  const live = !still && !reduced;
+  const live = !still;
 
   if (specimen) {
     return (
-      <div className="h-full overflow-auto p-4 sm:p-8">
+      <div ref={rootRef} className="h-full overflow-auto p-4 sm:p-8">
         <MetroMap layout={layout} onSelect={onSelect} lit={null} live={live} view={SPECIMEN} className="w-full" ready={drawn} />
       </div>
     );
@@ -61,7 +49,7 @@ export function ChartMetro({ taxonomy, onSelect }: { taxonomy: TaxonomyResponse 
 
   const services = taxonomy.compositions.map((c) => ({ id: c.name, label: labelOf(c.name), calls: c.composes }));
   return (
-    <div className="h-full overflow-y-auto overflow-x-hidden">
+    <div ref={rootRef} className="h-full overflow-y-auto overflow-x-hidden">
       <div className="mx-auto px-4 pb-10 pt-3 sm:px-6" style={{ maxWidth: SPACE.maxWidth }}>
         {/* phone: the cartouche sits in the map's far corner, so title + key lead here */}
         <header className="pb-3 md:hidden">

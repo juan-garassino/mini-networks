@@ -5,7 +5,8 @@
 // distinct input ports, inline labels in gaps, connector pairs where a line would detour —
 // drawn with the skin's own line-work components — and the sheet's audit on the SVG.
 // ?mode=mobile shows the phone sheet.
-import { useSyncExternalStore } from "react";
+import { useRef, useSyncExternalStore } from "react";
+import { useLabReady } from "@/lib/lab-contract";
 import { useWorld } from "@/hooks/use-world";
 import type { DfdMode } from "@/lib/world/dfd";
 import { Connectors, Edges, Labels } from "@/components/lab/flow";
@@ -23,10 +24,12 @@ export default function FlowSpecimen() {
   const { taxonomy, family } = useWorld(true);
   const measure = useFlowFont();
   const l = useDfd(taxonomy, family, mode, measure);
+  const rootRef = useRef<HTMLDivElement>(null);
+  const labReady = useLabReady(!!l, rootRef);
   const familyOf = (n: string) => l?.boxes.find((b) => b.name === n)?.family ?? "";
   return (
-    <div data-flow-root className="min-h-full w-full overflow-auto" style={{ ...FLOW_CSS_VARS, background: COLOR.sheet, fontFamily: "var(--flow-body)" }}
-      data-lab-ready={l ? "1" : undefined}>
+    <div ref={rootRef} data-flow-root className="min-h-full w-full overflow-auto" style={{ ...FLOW_CSS_VARS, background: COLOR.sheet, fontFamily: "var(--flow-body)" }}
+      data-lab-ready={labReady}>
       {!l && <p className="p-6" style={{ color: COLOR.inkSoft, fontSize: TYPE.body }}>Routing the sheet…</p>}
       {l && (
         <svg width={l.width} height={l.height} viewBox={`0 0 ${l.width} ${l.height}`} className="mx-auto block"

@@ -12,6 +12,7 @@ import { emblem, starSprite, ringOffsets, starRadius } from "./sprites";
 import { SpriteIcon, StarPair } from "./icon";
 import { Plaque } from "./plaque";
 import type { EvidenceState } from "@/components/lab/shared/card-model";
+import { useLabReady } from "@/lib/lab-contract";
 
 const Z = 4; // css px per art px
 const STATES: EvidenceState[] = ["champion", "trained", "provisional", "untrained"];
@@ -29,6 +30,8 @@ const BOX = { x: 0, y: 0, w: 720, h: 440 };
 
 export function SkySpecimen() {
   const ref = useRef<HTMLCanvasElement | null>(null);
+  const rootRef = useRef<HTMLDivElement | null>(null);
+  const labReady = useLabReady(true, rootRef); // static sheet: ready once painted
   const bake = useMemo(() => bakeSky({ stars: STARS, edges: EDGES.map(([a, b]) => ({ from: STARS[a], to: STARS[b], family: "sequence" })), box: BOX }), []);
   useEffect(() => {
     const cv = ref.current;
@@ -58,7 +61,7 @@ export function SkySpecimen() {
   const fam = (f: string) => FAMILY_INK[f];
   const swatch = (c: string): CSSProperties => ({ width: 28, height: 28, background: c, display: "inline-block" });
   return (
-    <div data-lab-ready="1" className="min-h-full w-full overflow-auto p-8" style={{ background: NIGHT[1], color: m.ink, fontFamily: m.bodyFont, ["--ap" as string]: `${GRID.ap}px` } as CSSProperties}>
+    <div ref={rootRef} data-lab-ready={labReady} className="min-h-full w-full overflow-auto p-8" style={{ background: NIGHT[1], color: m.ink, fontFamily: m.bodyFont, ["--ap" as string]: `${GRID.ap}px` } as CSSProperties}>
       <h1 style={{ fontFamily: m.signFont, fontWeight: 700, fontSize: TYPE.sheet.title, color: m.border }}>Night Map specimen</h1>
       <div className="mt-6 flex flex-wrap items-start gap-10">
         <section>

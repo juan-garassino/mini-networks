@@ -4,7 +4,8 @@ import { useRef } from "react";
 import type { TaxonomyResponse } from "@/lib/types";
 import { atomicNumbers } from "@/lib/blueprint";
 import { ChartKey } from "./chart-key";
-import { entranceEnd, useFrozen, useReady } from "./entrance";
+import { useLabReady, useStill } from "@/lib/lab-contract";
+import { entranceEnd } from "./entrance";
 import { FamilyStack } from "./family-stack";
 import { Masthead } from "./masthead";
 import { placeModels, placeReactions } from "./placed";
@@ -14,8 +15,8 @@ import { TableGrid, keyFitsBay } from "./table-grid";
 
 // The periodic table sheet: one structure for every skin. The skin's look
 // arrives as CSS vars on <html> (skins/index.ts applySkin); this component
-// only reads the skin's motion timings and masthead variant. Under ?still=1 /
-// reduced motion nothing enters; data-lab-ready waits for the entrance (entrance.ts).
+// only reads the skin's motion timings and masthead variant. Under still (the lab
+// contract) nothing enters; data-lab-ready waits for the entrance (entrance.ts).
 export function PeriodicTable({
   taxonomy, skin, onSelect,
 }: {
@@ -23,13 +24,13 @@ export function PeriodicTable({
   skin: PeriodicSkin;
   onSelect: (name: string) => void;
 }) {
-  const frozen = useFrozen();
+  const frozen = useStill();
   const ref = useRef<HTMLDivElement>(null);
   const models = taxonomy ? placeModels(taxonomy) : [];
   const reactions = taxonomy ? placeReactions(taxonomy) : [];
   const motion = frozen ? null : skin.motion;
   const end = motion ? entranceEnd(motion, Math.max(1, ...models.map((m) => m.row)), Math.max(1, ...models.map((m) => m.col)), reactions.length) : 0;
-  const ready = useReady(ref, end, !!taxonomy);
+  const ready = useLabReady(!!taxonomy, ref, end * 1000);
   if (!taxonomy) {
     return (
       <div className="pt-sheet pt-loading" role="status">
@@ -39,7 +40,7 @@ export function PeriodicTable({
   }
   const sample = atomicNumbers().transformer;
   return (
-    <div ref={ref} className="pt-sheet" data-lab-ready={ready ? "1" : undefined}>
+    <div ref={ref} className="pt-sheet" data-lab-ready={ready}>
       <Masthead
         variant={skin.masthead}
         counts={{

@@ -129,6 +129,12 @@ export function useCamera({ world, target, still, minWidth = 240, targetViewport
     });
   }, [minWidth, world.w]);
 
+  // the lab contract's "camera landed": measured, and the box is the fitted target
+  const goal = fitBox(target, size.w, size.h);
+  const eps = Math.max(0.5, goal.w * 1e-3);
+  const landed = size.w > 1 && ready && Math.abs(box.x - goal.x) < eps && Math.abs(box.y - goal.y) < eps
+    && Math.abs(box.w - goal.w) < eps && Math.abs(box.h - goal.h) < eps;
+
   const scale = size.w / box.w;
   return {
     ref,
@@ -139,5 +145,7 @@ export function useCamera({ world, target, still, minWidth = 240, targetViewport
     offset: { x: -box.x * scale, y: -box.y * scale },
     handlers: { onPointerDown, onPointerMove, onPointerUp, onPointerCancel: onPointerUp, onWheel },
     dragged,
+    /** true once the camera rests on its (fitted) target — lib/lab-contract.ts readiness */
+    landed,
   };
 }

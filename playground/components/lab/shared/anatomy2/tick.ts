@@ -7,14 +7,15 @@
 //   <Wire pts={…} fill={T.wireHot} step={3} phase={frame} />   // dots march a→b
 //
 // Rules the hook enforces so authors cannot forget them:
-//   · frame is 0 while `still` (screenshots), while the viewer prefers reduced
-//     motion, and when frames ≤ 1 — frame 0 must therefore be the complete,
-//     canonical drawing;
+//   · frame is 0 while `still` (screenshots), under the lab contract's still
+//     (?still=1 or reduced motion, lib/lab-contract.ts useStill), and when
+//     frames ≤ 1 — frame 0 must therefore be the complete, canonical drawing;
 //   · the loop is driven by requestAnimationFrame and PAUSES while the tab is
 //     hidden (no work, no drift), resuming on the frame it stopped at;
 //   · fps is clamped to MAX_FPS = 6: the diagrams step like a flip-book, they
 //     never glide.
 import { useEffect, useState } from "react";
+import { useStill } from "@/lib/lab-contract";
 
 export const MAX_FPS = 6;
 
@@ -22,11 +23,11 @@ export function useTick(fps: number, frames: number, still: boolean): number {
   const [frame, setFrame] = useState(0);
   const period = 1000 / Math.max(0.1, Math.min(MAX_FPS, fps));
   const n = Math.max(1, Math.floor(frames));
-  const active = !still && n > 1 && fps > 0;
+  const frozen = useStill();
+  const active = !still && !frozen && n > 1 && fps > 0;
 
   useEffect(() => {
     if (!active || typeof window === "undefined") return;
-    const mq = window.matchMedia?.("(prefers-reduced-motion: reduce)") ?? null;
     let raf = 0;
     let last = 0;
     let acc = 0;
@@ -42,7 +43,7 @@ export function useTick(fps: number, frames: number, still: boolean): number {
       raf = requestAnimationFrame(loop);
     };
     const start = () => {
-      if (raf || document.hidden || mq?.matches) return;
+      if (raf || document.hidden) return;
       last = performance.now();
       acc = 0;
       raf = requestAnimationFrame(loop);
@@ -53,17 +54,12 @@ export function useTick(fps: number, frames: number, still: boolean): number {
       raf = 0;
     };
     const onVisibility = () => (document.hidden ? stop() : start());
-    const onMotion = () => {
-      if (mq?.matches) { stop(); setFrame(0); } else start();
-    };
 
     document.addEventListener("visibilitychange", onVisibility);
-    mq?.addEventListener("change", onMotion);
     start();
     return () => {
       stop();
       document.removeEventListener("visibilitychange", onVisibility);
-      mq?.removeEventListener("change", onMotion);
     };
   }, [active, period, n]);
 

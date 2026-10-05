@@ -45,18 +45,6 @@ export function useStage() {
   return { ref, size };
 }
 
-export function useReducedMotion() {
-  const [r, setR] = useState(false);
-  useEffect(() => {
-    const m = window.matchMedia("(prefers-reduced-motion: reduce)");
-    const on = () => setR(m.matches);
-    on();
-    m.addEventListener("change", on);
-    return () => m.removeEventListener("change", on);
-  }, []);
-  return r;
-}
-
 export function useCamera({ layout, g, active, stage, zoom, focus, frozen, onBackground }: {
   layout: DfdLayout | null; g: DrawnGraph | null; active: boolean; stage: { w: number; h: number };
   zoom: Zoom; focus: DfdBox | null; frozen: boolean;
@@ -148,5 +136,7 @@ export function useCamera({ layout, g, active, stage, zoom, focus, frozen, onBac
     return () => el.removeEventListener("wheel", onWheel);
   }, [layout, active, placed]);
 
-  return { cam, svgRef, handlers };
+  // the lab contract's "camera landed": the camera rests on its target
+  const landed = !!cam && !!target && Math.abs(cam.s - target.s) < 1e-3 && Math.abs(cam.tx - target.tx) < 0.5 && Math.abs(cam.ty - target.ty) < 0.5;
+  return { cam, svgRef, handlers, landed };
 }
