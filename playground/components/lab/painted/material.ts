@@ -14,14 +14,15 @@
 import { createElement, Fragment, type ReactNode } from "react";
 import type { EvidenceState } from "@/components/lab/shared/card-model";
 import type { MapId } from "./anchors";
+import type { ThemeName } from "../shared/anatomy2/themes.ts";
 import { withDigits } from "../../../lib/numerals.ts";
 
 export type MaterialId = MapId | "sky";
 
 export interface Material {
   id: MaterialId;
-  /** which anatomy diagram theme the drawer uses */
-  diagram: "pixel" | "paper";
+  /** which anatomy diagram theme the drawer and the map plate use */
+  diagram: ThemeName;
   sea: string;          // page colour beyond the image edge
   plate: string;        // tag / sign fill
   plateHi: string;      // hovered tag; the sheets' ground (#rrggbb: the drawer's fade appends alpha)
@@ -175,7 +176,6 @@ export const DRAWER = {
  * motion (LabMotion + the keyframes' media query). */
 export const MOTION = {
   stamp: { ms: 160, steps: 2, delay: 60 },                // the load moment: the corners stamp on together, one frame (the cartouche is already there)
-  unroll: { ms: 640 },                                     // the loading bar's current segment blinks cell by cell
   restamp: { ms: 140, steps: 2, stagger: 40 },            // a focus-mode change re-stamps them in place
   plateFade: { ms: 180, steps: 3 },                        // the map plate on landing
   sheet: "220ms ease",                                     // the phone sheet's height
@@ -365,4 +365,7 @@ export const IMAGES = {
   clean: "/local/pixel-map-clean2.png",
   baked: "/local/pixel-map.png",
   paper: "/local/paper-map.png",
+  // the loading plate's ground: the painting at 192 px (a few kB), shown blurred
+  // while the full painting loads and is retouched; local like the painting
+  paperLow: "/local/paper-map-low.jpg",
 } as const;

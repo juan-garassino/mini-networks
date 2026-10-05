@@ -31,7 +31,7 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, typ
 import { useWorld } from "@/hooks/use-world";
 import { useLabView, type LabView } from "@/components/lab/shared/url-state";
 import { LabMotion } from "@/components/lab/shared/still";
-import { installLabHook, useLabReady } from "@/lib/lab-contract";
+import { installLabHook, loadPhase, useLabReady } from "@/lib/lab-contract";
 import { zooCounts } from "@/lib/copy";
 import { useCamera, type CamBox } from "@/components/lab/shared/camera";
 import { cardModel, displayName, evidenceState, type EvidenceState } from "@/components/lab/shared/card-model";
@@ -51,7 +51,7 @@ import { CornerPlate, PhoneKey } from "./corners/corner-plate";
 import { PhoneBar } from "./corners/phone-bar";
 import { plateStyle } from "./corners/plate";
 import { EdgeSigns, placeEdgeSigns, type EdgeSign } from "./corners/edge-signs";
-import { UNROLL_KEYFRAMES, Unrolling } from "./corners/unrolling";
+import { Unrolling } from "./corners/unrolling";
 import { SeaCanvas, useSeaFurniture } from "./stage";
 import { TrueMapLayers, spotClear, useTrueMap } from "./true-map";
 import { PIXELMAP_CMD } from "./pixelmap";
@@ -87,7 +87,6 @@ const KEYFRAMES = `
 @keyframes painted-restamp-a { from { opacity: .35; transform: translate(0, 2px); } to { opacity: 1; transform: none; } }
 @keyframes painted-restamp-b { from { opacity: .35; transform: translate(0, 2px); } to { opacity: 1; transform: none; } }
 [data-painted-root][data-veiled] > :not(style):not([data-painted-loading]) { opacity: 0 !important; }
-${UNROLL_KEYFRAMES}
 @media (prefers-reduced-motion: reduce) { [data-painted-root] [data-corner], [data-painted-root] [data-map-plate] { animation: none !important; } }
 `;
 // the load moment: the cartouche is already on the sea (the loading plate,
@@ -186,7 +185,7 @@ export function PaintedSkin() {
   const { view, update } = useLabView();
   const { opts, set } = useOpts();
   const still = view?.still ?? true;
-  const { taxonomy, evidence, runs, family, ready } = useWorld(view ? view.still : null);
+  const { taxonomy, evidence, runs, family, ready, online } = useWorld(view ? view.still : null);
 
   const mapId: MapId = opts?.map ?? "pixel";
   const render: Render = opts?.render ?? "true";
@@ -1295,7 +1294,8 @@ export function PaintedSkin() {
         })()}
 
         {/* ——— the load moment: the cartouche on the bare sea, saying what is coming in */}
-        {!revealed && <Unrolling m={m} quiet={quietView} still={still} done={loadDone} />}
+        {!revealed && <Unrolling m={m} quiet={quietView} done={loadDone} ground={mapId === "paper" ? IMAGES.paperLow : undefined}
+          phase={loadPhase(ready ? taxonomy : null, { offline: !online, laidOut: false }) ?? "layout"} />}
 
         {/* ——— the four corners (the map stays draggable between them) */}
         {opts && uiHidden && (
