@@ -83,6 +83,18 @@ them with the stock's veil and dims their names. While the diagram plate is
 up and no hole fits it, the scale bar folds away, then the minimap: the chrome
 yields, the plate never clips.
 
+## The diagram plate (`map-plate.tsx`)
+
+One chrome row (title, the real-vs-illustrative badge, Enlarge, Close) over
+the drawing on its mat; the drawer holds the prose. It keeps the diagram
+kit's legibility floor (anatomy2 `legible.ts`): the full drawing at the
+smallest crisp zoom whose labels read (×1.5 on a retina screen), never ×1.
+It stays a vignette: at most half the visible map's area, and it may not push
+the map below ×2 (pixel) or one step out of the land (paper). Otherwise the
+card at ×2 takes its place; a tap or Enlarge opens the full drawing. So
+1440×900 and 1920×1080 show the full drawing, 1280×800 the card; phones keep
+the card in the sheet.
+
 ## Label obstacle rules
 
 - A label never sits half under anything: the diagram plate, its leader and
@@ -142,6 +154,7 @@ for the faces); the pixel art modules only for a pixel map.
    a `textFont` for sentences), plate construction (`crisp` / `card`), `marks`.
 4. Replace the data: `useWorld` feeds names, groups, evidence; the card reads
    `cardModel`; `FAMILY_TITLE` / `PAPER_*` hold the group words.
-5. Swap the plate's `MechanismDiagram` for yours (placement needs its size).
+5. Swap the plate's `MechanismDiagram` for yours (placement needs its size;
+   `plateFits` in `painted-skin.tsx` lists what it may show, best first).
 6. Rewrite `encoding.ts`. Skins reusing the corners pass their own `Material`
    and, for the card, an optional `glyph` to the Drawer.

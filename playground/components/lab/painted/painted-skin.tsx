@@ -57,7 +57,8 @@ import { PIXELMAP_CMD } from "./pixelmap";
 import { layoutRibbons, spotBoxes, type PlacedRibbon, type RibbonItem } from "./ribbons";
 import { ribbonSize } from "./pixel-art";
 import { CORNER, FAMILY_TITLE, IMAGES, MATERIALS, MOTION, PAPER_TITLE, PHONE, TYPE } from "./material";
-import { Leader, MapPlate, plateEstimate } from "./map-plate";
+import { Leader, MapPlate, plateEstimate, type PlateFit } from "./map-plate";
+import { LEGIBLE, legibleZooms } from "@/components/lab/shared/anatomy2/legible";
 import { retouch, type Pixels } from "./heal";
 import { composePlate, plateRect, sample, type PBox, type PPt, type PlatePlan } from "./plate-place";
 
@@ -124,6 +125,9 @@ function useOpts() {
   }, []);
   return { opts, set };
 }
+
+/** A measured plate size's key: one per model and fit. */
+const fitKey = (n: string, f: PlateFit) => `${n}|${f.variant}|${f.zoom}`;
 
 function useDpr() {
   const [dpr, setDpr] = useState(1);
@@ -389,15 +393,22 @@ export function PaintedSkin() {
   // it is folded away), so the plate can be planned with or without it
   const [cornerAt, setCornerAt] = useState<{ tl?: PBox; tr?: PBox; br?: PBox; compass?: { w: number; h: number }; scale?: { w: number; h: number } }>({});
   const plateEl = useRef<HTMLElement | null>(null);
-  const [plateMeasured, setPlateMeasured] = useState<{ name: string; zoom: number; w: number; h: number } | null>(null);
+  // measured plate sizes, per model + fit (kept, so a fit measured too big
+  // for its hole stays rejected instead of flip-flopping with its estimate)
+  const [plateMeasured, setPlateMeasured] = useState<Record<string, { w: number; h: number }>>({});
   const plateWanted = !mobile && !!selected && plateOpen && !uiHidden && view?.zoom === "node";
-  // the largest crisp zoom (a whole number of device px per art px) at which
-  // the plate keeps to half the visible width and 60 % of its height — the
-  // castle and its land are the subject; ×1 whatever the screen otherwise
-  const plateZoom = [2, 1.5].find((z) => Number.isInteger(z * dpr) && plateEstimate(selected ?? "", z, 2).w <= visW * 0.5
-    && plateEstimate(selected ?? "", z, 2).h <= visH * 0.6) ?? 1;
-  const plateSize = selected && plateMeasured?.name === selected && plateMeasured.zoom === plateZoom
-    ? plateMeasured : plateEstimate(selected ?? "", plateZoom, 2);
+  // what the plate may show, best first, under the diagram kit's legibility
+  // floor (anatomy2/legible.ts): the full drawing at the smallest crisp zoom
+  // whose labels read (×1.5 on a retina screen: 3 device px per art px), else
+  // the card at ×2 (Enlarge = the full drawing). Never the full drawing at ×1.
+  // The smallest legible zoom, not the largest: the castle and its land are
+  // still the subject, the plate is their caption.
+  const plateFits: PlateFit[] = useMemo(() => [
+    ...legibleZooms(dpr).slice(0, 1).map((zoom) => ({ variant: "full" as const, zoom })),
+    { variant: "card" as const, zoom: LEGIBLE.cardZoom },
+  ], [dpr]);
+  // before it is measured, the border is taken at its widest (3 px)
+  const sizeOf = useCallback((n: string, f: PlateFit) => plateMeasured[fitKey(n, f)] ?? plateEstimate(n, f, 3), [plateMeasured]);
   const anchorPt = useCallback((n: string): PPt => {
     const a = map.anchors[n];
     return isTrue ? { x: Math.floor(a[0]) + 0.5, y: Math.floor(a[1]) + 0.5 } : { x: a[0], y: a[1] };
@@ -419,7 +430,7 @@ export function PaintedSkin() {
   const castleSpot = selected && isTrue && td ? spotClear(selected, atoms, td.markers) : 0;
   const PLATE_GAP = 40;
   // fold: 0 = every corner plate stays; 1 = the scale bar folds; 2 = the minimap too
-  const planned: { plan: PlatePlan | null; fold: 0 | 1 | 2 } | null = useMemo(() => {
+  const planned: { plan: PlatePlan | null; fold: 0 | 1 | 2; fit: PlateFit } | null = useMemo(() => {
     if (!plateWanted || !selected || !family?.[selected] || vp.w <= 1) return null;
     const fam = family[selected] as Family;
     const lb = landFrame(fam);
@@ -460,7 +471,7 @@ export function PaintedSkin() {
     const avoidYield = cp ? [...top, ...right, ...compassDown] : corners;
     // and if even that leaves no hole, the minimap folds too (the plate is the focus)
     const avoidBare = cp ? [...top, ...compassDown] : corners;
-    const base0 = { anchor: a, castle: castleBox, plate: plateSize, land: lb, view, keep, gap: PLATE_GAP, bounded };
+    const base1 = { anchor: a, castle: castleBox, land: lb, view, keep, gap: PLATE_GAP, bounded };
     // the land-centred framing (paper: kept on the painting), for the last resort
     const wv = visW / kLand, hv = visH / kLand;
     const camX = bounded ? clamp(lb.x + lb.w / 2 - wv / 2, 0, Math.max(0, W - wv)) : lb.x + lb.w / 2 - wv / 2;
@@ -470,8 +481,9 @@ export function PaintedSkin() {
     // if the plate then covers more of its land. If no framing on the painting
     // fits the pair with the lineage's names whole, there is no plate: the
     // diagram goes back into the (wide) drawer — the card fallback
-    const attempt = (avoid: PBox[]) => {
-      const base = { ...base0, avoid };
+    const attempt = (base0: typeof base1 & { plate: { w: number; h: number }; scales: number[] }, avoid: PBox[]) => {
+      const { scales, ...rest } = base0;
+      const base = { ...rest, avoid };
       // a model wedged between titles (transformer under "Sequence & State")
       // has no framing clear of them all: then the plate covers as little of
       // any title as it can, rather than wherever the land-centred framing put it
@@ -484,16 +496,36 @@ export function PaintedSkin() {
       return composePlate({ ...base, castlePad: 14, scales, inset: 16 })
         ?? composePlate({ ...base, castlePad: 0, scales, inset: 4 });
     };
-    const full = attempt(avoidFull);
-    if (full) return { plan: full, fold: 0 };
-    const folded = attempt(avoidYield);
-    if (folded) return { plan: folded, fold: 1 };
-    const bare = attempt(avoidBare);
-    if (bare || heal) return { plan: bare, fold: bare ? 2 : 0 };
-    // last resort: the land-centred framing, the plate on its least-bad side
-    return { plan: composePlate({ ...base0, avoid: avoidBare, castlePad: 0, scales: [kLand], inset: 4, fixed: { x: (a.x - camX) * kLand, y: (a.y - camY) * kLand } }), fold: 2 };
-  }, [plateWanted, selected, family, vp.w, vp.h, landFrame, crispK, landFitK, isTrue, crisp, levels, anchorPt, names, lineage, lineageSet, map, visW, visH, mapId, W, H, castleBox, plateSize, corners, cornerAt, heal, BL_GAP]);
+    // each fit in turn (the legible full drawing, then the card), each with
+    // the chrome yielding step by step; the first that frames wins. The full
+    // drawing stays a vignette: at most half the visible map's area (1440×900:
+    // 46 %; 1280×800 would be 61 %), and it may not push the map out of
+    // reading range — pixel below ×2 (at ×1.5 its names fall to 7.5 px),
+    // paper past one step out of the land's framing. A legible plate over a
+    // map it buries is no gain: there the card takes its place
+    const last = plateFits[plateFits.length - 1];
+    const mapFloor = isTrue ? 2 : kLand / 1.2;
+    for (const fit of plateFits) {
+      const size = sizeOf(selected, fit);
+      if (fit !== last && size.w * size.h > 0.5 * visW * visH) continue;
+      const sc = fit !== last ? scales.filter((k) => k >= mapFloor - 1e-3) : scales;
+      if (!sc.length) continue;
+      const b = { ...base1, plate: size, scales: sc };
+      const full = attempt(b, avoidFull);
+      if (full) return { plan: full, fold: 0, fit };
+      const folded = attempt(b, avoidYield);
+      if (folded) return { plan: folded, fold: 1, fit };
+      const bare = attempt(b, avoidBare);
+      if (bare) return { plan: bare, fold: 2, fit };
+    }
+    // paper: no framing on the painting → no plate (the drawer's card fallback)
+    if (heal) return { plan: null, fold: 0, fit: last };
+    // last resort: the land-centred framing, the card on its least-bad side
+    return { plan: composePlate({ ...base1, plate: sizeOf(selected, last), avoid: avoidBare, castlePad: 0, scales: [kLand], inset: 4, fixed: { x: (a.x - camX) * kLand, y: (a.y - camY) * kLand } }), fold: 2, fit: last };
+  }, [plateWanted, selected, family, vp.w, vp.h, landFrame, crispK, landFitK, isTrue, crisp, levels, anchorPt, names, lineage, lineageSet, map, visW, visH, mapId, W, H, castleBox, plateFits, sizeOf, corners, cornerAt, heal, BL_GAP]);
   const plan: PlatePlan | null = planned?.plan ?? null;
+  const plateFit: PlateFit = planned?.fit ?? plateFits[0];
+  const plateSize = useMemo(() => (selected ? sizeOf(selected, plateFit) : { w: 0, h: 0 }), [selected, sizeOf, plateFit]);
   // the scale bar (and, at need, the minimap) fold away while the plate needs their corner
   const fold = planned?.fold ?? 0;
   const foldScale = fold >= 1;
@@ -714,14 +746,14 @@ export function PaintedSkin() {
     const el = plateEl.current;
     if (!plateShown || !el || !selected) return;
     const on = () => {
-      const w = el.offsetWidth, h = el.offsetHeight;
-      setPlateMeasured((cur) => (cur && cur.name === selected && cur.zoom === plateZoom && cur.w === w && cur.h === h ? cur : { name: selected, zoom: plateZoom, w, h }));
+      const w = el.offsetWidth, h = el.offsetHeight, key = fitKey(selected, plateFit);
+      setPlateMeasured((cur) => (cur[key]?.w === w && cur[key]?.h === h ? cur : { ...cur, [key]: { w, h } }));
     };
     on();
     const ro = new ResizeObserver(on);
     ro.observe(el);
     return () => ro.disconnect();
-  }, [plateShown, selected, plateZoom]);
+  }, [plateShown, selected, plateFit]);
 
   // ——— which names show: three levels of openness.
   //   whole map   only the land signs — the painting is the thing; a hovered
@@ -1184,7 +1216,7 @@ export function PaintedSkin() {
           return (
             <div className="pointer-events-none absolute inset-0 z-[15]"
               style={{ right: drawerPx, opacity: landed ? 1 : 0, visibility: landed ? "visible" : "hidden", transition: still ? undefined : `opacity ${MOTION.plateFade.ms}ms steps(${MOTION.plateFade.steps}, end)` }}>
-              <MapPlate ref={plateEl} m={m} name={selected} still={still} zoom={plateZoom}
+              <MapPlate ref={plateEl} m={m} name={selected} still={still} fit={plateFit}
                 data={{ "data-plate-side": plan.side, "data-plate-k": String(plan.k), "data-plate-cost": String(Math.round(plan.cost)) }}
                 style={{ left: px, top: py, ...stamp(4, still || !revealed) }}
                 onEnlarge={() => setFullDiagram(true)} onClose={() => setPlateOpen(false)} />

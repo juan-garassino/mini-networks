@@ -3,13 +3,18 @@
 // "How <model> works" as a plate ON the map: a vignette in the map's own
 // plate material (parchment + maroon border + hard shadow on the pixel map,
 // cardstock on the paper map) hung beside the selected castle by a leader
-// line. The full mechanism diagram sits on its mat at a crisp scale (1 art px
-// = 1 CSS px; ×1.5 or ×2 only when that is a whole number of device px AND the
-// plate stays within half the visible map — painted-skin plateZoom), and it
-// keeps its scrubber / keys; still=1 and reduced motion freeze it (the diagram
-// and useTick handle both). Placement + camera: plate-place.ts. The skin
-// positions the plate in screen px from the castle's live position, so it
-// follows pans and zooms without ever scaling.
+// line. The plate keeps the diagram kit's legibility floor
+// (anatomy2/legible.ts): the full drawing at the smallest crisp zoom whose
+// labels read (×1.5 on a retina screen = 3 device px per art px, 10.5-px
+// caps), or — when the castle and that plate fit nowhere together — the card
+// composition at ×2 with the full drawing one click away (Enlarge, or a tap
+// on the card). Never the full drawing at ×1 (7-px caps). The skin picks the
+// fit (painted-skin plateFits); the full drawing keeps its scrubber / keys;
+// still=1 and reduced motion freeze it (the diagram and useTick handle both).
+// The frame is one row: title, the real-vs-illustrative badge, Enlarge,
+// Close — the drawer beside it holds the prose. Placement + camera:
+// plate-place.ts. The skin positions the plate in screen px from the
+// castle's live position, so it follows pans and zooms without ever scaling.
 import { forwardRef, type CSSProperties } from "react";
 import { MechanismDiagram, diagramFor } from "@/components/lab/shared/anatomy2";
 import { THEMES } from "@/components/lab/shared/anatomy2/themes";
@@ -21,56 +26,70 @@ import type { PlateSide } from "./plate-place";
 export const ART_W = 560;
 export const ART_H = 316;
 // a compact frame: the drawing is the plate, the frame only holds it
-const PAD = 8;       // plate padding
+const PAD = 6;       // plate padding
 const MAT = 4;       // mat padding around the drawing
-const HEAD = 28;     // title row (a 22-px button + air)
-const FOOT = 20;     // caption row
+const HEAD = 28;     // the one chrome row (a 22-px button + air)
 
-/** The plate's size before it is measured (CSS px). `ap` = the border width. */
-export function plateEstimate(name: string, zoom: number, ap: number): { w: number; h: number } {
+/** What the plate shows: the full drawing or the card, at a zoom (CSS px per art px). */
+export interface PlateFit { variant: "full" | "card"; zoom: number }
+
+/** The drawing's art size for a fit (the card's height is per diagram). */
+function artOf(name: string, variant: PlateFit["variant"]): { w: number; h: number } {
   const def = diagramFor(name);
-  const ctl = def && (def.scrub || def.interactive) ? (def.keysHint ? 22 : 0) + (def.scrub ? 30 : 0) : 0;
-  const w = ART_W * zoom + 2 * (MAT + ap) + 2 * (PAD + ap);
-  const h = HEAD + ART_H * zoom + 2 * (MAT + ap) + ctl + FOOT + 2 * (PAD + ap);
-  return { w, h };
+  return variant === "card" && def ? def.card.view : { w: ART_W, h: ART_H };
 }
 
-const sentence = (s: string) => (s ? s[0].toUpperCase() + s.slice(1) + "." : "");
+/** The plate's size before it is measured (CSS px). `ap` = the border width. */
+export function plateEstimate(name: string, fit: PlateFit, ap: number): { w: number; h: number } {
+  const def = diagramFor(name);
+  const art = artOf(name, fit.variant);
+  const ctl = fit.variant === "full" && def && (def.scrub || def.interactive) ? (def.keysHint ? 27 : 0) + (def.scrub ? 32 : 0) : 0;
+  const w = art.w * fit.zoom + 2 * (MAT + ap) + 2 * (PAD + ap);
+  const h = HEAD + art.h * fit.zoom + 2 * (MAT + ap) + ctl + 2 * (PAD + ap);
+  return { w: Math.ceil(w), h: Math.ceil(h) };
+}
 
 export const MapPlate = forwardRef<HTMLElement, {
-  m: Material; name: string; still: boolean; zoom: number; style: CSSProperties;
+  m: Material; name: string; still: boolean; fit: PlateFit; style: CSSProperties;
   onEnlarge: () => void; onClose: () => void;
   /** data-* attributes (the placement, for screenshots and tests) */
   data?: Record<`data-${string}`, string>;
-}>(function MapPlate({ m, name, still, zoom, style, onEnlarge, onClose, data }, ref) {
+}>(function MapPlate({ m, name, still, fit, style, onEnlarge, onClose, data }, ref) {
   const def = diagramFor(name);
   const th = THEMES[m.diagram];
   const title = `How ${displayName(name)} works`;
+  const art = artOf(name, fit.variant);
+  const drawW = art.w * fit.zoom;
   // the drawer's and the full view's buttons: one size for every plate button
   const btn: CSSProperties = { fontSize: TYPE.button, minHeight: 22, padding: "0 6px", fontWeight: 500 };
+  const badge = def ? def.badge : "a generic sketch";
   return (
-    <section ref={ref} aria-label={title} data-map-plate {...data}
+    <section ref={ref} aria-label={title} data-map-plate data-plate-variant={fit.variant} data-plate-zoom={String(fit.zoom)} {...data}
       // a tap on the plate is never a tap on the sea (the plate sits outside
       // the stage, but stop it anyway so no future parent counts it)
       onClick={(e) => e.stopPropagation()} onPointerDown={(e) => e.stopPropagation()}
       className="pointer-events-auto absolute left-0 top-0"
-      style={{ ...plateStyle(m), fontFamily: m.bodyFont, padding: PAD, width: "max-content", ...style }}>
-      <header className="flex items-center justify-between gap-3" style={{ height: HEAD - 4, marginBottom: 4 }}>
-        <h2 className="leading-none" style={{ fontFamily: m.signFont, fontWeight: 700, fontSize: sign(m, TYPE.plateTitle), color: m.crisp ? m.border : m.ink, whiteSpace: "nowrap" }}>
+      // the frame is exactly the drawing's width: the chrome row never widens it
+      style={{ ...plateStyle(m), fontFamily: m.bodyFont, padding: PAD, width: `calc(${drawW + 2 * (MAT + PAD)}px + 4 * var(--ap, 2px))`, ...style }}>
+      <header className="flex items-center gap-2" style={{ height: HEAD - 4, marginBottom: 4 }}>
+        <h2 className="min-w-0 shrink truncate leading-none" style={{ fontFamily: m.signFont, fontWeight: 700, fontSize: sign(m, TYPE.plateTitle), color: m.crisp ? m.border : m.ink, whiteSpace: "nowrap" }}>
           {howItWorks(m, displayName(name))}
         </h2>
-        <div className="flex items-center gap-1.5">
-          <Btn m={m} onClick={onEnlarge} label={`Enlarge: ${title}`} title="Enlarge" style={btn}>Enlarge</Btn>
+        {/* what is real vs illustrative: the badge travels with the drawing */}
+        <p className="min-w-0 flex-1 truncate" title={def?.truth} style={{ fontFamily: textFace(m), fontSize: TYPE.caption, lineHeight: 1.2, color: m.inkSoft }}>
+          {badge}
+        </p>
+        <div className="flex shrink-0 items-center gap-1.5">
+          <Btn m={m} onClick={onEnlarge} label={`Enlarge: ${title}`} title="Enlarge: the whole drawing, what is computed and what is drawn" style={btn}>Enlarge</Btn>
           <Btn m={m} onClick={onClose} label="Close the diagram (Esc)" title="Close (Esc)" style={btn}>Close</Btn>
         </div>
       </header>
       <div style={{ background: th.ground, padding: MAT, border: `var(--ap, 2px) solid ${m.border}`, borderRadius: m.radius, lineHeight: 0 }}>
-        <MechanismDiagram name={name} theme={m.diagram} variant="full" still={still} width={ART_W * zoom} fit={false} caption={false} />
+        {fit.variant === "full"
+          ? <MechanismDiagram name={name} theme={m.diagram} variant="full" still={still} width={drawW} fit={false} caption={false} />
+          // below the floor: the card, its tap = Enlarge (the full drawing)
+          : <MechanismDiagram name={name} theme={m.diagram} variant="card" still={still} width={drawW} caption={false} onOpen={() => { onEnlarge(); return true; }} />}
       </div>
-      <p className="truncate" title={def?.truth} style={{ height: FOOT, paddingTop: 6, fontFamily: textFace(m), fontSize: TYPE.caption, lineHeight: 1.2, color: m.inkSoft, maxWidth: ART_W * zoom + 2 * MAT }}>
-        {def ? sentence(def.badge) : "A generic sketch, not this model's own diagram."}
-        {def && " Enlarge for what is computed and what is drawn."}
-      </p>
     </section>
   );
 });
