@@ -228,9 +228,10 @@ export function FlowBoard() {
             <div style={{ height: selected ? "56vh" : 24 }} />
           </div>
         )}
-        {mobile && keyOpen && (
-          <div className="absolute inset-x-3 z-50 border p-3" style={{ top: SPACE.barMobile + 6, borderColor: COLOR.ink, borderRadius: RADIUS.panel, background: COLOR.card, boxShadow: SHADOW.panel }}>
-            <Legend column />
+        {keyOpen && (
+          <div className={`absolute z-50 border p-3 ${mobile ? "inset-x-3" : "right-3"}`}
+            style={{ top: (mobile ? SPACE.barMobile : SPACE.barDesktop) + 6, width: mobile ? undefined : SPACE.keyW, borderColor: COLOR.ink, borderRadius: RADIUS.panel, background: COLOR.card, boxShadow: SHADOW.panel }}>
+            <Legend sample={layout?.labels[0]?.text ?? ""} />
           </div>
         )}
         {pipesOpen && (

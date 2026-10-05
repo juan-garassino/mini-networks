@@ -142,7 +142,10 @@ for (const mode of ["desktop", "mobile"] as DfdMode[]) {
     // a line too short for its label needs none; every longer one has its trunk's
     const labelled = new Set(l.labels.flatMap((x) => x.edges));
     for (const e of l.edges) if (e.cross && !e.offSheet && routeLength(e.points) > DFD_SHORT) assert.ok(labelled.has(`${e.from}->${e.to}`), `${e.from}->${e.to} unlabelled`);
-    if (mode === "desktop") assert.equal(l.labels.filter((x) => x.text === "4 transformer").length, 1, "4 transformer once");
+    if (mode === "desktop") {
+      const t = l.boxes.find((b) => b.name === "transformer")!.address;
+      assert.equal(l.labels.filter((x) => x.text === `${t} transformer`).length, 1, `${t} transformer once`);
+    }
   });
 }
 
@@ -162,8 +165,15 @@ test("desktop: island atoms are chips on their lane's title row; the stacks bala
   assert.ok(l.boxes.filter((b) => b.lines.length > 1).length <= 8, "at most 8 two-line names");
   const bottom = (s: number) => Math.max(...l.lanes.filter((x) => x.stack === s).map((x) => x.y + x.h));
   assert.ok(Math.abs(bottom(0) - bottom(1)) <= 2 * (DFD_BOX_TALL + 16), `stacks end at ${bottom(0)} / ${bottom(1)}`);
-  // the margins are the 16-px gutter: nothing runs round the outside of the sheet
-  for (const e of l.edges) for (const p of e.points) assert.ok(p.x >= 16 && p.x <= l.width - 16, `${e.from}->${e.to} runs in the margin`);
+  // the 16-px margins hold one track (the lane's left gutter): only a line leaving its parent's
+  // LEFT side may ride it, never the sheet's own edge
+  const by = new Map(l.boxes.map((b) => [b.name, b]));
+  for (const e of l.edges) for (const p of e.points) {
+    assert.ok(p.x >= DFD_G && p.x <= l.width - DFD_G, `${e.from}->${e.to} runs on the sheet's edge`);
+    if (p.x < 16 || p.x > l.width - 16) assert.equal(e.points[0].x, by.get(e.from)!.x, `${e.from}->${e.to} rides the margin without leaving its parent's left side`);
+  }
+  // a connector pair never joins two boxes of one lane: that line takes the left gutter instead
+  for (const o of l.offSheet) assert.notEqual(by.get(o.from)!.lane, by.get(o.to)!.lane, `${o.from}->${o.to}: a pair inside one lane`);
 });
 
 test("mobile: a file tree indented by generation, a ruler for it, a compact sheet", () => {
@@ -198,6 +208,50 @@ for (const mode of ["desktop", "mobile"] as DfdMode[]) {
     for (const lab of l.labels) if (!lab.turn) for (const ln of l.lanes) {
       const hit = lab.y <= ln.y + 1 && lab.y + lab.h >= ln.y && lab.x < ln.x + ln.w && lab.x + lab.w > ln.x;
       assert.ok(!hit, `label "${lab.text}" sits on the ${ln.family} rule`);
+    }
+  });
+}
+
+// ——— review 1: the addresses are read off the sheet, so they count down the page
+
+const byAddr = (a: string, b: string) => a.localeCompare(b, "en", { numeric: true });
+
+/** Pairs (upper, lower) inside one reading group whose addresses run backwards. */
+function inversions(l: DfdLayout): string[] {
+  const groups = new Map<string, DfdLayout["boxes"]>();
+  for (const b of l.boxes) {
+    // desktop: a lane's chip shelf, and each of its grid columns; phone: a lane's file tree
+    const k = l.mode === "desktop" ? `${b.lane}:${b.chip ? "chips" : b.col}` : `${b.lane}`;
+    if (!groups.has(k)) groups.set(k, []);
+    groups.get(k)!.push(b);
+  }
+  const out: string[] = [];
+  for (const bs of groups.values()) {
+    bs.sort((a, b) => a.y - b.y || a.x - b.x);
+    for (let i = 1; i < bs.length; i++) if (byAddr(bs[i - 1].address, bs[i].address) >= 0) out.push(`${bs[i - 1].address} ${bs[i - 1].name} above ${bs[i].address} ${bs[i].name}`);
+  }
+  // desktop: a lane's atoms read chips first, then the Atoms column
+  if (l.mode === "desktop") for (const ln of l.lanes.keys()) {
+    const atoms = l.boxes.filter((b) => b.lane === ln && b.atom).sort((a, b) => Number(b.chip) - Number(a.chip) || a.y - b.y || a.x - b.x);
+    for (let i = 1; i < atoms.length; i++) if (byAddr(atoms[i - 1].address, atoms[i].address) >= 0) out.push(`atoms: ${atoms[i - 1].name} before ${atoms[i].name}`);
+  }
+  return out;
+}
+
+for (const mode of ["desktop", "mobile"] as DfdMode[]) {
+  test(`${mode}: inside a lane the addresses count down the page (real graph and perturbations)`, () => {
+    const l = buildDfd(tax, fam, { mode });
+    assert.deepEqual(inversions(l), [], `${mode}: rows out of address order`);
+    // every address is unique and is its primary parent's address plus one step
+    assert.equal(new Set(l.boxes.map((b) => b.address)).size, l.boxes.length, "unique addresses");
+    for (const b of l.boxes) if (!b.atom) assert.match(b.address, /^\d+(\.\d+)+$/, `${b.name}: a lineage address`);
+    for (let seed = 1; seed <= 3; seed++) {
+      const rnd = mulberry32(seed * 104729);
+      const parents = new Set(tax.models.flatMap((m) => m.builds_on));
+      const leaves = tax.models.filter((m) => !parents.has(m.name)).map((m) => m.name);
+      const drop = new Set(shuffle([...leaves], rnd).slice(0, 1 + (seed % 3)));
+      const t: TaxonomyResponse = { ...tax, models: tax.models.filter((m) => !drop.has(m.name)) };
+      assert.deepEqual(inversions(buildDfd(t, fam, { mode })), [], `${mode} seed ${seed}`);
     }
   });
 }

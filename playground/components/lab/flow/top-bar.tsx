@@ -1,11 +1,10 @@
 "use client";
 
-// The top bar: back link, the keeper (an easter egg), the title, the key (desktop: inline;
-// phone: behind "Key"), the pipelines toggle and the model finder.
+// The top bar: back link, the keeper (an easter egg), the title, then "Key" (the legend, as a
+// popover), the pipelines toggle and the model finder. Nothing else: the sheet speaks.
 import Link from "next/link";
 import { displayName } from "@/components/lab/shared/card-model";
 import { Critter } from "./critter";
-import { Legend } from "./legend";
 import { COLOR, RADIUS, SPACE, TYPE } from "./tokens";
 import s from "./flow.module.css";
 
@@ -26,8 +25,8 @@ export function TopBar({ mobile, keeperHappy, onKeeper, pipeCount, pipeShown, pi
       </button>
       <h1 className={`${s.title} shrink-0 whitespace-nowrap leading-none`} style={{ fontSize: mobile ? TYPE.titleMobile : TYPE.title }}>Zoo flow</h1>
       <div className="min-w-0 flex-1" />
-      {!mobile && <Legend />}
-      {mobile && <button type="button" onClick={onKey} aria-expanded={keyOpen} className={button} style={ui}>Key</button>}
+      <button type="button" onClick={onKey} aria-expanded={keyOpen} className={button}
+        style={{ ...ui, background: keyOpen ? COLOR.accent : COLOR.card, color: keyOpen ? COLOR.onAccent : COLOR.ink }}>Key</button>
       <button type="button" onClick={onPipes} aria-expanded={pipesOpen} className={button}
         style={{ ...ui, background: pipeShown ? COLOR.accent : COLOR.card, color: pipeShown ? COLOR.onAccent : COLOR.ink }}>
         {mobile ? "Pipelines" : `Pipelines ${pipeCount}`}

@@ -4,7 +4,7 @@
 // column header row, the line work (edges.tsx), and the boxes (box.tsx). Pure render: the
 // board owns the camera, the selection and the motion; this decides only what is lit.
 import { memo, useMemo } from "react";
-import type { DfdLayout } from "@/lib/world/dfd";
+import { DFD_SHELF_TEXT, type DfdLayout } from "@/lib/world/dfd";
 import type { EvidenceState } from "@/components/lab/shared/card-model";
 import { Box } from "./box";
 import { Connectors, edgeKey, Edges, Labels, type EdgeLight } from "./edges";
@@ -54,6 +54,7 @@ export const Sheet = memo(function Sheet({ layout, st, onPick, onHover }: {
           <text x={l.label.x} y={l.label.y + 12} className={s.lane} fontSize={TYPE.lane} fill={COLOR.ink}>
             {fam(l.family).label}<tspan className={s.count} fill={COLOR.inkSoft} dx={5}>{l.count}</tspan>
           </text>
+          {l.shelf && <text x={l.shelf.x} y={l.shelf.y + 11} className={s.head} fontSize={TYPE.shelf} fill={COLOR.head}>{DFD_SHELF_TEXT}</text>}
         </g>
       ))}
       {layout.mode === "desktop" && layout.headers.map((h) => (

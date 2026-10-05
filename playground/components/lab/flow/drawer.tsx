@@ -21,6 +21,8 @@ import { COLOR, fam, MOTION, SHADOW, SPACE, STROKE } from "./tokens";
 import s from "./flow.module.css";
 
 const words = (k: string) => k.replace(/_/g, " ");
+/** The shared evidence copy in this sheet's voice: a colon, never a spaced em dash. */
+const evidenceLine = (st: CardModel["state"]) => EVIDENCE_COPY[st].replace(" — ", ": ");
 
 function fmt(n: number) {
   return Math.abs(n) >= 100 ? n.toFixed(0) : Math.abs(n) >= 10 ? n.toFixed(1) : n.toFixed(Math.abs(n) < 1 ? 3 : 2).replace(/0+$/, "").replace(/\.$/, "");
@@ -155,7 +157,7 @@ export function FlowDrawer({ c, address, lesson, mobile, still, evidence, family
         </button>
       </div>
 
-      <p className={`mt-3 max-w-[60ch] ${s.tLede} font-bold leading-snug`}>{l?.what ?? `${c.description}.`}</p>
+      <p className={`mt-3 max-w-[60ch] ${s.tLede} font-medium leading-snug`}>{l?.what ?? `${c.description}.`}</p>
       {l && (
         <p className={`mt-2 max-w-[60ch] ${s.tBody} leading-relaxed`}>
           <b>The idea: </b>{l.idea}
@@ -164,7 +166,7 @@ export function FlowDrawer({ c, address, lesson, mobile, still, evidence, family
       )}
       <p className={`mt-2 flex items-center gap-2 ${s.tProse} font-bold`}>
         <svg viewBox="-6 -6 12 12" className="h-3.5 w-3.5 shrink-0" aria-hidden><EvidenceMark state={c.state} /></svg>
-        {EVIDENCE_COPY[c.state]}
+        {evidenceLine(c.state)}
       </p>
 
       {full && (<>

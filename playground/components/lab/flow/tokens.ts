@@ -5,7 +5,7 @@
 // lights a lineage. Geometry (track grid, box sizes, label/tag/name px) belongs to the router:
 // lib/world/dfd.ts, re-exported below so a renderer needs one import.
 import type { CSSProperties } from "react";
-import { DFD_ATOM_CELL, DFD_LABEL_PX, DFD_NAME_PX, DFD_PAD, DFD_STRIP, DFD_TAG_PX, critterPx } from "@/lib/world/dfd";
+import { DFD_ATOM_CELL, DFD_LABEL_PX, DFD_NAME_PX, DFD_PAD, DFD_SHELF_PX, DFD_STRIP, DFD_TAG_PX, critterPx } from "@/lib/world/dfd";
 
 export const COLOR = {
   sheet: "#FCFCFA",     // the paper
@@ -50,12 +50,13 @@ export const TYPE = {
   address: 9.5,             // a derived box's header strip
   index: 12,                // an atom's index cell
   lane: 13,                 // swim-lane name
+  shelf: DFD_SHELF_PX,      // "standalone atoms" under the name of a lane with chips
   head: 12,                 // column headers, the phone ruler
   small: 12,                // drawer addresses, captions
   ui: 13,                   // buttons, legend, search
   prose: 14,                // drawer notes, chips, pipeline rows
   body: 15,                 // drawer prose
-  lede: 17,                 // drawer's first sentence
+  lede: 15,                 // drawer's first sentence (regular: it leads, it does not shout)
   title: 19, titleMobile: 16, // "Zoo flow"
   drawerTitle: 24,
 } as const;
@@ -74,6 +75,7 @@ export const SPACE = {
   barDesktop: 44,           // top bar height
   barMobile: 52,
   drawerW: 420,             // docked drawer (desktop)
+  keyW: 380,                // the key popover (desktop)
   sheetMaxH: "55%",         // phone bottom sheet
   stageInset: 4,            // the overview's breathing room inside the stage
   nodeInset: 16,            // node view: frame inset beside the drawer

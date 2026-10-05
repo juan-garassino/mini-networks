@@ -3,8 +3,8 @@
 // The desktop camera: one uniform scale over the sheet and three URL-driven views —
 //   overview: the whole sheet, fitted to the stage;
 //   region:   the focused model's lane band;
-//   node:     the selection + every ancestor + as many children as still fit at scale ≥ 1
-//             (names stay ≥ 13 px), in the area left of the docked drawer.
+//   node:     the selection + every ancestor + as many children as still fit at scale ≥ 0.85
+//             (names stay ≥ 11 px), in the area left of the docked drawer.
 // Views ease in over MOTION.camera ms (instant when frozen); drag pans, the wheel zooms.
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { DfdBox, DfdLayout } from "@/lib/world/dfd";
@@ -15,8 +15,9 @@ export interface Cam { s: number; tx: number; ty: number }
 type R = { x: number; y: number; w: number; h: number };
 type Zoom = "overview" | "region" | "node";
 
-/** Node view: never frame so wide that names drop below their 13 px. */
-const NODE_MIN_S = 1;
+/** Node view: frame the whole lit lineage left of the drawer, down to names at 11 px (13 × 0.85);
+ * only a hub too wide even for that drops its farthest children. */
+const NODE_MIN_S = 0.85;
 
 const fit = (r: R, a: R, max: number, min = 0): Cam => {
   const sc = Math.max(min, Math.min(max, a.w / r.w, a.h / r.h));
