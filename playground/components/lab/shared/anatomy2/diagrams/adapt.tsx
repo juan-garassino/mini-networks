@@ -652,7 +652,6 @@ function RagCard({ theme }: { theme: Theme }) {
       ))}
       <Frame x={winX - 2} y={TY[2] - 2} w={RAG_SEQ_LEN / 2 + 4} h={8} fill={T.wireHot} />
       <PText x={4} y={60} text={genText} fill={T.text} />
-      <PText x={4} y={90} text={`the LM reads only the last ${RAG_SEQ_LEN}`} fill={T.textDim} />
     </g>
   );
 }
@@ -676,7 +675,7 @@ interface AdaptDef {
   title: string;
   truth: string;
   render: (p: { theme: Theme; t: number; onT?: (t: number) => void; still: boolean; keys: MutableRefObject<KeyHandler | null> }) => ReactNode;
-  card: { view: { w: number; h: number }; render: (p: { theme: Theme; t: number }) => ReactNode };
+  card: { view: { w: number; h: number }; render: (p: { theme: Theme; t: number }) => ReactNode; caption?: string };
   badge: string;
 }
 
@@ -697,11 +696,14 @@ const ADAPT_TEXT: Record<AdaptName, Pick<AdaptDef, "title" | "truth" | "badge" |
   },
 };
 
+// card footer captions (the kit sets them beside the badge, outside the art)
+const ADAPT_CAPTION: Partial<Record<AdaptName, string>> = { rag: `the LM reads only the last ${RAG_SEQ_LEN}` };
+
 export const ADAPT_DEFS: Record<string, AdaptDef> = Object.fromEntries(
   (Object.keys(ADAPT_TEXT) as AdaptName[]).map((n) => [n, {
     view: ADAPT_VIEW,
     ...ADAPT_TEXT[n],
     render: ({ theme, still, keys }) => <AdaptDiagram theme={theme} name={n} still={still} keys={keys} />,
-    card: { view: ADAPT_CARD_VIEW, render: ({ theme }) => <AdaptCard theme={theme} name={n} /> },
+    card: { view: ADAPT_CARD_VIEW, render: ({ theme }) => <AdaptCard theme={theme} name={n} />, caption: ADAPT_CAPTION[n] },
   } satisfies AdaptDef]),
 );

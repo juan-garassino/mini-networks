@@ -9,9 +9,11 @@
 //
 //   legibleZooms(dpr)                 → [1.5, 2] on dpr 2, [2] on dpr 1
 //   isLegible(zoom)                   → labels ≥ the floor at this zoom
+//   fitZoom(avail, viewW, dpr)        → the largest of those that fits, or null
 //   fallbackFor(width, viewW)         → "full" | "card": what MechanismDiagram
 //                                       renders when given minLabelPx
-// Pure, no React (tested by components/lab/painted/plate-place.test.ts).
+// Pure, no React (tested by diagrams/fit-zoom.test.ts and
+// components/lab/painted/plate-legible.test.ts).
 import { FONT_H } from "./pixel-font.ts";
 
 /** Never show a drawing whose labels fall below minLabelPx CSS px (cap height
@@ -46,4 +48,14 @@ export function legibleZooms(dpr: number, max: number = LEGIBLE.maxZoom, min: nu
 /** What a full drawing `width` CSS px wide shows under the floor: itself, or its card. */
 export function fallbackFor(width: number, viewW: number, min: number = LEGIBLE.minLabelPx): "full" | "card" {
   return isLegible(width / viewW, min) ? "full" : "card";
+}
+
+/** The largest crisp, legible zoom at which `viewW` art px fit in `avail` CSS
+ * px (≤ max), or null when even the smallest legible zoom is too wide. The
+ * specimen sizes its drawing and its cards with this:
+ *   fitZoom(1248, 560, 2) → 2 · fitZoom(992, 560, 2) → 1.5 · fitZoom(358, 560, 2) → null
+ *   fitZoom(358, 190, 3) → 5/3 (316.67 CSS px = 950 device px) */
+export function fitZoom(avail: number, viewW: number, dpr: number, max: number = LEGIBLE.maxZoom, min: number = LEGIBLE.minLabelPx): number | null {
+  const fits = legibleZooms(dpr, max, min).filter((z) => z * viewW <= avail + 1e-6);
+  return fits.length ? fits[fits.length - 1] : null;
 }

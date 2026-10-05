@@ -23,7 +23,7 @@ import { Bars, Diamond, Frame, Node, PText, Thumb, Wire } from "../prims";
 import type { Theme } from "../themes";
 
 export const VISION_VIEW = { w: 560, h: 316 };
-export const VISION_CARD_VIEW = { w: 190, h: 110 };
+export const VISION_CARD_VIEW = { w: 190, h: 104 }; // caption moved to card.caption
 export type VisionName = "resnet" | "mobilenet" | "convnext" | "vit";
 
 interface Stage { label: string; res: number; ch: number; idx: number; map: string }
@@ -391,6 +391,9 @@ export function VisionDiagram({ theme, name }: { theme: Theme; name: VisionName 
   );
 }
 
+/** The card's footer caption: the inset's subject ("block 2", "stage 1"). */
+export const visionCaption = (name: VisionName): string => SPECS[name].inset.split(":")[0].replace("inside ", "");
+
 export function VisionCard({ theme, name }: { theme: Theme; name: VisionName }) {
   const T = theme;
   const S = SPECS[name];
@@ -402,7 +405,6 @@ export function VisionCard({ theme, name }: { theme: Theme; name: VisionName }) 
       <Wire pts={[[33, 38], [40, 38]]} fill={T.wire} />
       <S.Mini theme={T} x={42} y={8} />
       <Logits theme={T} x={150} y={10} logits={S.logits} rowH={9} barW={30} />
-      <PText x={4} y={100} text={S.inset.split(":")[0].replace("inside ", "")} fill={T.textDim} />
     </g>
   );
 }

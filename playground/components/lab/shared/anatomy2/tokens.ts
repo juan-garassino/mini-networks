@@ -11,7 +11,7 @@ export { THEMES, type Theme, type ThemeName } from "./themes";
 /** The art grid (viewBox units). See STYLE.md §1. */
 export const ART = {
   full: { w: 560, h: 316 },  // every full diagram
-  cardW: 190,                // every card; heights 100–124
+  cardW: 190,                // every card; heights 76–124 (art only; caption in the footer)
   scale: 2,                  // CSS px per art px at the canonical size
   row: 10,                   // text row pitch: 7-px glyph + 3
   glyph: FONT_H,             // cap height of the pixel face
@@ -37,7 +37,9 @@ export const TYPE = {
   nav: { size: 14, line: 1.3 },      // index entries
   hint: { size: 13, line: 1.45 },    // keyboard hints, scrubber label
   small: { size: 12, line: 1.4 },    // under a card (badge + open link)
-  measure: "68ch",                   // longest prose line
+  // longest prose line: ≈ 68 characters. Not "68ch": ch is the width of a
+  // "0", wider than Atkinson's average letter, so 68ch measured 90 (review-2).
+  measure: "33em",
 } as const;
 
 /** Spacing in CSS px; an 8-px rhythm with the 16-px phone gutter. */
@@ -51,6 +53,9 @@ export const SPACE = {
   index: 240,     // desktop index column width
   card: 380,      // card column = ART.cardW × ART.scale
 } as const;
+
+/** The specimen's index layout (index | gap | drawing at ×2) needs this many CSS px. */
+export const WIDE_MIN = SPACE.index + SPACE.xl + ART.full.w * ART.scale + 2 * SPACE.gutter; // 1432
 
 /** Lines: everything is square-cornered pixel work; borders are 1 or 2 px. */
 export const BORDER = {

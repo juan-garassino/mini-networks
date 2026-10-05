@@ -1,8 +1,12 @@
 "use client";
 
 // One model's plate: its name in the diagram's own pixel face, the one-line
-// "what it does", the drawing at an integer scale, then what is real.
-import { MechanismDiagram } from "../mechanism";
+// "what it does", the drawing, then what is real. The drawing obeys the
+// legibility floor (legible.ts): the full drawing at a crisp zoom whose labels
+// are ≥ 10 px when one fits; otherwise the card, whose "Open full diagram"
+// opens the full drawing in place (?full=1) in a sideways scroller.
+import type { ReactNode } from "react";
+import { MechanismDiagram, sentence } from "../mechanism";
 import { PixelLabel, displayName } from "../prims";
 import { diagramFor } from "../registry";
 import { BORDER, PIXEL, SPACE, TYPE, type Theme, type ThemeName } from "../tokens";
@@ -14,18 +18,51 @@ export function ledeOf(title: string): string {
   return s ? s[0].toUpperCase() + s.slice(1) : "";
 }
 
-export function Plate({ model, theme, th, t, onT, still, width, narrow }: {
+/** How the plate shows its drawing (specimen.tsx picks it from the room it has). */
+export type PlateFit =
+  | { kind: "full"; width: number }                               // the drawing fits at a legible zoom
+  | { kind: "card"; cardWidth: number; fullWidth: number };      // only the card fits; full scrolls
+
+export function Plate({ model, theme, th, t, onT, still, fit, full, onFull }: {
   model: string; theme: ThemeName; th: Theme; t: number; onT: (t: number) => void; still: boolean;
-  /** drawing width in CSS px (an integer multiple of the art width) */
-  width: number;
-  /** below 1×: keep 1× and let the drawing scroll sideways on its own */
-  narrow: boolean;
+  fit: PlateFit;
+  /** card fit only: the full drawing is open (sideways scroller) */
+  full: boolean;
+  onFull: (open: boolean) => void;
 }) {
   const def = diagramFor(model);
-  const drawing = (
+  const stacked = fit.kind === "card";
+  const drawing = (width: number, exact: boolean) => (
     <MechanismDiagram key={`${model}-${theme}`} name={model} theme={theme} t={t} onTChange={onT}
-      still={still} width={width} fit={!narrow} caption={false} />
+      still={still} width={width} fit={!exact} caption={false} />
   );
+
+  let body: ReactNode;
+  if (fit.kind === "full") body = drawing(fit.width, false);
+  else if (!full) {
+    // the card, its footer without the badge ("what is real" below says it)
+    body = (
+      <>
+        <MechanismDiagram key={`${model}-${theme}-card`} name={model} theme={theme} variant="card" still={still} width={fit.cardWidth}
+          caption={false} onOpen={() => { onFull(true); return true; }} />
+        <p style={{ display: "flex", flexWrap: "wrap", justifyContent: "space-between", gap: SPACE.s, margin: `${SPACE.s}px 0 0`, maxWidth: fit.cardWidth, fontSize: TYPE.small.size, lineHeight: TYPE.small.line, color: th.text }}>
+          <span>{def?.card.caption ? sentence(def.card.caption) : ""}</span>
+          <button type="button" className="anx-back" style={{ color: th.wireHot }} onClick={() => onFull(true)}>Open full diagram</button>
+        </p>
+      </>
+    );
+  } else {
+    body = (
+      <>
+        <div className="anx-scroll" style={{ margin: `0 -${SPACE.gutter}px`, padding: `0 ${SPACE.gutter}px` }}>{drawing(fit.fullWidth, true)}</div>
+        <p style={{ display: "flex", flexWrap: "wrap", justifyContent: "space-between", gap: SPACE.s, margin: `${SPACE.s}px 0 0`, fontSize: TYPE.small.size, lineHeight: TYPE.small.line, color: th.textDim }}>
+          <span>Wider than the screen: swipe it sideways.</span>
+          <button type="button" className="anx-back" style={{ color: th.wireHot }} onClick={() => onFull(false)}>Show the card</button>
+        </p>
+      </>
+    );
+  }
+
   return (
     <article aria-labelledby="plate-name">
       <header style={{ marginBottom: SPACE.l }}>
@@ -38,22 +75,18 @@ export function Plate({ model, theme, th, t, onT, still, width, narrow }: {
           </p>
         )}
       </header>
-      {narrow ? (
-        <>
-          <div className="anx-scroll" style={{ margin: `0 -${SPACE.gutter}px`, padding: `0 ${SPACE.gutter}px` }}>{drawing}</div>
-          <p style={{ margin: `${SPACE.s}px 0 0`, fontSize: TYPE.small.size, color: th.textDim }}>The drawing is wider than the screen: swipe it sideways.</p>
-        </>
-      ) : drawing}
+      {body}
       {def && (
         <section aria-labelledby="plate-real" style={{
-          display: "grid", gridTemplateColumns: narrow ? "1fr" : `${SPACE.index - SPACE.l}px minmax(0, ${TYPE.measure})`,
-          gap: narrow ? SPACE.s : SPACE.l, marginTop: SPACE.xl, paddingTop: SPACE.m, borderTop: `${BORDER.hair}px solid ${th.frame}`,
+          display: "grid", gridTemplateColumns: stacked ? "1fr" : `${SPACE.index - SPACE.l}px minmax(0, 1fr)`,
+          gap: stacked ? SPACE.s : SPACE.l, marginTop: SPACE.xl, paddingTop: SPACE.m, borderTop: `${BORDER.hair}px solid ${th.frame}`,
         }}>
           <div>
             <h2 id="plate-real" style={{ margin: 0, color: th.textDim }}><PixelLabel text="what is real" s={PIXEL.head} /></h2>
             <p style={{ margin: `${SPACE.s}px 0 0`, color: th.wireHot, fontSize: TYPE.hint.size, lineHeight: TYPE.hint.line }}>{def.badge}</p>
           </div>
-          <p style={{ margin: 0, fontSize: TYPE.body.size, lineHeight: TYPE.body.line, color: th.text }}>{def.truth}</p>
+          {/* the measure sits on the paragraph itself, in its own em */}
+          <p style={{ margin: 0, maxWidth: TYPE.measure, fontSize: TYPE.body.size, lineHeight: TYPE.body.line, color: th.text }}>{def.truth}</p>
         </section>
       )}
     </article>

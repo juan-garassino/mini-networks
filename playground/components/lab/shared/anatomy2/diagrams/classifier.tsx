@@ -131,7 +131,10 @@ export function ClassifierDiagram({ theme }: { theme: Theme }) {
 }
 
 // ————— card: digit → 4 real conv1 maps → 4 real conv2 maps → 10 scores —————
-export const CLASSIFIER_CARD_VIEW = { w: 190, h: 100 };
+export const CLASSIFIER_CARD_VIEW = { w: 190, h: 88 }; // caption moved to card.caption
+
+// "real champion" is the badge's job; the footer adds only the verdict
+export const CLASSIFIER_CARD_CAPTION = `says ${(CLS_LOGITS as readonly number[]).indexOf(Math.max(...CLS_LOGITS))}`;
 
 export function ClassifierCard({ theme }: { theme: Theme }) {
   const T = theme;
@@ -167,7 +170,6 @@ export function ClassifierCard({ theme }: { theme: Theme }) {
           </g>
         );
       })}
-      <PText x={4} y={90} text={`real champion: says ${pred}`} fill={T.textDim} />
     </g>
   );
 }

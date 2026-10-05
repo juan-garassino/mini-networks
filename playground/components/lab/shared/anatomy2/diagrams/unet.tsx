@@ -16,7 +16,7 @@ import { Bars, Diamond, Frame, PText, Thumb, Wire } from "../prims";
 import type { Theme } from "../themes";
 
 export const UNET_VIEW = { w: 560, h: 316 };
-export const UNET_CARD_VIEW = { w: 190, h: 100 };
+export const UNET_CARD_VIEW = { w: 190, h: 76 }; // the duplicate caption is gone (the badge says it)
 export type UNetName = "segmentation" | "unet_ae";
 
 interface D { digits: readonly number[]; maps: readonly string[]; out: readonly string[]; tgt: readonly string[]; metric: readonly number[]; mName: string; good: "high" | "low" }
@@ -134,7 +134,6 @@ export function UNetCard({ theme, name }: { theme: Theme; name: UNetName }) {
       <PText x={142} y={24} text={d.mName} fill={T.loss} />
       <PText x={142} y={34} text={d.mName === "IoU" ? d.metric[0].toFixed(2) : d.metric[0].toFixed(4)} fill={T.loss} />
       <PText x={4} y={62} text="skips carry detail across" fill={T.wireHot} />
-      <PText x={4} y={72} text={name === "segmentation" ? "real champion mask" : "real champion rebuild"} fill={T.textDim} />
     </g>
   );
 }

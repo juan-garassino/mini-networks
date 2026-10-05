@@ -44,7 +44,7 @@ import { rampIndex, type Theme } from "../themes";
 import type { KeyHandler } from "./types";
 
 export const DETECT_VIEW = { w: 560, h: 316 };
-export const DETECT_CARD_VIEW = { w: 190, h: 104 };
+export const DETECT_CARD_VIEW = { w: 190, h: 86 }; // caption moved to card.caption
 
 /** house number format: two decimals, leading zero dropped under 1 */
 const fmt = (v: number) => (v >= 0.995 ? "1.00" : v.toFixed(2).replace(/^0/, ""));
@@ -300,7 +300,6 @@ function DetectionCard({ theme: T }: { theme: Theme }) {
       {/* where: the box head (introduced) */}
       <Wire pts={[[69, 72], [80, 72]]} fill={T.wireHot} step={1} />
       {DET_BOX_PRED[HERO].map((b, i) => <PText key={i} x={82 + i * 18} y={69} text={fmt(b)} fill={T.wireHot} />)}
-      <PText x={4} y={90} text={`IoU ${fmt(DET_IOU[HERO])}, says ${DET_PRED[HERO]}`} fill={T.textDim} />
     </g>
   );
 }
@@ -575,7 +574,6 @@ function SamCard({ theme: T }: { theme: Theme }) {
       <Click cx={CARD_X[1] + ax} cy={Y + ay} fill={T.wireHot} theme={T} />
       <Click cx={CARD_X[1] + bx} cy={Y + by} fill={T.text} theme={T} />
       <Thumb x={CARD_X[2]} y={Y} data={s.mB} n={56} px={1} theme={T} />
-      <PText x={CARD_X[0]} y={84} text="the click picks the digit" fill={T.textDim} />
     </g>
   );
 }
@@ -589,7 +587,7 @@ interface DetectDef {
   title: string;
   truth: string;
   render: (p: { theme: Theme; t: number; onT?: (t: number) => void; still: boolean; keys: MutableRefObject<KeyHandler | null> }) => ReactNode;
-  card: { view: { w: number; h: number }; render: (p: { theme: Theme; t: number }) => ReactNode };
+  card: { view: { w: number; h: number }; render: (p: { theme: Theme; t: number }) => ReactNode; caption?: string };
   badge: string;
 }
 
@@ -602,7 +600,7 @@ export const DETECT_DEFS: Record<string, DetectDef> = {
     truth: `Real: eight MNIST test digits on 56×56 canvases run through the local mini-detection champion (class probabilities, true vs predicted box, IoU, backbone channel ${DET_MAP_CH} after the second pool), with CE + MSE computed here from those outputs; IoU is only a measure and the gate scores the class (M .55, L .80). Structural: the plain conv + ReLU backbone, the 4×4 average pool and the one 2048 vector feeding a class head (256 → 10) and a box head (256 → 4 → sigmoid); the 500-canvas accuracy .62 and mean IoU .91 are a CPU probe of the same checkpoint.`,
     badge: "real champion boxes",
     render: ({ theme, still, keys }) => <DetectionDiagram theme={theme} still={still} keys={keys} />,
-    card: { view: DETECT_CARD_VIEW, render: ({ theme }) => <DetectionCard theme={theme} /> },
+    card: { view: DETECT_CARD_VIEW, render: ({ theme }) => <DetectionCard theme={theme} />, caption: `IoU ${fmt(DET_IOU[HERO])}, says ${DET_PRED[HERO]}` },
   },
   sam: {
     view: DETECT_VIEW,
@@ -610,6 +608,6 @@ export const DETECT_DEFS: Record<string, DetectDef> = {
     truth: "Exact, computed here: two real MNIST digits composited by max (placement hand-picked), the click points, the target masks and their IoUs, drawn on the structure of models/sam/model.py (3-conv encoder to 14×14×64 tokens, Fourier + type prompt tokens, two two-way blocks, ConvTranspose up, three mask heads and an IoU head). There is no local sam checkpoint, so the candidate masks, IoU scores, attention heat and Fourier frequencies are stand-ins, and the gate bars (eval_iou M .45, L .70) are provisional.",
     badge: "structure; targets exact",
     render: ({ theme, still }) => <SamDiagram theme={theme} still={still} />,
-    card: { view: DETECT_CARD_VIEW, render: ({ theme }) => <SamCard theme={theme} /> },
+    card: { view: DETECT_CARD_VIEW, render: ({ theme }) => <SamCard theme={theme} />, caption: "the click picks the digit" },
   },
 };

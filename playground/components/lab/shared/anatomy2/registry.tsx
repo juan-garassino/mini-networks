@@ -6,16 +6,16 @@
 import type { MutableRefObject, ReactNode } from "react";
 import type { Theme, ThemeName } from "./themes";
 import { DIFFUSION_CARD_VIEW, DIFFUSION_VIEW, DiffusionCard, DiffusionDiagram } from "./diagrams/diffusion";
-import { TRANSFORMER_CARD_VIEW, TRANSFORMER_VIEW, TransformerCard, TransformerDiagram } from "./diagrams/transformer";
-import { CLASSIFIER_CARD_VIEW, CLASSIFIER_VIEW, ClassifierCard, ClassifierDiagram } from "./diagrams/classifier";
+import { TRANSFORMER_CARD_CAPTION, TRANSFORMER_CARD_VIEW, TRANSFORMER_VIEW, TransformerCard, TransformerDiagram } from "./diagrams/transformer";
+import { CLASSIFIER_CARD_CAPTION, CLASSIFIER_CARD_VIEW, CLASSIFIER_VIEW, ClassifierCard, ClassifierDiagram } from "./diagrams/classifier";
 import { VAE_CARD_VIEW, VAE_VIEW, VAECard, VAEDiagram } from "./diagrams/vae";
 import { GAN_CARD_VIEW, GAN_VIEW, GANCard, GANDiagram } from "./diagrams/gan";
 import { CLIP_CARD_VIEW, CLIP_VIEW, CLIPCard, CLIPDiagram } from "./diagrams/clip";
-import { VISION_CARD_VIEW, VISION_VIEW, VisionCard, VisionDiagram, type VisionName } from "./diagrams/vision";
+import { VISION_CARD_VIEW, VISION_VIEW, VisionCard, VisionDiagram, visionCaption, type VisionName } from "./diagrams/vision";
 import { RECUR_CARD_VIEW, RECUR_VIEW, RecurCard, RecurDiagram, type RecurName } from "./diagrams/recur";
 import { LM_CARD_VIEW, LM_VIEW, LMCard, LMDiagram, type LMName } from "./diagrams/lm";
 import { TWIN_CARD_VIEW, TWIN_VIEW, TwinCard, TwinDiagram, type TwinName } from "./diagrams/twins";
-import { GNN_CARD_VIEW, GNN_VIEW, GNNCard, GNNDiagram } from "./diagrams/gnn";
+import { GNN_CARD_CAPTION, GNN_CARD_VIEW, GNN_VIEW, GNNCard, GNNDiagram } from "./diagrams/gnn";
 import { UNET_CARD_VIEW, UNET_VIEW, UNetCard, UNetDiagram, type UNetName } from "./diagrams/unet";
 import { AlphaZeroCard, AlphaZeroDiagram, MazeCard, MazeDiagram, RL_CARD_VIEW, RL_VIEW, type MazeName } from "./diagrams/rl";
 import { TEXT_DEFS } from "./diagrams/text";
@@ -29,6 +29,12 @@ import { ADAPT_DEFS } from "./diagrams/adapt";
 import { RPP_DEFS } from "./diagrams/rpp";
 import type { KeyHandler } from "./diagrams/types";
 
+export interface CardDef {
+  view: { w: number; h: number };
+  render: (p: { theme: Theme; t: number }) => ReactNode;
+  caption?: string;
+}
+
 export interface DiagramDef {
   view: { w: number; h: number };
   /** does it take the t scrubber? */
@@ -41,8 +47,10 @@ export interface DiagramDef {
   /** what is computed vs illustrative — one or two plain sentences */
   truth: string;
   render: (p: { theme: Theme; t: number; onT?: (t: number) => void; still: boolean; keys: MutableRefObject<KeyHandler | null> }) => ReactNode;
-  /** the compact card composition */
-  card: { view: { w: number; h: number }; render: (p: { theme: Theme; t: number }) => ReactNode };
+  /** the compact card composition; `caption` (optional) names what the card
+   * shows in a few words — the kit sets it in the card's footer line beside
+   * the badge, never inside the art (STYLE.md §4) */
+  card: CardDef;
   /** 2–4 words on how real the card is, shown under it */
   badge: string;
 }
@@ -66,7 +74,7 @@ export const DIAGRAMS: Record<string, DiagramDef> = {
     truth:
       "All real: the Tiny Shakespeare line tokenised with the model's own 65-character vocabulary, then the local mini-transformer champion's attention for every block and head, its top guess for each next character (lit when right), and the cross-entropy. Drawn from the code: 4 blocks, 4 heads of 32 channels, d_model 128, feed-forward 256, causal mask.",
     render: ({ theme, still, keys }) => <TransformerDiagram theme={theme} still={still} keys={keys} />,
-    card: { view: TRANSFORMER_CARD_VIEW, render: ({ theme }) => <TransformerCard theme={theme} /> },
+    card: { view: TRANSFORMER_CARD_VIEW, render: ({ theme }) => <TransformerCard theme={theme} />, caption: TRANSFORMER_CARD_CAPTION },
     badge: "real champion attention",
   },
   classifier: {
@@ -75,7 +83,7 @@ export const DIAGRAMS: Record<string, DiagramDef> = {
     truth:
       "All real: a MNIST test 7 through the local mini-classifier champion — four of its 32 learned 3×3 kernels with their feature maps, four of the 64 second-layer maps, the max-pools of those maps, and the ten logits. Drawn from the code: two conv + BN + ReLU + pool stages, flatten 3136, a 64-unit layer, 10 outputs.",
     render: ({ theme }) => <ClassifierDiagram theme={theme} />,
-    card: { view: CLASSIFIER_CARD_VIEW, render: ({ theme }) => <ClassifierCard theme={theme} /> },
+    card: { view: CLASSIFIER_CARD_VIEW, render: ({ theme }) => <ClassifierCard theme={theme} />, caption: CLASSIFIER_CARD_CAPTION },
     badge: "real champion maps",
   },
   vae: {
@@ -154,7 +162,7 @@ for (const n of Object.keys(VISION_DEFS) as VisionName[]) {
     truth: VISION_DEFS[n].truth,
     badge: VISION_DEFS[n].badge,
     render: ({ theme }) => <VisionDiagram theme={theme} name={n} />,
-    card: { view: VISION_CARD_VIEW, render: ({ theme }) => <VisionCard theme={theme} name={n} /> },
+    card: { view: VISION_CARD_VIEW, render: ({ theme }) => <VisionCard theme={theme} name={n} />, caption: visionCaption(n) },
   };
 }
 
@@ -247,7 +255,7 @@ DIAGRAMS.gnn = {
   truth: "Real: the exact 200-node community graph the code trains on (seed 11), its 20 labelled nodes, and what averaging over neighbours alone does to the weak node features — 35% right from features, 55% after one hop, 74% after two, with no weights at all. Drawn from the code: two GCN layers, 8 → 32 → 4. No local gnn checkpoint, so the trained weights are not shown.",
   badge: "real graph, exact averaging",
   render: ({ theme }) => <GNNDiagram theme={theme} />,
-  card: { view: GNN_CARD_VIEW, render: ({ theme }) => <GNNCard theme={theme} /> },
+  card: { view: GNN_CARD_VIEW, render: ({ theme }) => <GNNCard theme={theme} />, caption: GNN_CARD_CAPTION },
 };
 
 // ——— encoder–decoder with skip bridges ———

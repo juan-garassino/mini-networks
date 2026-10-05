@@ -17,7 +17,7 @@ so page and plate read as one printed object. Everything else stays quiet.
 | File | Role |
 |---|---|
 | `tokens.ts` | the one import for values: `ART`, `PIXEL`, `TYPE`, `SPACE`, `BORDER`, `MOTION`, re-exports `THEMES` and `LEGIBLE` |
-| `legible.ts` | the legibility floor: `LEGIBLE`, `labelPx`, `legibleZooms(dpr)`, `fallbackFor` (pure) |
+| `legible.ts` | the legibility floor: `LEGIBLE`, `labelPx`, `legibleZooms(dpr)`, `fitZoom(avail, viewW, dpr)`, `fallbackFor` (pure; `diagrams/fit-zoom.test.ts`) |
 | `themes.ts` | colour: a `Theme` is 14 role tokens + an 8-step data `ramp` + an 8-step `heat`; `pixel` (plum dusk), `dusk` (pixel's roles on warm umber: the painted pixel map's host theme) and `paper` (cut card with hard shadows) |
 | `encoding.ts` | every mark → primitive → token → meaning |
 | `prims.tsx` | `Wire`, `PText`, `Thumb`, `Frame`, `Bars`, `Diamond`, `Node`, plus `PixelLabel` / `displayName` for chrome |
@@ -25,7 +25,7 @@ so page and plate read as one printed object. Everything else stays quiet.
 | `tick.ts` | `useTick(fps, frames, still)`: the only motion primitive |
 | `registry.tsx` | one `DiagramDef` per name (+ `*_DEFS` from `diagrams/<family>.tsx`) |
 | `mechanism.tsx` | `<MechanismDiagram>` (variant full or card): renders a registry entry |
-| `specimen/` | the page chrome: `specimen.tsx` (layout), `plate.tsx`, `card-sheet.tsx`, `controls.tsx`, `groups.ts`, `view.ts` (URL), `styles.ts` |
+| `specimen/` | the page chrome: `specimen.tsx` (layout), `loading.tsx`, `plate.tsx`, `card-sheet.tsx`, `controls.tsx`, `groups.ts`, `view.ts` (URL), `styles.ts` |
 | `STYLE.md` | the drawing contract and the 14-point critic checklist |
 | `diagrams/`, `data/` | this project's drawings and their exported numbers |
 
@@ -35,7 +35,7 @@ so page and plate read as one printed object. Everything else stays quiet.
 |---|---|
 | `ART` | full view 560×316 art px, card 190 wide, ×2 canonical scale, 10-px text row, 7-px glyph |
 | `PIXEL` | pixel-face multiples for chrome: wordmark 3, plate name 4, heads 2, card names 2 |
-| `TYPE` | prose face (`--font-anatomy-prose`, Atkinson Hyperlegible Next); lede 19/1.4, body 15/1.6, nav 14, hint 13, small 12; measure 68ch |
+| `TYPE` | prose face (`--font-anatomy-prose`, Atkinson Hyperlegible Next); lede 19/1.4, body 15/1.6, nav 14, hint 13, small 12; measure 33em (≈ 68 characters) |
 | `SPACE` | 16-px gutter; 4 / 8 / 16 / 24 / 40 steps; index column 240; card column 380 |
 | `BORDER` | hair 1, focus 2, radius 0 (all pixel work is square) |
 | `MOTION` | max 6 fps; still t = 380 |
@@ -52,23 +52,30 @@ no eyebrows. Inside a drawing, only the pixel face (STYLE.md §1).
 
 ## Layout grid
 
-Drawings live on an art-pixel viewBox and are shown at an integer scale:
-×2 (1120 px) when it fits, else ×1. Below 560 px the drawing keeps ×1 and
-scrolls sideways in its own strip; the words never scroll.
-**Legibility floor** (`legible.ts`): a drawing is never shown with labels
-under `LEGIBLE.minLabelPx` (10 CSS px; ×1 sets 7). A host picks the smallest
-zoom from `legibleZooms(devicePixelRatio)` (×1.5 on retina, a whole number of
-device px); with no room for it, it shows the card at `LEGIBLE.cardZoom` (×2),
-the full drawing one tap away. `<MechanismDiagram variant="full" width
-minLabelPx={LEGIBLE.minLabelPx} onOpen>` applies the fallback itself. The map
-plate (painted kit) follows it; the specimen page still drops to ×1 below
-1432 px wide.
-Wide (≥ 1432 px): `index 240 | 40 | plate 1120`, the index sticky.
-Narrow: masthead + switches, one grouped `<select>`, then the plate.
-The plate: name (pixel ×4), lede, drawing, then "what is real" as
-`216 | truth (68ch)` on a hairline, then prev / next on a hairline.
-Card sheet: shelves with a count, cards in as many 380-px columns as fit,
-centred, each under its name.
+Drawings live on an art-pixel viewBox, shown at a zoom that is a whole
+number of **device** px per art px (×1.5 on retina = 3) and never sets a
+label under `LEGIBLE.minLabelPx` (10 CSS px; ×1 sets 7, so ×1 is never used).
+`fitZoom(avail, viewW, devicePixelRatio)` picks the largest such zoom that
+fits (≤ ×2); null means no room. `<MechanismDiagram variant="full" width
+minLabelPx={LEGIBLE.minLabelPx} onOpen>` applies the card fallback itself
+(the painted map plate uses it). The specimen page, cards and drawings alike:
+- Wide (≥ `WIDE_MIN` 1432 px): `index 240 | 40 | plate 1120`, index sticky.
+- Narrower: masthead + switches, one grouped `<select>`, then the plate at
+  `fitZoom` (1280 → ×2, 1024 @2x → ×1.5 = 840). With no room (phones) the
+  plate shows the **card**; its "Open full diagram" opens the full drawing in
+  place (`?full=1`) at the smallest legible zoom in a sideways scroller.
+- The plate: name (pixel ×4), lede, drawing, then "what is real" as
+  `216 | truth` on a hairline (`TYPE.measure` on the paragraph itself), then
+  prev / next on a hairline.
+- Card sheet: shelves with a count, cards at `fitZoom` (380 at ×2; 390 @3x:
+  ×5/3 = 950 device px), a shelf's cards share one art box (`artH`: its
+  tallest, top-aligned) so a row's footers share a baseline.
+- **Card footer**: ONE prose line, `Caption · badge` then "Open full
+  diagram". The caption is `card.caption` (what the card shows, a few
+  words); it is never drawn inside the art (STYLE.md §4).
+- **Loading** (`specimen/loading.tsx`): until the URL is read, the pixel
+  ground, the masthead in place and one `labLoading("layout")` status line in
+  the bitmap face, "inking the plates...". No spinner, no ready flag.
 
 ## Marks
 
@@ -97,7 +104,8 @@ drawing on the hot wire. Cards never tick. The page chrome has no motion.
      truth: "what is real vs illustrative, one or two sentences",
      badge: "2–4 words", scrub?: boolean, interactive?: boolean, keysHint?: string,
      render: ({ theme, t, onT, still, keys }) => <svg children/>,
-     card: { view: { w: 190, h: 110 }, render: ({ theme, t }) => <svg children/> } }
+     card: { view: { w: 190, h: 110 }, render: ({ theme, t }) => <svg children/>,
+             caption?: "what the card shows, a few words" } }
    ```
    `title` is `name — lede`; the specimen shows the lede under the name.
 3. Draw with prims only, in art pixels, integers, left to right, ending on a
@@ -109,5 +117,5 @@ drawing on the hot wire. Cards never tick. The page chrome has no motion.
    are this repo's) and `diagrams/`, `data/`.
 6. New palette = one more `Theme` entry; keep every role, check both themes.
 
-URL contract: `?model=&theme=pixel|paper&t=&still=1&from=&variant=card`;
+URL contract: `?model=&theme=pixel|paper&t=&still=1&from=&variant=card&full=1`;
 the page sets `data-lab-ready="1"` once painted (`useLabReady`, `lib/lab-contract.ts`).

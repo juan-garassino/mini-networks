@@ -42,7 +42,7 @@ import type { KeyHandler } from "./types";
 export const TEXT_VIEW = { w: 560, h: 316 };
 export type TextName = "text_token_classifier" | "text_seq2seq";
 export const TEXT_CARD_VIEW: Record<TextName, { w: number; h: number }> = {
-  text_token_classifier: { w: 190, h: 124 },
+  text_token_classifier: { w: 190, h: 114 }, // caption moved to card.caption
   text_seq2seq: { w: 190, h: 124 },
 };
 
@@ -256,13 +256,14 @@ function TokenClassifierDiagram({ theme: T, still, keys: keysRef }: { theme: The
   );
 }
 
+const TOK_RIGHT = TOK_LINE_PRED.filter((f, i) => f === TOK_LINE_TRUE[i]).length;
+
 // card: the parent's 13-column grid shape, FULL, with the real head and the hot step, over the 13 vowel flags
 function TokenClassifierCard({ theme: T }: { theme: Theme }) {
   const V = TEXT_CARD_VIEW.text_token_classifier;
   const X0 = 16, CW = 12, RH2 = 6, Y0 = 16;   // 13 cols × 12 = 156 → x 16..171
   const A = useMemo(() => unNib(TOK_ATTN[TOK_DEFAULT.layer][TOK_DEFAULT.head], 0, 1), []);
   const step = useMemo(() => stepPath(X0, Y0, CW, RH2, TN), []);
-  const right = TOK_LINE_PRED.filter((f, i) => f === TOK_LINE_TRUE[i]).length;
   return (
     <g>
       <rect x={0} y={0} width={V.w} height={V.h} fill={T.ground} />
@@ -284,7 +285,6 @@ function TokenClassifierCard({ theme: T }: { theme: Theme }) {
           </g>
         );
       })}
-      <PText x={X0} y={Y0 + TN * RH2 + 19} text={`reads both ways · vowel? ${right}/${TN}`} fill={T.textDim} />
     </g>
   );
 }
@@ -523,7 +523,7 @@ interface TextDef {
   title: string;
   truth: string;
   render: (p: { theme: Theme; t: number; onT?: (t: number) => void; still: boolean; keys: MutableRefObject<KeyHandler | null> }) => ReactNode;
-  card: { view: { w: number; h: number }; render: (p: { theme: Theme; t: number }) => ReactNode };
+  card: { view: { w: number; h: number }; render: (p: { theme: Theme; t: number }) => ReactNode; caption?: string };
   badge: string;
 }
 
@@ -536,7 +536,7 @@ export const TEXT_DEFS: Record<string, TextDef> = {
     truth: "All real: the local mini-text_token_classifier champion on 'Speak, speak.' — the char ids, p(vowel) at every position and the 13 flags (13/13 right; the exact cross-entropy is 0.0002, printed .00), and the self-attention of both blocks and both heads. There is no causal mask, so the square is full: right of the hot step (where the parent's mask begins) sit the later characters, and each head gives them 31–44% of a row's attention (a causal model: 0). Drawn from the code: 2 post-LN encoder blocks of 2 heads × 32 dims, FFN 64→256→64 (ReLU, no final norm), a 2-way head per position. Honest note: the label is a function of the character alone, so the architecture reads both ways while the task does not need it.",
     badge: "real champion attention",
     render: ({ theme, still, keys }) => <TextDiagram theme={theme} name="text_token_classifier" still={still} keys={keys} />,
-    card: { view: TEXT_CARD_VIEW.text_token_classifier, render: ({ theme }) => <TextCard theme={theme} name="text_token_classifier" /> },
+    card: { view: TEXT_CARD_VIEW.text_token_classifier, render: ({ theme }) => <TextCard theme={theme} name="text_token_classifier" />, caption: `reads both ways · vowel? ${TOK_RIGHT}/${TN}` },
   },
   text_seq2seq: {
     view: TEXT_VIEW,

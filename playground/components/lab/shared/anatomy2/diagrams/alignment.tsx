@@ -520,7 +520,6 @@ function RLHFCard({ T }: { T: Theme }) {
         </g>
       ))}
       <PText x={142} y={65} text={`A ${fmt(A_RLHF, 3)}`} fill={T.wireHot} />
-      <PText x={4} y={82} text="one A on every char" fill={T.textDim} />
     </g>
   );
 }
@@ -553,7 +552,6 @@ function GRPOCard({ T }: { T: Theme }) {
       <Wire pts={[[NODE.cx + 7, NODE.cy], [76, NODE.cy]]} fill={T.wireHot} />
       <Wire pts={[[76, yc[0]], [76, yc[3]]]} fill={T.wireHot} />
       <rect x={ZERO} y={8} width={1} height={73} fill={T.wireHot} />
-      <PText x={4} y={90} text="ΣA = 0 in one group" fill={T.textDim} />
     </g>
   );
 }
@@ -606,7 +604,7 @@ interface AlignDef {
   title: string;
   truth: string;
   render: (p: { theme: Theme; t: number; onT?: (t: number) => void; still: boolean; keys: MutableRefObject<KeyHandler | null> }) => ReactNode;
-  card: { view: { w: number; h: number }; render: (p: { theme: Theme; t: number }) => ReactNode };
+  card: { view: { w: number; h: number }; render: (p: { theme: Theme; t: number }) => ReactNode; caption?: string };
   badge: string;
 }
 
@@ -628,12 +626,15 @@ const ALIGN_TEXT: Record<AlignName, { title: string; truth: string; badge: strin
   },
 };
 
+// card footer captions (the kit sets them beside the badge, outside the art)
+const ALIGN_CAPTION: Partial<Record<AlignName, string>> = { rlhf: "one A on every char", grpo: "ΣA = 0 in one group" };
+
 export const ALIGNMENT_DEFS: Record<string, AlignDef> = {};
 for (const n of Object.keys(ALIGN_TEXT) as AlignName[]) {
   ALIGNMENT_DEFS[n] = {
     view: ALIGN_VIEW,
     ...ALIGN_TEXT[n],
     render: ({ theme, still }) => <AlignDiagram theme={theme} name={n} still={still} />,
-    card: { view: ALIGN_CARD_VIEW, render: ({ theme }) => <AlignCard theme={theme} name={n} /> },
+    card: { view: ALIGN_CARD_VIEW, render: ({ theme }) => <AlignCard theme={theme} name={n} />, caption: ALIGN_CAPTION[n] },
   };
 }

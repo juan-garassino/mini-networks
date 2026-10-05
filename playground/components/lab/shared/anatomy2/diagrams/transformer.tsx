@@ -184,7 +184,9 @@ export function TransformerDiagram({ theme, still, keys }: { theme: Theme; still
 }
 
 // ————— card: the line, one real head's pattern, the model's guesses —————
-export const TRANSFORMER_CARD_VIEW = { w: 190, h: 124 };
+export const TRANSFORMER_CARD_VIEW = { w: 190, h: 114 }; // caption moved to card.caption
+
+export const TRANSFORMER_CARD_CAPTION = "block 1, head 3: looks one back";
 
 export function TransformerCard({ theme }: { theme: Theme }) {
   const T = theme;
@@ -219,7 +221,6 @@ export function TransformerCard({ theme }: { theme: Theme }) {
           </g>
         );
       })}
-      <PText x={X0} y={Y0 + N * RH2 + 21} text="block 1, head 3: looks one back" fill={T.textDim} />
     </g>
   );
 }

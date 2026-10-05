@@ -42,22 +42,28 @@ export interface MechanismDiagramProps {
    * (its tap → `onOpen` / `href`: the full drawing one click away). Pass
    * LEGIBLE.minLabelPx; omit to always draw the full view at `width`. */
   minLabelPx?: number;
+  /** card only: reserve this many art px of height for the art (top-aligned;
+   * ≥ the card's own view.h) so a row of cards shares one footer line */
+  artH?: number;
   className?: string;
 }
 
 export function MechanismDiagram({
-  name, theme = "pixel", variant = "full", href, onOpen, t: tProp, onTChange, still = false, width, controls = true, caption = true, fit = true, minLabelPx, className,
+  name, theme = "pixel", variant = "full", href, onOpen, t: tProp, onTChange, still = false, width, controls = true, caption = true, fit = true, minLabelPx, artH, className,
 }: MechanismDiagramProps) {
   const def = DIAGRAMS[name];
   if (variant === "full" && def && width && minLabelPx && fallbackFor(width, def.view.w, minLabelPx) === "card") {
     return <MechanismCard name={name} theme={theme} href={href} onOpen={onOpen} t={MOTION.stillT} width={def.card.view.w * LEGIBLE.cardZoom} caption={caption} className={className} />;
   }
-  if (variant === "card") return <MechanismCard name={name} theme={theme} href={href} onOpen={onOpen} t={still ? MOTION.stillT : tProp ?? MOTION.stillT} width={width} caption={caption} className={className} />;
+  if (variant === "card") return <MechanismCard name={name} theme={theme} href={href} onOpen={onOpen} t={still ? MOTION.stillT : tProp ?? MOTION.stillT} width={width} caption={caption} artH={artH} className={className} />;
   return <MechanismFull name={name} theme={theme} t={tProp} onTChange={onTChange} still={still} width={width} controls={controls} caption={caption} fit={fit} className={className} />;
 }
 
-function MechanismCard({ name, theme, href, onOpen, t, width, caption, className }: {
-  name: string; theme: ThemeName; href?: string; onOpen?: () => boolean | void; t: number; width?: number; caption: boolean; className?: string;
+/** "says 7" → "Says 7": the footer line starts a sentence. */
+export const sentence = (s: string): string => s.charAt(0).toUpperCase() + s.slice(1);
+
+function MechanismCard({ name, theme, href, onOpen, t, width, caption, artH, className }: {
+  name: string; theme: ThemeName; href?: string; onOpen?: () => boolean | void; t: number; width?: number; caption: boolean; artH?: number; className?: string;
 }) {
   const def = DIAGRAMS[name];
   const th = THEMES[theme];
@@ -65,6 +71,8 @@ function MechanismCard({ name, theme, href, onOpen, t, width, caption, className
   const link = href ?? anatomyHref(name, theme, from);
   const w = width ?? (def ? def.card.view.w * ART.scale : SPACE.card);
   const onClick = (e: MouseEvent) => { if (onOpen && onOpen()) e.preventDefault(); };
+  // a pinned art box: the art top-aligned in artH art px, its ground below
+  const boxH = def && artH && artH > def.card.view.h ? Math.round((w * artH) / def.card.view.w) : undefined;
   const body = def ? (
     <svg viewBox={`0 0 ${def.card.view.w} ${def.card.view.h}`} width={w} height={Math.round((w * def.card.view.h) / def.card.view.w)}
       shapeRendering="crispEdges" role="img" aria-label={def.title}
@@ -81,12 +89,18 @@ function MechanismCard({ name, theme, href, onOpen, t, width, caption, className
   return (
     <figure className={className} style={{ margin: 0, width: w, maxWidth: "100%" }}>
       <a href={link} onClick={onClick} aria-label={`Open the full diagram: how ${name} works`}
-        style={{ display: "block", lineHeight: 0, outlineOffset: BORDER.focus, color: th.wireHot }}>
+        style={{ display: "block", lineHeight: 0, outlineOffset: BORDER.focus, color: th.wireHot, height: boxH }}>
         {body}
       </a>
       {caption && (
-        <figcaption style={{ display: "flex", justifyContent: "space-between", gap: SPACE.s, fontSize: TYPE.small.size, lineHeight: TYPE.small.line, padding: `${SPACE.s - 2}px 2px 0`, color: th.textDim }}>
-          <span>{def ? def.badge : "generic sketch"}</span>
+        // the footer: ONE line in the prose face — what the card shows · how
+        // real it is — then the way in. Pinned under a fixed art box (artH)
+        // it shares one baseline across a sheet row.
+        <figcaption style={{ display: "flex", alignItems: "baseline", gap: SPACE.m, fontSize: TYPE.small.size, lineHeight: TYPE.small.line, padding: `${SPACE.s}px 0 0`, color: th.textDim }}>
+          <span style={{ flex: 1, minWidth: 0 }}>
+            {def?.card.caption && <><span style={{ color: th.text }}>{sentence(def.card.caption)}</span>{" · "}</>}
+            {def ? def.badge : "generic sketch"}
+          </span>
           <a href={link} onClick={onClick} style={{ color: th.wireHot, textDecoration: "none", whiteSpace: "nowrap" }}>Open full diagram</a>
         </figcaption>
       )}

@@ -37,7 +37,7 @@ import { heatIndex, rampIndex, type Theme } from "../themes";
 import type { KeyHandler } from "./types";
 
 export const TAB_VIEW = { w: 560, h: 316 };
-export const TAB_CARD_VIEW = { w: 190, h: 104 };
+export const TAB_CARD_VIEW = { w: 190, h: 94 }; // captions moved to card.caption
 
 /** house number format: two decimals, leading zero dropped under 1 */
 const fmt = (v: number) => (v >= 0.995 ? "1.00" : v.toFixed(2).replace(/^0/, ""));
@@ -297,7 +297,6 @@ function TabClassifierCard({ theme: T }: { theme: Theme }) {
           </g>
         );
       })}
-      <PText x={4} y={92} text="one code per species" fill={T.textDim} />
     </g>
   );
 }
@@ -527,7 +526,6 @@ function TabDiffusionCard({ theme: T, t }: { theme: Theme; t: number }) {
       <Wire pts={base.fwd.map((v, i) => [ccx(i), cly(v)] as const)} fill={T.wireHot} step={1} />
       {base.fwd.map((v, i) => <rect key={`h${i}`} x={ccx(i) - 1} y={cly(v) - 1} width={3} height={3} fill={T.wireHot} />)}
       <PText x={186} y={27} text={`max ${Math.round(TDIFF_MAX_ABS)}`} fill={T.loss} anchor="end" />
-      <PText x={4} y={94} text="samples leave the data band" fill={T.textDim} />
     </g>
   );
 }
@@ -541,7 +539,7 @@ interface TabDef {
   title: string;
   truth: string;
   render: (p: { theme: Theme; t: number; onT?: (t: number) => void; still: boolean; keys: MutableRefObject<KeyHandler | null> }) => ReactNode;
-  card: { view: { w: number; h: number }; render: (p: { theme: Theme; t: number }) => ReactNode };
+  card: { view: { w: number; h: number }; render: (p: { theme: Theme; t: number }) => ReactNode; caption?: string };
   badge: string;
 }
 
@@ -554,7 +552,7 @@ export const TAB_DEFS: Record<string, TabDef> = {
     truth: "All real: 8 Iris test rows (test rows 0, 1, 2, 10, 11, 12, 20, 21; each feature is a z-score, standardized with the test split's own mean and std) through the local mini-tabular_classifier champion — the 64 units of its second hidden layer after ReLU (they cluster by species; 13 stay at 0 on all 8 rows), the softmax over the 3 species, and the cross-entropy .47 averaged over these 8 rows. Test row 10, a versicolor, is a real miss: it says virginica at .51. Test accuracy is .90 = 27 of the 30 test rows. Drawn from the code: 4 → 64 → ReLU → 64 → ReLU → 3, every input wired to every unit (4,675 parameters). The first hidden layer and the weights are not exported, so h1 and the fans are structure only.",
     badge: "real champion, acc .90",
     render: ({ theme, still, keys }) => <TabClassifierDiagram theme={theme} still={still} keys={keys} />,
-    card: { view: TAB_CARD_VIEW, render: ({ theme }) => <TabClassifierCard theme={theme} /> },
+    card: { view: TAB_CARD_VIEW, render: ({ theme }) => <TabClassifierCard theme={theme} />, caption: "one code per species" },
   },
   tabular_diffusion: {
     view: TAB_VIEW,
@@ -563,6 +561,6 @@ export const TAB_DEFS: Record<string, TabDef> = {
     truth: "Computed exactly here: the forward chain on a real Iris test row (test row 20, a virginica) with the model's own schedule — 200 steps, β 5e-4 → 0.1 (the 1e-4 → 0.02 range scaled by 1000/200) — one seeded ε, and the x_t mix. Real champion output: 8 seeded samples from the local mini-tabular_diffusion champion's own infer(), plotted as max |x| at the same noise levels as the chain columns. They leave the data band and reach |x| = 106, while real (standardized) iris rows stay under 3.1. Drawn from the code: the denoiser is a plain MLP 4 → 128 → 128 → 4 that is handed t and ignores it — there is no time embedding, so one function has to serve every noise level, and it under-predicts the noise. Its predicted noise and eval MSE are not exported, so ε̂ is drawn empty and the MSE diamond has no value. The quality gate scores that one-step noise MSE (pass under 1.0, the score of predicting ε̂ = 0) and never draws a sample, so it passes while sampling diverges.",
     badge: "real champion chain, diverges",
     render: ({ theme, t, onT, still }) => <TabDiffusionDiagram theme={theme} t={t} onT={onT} still={still} />,
-    card: { view: TAB_CARD_VIEW, render: ({ theme, t }) => <TabDiffusionCard theme={theme} t={t} /> },
+    card: { view: TAB_CARD_VIEW, render: ({ theme, t }) => <TabDiffusionCard theme={theme} t={t} />, caption: "samples leave the data band" },
   },
 };

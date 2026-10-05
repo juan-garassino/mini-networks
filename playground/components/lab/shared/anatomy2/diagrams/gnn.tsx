@@ -12,7 +12,7 @@ import { Bars, Frame, PText, Wire } from "../prims";
 import type { Theme } from "../themes";
 
 export const GNN_VIEW = { w: 560, h: 316 };
-export const GNN_CARD_VIEW = { w: 190, h: 110 };
+export const GNN_CARD_VIEW = { w: 190, h: 102 }; // caption moved to card.caption
 
 const commColor = (T: Theme) => [T.accentHi, T.loss, T.ramp[6], T.ramp[3]];
 
@@ -86,6 +86,8 @@ export function GNNDiagram({ theme }: { theme: Theme }) {
   );
 }
 
+export const GNN_CARD_CAPTION = "averaging neighbours sorts the graph";
+
 export function GNNCard({ theme }: { theme: Theme }) {
   const T = theme;
   return (
@@ -96,7 +98,6 @@ export function GNNCard({ theme }: { theme: Theme }) {
       <PText x={4} y={2} text={`features ${Math.round(GNN_ACC[0] * 100)}%`} fill={T.textDim} />
       <PText x={104} y={2} text={`2 hops ${Math.round(GNN_ACC[2] * 100)}%`} fill={T.wireHot} />
       <PText x={95} y={50} text="→" fill={T.wireHot} anchor="middle" />
-      <PText x={4} y={98} text="averaging neighbours sorts the graph" fill={T.textDim} />
     </g>
   );
 }

@@ -10,9 +10,11 @@ field expert's job; this file is the design contract.
 ## 1. The grid
 
 - Art pixels. Every full view is `{ w: 560, h: 316 }` (all 26 declare exactly
-  this); every card is 190 wide × 100–124 tall (classifier/vae/unet 100, gan/
-  recur/lm/rl 104, vision/gnn 110, diffusion 112, twins 116, clip 118,
-  transformer 124). Rendered ×2 (1120 / 380 CSS px) with
+  this); every card is 190 wide × 76–124 tall, as tall as its art + ~4 px
+  (unet 76, detection/sam 86, classifier 88, pixelcnn 90, tabular 94, vae
+  100, gnn 102, lm/rl/gan 104, vision 104, diffusion 112, transformer 114,
+  twins 116, clip 118, seq2seq 124; the caption row lives in the footer, not
+  the art). Rendered ×2 (1120 / 380 CSS px) with
   `shapeRendering="crispEdges"` + `imageRendering: pixelated`.
 - Integers only. `Math.round` anything computed (`xT = Math.round(tx(tt))`,
   `px = (v) => Math.round(PLANE.x + PLANE.s / 2 + v * R)`). Fractional rects
@@ -69,9 +71,9 @@ Family insets: vision panel `rect 10,134 540×172`, lm `10,112 540×194`, unet
 
 Where the words live: `DiagramDef.title` is the page heading, `truth` is the
 figcaption (what is computed vs illustrative — one or two sentences), `badge`
-sits under the card. Inside the SVG only a footer legend (`"1 bar = 32
-channels   4 blocks, 4 heads…"`, `"map: dark = 0 after ReLU…"`) and short
-honesty notes. Prose paragraphs belong in `truth`, not in eight `PText` rows.
+and `card.caption` share the card's one footer line (`Caption · badge`).
+Inside the SVG only a footer legend (`"1 bar = 32 channels   4 blocks, 4
+heads…"`, `"map: dark = 0 after ReLU…"`) and short honesty notes. Prose paragraphs belong in `truth`, not in eight `PText` rows.
 
 ## 3b. Alignment (owner, 2026-10-04: "things should be a bit more aligned")
 
@@ -115,10 +117,16 @@ The card is the one memorable shape; the full view explains it.
 - Card = the inset's key view: transformer one head's triangle + guesses, clip
   the 6×6 matrix, vae the plane, gan real/fake + D bars, vision `S.Mini`
   (the introduced block) + logits, rl the maze + path.
-- `px=1` thumbs, `bw=1 gap=1` bars, heat cells ≥ 3 px, ≤ 3 text rows, one
-  caption at `y ≈ 90–96`, no footer legend, no loss name unless the value is
-  the point. The card never duplicates the badge ("real champion: says 7"
-  under a badge reading "real champion maps" is a duplicate).
+- `px=1` thumbs, `bw=1 gap=1` bars, heat cells ≥ 3 px, ≤ 3 text rows, no
+  footer legend, no loss name unless the value is the point.
+- **The caption is not art** (2026-10-05, review-2): a line that names what
+  the card shows ("block 2", "says 7", "the click picks the digit") goes in
+  `card.caption`, and the kit sets it in the footer beside the badge, one
+  line in the prose face. Never draw it as the art's last `PText` row: card
+  heights differ, so in-art captions float on different baselines across a
+  sheet. In-art text is only labels tied to a mark (axes, `vs ε`, a legend
+  key) or a `T.loss` caveat. The caption never repeats the badge ("real
+  champion: says 7" beside "real champion maps" → "says 7").
 - Cards receive no `still` and must never animate.
 
 ## 5. Children reuse the parent; the loud colour marks what is introduced
@@ -230,7 +238,7 @@ const frame = useTick(3, 3, still);          // 3 fps, frames 0 → 1 → 2 → 
 Score a new diagram yes/no on each (design only; correctness is the field
 expert's list):
 
-1. Full view is 560×316, card 190×100–124; every coordinate is an integer.
+1. Full view is 560×316, card 190×76–124; every coordinate is an integer.
 2. Reads left → right: input at `x = 16`, output, then a Diamond with loss
    name and value where the flow lands (right edge by default).
 3. Paints only with `Theme` tokens — no literal colour but the Diamond core;
@@ -247,8 +255,9 @@ expert's list):
 8. No run of more than 4 consecutive `PText` rows of prose; rows 10 px apart;
    mini face only for indices.
 9. Nothing overlaps; wires stop 2–3 px short; thumbs keep their frame gap.
-10. The card is one memorable shape with ≤ 3 text rows and does not restate
-    the badge; `px=1` thumbs, `bw=1` bars, heat cells ≥ 3 px.
+10. The card is one memorable shape with ≤ 3 text rows, its caption in
+    `card.caption` (not the art) and not restating the badge; `px=1`
+    thumbs, `bw=1` bars, heat cells ≥ 3 px.
 11. Numbers follow the house format (`toFixed(2)`, leading zero dropped under
     1, `_{n}` channel subscripts, argmax in `accentHi` + `wireHot` label).
 12. `still=1` renders the complete canonical frame; any motion uses `useTick`

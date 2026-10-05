@@ -268,7 +268,7 @@ export function PixelCNNDiagram({ theme, still }: { theme: Theme; still: boolean
 }
 
 // ————— card: canvas → lens staircase + coin tape, masks A/B, 4 samples, the stack —————
-export const PIXELCNN_CARD_VIEW = { w: 190, h: 104 };
+export const PIXELCNN_CARD_VIEW = { w: 190, h: 90 }; // caption moved to card.caption
 const CARD_I = 467;
 
 export function PixelCNNCard({ theme }: { theme: Theme }) {
@@ -311,7 +311,6 @@ export function PixelCNNCard({ theme }: { theme: Theme }) {
         </g>
       ))}
       <rect x={174} y={56} width={1} height={28} fill={T.accentHi} />
-      <PText x={6} y={92} text="784 coins, raster order" fill={T.textDim} />
     </g>
   );
 }
@@ -325,7 +324,7 @@ interface PixelCNNDef {
   title: string;
   truth: string;
   render: (p: { theme: Theme; t: number; onT?: (t: number) => void; still: boolean; keys: MutableRefObject<KeyHandler | null> }) => ReactNode;
-  card: { view: { w: number; h: number }; render: (p: { theme: Theme; t: number }) => ReactNode };
+  card: { view: { w: number; h: number }; render: (p: { theme: Theme; t: number }) => ReactNode; caption?: string };
   badge: string;
 }
 
@@ -337,6 +336,6 @@ export const PIXELCNN_DEFS: Record<string, PixelCNNDef> = {
       "All drawn data is the registered mini-pixelcnn v1 champion (4 masked layers × 32 filters; today's config is 8 × 64): its 4 raster samples, the p(x_i=1|x_<i) each pixel was drawn from (exact, because the masks are causal), and the teacher-forced p map and BCE .07 nats/pixel on MNIST test 0, a 7. The outlined 34 pixels are this net's exact receptive field. Layers are structure only (no activations exported); the per-step random number is not shown, only the coin's real outcome. The gate is a separate judge score on samples (bar .5 at M), not this loss.",
     badge: "real champion samples + p",
     render: ({ theme, still }) => <PixelCNNDiagram theme={theme} still={still} />,
-    card: { view: PIXELCNN_CARD_VIEW, render: ({ theme }) => <PixelCNNCard theme={theme} /> },
+    card: { view: PIXELCNN_CARD_VIEW, render: ({ theme }) => <PixelCNNCard theme={theme} />, caption: "784 coins, raster order" },
   },
 };
