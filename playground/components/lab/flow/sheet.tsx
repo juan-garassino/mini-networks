@@ -55,7 +55,9 @@ const Box = memo(function Box({ b, state, dim, sel, order, delay, waveKey, onPic
   const two = b.lines.length > 1;
   const nameX = b.atom ? x + DFD_ATOM_CELL + 34 : x + 34;
   const mid = b.atom ? y + h / 2 : y + strip + (h - strip) / 2;
-  const base = two ? [mid - LINE / 2 + 4.4, mid + LINE / 2 + 4.4] : [mid + 4.6];
+  // two lines under a header strip ride 1.2 px high so the second line's descenders clear the border
+  const lift = two && !b.atom ? 1.2 : 0;
+  const base = two ? [mid - LINE / 2 + 4.4 - lift, mid + LINE / 2 + 4.4 - lift] : [mid + 4.6];
   const stroke = sel || order > 0 ? ACCENT : INK;
   return (
     <g role="button" tabIndex={0} aria-label={`${words(b.name)}, ${b.atom ? "atom" : `generation ${b.depth}`}, ${state}`}
@@ -145,7 +147,12 @@ export const Sheet = memo(function Sheet({ layout, st, onPick, onHover }: {
       {layout.labels.map((l) => (
         <g key={`${l.x}:${l.y}`} opacity={labelDim(l.edges) ? 0.2 : 1}>
           <rect x={l.x} y={l.y} width={l.w} height={l.h} fill={SHEET} />
-          <text x={l.x + l.w / 2} y={l.y + l.h / 2 + 3.8} textAnchor="middle" className={s.label} fontSize={11} fill={INK_SOFT}>{l.text}</text>
+          {l.turn ? (
+            // turned: reads up the vertical line it is cut into
+            <text transform={`translate(${l.x + l.w / 2} ${l.y + l.h / 2}) rotate(-90)`} y={3.8} textAnchor="middle" className={s.label} fontSize={11} fill={INK_SOFT}>{l.text}</text>
+          ) : (
+            <text x={l.x + l.w / 2} y={l.y + l.h / 2 + 3.8} textAnchor="middle" className={s.label} fontSize={11} fill={INK_SOFT}>{l.text}</text>
+          )}
         </g>
       ))}
       {layout.boxes.map((b) => (

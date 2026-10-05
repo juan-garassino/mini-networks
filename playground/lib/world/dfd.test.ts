@@ -82,3 +82,52 @@ for (const mode of ["desktop", "mobile"] as DfdMode[]) {
     }
   });
 }
+
+// ——— wire quality (critic pass 1): no hub line runs the long way round the page, the phone
+// sheet stays compact, and every cross-family edge carries its parent's name
+const reachRatio = (l: DfdLayout, e: DfdLayout["edges"][number]) => {
+  const by = new Map(l.boxes.map((b) => [b.name, b]));
+  const s = by.get(e.from)!, t = by.get(e.to)!;
+  let len = 0;
+  for (let k = 1; k < e.points.length; k++) len += Math.abs(e.points[k].x - e.points[k - 1].x) + Math.abs(e.points[k].y - e.points[k - 1].y);
+  return len / (Math.abs(t.x - (s.x + s.w)) + Math.abs(t.y - s.y) + 6 * DFD_G);
+};
+
+test("desktop: no cross-family line detours past 2× its reach (+ 6 tracks)", () => {
+  const l = buildDfd(tax, fam, { mode: "desktop" });
+  for (const e of l.edges) if (e.cross) assert.ok(reachRatio(l, e) <= 2, `${e.from}->${e.to} runs ${reachRatio(l, e).toFixed(2)}× its reach`);
+});
+
+test("mobile: compact sheet, every cross-family edge labelled with its parent's full name", () => {
+  const l = buildDfd(tax, fam, { mode: "mobile" });
+  assert.ok(l.height <= 44 * 48 + 6 * 48 + 64, `phone sheet ${l.height} px`);
+  assert.equal(l.audit.unlabelled, 0);
+  for (const lab of l.labels) {
+    if (lab.turn) assert.ok(lab.w === 12 && lab.h > lab.w, `${lab.text}: a turned label is a 12-px gap along its line`);
+  }
+  assert.ok(l.labels.filter((x) => x.text.includes(" ")).length >= l.labels.length - 1, "at most one bare-address label");
+  // an off-sheet tag hangs in the gap above its box: that gap must hold it (13 px + air)
+  for (const o of l.offSheet) for (const n of [o.from, o.to]) {
+    const b = l.boxes.find((x) => x.name === n)!;
+    const above = l.boxes.filter((x) => x.y < b.y && x.x < b.x + b.w && b.x < x.x + x.w).map((x) => x.y + x.h);
+    if (above.length) assert.ok(b.y - Math.max(...above) >= 20, `${n}: room for its off-sheet tag`);
+  }
+});
+
+for (const mode of ["desktop", "mobile"] as DfdMode[]) {
+  test(`${mode}: no line runs along a swim-lane rule and no level label sits on one`, () => {
+    const l = buildDfd(tax, fam, { mode });
+    for (const e of l.edges) for (let k = 1; k < e.points.length; k++) {
+      const a = e.points[k - 1], b = e.points[k];
+      if (a.y !== b.y) continue;
+      for (const ln of l.lanes) {
+        const ov = Math.min(Math.max(a.x, b.x), ln.x + ln.w) - Math.max(Math.min(a.x, b.x), ln.x);
+        assert.ok(!(a.y === ln.y && ov > 0), `${e.from}->${e.to} runs along the ${ln.family} rule`);
+      }
+    }
+    for (const lab of l.labels) if (!lab.turn) for (const ln of l.lanes) {
+      const hit = lab.y <= ln.y + 1 && lab.y + lab.h >= ln.y && lab.x < ln.x + ln.w && lab.x + lab.w > ln.x;
+      assert.ok(!hit, `label "${lab.text}" sits on the ${ln.family} rule`);
+    }
+  });
+}

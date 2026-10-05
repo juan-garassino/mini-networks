@@ -31,6 +31,7 @@ import s from "./flow.module.css";
 
 const BAR_D = 44;      // desktop top bar
 const BAR_M = 52;      // phone top bar
+const NODE_MIN_S = 1;  // node view: never frame so wide that names drop below their 13 px
 const STATES: EvidenceState[] = ["champion", "trained", "provisional", "untrained"];
 const STATE_WORD: Record<EvidenceState, string> = { champion: "champion", trained: "trained", provisional: "provisional", untrained: "untrained" };
 
@@ -232,9 +233,18 @@ export function FlowBoard() {
       return fit(r, all, 2.2, over.s);
     }
     if (zoom === "node" && focusBox) {
-      const kin = [focusBox.name, ...(g.parents.get(focusBox.name) ?? []), ...(g.children.get(focusBox.name) ?? [])].map((n) => g.box.get(n)!);
-      const r = pad(union(kin), 32);
+      // the selection, every ancestor, then as many children as still fit at a readable scale
+      // (names ≥ 13 px): a hub's far children are dropped nearest-last, their lit lines lead
+      // off the frame. Framing every child of transformer zoomed the sheet out to ≈ 0.7.
       const avail: R = { x: 16, y: 8, w: stageW - DRAWER_W - 32, h: stageH - 16 };
+      const c = { x: focusBox.x + focusBox.w / 2, y: focusBox.y + focusBox.h / 2 };
+      const far = (b: R) => Math.abs(b.x + b.w / 2 - c.x) + Math.abs(b.y + b.h / 2 - c.y);
+      const core = [...hopsUp(g.parents, focusBox.name).keys()].map((n) => g.box.get(n)!);
+      const kids = (g.children.get(focusBox.name) ?? []).map((n) => g.box.get(n)!).sort((a, b) => far(a) - far(b));
+      const scaleOf = (rs: R[]) => { const r = pad(union(rs), 32); return Math.min(avail.w / r.w, avail.h / r.h); };
+      let k = kids.length;
+      while (k > 0 && scaleOf([...core, ...kids.slice(0, k)]) < NODE_MIN_S) k--;
+      const r = pad(union([...core, ...kids.slice(0, k)]), 32);
       return fit(r, avail, 1.9, Math.min(over.s, avail.w / r.w));
     }
     return over;

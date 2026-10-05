@@ -102,13 +102,20 @@ playground/ (repo root)  Next.js 16 + React 19 + TS + Tailwind v4 + Recharts +
                      file-tree column between two routing gutters) and routes every
                      builds_on edge orthogonally (one elbow radius, arrowhead at its
                      own input port, inline labels in gaps on cross-family edges) with
-                     ZERO crossings/overlaps/box hits — desktop by a maze router,
-                     phone by a two-page channel annealer (off-sheet connector
-                     fallback, budget 2); dfd.test.ts proves it on the fixture + 5
-                     shuffles + 5 perturbations; the board carries data-crossings /
-                     data-overlaps. Boxes: atom = store (index cell), derived =
-                     process (strip with lineage address 4.1.2 + evidence mark),
-                     creature = silhouette (family) + face (evidence). Docked drawer
+                     ZERO crossings/overlaps/box hits — desktop by a maze router
+                     (the 4 best stack arrangements are routed and the one with the
+                     best wireQuality — length, bends, detours past 1.3× reach —
+                     wins; no line runs along a lane rule; a parent in the other
+                     stack may enter a childless box on its right side), phone by a
+                     two-page channel annealer on a 48-px pitch (off-sheet connector
+                     fallback, budget 2; labels on gutter lines are turned to read up
+                     the line); dfd.test.ts proves it on the fixture + 5 shuffles +
+                     5 perturbations, plus detour / lane-rule / phone-label bounds;
+                     the board carries data-crossings / data-overlaps. Boxes: atom =
+                     store (index cell), derived = process (strip with lineage
+                     address 4.1.2 + evidence mark), creature = silhouette (family)
+                     + face (evidence). Node view frames the selection + ancestors +
+                     the nearest children that fit at names ≥ 13 px. Docked drawer
                      (phone: bottom sheet ≤55%), packets ride the lit lineage;
                      /lab/flow/specimen = the router alone (?mode=mobile).
                      /lab/painted = the owner's two painted maps (pixel 768×512

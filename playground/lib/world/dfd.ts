@@ -50,9 +50,10 @@ const D = {
 // phone sheet (one box column between two routing gutters)
 const M = {
   width: 376, // 47 tracks; shown at scale 1 on a 390-px phone
-  rowPitch: 56,
+  rowPitch: 48, // box 40 + 8: no line ever runs between two phone rows (only beside them)
   laneHead: 32,
   laneGap: 16,
+  tagRoom: 16, // extra gap above a box that carries an off-sheet tag (the 8-px row gap cannot hold it)
   top: 8,
   iters: 3000,
 };
@@ -100,6 +101,8 @@ export interface DfdLabel extends Rect {
   edges: string[];
   /** the run the gap is cut in: horizontal (text on the line) or vertical (text across it) */
   along: "h" | "v";
+  /** on a vertical run: the text turned to read up the line (where there is no room across it) */
+  turn?: boolean;
 }
 export interface DfdOffSheet { from: string; to: string; outText: string; inText: string; out: Rect; in: Rect; stubOut: Pt[]; stubIn: Pt[] }
 export interface DfdAudit {
@@ -438,9 +441,13 @@ class PhoneSearch {
   rows(): { top: Int32Array; laneY: [number, number][]; bottom: number } {
     const top = new Int32Array(this.n).fill(-1);
     const laneY: [number, number][] = [];
+    // an off-sheet connector's tag sits in the gap above its box: those rows get TAG_ROOM more
+    const tagged = new Uint8Array(this.n);
+    for (let i = 0; i < this.m; i++) if (this.off[i]) { tagged[this.ef[i]] = 1; tagged[this.et[i]] = 1; }
     let y = M.top;
     const walk = (b: number) => {
       if (top[b] >= 0) return;
+      if (tagged[b]) y += M.tagRoom;
       top[b] = y; y += M.rowPitch;
       for (const c of this.kids[b]) walk(c);
     };
@@ -700,6 +707,9 @@ const JOIN = 1;
 const CROWD = 0.3;
 const SOFT = 30; // price per grid step through another source's line (rip-up search)
 const MAX_RIPS = 3;
+/** desktop arrangements routed once / given the full routing search */
+const ARR_QUICK = 4;
+const ARR_FULL = 2;
 const PORT_LANE = 1.5;
 
 interface PortOpt { pre: number; prepre: number; port: Pt; side: DfdSide; dir: number; cost: number }
@@ -767,7 +777,11 @@ class Router {
   apprMark: Uint8Array;
   /** the second track beside a box's in-port side (box index + 1): running along it shuts that box's doors */
   portLane: Int32Array;
+  /** grid points on a swim-lane rule: a line may cross a rule, never run along it */
+  onRule: Uint8Array;
   locked: Uint8Array = new Uint8Array(0);
+  /** boxes with an out-port (set per routeAll) */
+  sources = new Set<string>();
   heap = new MinHeap();
   g: Float64Array;
   came: Int32Array;
@@ -793,6 +807,11 @@ class Router {
     this.goalMark = new Int32Array(this.N);
     this.apprMark = new Uint8Array(this.N);
     this.portLane = new Int32Array(this.N);
+    this.onRule = new Uint8Array(this.N);
+    for (const l of sheet.lanes) {
+      if (l.y % G) continue;
+      for (let x = Math.ceil(l.x / G) * G; x <= l.x + l.w; x += G) this.onRule[this.at(x, l.y)] = 1;
+    }
     const mark = (r: Rect, clear: number) => {
       const i0 = Math.max(0, Math.floor((r.x - clear) / G)), i1 = Math.min(this.nx - 1, Math.ceil((r.x + r.w + clear) / G));
       const j0 = Math.max(0, Math.floor((r.y - clear) / G)), j1 = Math.min(this.ny - 1, Math.ceil((r.y + r.h + clear) / G));
@@ -838,7 +857,7 @@ class Router {
     return opts.filter((o) => this.free(o.start));
   }
 
-  inOpts(b: DfdBox, net: number, own?: Uint8Array, soft = false, crossEdge = false): PortOpt[] {
+  inOpts(b: DfdBox, net: number, own?: Uint8Array, soft = false, crossEdge = false, fromRight = false): PortOpt[] {
     const opts: PortOpt[] = [];
     const ok = (p: number) => p >= 0 && p < this.N && !this.blocked[p] && foreignOk(p) && (!this.resv[p] || this.resv[p] === this.idx.get(b.name)! + 1);
     void net;
@@ -863,7 +882,10 @@ class Router {
         }
       }
     };
-    if (this.mode === "desktop") { side("left", 0); side("top", 6); side("bottom", 6); }
+    // a line from a parent RIGHT of the box (another stack) may enter a childless box on its
+    // right side instead of hooking over it into its top; a parent to the left never does
+    // (two arrowheads meeting nose to nose read as a two-way edge)
+    if (this.mode === "desktop") { side("left", 0); side("top", 6); side("bottom", 6); if (fromRight && !this.sources.has(b.name)) side("right", 6); }
     else { side("left", crossEdge ? 6 : 0); side("right", crossEdge ? 0 : 6); }
     return opts;
   }
@@ -919,6 +941,7 @@ class Router {
         const rv = this.resv[q];
         if (rv && rv !== keys[0] && rv !== keys[1]) continue;
         if (nd % 2 === 1 && !this.vBand[qx] && !am[q]) continue;
+        if (nd % 2 === 0 && this.onRule[q] && this.onRule[p]) continue;
         let c = gc + 1 + (d !== 4 && nd !== d ? BEND : 0) + (ow ? soft : 0);
         // running along another box's door track (not just crossing it) closes that box's in-ports
         const pl = this.portLane[q];
@@ -963,6 +986,7 @@ class Router {
    */
   routeAll(nets: { src: string; targets: string[] }[], cross: (a: string, b: string) => boolean): RouteResult {
     this.owner.fill(0);
+    this.sources = new Set(nets.map((n) => n.src));
     const K = nets.length;
     const netPts: number[][] = nets.map(() => []);
     const netEdges: DfdEdge[][] = nets.map(() => []);
@@ -1017,7 +1041,7 @@ class Router {
       let outs: OutOpt[] = [];
       for (const soft of [0, SOFT]) {
         const tb = this.byName.get(t)!;
-        const goals = this.inOpts(tb, ni, own, soft > 0, cross(net.src, t)).filter((o) => !own[o.pre] && (!own[o.prepre] || (root !== null && !reserved.has(o.prepre))));
+        const goals = this.inOpts(tb, ni, own, soft > 0, cross(net.src, t), sb.x > tb.x + tb.w).filter((o) => !own[o.pre] && (!own[o.prepre] || (root !== null && !reserved.has(o.prepre))));
         // a fresh out-port (only one on desktop; the phone's second side), or any joinable tree point
         outs = this.outOpts(sb).filter((o) => !rootAt.has(o.start) && !own[o.start] && (!root || this.mode === "mobile"));
         const starts: { p: number; d: number; c: number }[] = [
@@ -1162,7 +1186,13 @@ export function auditDfd(l: { boxes: DfdBox[]; edges: DfdEdge[]; labels: DfdLabe
 
 // ———————————————————————————————————————— inline labels
 
-function placeLabels(edges: DfdEdge[], boxes: DfdBox[], addr: Map<string, string>, measure: (t: string, px: number) => number, width = Infinity, height = Infinity): DfdLabel[] {
+/** Width of a turned label's gap: clears the line's neighbours one track (8 px) away with 1.5 px to spare. */
+const TURN_W = 12;
+
+function placeLabels(edges: DfdEdge[], boxes: DfdBox[], addr: Map<string, string>, measure: (t: string, px: number) => number, width = Infinity, height = Infinity, lanes: DfdLane[] = []): DfdLabel[] {
+  // a label laid level never sits on a swim-lane rule (it would read as the lane's own caption);
+  // a turned one may cut through a rule like the line it is cut into
+  const rules: Rect[] = lanes.map((l) => ({ x: l.x, y: l.y, w: l.w, h: 1 }));
   const labels: DfdLabel[] = [];
   const segs = segmentsOf(edges);
   const H = DFD_LABEL_PX + 3;
@@ -1176,25 +1206,30 @@ function placeLabels(edges: DfdEdge[], boxes: DfdBox[], addr: Map<string, string
     let placed: DfdLabel | null = null;
     for (const text of [`${addr.get(e.from)} ${words(e.from)}`, addr.get(e.from)!]) {
     const w = Math.ceil(measure(text, DFD_LABEL_PX)) + 8;
-    const runs: { a: Pt; b: Pt; k: number; h: boolean }[] = [];
+    // turn: on a vertical run the text reads up the line in a gap TURN_W wide, so it stays
+    // clear of the neighbouring tracks (a label laid across a gutter line hits them)
+    const runs: { a: Pt; b: Pt; k: number; h: boolean; turn: boolean }[] = [];
     for (let k = 1; k < e.points.length; k++) {
       const a = e.points[k - 1], b = e.points[k];
-      if (a.y === b.y && Math.abs(a.x - b.x) >= w + 2 * DFD_R + 4) runs.push({ a, b, k, h: true });
-      if (a.x === b.x && Math.abs(a.y - b.y) >= H + 2 * DFD_R + 8) runs.push({ a, b, k, h: false });
+      if (a.y === b.y && Math.abs(a.x - b.x) >= w + 2 * DFD_R + 4) runs.push({ a, b, k, h: true, turn: false });
+      if (a.x === b.x && Math.abs(a.y - b.y) >= H + 2 * DFD_R + 8) runs.push({ a, b, k, h: false, turn: false });
     }
-    // horizontal runs first (a gap cut along the line), longest first; vertical runs are the fallback
-    runs.sort((p, q) => Number(q.h) - Number(p.h) || (q.h ? Math.abs(q.a.x - q.b.x) - Math.abs(p.a.x - p.b.x) : Math.abs(q.a.y - q.b.y) - Math.abs(p.a.y - p.b.y)) || q.k - p.k);
+    for (const r of [...runs]) if (!r.h && Math.abs(r.a.y - r.b.y) >= w + 2 * DFD_R + 8) runs.push({ ...r, turn: true });
+    // horizontal runs first (a gap cut along the line), longest first; then vertical runs with
+    // the text across the line; then vertical runs with the text turned along it
+    const rank = (r: { h: boolean; turn: boolean }) => (r.h ? 0 : r.turn ? 2 : 1);
+    runs.sort((p, q) => rank(p) - rank(q) || (q.h ? Math.abs(q.a.x - q.b.x) - Math.abs(p.a.x - p.b.x) : Math.abs(q.a.y - q.b.y) - Math.abs(p.a.y - p.b.y)) || q.k - p.k);
     for (const r of runs) {
       const lo = r.h ? Math.min(r.a.x, r.b.x) + DFD_R + 2 : Math.min(r.a.y, r.b.y) + DFD_R + 4;
       const hi = r.h ? Math.max(r.a.x, r.b.x) - DFD_R - 2 : Math.max(r.a.y, r.b.y) - DFD_R - 4;
-      const len = r.h ? w : H;
+      const len = r.h || r.turn ? w : H;
       const mid = Math.round((lo + hi) / 2);
       const tries = [0];
       for (let s = G; s < (hi - lo) / 2; s += G) tries.push(s, -s);
       for (const d of tries) {
         const c0 = mid + d - len / 2;
         if (c0 < lo || c0 + len > hi) continue;
-        const rect: Rect = r.h ? { x: c0, y: r.a.y - H / 2, w, h: H } : { x: r.a.x - w / 2, y: c0, w, h: H };
+        const rect: Rect = r.h ? { x: c0, y: r.a.y - H / 2, w, h: H } : r.turn ? { x: r.a.x - TURN_W / 2, y: c0, w: TURN_W, h: w } : { x: r.a.x - w / 2, y: c0, w, h: H };
         if (rect.x < 2 || rect.y < 2 || rect.x + rect.w > width - 2 || rect.y + rect.h > height - 2) continue; // stays on the sheet
         // the lines the gap cuts: runs of this same source along this line through the rect
         const own = new Set<string>();
@@ -1209,8 +1244,9 @@ function placeLabels(edges: DfdEdge[], boxes: DfdBox[], addr: Map<string, string
         if (bad) continue;
         if (boxes.some((b) => rectHit({ x: b.x, y: b.y, w: b.w, h: b.h }, 0.5)({ a: { x: rect.x, y: rect.y }, b: { x: rect.x + rect.w, y: rect.y + rect.h } }))) continue;
         if (labels.some((o) => segRect({ a: { x: o.x, y: o.y }, b: { x: o.x + o.w, y: o.y + o.h } }, rect, 3))) continue;
+        if (!r.turn && rules.some((u) => segRect({ a: { x: u.x, y: u.y }, b: { x: u.x + u.w, y: u.y + u.h } }, rect, 2))) continue;
         // a vertical gap must cut the line where it fully crosses the rect (no elbow inside)
-        placed = { text, ...rect, edges: [...own], along: r.h ? "h" : "v" };
+        placed = { text, ...rect, edges: [...own], along: r.h ? "h" : "v", ...(r.turn ? { turn: true } : {}) };
         break;
       }
       if (placed) break;
@@ -1218,6 +1254,29 @@ function placeLabels(edges: DfdEdge[], boxes: DfdBox[], addr: Map<string, string
     if (placed) break;
     }
     if (placed) { labels.push(placed); for (const k of placed.edges) done.add(k); }
+  }
+  // a cross edge with no room of its own that is only a BRANCH of a labelled line of the same
+  // parent (every run but its last lies on that line, which carries the parent's name) shares
+  // that label: the phone's short transformer → clip stub off the labelled transformer → vit trunk
+  const on = (s: { a: Pt; b: Pt }, f: DfdEdge) => {
+    for (let k = 1; k < f.points.length; k++) {
+      const t = { a: f.points[k - 1], b: f.points[k] };
+      if (horiz(s) !== horiz(t) && !(s.a.x === s.b.x && s.a.y === s.b.y)) continue;
+      const inX = Math.min(s.a.x, s.b.x) >= Math.min(t.a.x, t.b.x) && Math.max(s.a.x, s.b.x) <= Math.max(t.a.x, t.b.x);
+      const inY = Math.min(s.a.y, s.b.y) >= Math.min(t.a.y, t.b.y) && Math.max(s.a.y, s.b.y) <= Math.max(t.a.y, t.b.y);
+      if (inX && inY) return true;
+    }
+    return false;
+  };
+  for (const e of edges) {
+    if (!e.cross || e.offSheet || done.has(key(e)) || e.points.length < 3) continue;
+    const lab = labels.find((l) => l.edges.some((k) => {
+      const f = edges.find((x) => key(x) === k);
+      if (!f || f.from !== e.from) return false;
+      for (let i = 1; i < e.points.length - 1; i++) if (!on({ a: e.points[i - 1], b: e.points[i] }, f)) return false;
+      return true;
+    }));
+    if (lab) { lab.edges.push(key(e)); done.add(key(e)); }
   }
   return labels;
 }
@@ -1269,6 +1328,26 @@ function arrangements(g: Graph): Arrangement[] {
   return cands.map((c) => c.a);
 }
 
+/**
+ * Wire quality of a routed sheet (lower is better): total length + a price per bend, plus a
+ * steep price on every DETOUR — wire beyond 1.3× an edge's Manhattan reach (+ 6 tracks of
+ * slack). Clean routing alone is not enough: the first clean arrangement used to win even when
+ * its hub's lines ran round the page margin at 2–2.5× their reach.
+ */
+export function wireQuality(edges: DfdEdge[], boxes: DfdBox[]): number {
+  const by = new Map(boxes.map((b) => [b.name, b]));
+  let q = 0;
+  for (const e of edges) {
+    if (e.points.length < 2) continue;
+    let len = 0;
+    for (let k = 1; k < e.points.length; k++) len += Math.abs(e.points[k].x - e.points[k - 1].x) + Math.abs(e.points[k].y - e.points[k - 1].y);
+    const s = by.get(e.from)!, t = by.get(e.to)!;
+    const reach = Math.abs(t.x - (s.x + s.w)) + Math.abs(t.y - s.y);
+    q += len + 16 * (e.points.length - 2) + 3 * Math.max(0, len - 1.3 * reach - 6 * G);
+  }
+  return q;
+}
+
 function routeSheet(sheet: Sheet, g: Graph, mode: DfdMode, budget: number): { res: RouteResult; tries: number } {
   const router = new Router(sheet, mode);
   const cross = (a: string, b: string) => g.family.get(a) !== g.family.get(b);
@@ -1288,11 +1367,12 @@ function routeSheet(sheet: Sheet, g: Graph, mode: DfdMode, budget: number): { re
   ];
   let best: RouteResult | null = null;
   let tries = 0;
-  for (const start of orders) {
+  for (const start of orders.slice(0, budget > 1 ? orders.length : 1)) {
     let order = start;
     for (let it = 0; it < 3 && tries < budget; it++) {
       tries++;
       const res = router.routeAll(order, cross);
+      res.cost = wireQuality(res.edges, sheet.boxes);
       if (!best || res.failed.length < best.failed.length || (res.failed.length === best.failed.length && res.cost < best.cost)) best = res;
       if (!res.failed.length) break;
       const bad = new Set(res.failed.map((f) => f.from));
@@ -1330,7 +1410,7 @@ export function buildDfd(tax: TaxonomyResponse, fam: FamilyMap, opts: DfdOptions
     const ph = phoneSheet(g, addr, measure);
     const off = offSheetPairs(ph.off, ph.sheet, addr);
     const edges = [...ph.edges, ...off.edges].sort((a, b) => (a.from < b.from ? -1 : a.from > b.from ? 1 : a.to < b.to ? -1 : 1));
-    const labels = placeLabels(ph.edges, ph.sheet.boxes, addr, measure, ph.sheet.width, ph.sheet.height);
+    const labels = placeLabels(ph.edges, ph.sheet.boxes, addr, measure, ph.sheet.width, ph.sheet.height, ph.sheet.lanes);
     const layout: DfdLayout = {
       mode: "mobile", width: ph.sheet.width, height: ph.sheet.height, grid: G, radius: DFD_R,
       boxes: ph.sheet.boxes, lanes: ph.sheet.lanes, headers: ph.sheet.headers, edges, labels, offSheet: off.pairs,
@@ -1339,19 +1419,28 @@ export function buildDfd(tax: TaxonomyResponse, fam: FamilyMap, opts: DfdOptions
     layout.audit = auditDfd(layout);
     return layout;
   }
+  // Two rounds: every one of the ARR_QUICK best arrangements (by the cheap proxy) is routed
+  // once; the ARR_FULL best of those by wire quality (more, while none routes cleanly) get the
+  // full routing search, and the winner is the cleanest, then the best labelled, then the
+  // shortest and straightest.
   const arrs = arrangements(g);
-  let best: { sheet: Sheet; res: RouteResult; labels: DfdLabel[]; arr: Arrangement; score: number } | null = null;
   let attempts = 0;
-  for (const arr of arrs.slice(0, 4)) {
+  const quick = arrs.slice(0, ARR_QUICK).map((arr) => {
     const sheet = sheetDesktop(g, arr, orderDesktop(g, arr, 8), addr, measure, opts.maxWidth ?? 1424);
+    const { res, tries } = routeSheet(sheet, g, "desktop", 1);
+    attempts += tries;
+    return { arr, sheet, score: res.failed.length * 1e6 + res.cost };
+  }).sort((a, b) => a.score - b.score);
+  let best: { sheet: Sheet; res: RouteResult; labels: DfdLabel[]; arr: Arrangement; score: number } | null = null;
+  for (const [i, { arr, sheet }] of quick.entries()) {
+    // past the first ARR_FULL, only while nothing has routed cleanly yet
+    if (i >= ARR_FULL && best && best.res.failed.length === 0) break;
     const { res, tries } = routeSheet(sheet, g, "desktop", 6);
     attempts += tries;
-    const labels = placeLabels(res.edges, sheet.boxes, addr, measure, sheet.width, sheet.height);
-    const unl = res.edges.filter((e) => e.cross).length - new Set(labels.flatMap((l) => l.edges)).size;
+    const labels = placeLabels(res.edges, sheet.boxes, addr, measure, sheet.width, sheet.height, sheet.lanes);
+    const unl = auditDfd({ boxes: sheet.boxes, edges: res.edges, labels }).unlabelled;
     const score = res.failed.length * 1e6 + unl * 1e4 + res.cost;
     if (!best || score < best.score) best = { sheet, res, labels, arr, score };
-    // the first cleanly routed arrangement wins: routing is the expensive part
-    if (!res.failed.length) break;
   }
   const { sheet, res, labels, arr } = best!;
   const off = offSheetPairs(res.failed, sheet, addr);
