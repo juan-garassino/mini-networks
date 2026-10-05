@@ -7,6 +7,7 @@ import { Anatomy } from "@/components/lab/shared/lesson/anatomy";
 import { schematicFor } from "@/lib/schematics";
 import { ART, BORDER, MOTION, SPACE, THEMES, TYPE, type ThemeName } from "./tokens";
 import { DIAGRAMS, anatomyHref } from "./registry";
+import { LEGIBLE, fallbackFor } from "./legible";
 import type { KeyHandler } from "./diagrams/types";
 
 // the card's back-link target: the page it sits on (client only; undefined on the server)
@@ -36,12 +37,21 @@ export interface MechanismDiagramProps {
   caption?: boolean;
   /** shrink to the container (max-width 100%, default true); false keeps `width` exact */
   fit?: boolean;
+  /** full only, the legibility floor (legible.ts): when `width` would set the
+   * labels below this many CSS px, render the card at LEGIBLE.cardZoom instead
+   * (its tap → `onOpen` / `href`: the full drawing one click away). Pass
+   * LEGIBLE.minLabelPx; omit to always draw the full view at `width`. */
+  minLabelPx?: number;
   className?: string;
 }
 
 export function MechanismDiagram({
-  name, theme = "pixel", variant = "full", href, onOpen, t: tProp, onTChange, still = false, width, controls = true, caption = true, fit = true, className,
+  name, theme = "pixel", variant = "full", href, onOpen, t: tProp, onTChange, still = false, width, controls = true, caption = true, fit = true, minLabelPx, className,
 }: MechanismDiagramProps) {
+  const def = DIAGRAMS[name];
+  if (variant === "full" && def && width && minLabelPx && fallbackFor(width, def.view.w, minLabelPx) === "card") {
+    return <MechanismCard name={name} theme={theme} href={href} onOpen={onOpen} t={MOTION.stillT} width={def.card.view.w * LEGIBLE.cardZoom} caption={caption} className={className} />;
+  }
   if (variant === "card") return <MechanismCard name={name} theme={theme} href={href} onOpen={onOpen} t={still ? MOTION.stillT : tProp ?? MOTION.stillT} width={width} caption={caption} className={className} />;
   return <MechanismFull name={name} theme={theme} t={tProp} onTChange={onTChange} still={still} width={width} controls={controls} caption={caption} fit={fit} className={className} />;
 }

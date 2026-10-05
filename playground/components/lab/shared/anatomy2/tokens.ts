@@ -18,6 +18,9 @@ export const ART = {
   descender: 2,              // rows below the baseline (g, p, y)
 } as const;
 
+/** The legibility floor: see legible.ts (kept there, pure, so tests import it). */
+export { LEGIBLE } from "./legible";
+
 /** Pixel-face sizes for chrome, as integer multiples of one font pixel. */
 export const PIXEL = {
   wordmark: 3,   // "how it works"

@@ -16,7 +16,8 @@ so page and plate read as one printed object. Everything else stays quiet.
 
 | File | Role |
 |---|---|
-| `tokens.ts` | the one import for values: `ART`, `PIXEL`, `TYPE`, `SPACE`, `BORDER`, `MOTION`, re-exports `THEMES` |
+| `tokens.ts` | the one import for values: `ART`, `PIXEL`, `TYPE`, `SPACE`, `BORDER`, `MOTION`, re-exports `THEMES` and `LEGIBLE` |
+| `legible.ts` | the legibility floor: `LEGIBLE`, `labelPx`, `legibleZooms(dpr)`, `fallbackFor` (pure) |
 | `themes.ts` | colour: a `Theme` is 14 role tokens + an 8-step data `ramp` + an 8-step `heat`; `pixel` (plum dusk) and `paper` (cut card with hard shadows) |
 | `encoding.ts` | every mark → primitive → token → meaning |
 | `prims.tsx` | `Wire`, `PText`, `Thumb`, `Frame`, `Bars`, `Diamond`, `Node`, plus `PixelLabel` / `displayName` for chrome |
@@ -38,6 +39,7 @@ so page and plate read as one printed object. Everything else stays quiet.
 | `SPACE` | 16-px gutter; 4 / 8 / 16 / 24 / 40 steps; index column 240; card column 380 |
 | `BORDER` | hair 1, focus 2, radius 0 (all pixel work is square) |
 | `MOTION` | max 6 fps; still t = 380 |
+| `LEGIBLE` | label floor 10 CSS px (cap), card fallback ×2, zooms up to ×2 |
 | `Theme` | ground, panel, frame, wire, wireHot, accent/Hi/Lo, text, textDim, loss/Hi, shadow, spark, ramp[8], heat[8] |
 
 ## Type scale
@@ -53,6 +55,14 @@ no eyebrows. Inside a drawing, only the pixel face (STYLE.md §1).
 Drawings live on an art-pixel viewBox and are shown at an integer scale:
 ×2 (1120 px) when it fits, else ×1. Below 560 px the drawing keeps ×1 and
 scrolls sideways in its own strip; the words never scroll.
+**Legibility floor** (`legible.ts`): a drawing is never shown with labels
+under `LEGIBLE.minLabelPx` (10 CSS px; ×1 sets 7). A host picks the smallest
+zoom from `legibleZooms(devicePixelRatio)` (×1.5 on retina, a whole number of
+device px); with no room for it, it shows the card at `LEGIBLE.cardZoom` (×2),
+the full drawing one tap away. `<MechanismDiagram variant="full" width
+minLabelPx={LEGIBLE.minLabelPx} onOpen>` applies the fallback itself. The map
+plate (painted kit) follows it; the specimen page still drops to ×1 below
+1432 px wide.
 Wide (≥ 1432 px): `index 240 | 40 | plate 1120`, the index sticky.
 Narrow: masthead + switches, one grouped `<select>`, then the plate.
 The plate: name (pixel ×4), lede, drawing, then "what is real" as

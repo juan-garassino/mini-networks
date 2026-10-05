@@ -169,6 +169,11 @@ this; `T.accent` + the note is the honest reading.
   objective. Never draw data in accent blue, never draw a block in the ramp.
   Accepted exception: gnn's four communities borrow `accentHi, loss, ramp[6],
   ramp[3]` as a categorical set — there is no categorical token.
+- **Legibility floor** (`legible.ts`, `LEGIBLE.minLabelPx = 10`): never show
+  a drawing whose 7-px caps land under 10 CSS px. ×1 (7 px) fails; ×1.5
+  (10.5 px, 3 device px on a retina screen) passes. A host with no room for
+  the full drawing at a legible crisp zoom shows the card at ×2 instead, the
+  full drawing one tap away (`<MechanismDiagram minLabelPx>` does this).
 - At card scale (×2) the 5×7 face is 10 px, mini is 6 px: mini only for
   indices (`_{k}`), never for words. A 28×28 digit at `px=1` is the floor; a
   14×14 map at `px=1` reads as texture only. Heat cells ≥ 3 art px.

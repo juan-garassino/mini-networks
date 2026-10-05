@@ -22,3 +22,4 @@
 export { anatomyHref, diagramFor, hasDiagram, DIAGRAM_NAMES, type DiagramDef } from "./registry";
 export { MechanismDiagram, type MechanismDiagramProps } from "./mechanism";
 export type { ThemeName } from "./themes";
+export { LEGIBLE, fallbackFor, isLegible, labelPx, legibleZooms } from "./legible";
