@@ -1,0 +1,243 @@
+/* The periodic table's one stylesheet. Every value is a --pt-* / --skin-* var
+   painted on <html> by skins/index.ts applySkin(), or a global colour token
+   (--paper, --ink, --line, --redline …) the skin also sets. No skin names and
+   no colours live here: a new skin is a new tokens file, never a CSS block. */
+
+/* ————— sheet ————— */
+.pt-sheet {
+  height: 100%;
+  overflow: auto;
+  padding: 1.5rem 1rem 2rem;
+  font-family: var(--pt-body), monospace;
+  color: var(--ink);
+}
+@media (min-width: 640px) { .pt-sheet { padding: 1.5rem 2.5rem 2.5rem; } }
+.pt-loading {
+  display: grid;
+  place-items: center;
+  font-family: var(--pt-display), sans-serif;
+  font-size: 1.125rem;
+  color: var(--ink-dim);
+}
+
+/* ————— masthead: title left, ruled count block right ————— */
+.pt-masthead {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 1rem 2rem;
+  margin-bottom: 1.5rem;
+  padding-bottom: 1rem;
+  border-bottom: var(--pt-border-atom);
+}
+.pt-title {
+  font-family: var(--pt-display), sans-serif;
+  font-size: clamp(1.75rem, 4.2vw, var(--pt-title));
+  font-weight: 800;
+  line-height: 0.95;
+  letter-spacing: 0.04em;
+  text-transform: var(--pt-case);
+  text-wrap: balance;
+  color: var(--ink);
+}
+.pt-subtitle, .pt-prompt { margin-top: 0.5rem; font-size: calc(var(--pt-small) * 1.1); color: var(--ink-dim); }
+.pt-prompt { margin: 0 0 0.25rem; font-size: 1.15em; }
+.pt-prompt span { color: var(--line); }
+.pt-counts { display: flex; border: var(--pt-border-compound); }
+.pt-counts > div {
+  display: flex;
+  flex-direction: column-reverse;   /* number above its label */
+  padding: 0.4rem 0.9rem 0.45rem;
+  min-width: 5.5rem;
+}
+.pt-counts > div + div { border-left: var(--pt-border-compound); }
+.pt-counts dd {
+  font-family: var(--pt-display), sans-serif;
+  font-size: 1.75rem;
+  font-weight: 700;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+.pt-counts dt { margin-top: 0.2rem; font-size: var(--pt-small); color: var(--ink-dim); }
+
+/* ————— grids ————— */
+.pt-grid {
+  display: grid;
+  grid-template-columns: repeat(var(--pt-cols), minmax(0, 1fr));
+  gap: var(--pt-gap);
+}
+.pt-table { margin-top: 6px; grid-template-rows: repeat(var(--pt-rows), var(--pt-row)); }
+.pt-wide { display: none; }
+
+/* family head: label over a bracket rule (single ink) or a tint band (colour) */
+.pt-famhead {
+  position: relative;
+  display: flex;
+  align-items: flex-end;
+  min-width: 0;
+  padding-bottom: calc(4px + var(--pt-fam-band));
+  border-bottom: var(--pt-fam-rule);
+  box-shadow: inset 0 calc(-1 * var(--pt-fam-band)) 0 var(--fam, transparent);
+}
+.pt-famhead::before, .pt-famhead::after {
+  content: ""; position: absolute; bottom: -1px; height: 5px; border-left: var(--pt-fam-rule);
+}
+.pt-famhead::before { left: 0; }
+.pt-famhead::after { right: 0; }
+.pt-famhead span {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  font-family: var(--pt-display), sans-serif;
+  font-size: var(--pt-famhead);
+  letter-spacing: var(--skin-title-tracking);
+  text-transform: var(--pt-case);
+  color: var(--ink-dim);
+}
+
+/* narrow: each family as its own small table, flowing side by side */
+.pt-stack { display: flex; flex-wrap: wrap; gap: 1.25rem 1.5rem; }
+.pt-family .pt-grid {
+  margin-top: 6px;
+  grid-template-columns: repeat(var(--pt-cols), var(--pt-stack-cell));
+  grid-auto-rows: var(--pt-row);
+}
+
+/* ————— element tile ————— */
+.pt-tile {
+  --tint: var(--fam, var(--paper-deep));
+  display: grid;
+  grid-template-rows: auto 1fr auto;
+  align-items: center;
+  min-width: 0;
+  padding: var(--pt-pad);
+  border-radius: var(--pt-radius);
+  box-shadow: var(--pt-shadow);
+  container-type: inline-size;
+  text-align: left;
+  color: var(--ink);
+  transition: border-color 0.15s ease, background-color 0.15s ease, color 0.15s ease;
+}
+:is(.pt-tile, .pt-swatch)[data-level="atom"] {
+  border: var(--pt-border-atom);
+  background: color-mix(in srgb, var(--tint, var(--paper-deep)) var(--pt-fill-atom), var(--pt-fill-under));
+}
+:is(.pt-tile, .pt-swatch)[data-level="compound"] {
+  border: var(--pt-border-compound);
+  background: color-mix(in srgb, var(--tint, var(--paper-deep)) var(--pt-fill-compound), var(--pt-fill-under));
+}
+:is(.pt-tile, .pt-swatch)[data-level="reaction"] {
+  border: var(--pt-border-reaction);
+  background: color-mix(in srgb, var(--paper-deep) var(--pt-fill-reaction), var(--pt-fill-under));
+}
+.pt-head { display: flex; align-items: flex-start; justify-content: space-between; line-height: 1; }
+.pt-z { font-size: var(--pt-number); font-variant-numeric: tabular-nums; letter-spacing: 0.02em; color: var(--ink-dim); }
+.pt-tile[data-level="reaction"] .pt-z { color: color-mix(in srgb, var(--redline) 85%, transparent); }
+.pt-icon { width: 13px; height: 13px; flex: none; color: var(--ink-dim); transition: color 0.15s ease; }
+.pt-sym {
+  padding-top: 2px;
+  font-family: var(--pt-display), sans-serif;
+  font-size: var(--pt-sym-atom);
+  font-weight: 800;
+  line-height: 1;
+  letter-spacing: 0.02em;
+  text-align: center;
+  text-transform: var(--pt-case);
+  color: var(--ink);
+}
+.pt-tile[data-level="compound"] .pt-sym { font-size: var(--pt-sym-compound); font-weight: 700; color: var(--pt-sym-compound-ink); }
+.pt-tile[data-level="reaction"] .pt-sym { font-size: var(--pt-sym-reaction); font-weight: 700; color: var(--ink-dim); }
+.pt-name {
+  /* a 12-letter word (segmentation) fits one line: a mono advance is ~0.68em,
+     so the size is capped at 12cqi of the tile; breaks fall at underscores */
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  height: 2.4em;
+  overflow: hidden;
+  overflow-wrap: break-word;
+  font-size: min(var(--pt-name), var(--pt-name-fit));
+  line-height: 1.2;
+  letter-spacing: -0.02em;
+  text-align: center;
+  color: var(--ink-dim);
+}
+/* compositions have the longest names: three lines in the taller f-block row */
+.pt-tile[data-level="reaction"] .pt-name { -webkit-line-clamp: 3; height: 3.6em; font-size: min(var(--pt-name), calc(var(--pt-name-fit) * 0.96)); }
+
+/* spec-sheet drawer: the same tile, larger, symbol in the accent */
+.pt-tile[data-size="spec"] { width: 6rem; height: 6rem; flex: none; }
+.pt-tile[data-size="spec"] .pt-sym { font-size: 44px; color: var(--redline); }
+.pt-tile[data-size="spec"] .pt-name { -webkit-line-clamp: 1; height: 1.2em; }
+
+/* interaction — the only use of the accent on the table */
+button.pt-tile { cursor: pointer; }
+button.pt-tile:focus-visible { outline: none; }
+html[data-pt-interaction="accent"] button.pt-tile:is(:hover, :focus-visible) { border-color: var(--redline); }
+html[data-pt-interaction="accent"] button.pt-tile:is(:hover, :focus-visible) :is(.pt-sym, .pt-icon) { color: var(--redline); }
+html[data-pt-interaction="accent"] button.pt-tile:is(:hover, :focus-visible) .pt-name { color: var(--ink); }
+html[data-pt-interaction="inverse"] button.pt-tile:is(:hover, :focus-visible) { background: var(--line); border-color: var(--line); }
+html[data-pt-interaction="inverse"] button.pt-tile:is(:hover, :focus-visible) :is(.pt-z, .pt-sym, .pt-icon, .pt-name) { color: var(--paper-deep); }
+
+/* ————— f-block: reactions ————— */
+.pt-fblock { margin-top: 1.75rem; }
+.pt-fblock-label h2 {
+  font-family: var(--pt-display), sans-serif;
+  font-size: calc(var(--pt-famhead) * 1.1);
+  letter-spacing: var(--skin-title-tracking);
+  text-transform: var(--pt-case);
+  color: var(--ink);
+}
+.pt-fblock-label p { margin-top: 0.25rem; font-size: var(--pt-small); line-height: 1.4; color: var(--ink-dim); }
+.pt-fblock-tiles {
+  display: grid;
+  margin-top: 0.75rem;
+  grid-template-columns: repeat(auto-fill, var(--pt-stack-cell));
+  grid-auto-rows: var(--pt-reaction-row);
+  gap: var(--pt-gap);
+}
+@media (min-width: 1024px) {
+  /* on the wide table: label in columns 1-2, tiles 11 across in columns 3-13 */
+  .pt-fblock {
+    display: grid;
+    min-width: 62rem;
+    grid-template-columns: repeat(16, minmax(0, 1fr));
+    gap: var(--pt-gap);
+  }
+  .pt-fblock-label { grid-column: 1 / 3; align-self: center; padding-right: 0.75rem; text-align: right; }
+  .pt-fblock-tiles {
+    grid-column: 3 / 14;
+    margin-top: 0;
+    grid-template-columns: repeat(11, minmax(0, 1fr));
+  }
+}
+
+/* ————— key ————— */
+.pt-bay { display: flex; flex-direction: column; justify-content: center; padding: 0 0.75rem; }
+.pt-key-foot { margin-top: 1.75rem; max-width: 28rem; }
+.pt-key { display: flex; flex-direction: column; gap: 0.75rem; font-size: var(--pt-small); line-height: 1.3; color: var(--ink-dim); }
+.pt-key-title {
+  font-family: var(--pt-display), sans-serif;
+  font-size: var(--pt-famhead);
+  letter-spacing: var(--skin-title-tracking);
+  text-transform: var(--pt-case);
+  color: var(--ink);
+}
+.pt-key-sample { display: grid; grid-template-columns: var(--pt-stack-cell) 1fr; height: var(--pt-row); }
+.pt-key-sample ul { display: grid; grid-template-rows: 1.1rem 1fr 1.6rem; }
+.pt-key-sample li { display: flex; align-items: center; gap: 0.5rem; }
+.pt-key-sample li::before { content: ""; width: 1.5rem; border-top: 1px dashed var(--line-faint); }
+.pt-key-levels { display: grid; gap: 0.4rem; }
+.pt-key-levels li { display: flex; align-items: center; gap: 0.5rem; }
+.pt-swatch { width: 0.75rem; height: 0.75rem; flex: none; }
+
+/* ————— breakpoint: the wide table from lg up, the family stack below ————— */
+@media (min-width: 1024px) {
+  .pt-wide { display: block; min-width: 62rem; }
+  .pt-stack, .pt-narrow-only { display: none; }
+}
+
+/* ————— the skin reaches the shared chrome (title block, drawer, page) ————— */
+html[data-pt-single-weight] { font-synthesis: none; }
+html[data-pt-single-weight] :is(.bp-title, .pt-title, .pt-sym, .pt-counts dd) { font-weight: 400 !important; }

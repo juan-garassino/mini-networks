@@ -7,8 +7,8 @@ import type { TaxonomyResponse } from "@/lib/types";
 import { useRuns } from "@/hooks/use-runs";
 import { TitleBlock, type EditionId, type SheetId } from "@/components/title-block";
 import { ElementSheet } from "@/components/element-sheet";
-import { Chart } from "@/components/views/chart";
-import { ChartTerminal } from "@/components/views/chart-terminal";
+import { PERIODIC_SKINS, applySkin, isPeriodicSkin } from "@/components/periodic/skins";
+import { PeriodicTable } from "@/components/periodic/periodic-table";
 import { ChartMetro } from "@/components/views/chart-metro";
 import { ChartAtlas } from "@/components/views/chart-atlas";
 import { ChartPaper } from "@/components/views/chart-paper";
@@ -53,6 +53,12 @@ export default function Page() {
   useEffect(() => {
     document.documentElement.setAttribute("data-edition", edition);
     localStorage.setItem("mn-edition", edition);
+    // the periodic-table skins are token sets painted on <html>; the other
+    // editions keep their [data-edition] blocks in blueprint.css and borrow
+    // only the blueprint's tile tokens for the drawer's element tile
+    return isPeriodicSkin(edition)
+      ? applySkin(document.documentElement, PERIODIC_SKINS[edition])
+      : applySkin(document.documentElement, PERIODIC_SKINS.blueprint, { tableOnly: true });
   }, [edition]);
 
   return (
@@ -70,11 +76,10 @@ export default function Page() {
           transition={{ duration: 0.22, ease: "easeOut" }}
         >
           {sheet === "chart" && (
-            edition === "terminal" ? <ChartTerminal taxonomy={taxonomy} onSelect={setSelected} />
+            isPeriodicSkin(edition) ? <PeriodicTable taxonomy={taxonomy} skin={PERIODIC_SKINS[edition]} onSelect={setSelected} />
             : edition === "metro" ? <ChartMetro taxonomy={taxonomy} onSelect={setSelected} />
             : edition === "atlas" ? <ChartAtlas taxonomy={taxonomy} onSelect={setSelected} />
-            : edition === "paper" ? <ChartPaper taxonomy={taxonomy} onSelect={setSelected} />
-            : <Chart taxonomy={taxonomy} onSelect={setSelected} />
+            : <ChartPaper taxonomy={taxonomy} onSelect={setSelected} />
           )}
           {sheet === "reactions" && (
             <Reactions taxonomy={taxonomy} runs={runs} onSelect={setSelected} />

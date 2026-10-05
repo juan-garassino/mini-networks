@@ -4,14 +4,10 @@ body {
   background-color: var(--paper);
   color: var(--ink);
   font-family: var(--font-draft), monospace;
-  /* drafting grid: fine + major lines, then a vignette toward the margins */
-  background-image:
-    radial-gradient(ellipse at 50% 40%, rgba(20, 60, 100, 0.35), rgba(4, 14, 26, 0.55)),
-    linear-gradient(var(--line-faint) 1px, transparent 1px),
-    linear-gradient(90deg, var(--line-faint) 1px, transparent 1px),
-    linear-gradient(rgba(29, 68, 104, 0.35) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(29, 68, 104, 0.35) 1px, transparent 1px);
-  background-size: 100% 100%, 96px 96px, 96px 96px, 24px 24px, 24px 24px;
+  /* the periodic-table skins paint their backdrop through these vars
+     (components/periodic/skins); the other editions set their own below */
+  background-image: var(--skin-backdrop, none);
+  background-size: var(--skin-backdrop-size, auto);
 }
 
 /* photographic grain over everything */
@@ -21,7 +17,7 @@ body::after {
   inset: 0;
   pointer-events: none;
   z-index: 50;
-  opacity: 0.07;
+  opacity: var(--skin-grain, 0.07);
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2'/%3E%3C/filter%3E%3Crect width='140' height='140' filter='url(%23n)' opacity='0.6'/%3E%3C/svg%3E");
 }
 
@@ -40,7 +36,7 @@ body::after {
 .bp-title {
   font-family: var(--font-display), sans-serif;
   text-transform: uppercase;
-  letter-spacing: 0.14em;
+  letter-spacing: var(--skin-title-tracking, 0.14em);
 }
 
 .bp-stamp {
@@ -49,8 +45,12 @@ body::after {
   letter-spacing: 0.22em;
   border: 1.5px solid var(--redline);
   color: var(--redline);
-  transform: rotate(-2deg);
+  transform: rotate(var(--skin-stamp-tilt, -2deg));
 }
+
+/* faces that run small (VT323) zoom the px-sized chrome instead of re-sizing it */
+footer { zoom: var(--skin-chrome-zoom, 1); }
+.pt-drawer-body { zoom: var(--skin-drawer-zoom, 1); }
 
 /* stroke draw-in for the load moment */
 @keyframes bp-draw { from { stroke-dashoffset: 1; } to { stroke-dashoffset: 0; } }
@@ -61,32 +61,8 @@ body::after {
 
 /* ————— EDITIONS: token overrides per design ————— */
 
-/* 1 · vintage wall chart: parchment + oxblood ink */
-[data-edition="wallchart"] {
-  --paper: #efe3c8; --paper-deep: #e4d4b0;
-  --ink: #2b1d12; --ink-dim: #7a5c3e;
-  --line: #5b2320; --line-faint: #c9b58e;
-  --redline: #8a1f1c;
-}
-[data-edition="wallchart"] body, body[data-edition="wallchart"] {
-  background-image:
-    radial-gradient(ellipse at 50% 30%, rgba(255, 250, 230, 0.6), rgba(190, 165, 120, 0.5)),
-    repeating-linear-gradient(0deg, transparent 0 30px, rgba(120, 90, 50, 0.05) 30px 31px);
-}
-[data-edition="wallchart"] { --font-display: var(--font-instrument); }
-
-/* 2 · brutalist terminal: phosphor on black */
-[data-edition="terminal"] {
-  --paper: #050805; --paper-deep: #020302;
-  --ink: #7dff9a; --ink-dim: #2e7a44;
-  --line: #4ddc72; --line-faint: #123920;
-  --redline: #e9d47e;  /* soft amber cursor (was #ffe14d — too loud) */
-}
-[data-edition="terminal"] body, body[data-edition="terminal"] {
-  background-image: repeating-linear-gradient(0deg, rgba(0, 0, 0, 0.35) 0 2px, transparent 2px 4px);
-}
-[data-edition="terminal"] { --font-display: var(--font-vt); --font-draft: var(--font-vt); }
-[data-edition="terminal"] .bp-title { letter-spacing: 0.05em; }
+/* blueprint, wall chart and terminal are periodic-table skins: their tokens
+   live in components/periodic/skins/*.ts, painted on <html> by applySkin() */
 
 /* 3 · metro map: one system map, pastel lines on a neutral porcelain sheet */
 [data-edition="metro"] {
@@ -206,33 +182,6 @@ body::after {
 @keyframes nodepulse { 0%,100% { opacity: 0.75; } 50% { opacity: 1; } }
 .flow-node { animation: nodepulse 2.2s ease-in-out infinite; }
 
-/* ————— periodic table tiles (components/views/chart.tsx) —————
-   One type scale for every tile; the name block always reserves two lines so
-   symbols sit on one baseline across a period. */
-.pt-tile { padding: 4px 5px 5px; min-width: 0; container-type: inline-size; }
-.pt-tile .pt-z { font-size: 9px; letter-spacing: 0.02em; }
-.pt-tile .pt-icon { width: 13px; height: 13px; flex: none; }
-.pt-tile .pt-sym { font-size: 27px; padding-top: 2px; }
-.pt-tile[data-level="compound"] .pt-sym { font-size: 23px; }
-.pt-reaction .pt-sym { font-size: 18px; }
-.pt-tile .pt-name {
-  /* a 12-letter word (segmentation, distillation) always fits one line:
-     Martian Mono advances ~0.68em, so cap the size at 12cqi of the tile */
-  font-size: min(8.5px, 12cqi);
-  line-height: 1.2;
-  height: 2.4em;
-  letter-spacing: -0.02em;
-  overflow-wrap: break-word; /* breaks fall at underscores (<wbr>); only an over-long word splits */
-}
-.pt-reaction .pt-name { font-size: min(8px, 12cqi); }
-.pt-famhead { border-bottom: 1px solid var(--line-faint); position: relative; }
-/* end ticks: the bracket of a family block, flush with its outer tile edges */
-.pt-famhead::before, .pt-famhead::after {
-  content: ""; position: absolute; bottom: -1px; width: 1px; height: 5px; background: var(--line-faint);
-}
-.pt-famhead::before { left: 0; }
-.pt-famhead::after { right: 0; }
-
 /* still frames + reduced motion: every looping mark freezes */
 @media (prefers-reduced-motion: reduce) {
   .bp-live, .bp-draw, .flow-edge, .flow-node { animation: none !important; }
@@ -241,49 +190,3 @@ body::after {
 html[data-still] .bp-live, html[data-still] .bp-draw,
 html[data-still] .flow-edge, html[data-still] .flow-node { animation: none !important; }
 html[data-still] .bp-draw { stroke-dashoffset: 0; }
-
-/* ————— wall chart: a printed classroom poster —————
-   Instrument Serif ships one weight: never fake-bold it. Families print as
-   soft pastel blocks (the classic periodic-table colour key); atoms carry the
-   full tint, compounds a lighter pull of the same ink. The family headers'
-   colour bands double as the legend. */
-[data-edition="wallchart"] { font-synthesis: none; }
-[data-edition="wallchart"] .bp-title { font-weight: 400 !important; }
-[data-edition="wallchart"] .pt-fam[data-family="perception"]     { --fam: #c9d5ab; }
-[data-edition="wallchart"] .pt-fam[data-family="sequence"]       { --fam: #b7cbd8; }
-[data-edition="wallchart"] .pt-fam[data-family="generative"]     { --fam: #e3bdb0; }
-[data-edition="wallchart"] .pt-fam[data-family="representation"] { --fam: #ead095; }
-[data-edition="wallchart"] .pt-fam[data-family="structure"]      { --fam: #cdc1db; }
-[data-edition="wallchart"] .pt-fam[data-family="decision"]       { --fam: #afd2c8; }
-[data-edition="wallchart"] .pt-tile.pt-fam[data-family] { background: var(--fam); }
-[data-edition="wallchart"] .pt-tile.pt-fam[data-level="compound"] {
-  background: color-mix(in srgb, var(--fam) 50%, var(--paper));
-  border-color: color-mix(in srgb, var(--line) 35%, var(--paper));
-}
-[data-edition="wallchart"] .pt-tile.pt-fam[data-level="compound"] .pt-sym { color: var(--ink); }
-/* a printed chart sets symbols in chemistry case (Cv, At); the blueprint keeps
-   drafting caps — Big Shoulders' l and I are the same stroke */
-[data-edition="wallchart"] .pt-tile .pt-sym,
-[data-edition="wallchart"] .pt-spec .bp-title { text-transform: none; }
-[data-edition="wallchart"] .pt-tile .pt-sym { font-size: 30px; letter-spacing: 0; }
-[data-edition="wallchart"] .pt-tile[data-level="compound"] .pt-sym { font-size: 26px; }
-[data-edition="wallchart"] .pt-reaction .pt-sym { font-size: 20px; }
-[data-edition="wallchart"] .pt-famhead { border-bottom: 0; }
-[data-edition="wallchart"] .pt-famhead::before, [data-edition="wallchart"] .pt-famhead::after { display: none; }
-[data-edition="wallchart"] .pt-famhead[data-family] { box-shadow: inset 0 -5px 0 var(--fam); }
-[data-edition="wallchart"] .pt-famhead span { color: var(--ink); }
-
-/* ————— terminal: phosphor, read at arm's length —————
-   VT323 sits ~25% smaller than Martian Mono at the same px; the chrome that
-   keeps Tailwind px sizes (footer, spec-sheet) zooms instead of re-sizing. */
-[data-edition="terminal"] { font-synthesis: none; }
-[data-edition="terminal"] .bp-title { font-weight: 400 !important; }
-[data-edition="terminal"] footer { zoom: 1.4; }
-[data-edition="terminal"] .pt-drawer-body { zoom: 1.3; }
-[data-edition="terminal"] .bp-stamp { transform: none; }
-[data-edition="wallchart"] .pt-tile:hover,
-[data-edition="wallchart"] .pt-tile:focus-visible { border-color: var(--redline); }
-/* terminal columns: name column wide enough for the deepest tree line, so
-   every # comment starts on one column */
-.term-sheet { --term-name: 34ch; --term-rx: 29ch; }
-@media (max-width: 640px) { .term-sheet { --term-name: 30ch; --term-rx: 22ch; } }

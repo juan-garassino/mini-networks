@@ -1,4 +1,5 @@
 import "./blueprint.css";
+import "@/components/periodic/periodic.css";
 
 // The framed blueprint shell for the classic playground ("/" and "/atlas").
 // Its stylesheet stays out of /lab; links across the two must be plain <a>

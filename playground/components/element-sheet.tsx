@@ -1,12 +1,12 @@
 "use client";
 
-import { createElement, useState } from "react";
+import { useState } from "react";
 import { AnimatePresence, motion } from "motion/react";
 import { infer } from "@/lib/api";
 import type { RunSummary, TaxonomyResponse } from "@/lib/types";
 import { STATUS_INK, atomicNumbers, familyOf, symbolFor } from "@/lib/blueprint";
-import { iconFor } from "@/lib/icons";
 import { NetworkFlow } from "@/components/network-flow";
+import { ElementTile } from "@/components/periodic/element-tile";
 import { schematicFor } from "@/lib/schematics";
 
 export function ElementSheet({
@@ -31,7 +31,6 @@ export function ElementSheet({
   // atoms 1-16, compounds by chart reading order, reactions ✻n — as on the table
   const specimenNo = composition ? `✻${rxIndex + 1}` : (name && atomicNumbers()[name]) || "—";
   const family = model && name ? familyOf(name) : undefined;
-  const Icon = name ? iconFor(name) : null;
 
   const runInfer = async () => {
     if (!name) return;
@@ -64,22 +63,12 @@ export function ElementSheet({
             <div className="pt-drawer-body">
             {/* header: the specimen's own element tile, then its name and kind */}
             <div className="flex items-start gap-4">
-              <div
-                className={`pt-tile pt-fam pt-spec grid h-24 w-24 flex-none grid-rows-[auto_1fr_auto] items-center ${
-                  composition ? "pt-reaction border border-dashed border-line" : "border-[1.5px] border-line bg-paper-deep/80"
-                }`}
-                data-family={composition ? undefined : familyOf(name)}
-                data-level={composition ? "reaction" : model?.level === "elementary" ? "atom" : "compound"}
-              >
-                <span className="flex items-start justify-between leading-none">
-                  <span className="pt-z tabular-nums text-ink-dim">{specimenNo}</span>
-                  {Icon && createElement(Icon, { strokeWidth: 1.5, className: "pt-icon text-ink-dim" })}
-                </span>
-                <span className="bp-title text-center text-[44px] font-extrabold leading-none tracking-[0.02em] text-redline">
-                  {symbolFor(name)}
-                </span>
-                <span className="pt-name truncate text-center text-ink-dim">{name}</span>
-              </div>
+              <ElementTile
+                name={name}
+                number={specimenNo}
+                level={composition ? "reaction" : model?.level === "elementary" ? "atom" : "compound"}
+                size="spec"
+              />
               <div className="min-w-0 flex-1 pt-0.5">
                 <div className="flex items-start justify-between gap-3">
                   <div className="text-[10px] tracking-[0.3em] text-ink-dim">SPEC SHEET</div>
