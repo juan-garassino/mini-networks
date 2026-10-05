@@ -22,7 +22,7 @@ export function Legend({ sample }: { sample: string }) {
     <div className="flex flex-col items-start gap-2 font-bold" style={{ color: COLOR.ink, fontSize: TYPE.ui }}>
       <span className={item}>
         <svg width="30" height="16" viewBox="0 0 30 16" className="shrink-0" aria-hidden><rect x="0.6" y="0.6" width="28.8" height="14.8" rx="4" fill={COLOR.card} stroke={COLOR.ink} strokeWidth={STROKE.box} /><path d="M0.6 4.6 Q0.6 0.6 4.6 0.6 H9 V15.4 H4.6 Q0.6 15.4 0.6 11.4 Z" fill={strip} /><path d="M9 0.6 V15.4" stroke={COLOR.ink} /></svg>
-        atom: its number starts a lineage (a small chip: nothing builds on it yet)
+        atom: its number starts a lineage (on the shelf at the top: nothing builds on it yet)
       </span>
       <span className={item}>
         <svg width="30" height="16" viewBox="0 0 30 16" className="shrink-0" aria-hidden><path d="M0.6 5 V4.6 Q0.6 0.6 4.6 0.6 H25.4 Q29.4 0.6 29.4 4.6 V5 Z" fill={strip} /><path d="M0.6 5 H29.4" stroke={COLOR.ink} /><rect x="0.6" y="0.6" width="28.8" height="14.8" rx="4" fill="none" stroke={COLOR.ink} strokeWidth={STROKE.box} /></svg>
@@ -41,7 +41,7 @@ export function Legend({ sample }: { sample: string }) {
       </span>
       <span className={item}>
         <svg width="34" height="14" viewBox="0 0 34 14" className="shrink-0" aria-hidden><path d="M1 7 H8" stroke={COLOR.ink} strokeWidth={STROKE.edge} /><path d={tagD({ x: 8.5, y: 1.5, w: 24, h: 11, tip: "right" }, 5)} fill={strip} stroke={COLOR.ink} strokeWidth={STROKE.tag} /></svg>
-        jumps to the box on the tag (drawn whole, the line would take the long way round)
+        jumps to the box on the tag: lines between the two halves of the sheet, and any that would take the long way round
       </span>
       <span className="flex flex-col items-start gap-1.5">
         {STATES.map((st) => (

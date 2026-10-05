@@ -28,20 +28,25 @@ export const ENCODING = defineEncoding({
   },
   "column header": {
     mark: "column header row (Atoms / Gen 1 / Gen 2 / Gen 3), desktop",
-    encodes: "generation depth of the column under it, aligned in both stacks",
+    encodes: "generation depth of the column under it, aligned in both stacks; true for every box under it (the island chips sit on the shelf ABOVE the header row)",
     source: "graph.depth",
     kind: "chrome",
   },
   // ——— boxes
   "store box": {
     mark: "store box: a left index cell in the family pastel holding a number",
-    encodes: "atom (depth 0, starts a lineage); the number is its lineage address, counted in reading order (left stack then right, lanes top → bottom, chips first), so atom numbers count down the page",
+    encodes: "atom (depth 0, starts a lineage); the number is its lineage address, counted in reading order (the shelf first, then the left stack and the right, lanes top → bottom), so atom numbers count down the page",
     source: "sheetAddresses() → lineageAddresses(g, reading order)",
   },
+  shelf: {
+    mark: "shelf: a soft tray across the top of the sheet, above the column headers, titled \"Standalone atoms\" with the caption \"no lines in or out yet\"",
+    encodes: "where the atoms with no edges live: off the grid, so no generation header ever stands over them; a family made only of them (Structure) has no lane",
+    source: "sheetDesktop() shelf in lib/world/dfd.ts (DFD_SHELF_TITLE / DFD_SHELF_TEXT)",
+  },
   chip: {
-    mark: "chip: a smaller store (40 px, 22-px creature) on the lane's title row, right of the lane name, left-aligned to a column x for order only; the caption \"standalone atoms\" under the lane name",
-    encodes: "an atom nothing builds on yet (no edges in or out): it starts no line, so it does not take a grid row — and the column header above it does not apply to it",
-    source: "isIsland() + DFD_SHELF_TEXT in lib/world/dfd.ts",
+    mark: "chip: a smaller store (40 px, 22-px creature) on the shelf, grouped by family (8 px apart, 24 between groups) in the lanes' reading order",
+    encodes: "an atom nothing builds on yet (no edges in or out): it starts no line, so it takes no grid row",
+    source: "isIsland() in lib/world/dfd.ts",
   },
   "process box": {
     mark: "process box: a family-pastel header strip holding an address like 4.1.2",
@@ -95,14 +100,24 @@ export const ENCODING = defineEncoding({
     source: "Router.outOpts (back)",
   },
   "margin line": {
-    mark: "a line leaving an atom's LEFT side and riding the 8-px margin track (the lane's left gutter)",
+    mark: "a line leaving an atom's LEFT side and riding the margin track (the lane's left gutter, 8 px off the boxes and 24 px in from the sheet's edge)",
     encodes: "a same-lane child the parent's own comb cannot reach without a crossing (the zoo: transformer → text diffusion, past mamba's line): one clean elbow instead of a connector pair inside one lane",
     source: "Router.salvage",
   },
   "connector pair": {
     mark: "off-sheet connector pair: a short stub out of a free port on each end, ending in a tag (address bold + name) whose tip points along the flow; the tag is tinted with the far end's family; the in-end's stub carries the arrowhead",
-    encodes: "a line that would detour (routed > 1.6 × the Manhattan distance between the box centres, or straying outside its two stacks) or could not route at all; the tag names the far end (budget 2, never inside one lane; the zoo: audio spectrogram → audio transformer on desktop, diffusion → text diffusion on the phone)",
-    source: "finish() + placePair() in lib/world/dfd.ts (DFD_DETOUR_MAX, DFD_OFFSHEET_MAX)",
+    encodes: "a line between the two stacks (desktop: real wires stay in their panel, so every such line is a pair; the zoo: tabular classifier → tabular diffusion, audio spectrogram → audio transformer), or a line inside a stack that would detour (routed > 1.6 × the Manhattan distance between the box centres) or could not route at all (budget 2, never inside one lane; the zoo's phone: diffusion → text diffusion); the tag names the far end",
+    source: "finish() + placeBundle() / placePair() in lib/world/dfd.ts (DFD_DETOUR_MAX, DFD_OFFSHEET_MAX)",
+  },
+  "bundle tag": {
+    mark: "a connector tag of several lines, one per far end (address bold + name), each line banded in its own far end's family pastel",
+    encodes: "ALL of one parent's lines into the other stack, from one stub (the zoo: transformer → vit, sam, clip)",
+    source: "placeBundle() in lib/world/dfd.ts",
+  },
+  "hub tag": {
+    mark: "an in-tag with no stub, standing in a free grid cell of the children's stack, tip pointing right into a small comb of ordinary lines",
+    encodes: "where a parent's bundle enters the other stack when its children have no room for a tag each: the comb's lines are its builds_on edges (lit with the lineage), named once by the hub",
+    source: "placeHub() in lib/world/dfd.ts (edges flagged hub)",
   },
   // ——— interaction
   "lit lineage": {

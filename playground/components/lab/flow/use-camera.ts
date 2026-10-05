@@ -57,8 +57,15 @@ export function useCamera({ layout, g, active, stage, zoom, focus, frozen, onBac
     const all: R = { x: i, y: i / 2, w: stage.w - 2 * i, h: stage.h - i };
     const over = fit({ x: 0, y: 0, w: layout.width, h: layout.height }, all, 1.25);
     if (zoom === "region" && focus) {
-      const lane = layout.lanes.find((l) => l.family === focus.family)!;
-      return fit(pad(lane, SPACE.lanePad), all, 2.2, over.s);
+      // a box's region is its lane; a chip's, the shelf down to its family's lane (a family made
+      // only of chips has none: the whole sheet, with the chip lit)
+      const lane = layout.lanes.find((l) => l.family === focus.family);
+      if (focus.chip && !lane) return over;
+      const r = focus.chip && layout.shelf && lane ? union([layout.shelf, lane]) : lane ?? focus;
+      const c = fit(pad(r, SPACE.lanePad), all, 2.2, over.s);
+      // never pull the sheet's own top (or bottom) edge into the stage: no empty band above the shelf
+      const h = layout.height * c.s;
+      return { ...c, ty: h > all.h ? Math.min(all.y, Math.max(all.y + all.h - h, c.ty)) : all.y + (all.h - h) / 2 };
     }
     if (zoom === "node" && focus) {
       const n = SPACE.nodeInset;

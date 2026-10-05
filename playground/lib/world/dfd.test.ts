@@ -9,7 +9,7 @@ import type { TaxonomyResponse } from "../types.ts";
 import { familyMapFromBlueprint } from "./index.ts";
 import {
   auditDfd, buildDfd, detourRatio, DFD_BOX_TALL, DFD_DETOUR_MAX, DFD_G, DFD_INDENT, DFD_OFFSHEET_MAX, DFD_SHORT,
-  elbowD, routeLength, type DfdLayout, type DfdMode,
+  elbowD, framedBoxes, routeLength, type DfdBox, type DfdEdge, type DfdLayout, type DfdMode,
 } from "./dfd.ts";
 import { mulberry32, shuffle } from "./rng.ts";
 
@@ -24,9 +24,11 @@ function clean(l: DfdLayout, what: string) {
   assert.equal(a.nonOrthogonal, 0, `${what}: diagonal runs`);
   assert.equal(a.labelHits, 0, `${what}: label hits`);
   // a detour may remain only once the connector budget is spent (shuffled perturbations can
-  // exhaust it; the real zoo never does — asserted below)
-  assert.ok(l.audit.detours === 0 || l.offSheet.length === DFD_OFFSHEET_MAX, `${what}: a routed line is a detour with budget left`);
-  assert.ok(l.offSheet.length <= DFD_OFFSHEET_MAX, `${what}: off-sheet budget`);
+  // exhaust it; the real zoo never does — asserted below). Pairs between the two stacks
+  // ("panel") are the rule, not a repair, so the budget counts only the others.
+  const repairs = l.offSheet.filter((o) => o.why !== "panel");
+  assert.ok(l.audit.detours === 0 || repairs.length === DFD_OFFSHEET_MAX, `${what}: a routed line is a detour with budget left`);
+  assert.ok(repairs.length <= DFD_OFFSHEET_MAX, `${what}: off-sheet budget`);
   // every routed edge ends ON its target's edge, its last run perpendicular to it
   const by = new Map(l.boxes.map((b) => [b.name, b]));
   for (const e of l.edges) {
@@ -60,12 +62,11 @@ for (const mode of ["desktop", "mobile"] as DfdMode[]) {
     // every cross-family edge carries its inline label on desktop
     if (mode === "desktop") {
       assert.equal(l.audit.unlabelled, 0, "desktop: every cross-family edge labelled");
-      // the grid: a generation column shares one left x in its stack (island chips ride the
-      // lane's title row, each left-aligned to one of those column x's)
+      // the grid: a generation column shares one left x in its stack (island chips sit on the
+      // shelf, outside the grid)
       const xs = new Map<string, Set<number>>();
       for (const b of l.boxes) if (!b.chip) { const k = `${b.stack}:${b.col}`; if (!xs.has(k)) xs.set(k, new Set()); xs.get(k)!.add(b.x); }
       for (const [k, s] of xs) assert.equal(s.size, 1, `column ${k} is aligned`);
-      for (const b of l.boxes) if (b.chip) assert.ok(xs.get(`${b.stack}:${b.col}`)?.has(b.x), `${b.name}: chip on a column x`);
     }
   });
 
@@ -102,8 +103,12 @@ test("desktop: no routed line is a detour; each connector pair replaced one", ()
     const r = detourRatio(e.points, by.get(e.from)!, by.get(e.to)!);
     assert.ok(r <= DFD_DETOUR_MAX, `${e.from}->${e.to} runs ${r.toFixed(2)}× the distance between its boxes`);
   }
-  // the trade is measured: a pair only ever replaces a line that was a detour (or had no route)
-  for (const o of l.offSheet) assert.ok(o.why === "unroutable" || o.ratio > DFD_DETOUR_MAX, `${o.from}->${o.to}: replaced a ${o.ratio}× line`);
+  // the trade is measured: a pair only ever replaces a line that was a detour (or had no route),
+  // or joins the two stacks (wires stay in their panel)
+  for (const o of l.offSheet) {
+    if (o.why === "panel") assert.notEqual(by.get(o.from)!.stack, by.get(o.to)!.stack, `${o.from}->${o.to}: a panel pair inside one stack`);
+    else assert.ok(o.why === "unroutable" || o.ratio > DFD_DETOUR_MAX, `${o.from}->${o.to}: replaced a ${o.ratio}× line`);
+  }
   // the zoo's one hopeless line: a backward edge between the stacks
   assert.ok(l.offSheet.some((o) => o.from === "audio_spectrogram" && o.to === "audio_transformer"), "audio spectrogram → audio transformer is a pair");
 });
@@ -114,8 +119,17 @@ for (const mode of ["desktop", "mobile"] as DfdMode[]) {
     const by = new Map(l.boxes.map((b) => [b.name, b]));
     for (const o of l.offSheet) {
       for (const [tag, far, own] of [[o.out, o.to, o.from], [o.in, o.from, o.to]] as const) {
-        assert.ok(tag.text.startsWith(`${tag.address} `) && tag.text.endsWith(far.replace(/_/g, " ")), `${tag.text}: address + name of ${far}`);
-        assert.equal(tag.address, l.boxes.find((x) => x.name === far)!.address, `${tag.text}: the far end's address`);
+        // a bundle names every far end of its parent in the other stack, one line each
+        const line = tag.lines.find((x) => x.text.endsWith(far.replace(/_/g, " ")));
+        assert.ok(line && line.text.startsWith(`${line.address} `), `${tag.text}: address + name of ${far}`);
+        assert.equal(line!.address, l.boxes.find((x) => x.name === far)!.address, `${tag.text}: the far end's address`);
+        assert.equal(tag.text, tag.lines[0].text, `${tag.text}: text is the first line`);
+        if (!tag.stub.length) {
+          // a hub: its lines (routed edges) start on the tag and end on each child
+          const hub = l.edges.find((e) => e.from === o.from && e.to === o.to)!;
+          assert.ok(hub.hub && hub.points[0].x === tag.x + tag.w && hub.points[0].y > tag.y && hub.points[0].y < tag.y + tag.h, `${tag.text}: ${o.to}'s line leaves the hub`);
+          continue;
+        }
         const b = by.get(own)!;
         const port = tag === o.out ? tag.stub[0] : tag.stub[tag.stub.length - 1];
         const onEdge = port.x === b.x || port.x === b.x + b.w || port.y === b.y || port.y === b.y + b.h;
@@ -141,7 +155,8 @@ for (const mode of ["desktop", "mobile"] as DfdMode[]) {
     }
     // a line too short for its label needs none; every longer one has its trunk's
     const labelled = new Set(l.labels.flatMap((x) => x.edges));
-    for (const e of l.edges) if (e.cross && !e.offSheet && routeLength(e.points) > DFD_SHORT) assert.ok(labelled.has(`${e.from}->${e.to}`), `${e.from}->${e.to} unlabelled`);
+    // (a hub's lines are named by the hub's own tag)
+    for (const e of l.edges) if (e.cross && !e.offSheet && !e.hub && routeLength(e.points) > DFD_SHORT) assert.ok(labelled.has(`${e.from}->${e.to}`), `${e.from}->${e.to} unlabelled`);
     if (mode === "desktop") {
       const t = l.boxes.find((b) => b.name === "transformer")!.address;
       assert.equal(l.labels.filter((x) => x.text === `${t} transformer`).length, 1, `${t} transformer once`);
@@ -149,15 +164,23 @@ for (const mode of ["desktop", "mobile"] as DfdMode[]) {
   });
 }
 
-test("desktop: island atoms are chips on their lane's title row; the stacks balance", () => {
+test("desktop: island atoms are chips on the shelf, above every column header; the stacks balance", () => {
   const l = buildDfd(tax, fam, { mode: "desktop" });
   const linked = new Set(l.edges.flatMap((e) => [e.from, e.to]));
+  const top = Math.min(...l.headers.map((h) => h.y));
+  assert.ok(l.shelf, "a shelf");
   for (const b of l.boxes) {
     assert.equal(b.chip, b.atom && !linked.has(b.name), `${b.name}: a chip exactly when it has no edges`);
     if (!b.chip) continue;
-    const lane = l.lanes[b.lane];
-    const grid = l.boxes.filter((o) => o.lane === b.lane && !o.chip);
-    assert.ok(b.y > lane.y && grid.every((o) => o.y >= b.y + b.h + 16), `${b.name}: above its lane's grid`);
+    // on the shelf, which ends above the column headers: no generation claims a chip
+    const s = l.shelf!;
+    assert.ok(b.x >= s.x && b.x + b.w <= s.x + s.w && b.y >= s.y && b.y + b.h <= s.y + s.h, `${b.name}: inside the shelf`);
+    assert.ok(b.y + b.h < top, `${b.name}: above the column headers`);
+  }
+  // every grid box stands under the header of its own generation (the headers never lie)
+  for (const b of l.boxes) if (!b.chip) {
+    const h = l.headers.find((x) => x.stack === b.stack && x.x === b.x);
+    assert.ok(h && h.depth === b.depth, `${b.name} (gen ${b.depth}) under "${h?.text}"`);
   }
   // the grid keeps only boxes that carry lines, so the tall boxes fit the 848-px envelope
   assert.ok(l.boxes.filter((b) => !b.chip).every((b) => b.h === DFD_BOX_TALL), "tall boxes");
@@ -165,15 +188,47 @@ test("desktop: island atoms are chips on their lane's title row; the stacks bala
   assert.ok(l.boxes.filter((b) => b.lines.length > 1).length <= 8, "at most 8 two-line names");
   const bottom = (s: number) => Math.max(...l.lanes.filter((x) => x.stack === s).map((x) => x.y + x.h));
   assert.ok(Math.abs(bottom(0) - bottom(1)) <= 2 * (DFD_BOX_TALL + 16), `stacks end at ${bottom(0)} / ${bottom(1)}`);
-  // the 16-px margins hold one track (the lane's left gutter): only a line leaving its parent's
-  // LEFT side may ride it, never the sheet's own edge
+  // the left margin holds one track (the lane's left gutter), 24 px in from the sheet's edge:
+  // only a line leaving its parent's LEFT side may ride it; nothing rides the right margin
   const by = new Map(l.boxes.map((b) => [b.name, b]));
+  const x0 = Math.min(...l.boxes.filter((b) => !b.chip).map((b) => b.x));
   for (const e of l.edges) for (const p of e.points) {
-    assert.ok(p.x >= DFD_G && p.x <= l.width - DFD_G, `${e.from}->${e.to} runs on the sheet's edge`);
-    if (p.x < 16 || p.x > l.width - 16) assert.equal(e.points[0].x, by.get(e.from)!.x, `${e.from}->${e.to} rides the margin without leaving its parent's left side`);
+    assert.ok(p.x >= 3 * DFD_G && p.x <= l.width - DFD_G, `${e.from}->${e.to} runs within a track of the sheet's edge`);
+    if (p.x < x0) assert.equal(e.points[0].x, by.get(e.from)!.x, `${e.from}->${e.to} rides the margin without leaving its parent's left side`);
   }
   // a connector pair never joins two boxes of one lane: that line takes the left gutter instead
   for (const o of l.offSheet) assert.notEqual(by.get(o.from)!.lane, by.get(o.to)!.lane, `${o.from}->${o.to}: a pair inside one lane`);
+});
+
+test("desktop: real wires stay inside one stack; lines between the stacks are connector pairs", () => {
+  const l = buildDfd(tax, fam, { mode: "desktop" });
+  const by = new Map(l.boxes.map((b) => [b.name, b]));
+  const pairs = new Set(l.offSheet.map((o) => `${o.from}->${o.to}`));
+  for (const e of l.edges) {
+    if (by.get(e.from)!.stack === by.get(e.to)!.stack) continue;
+    assert.ok(pairs.has(`${e.from}->${e.to}`), `${e.from}->${e.to} crosses the corridor as a wire`);
+    // the in-end: a stub tag on the child, or a hub whose lines stay in the child's stack
+    if (e.hub) for (const p of e.points) assert.ok(p.x > l.width / 2 === by.get(e.to)!.x > l.width / 2, `${e.from}->${e.to}: hub line leaves its stack`);
+  }
+  // one out-tag per parent, naming all its far ends
+  const outs = new Map<string, Set<object>>();
+  for (const o of l.offSheet) if (o.why === "panel") { if (!outs.has(o.from)) outs.set(o.from, new Set()); outs.get(o.from)!.add(o.out); }
+  for (const [p, s] of outs) assert.equal(s.size, 1, `${p}: one bundle tag`);
+});
+
+test("desktop: no parent's lines box boxes in (the frame rule)", () => {
+  // the real zoo
+  assert.deepEqual(framedBoxes(buildDfd(tax, fam, { mode: "desktop" })), [], "the zoo");
+  // the detector: one source's U round a box, closed by another line over its open side
+  const box = (name: string, x: number, y: number): DfdBox => ({ name, family: "f", depth: 1, atom: false, chip: false, stack: 0, lane: 0, col: 1, row: 0, x, y, w: 80, h: 48, lines: [name], address: "1.1" });
+  const inside = box("inside", 140, 140);
+  const u: DfdEdge = { from: "p", to: "a", cross: false, side: "left", offSheet: false, points: [{ x: 100, y: 100 }, { x: 100, y: 240 }, { x: 260, y: 240 }, { x: 260, y: 100 }, { x: 280, y: 100 }] };
+  const lid: DfdEdge = { from: "q", to: "b", cross: false, side: "left", offSheet: false, points: [{ x: 96, y: 96 }, { x: 240, y: 96 }] };
+  assert.deepEqual(framedBoxes({ boxes: [inside], edges: [u, lid] }).map((f) => [f.src, f.boxes]), [["p", ["inside"]]], "a closed frame is found");
+  assert.deepEqual(framedBoxes({ boxes: [inside], edges: [u] }), [], "an open U is not a frame");
+  // a comb (short taps) never frames
+  const comb: DfdEdge[] = [100, 164, 228].map((y, i) => ({ from: "p", to: `c${i}`, cross: false, side: "left" as const, offSheet: false, points: [{ x: 60, y: 164 }, { x: 80, y: 164 }, { x: 80, y }, { x: 104, y }] }));
+  assert.deepEqual(framedBoxes({ boxes: [inside], edges: [...comb, lid] }), [], "a comb is no frame");
 });
 
 test("mobile: a file tree indented by generation, a ruler for it, a compact sheet", () => {
@@ -230,10 +285,10 @@ function inversions(l: DfdLayout): string[] {
     bs.sort((a, b) => a.y - b.y || a.x - b.x);
     for (let i = 1; i < bs.length; i++) if (byAddr(bs[i - 1].address, bs[i].address) >= 0) out.push(`${bs[i - 1].address} ${bs[i - 1].name} above ${bs[i].address} ${bs[i].name}`);
   }
-  // desktop: a lane's atoms read chips first, then the Atoms column
-  if (l.mode === "desktop") for (const ln of l.lanes.keys()) {
-    const atoms = l.boxes.filter((b) => b.lane === ln && b.atom).sort((a, b) => Number(b.chip) - Number(a.chip) || a.y - b.y || a.x - b.x);
-    for (let i = 1; i < atoms.length; i++) if (byAddr(atoms[i - 1].address, atoms[i].address) >= 0) out.push(`atoms: ${atoms[i - 1].name} before ${atoms[i].name}`);
+  // desktop: the shelf (at the top) reads first, so every chip's number is below every grid atom's
+  if (l.mode === "desktop") {
+    const chips = l.boxes.filter((b) => b.chip), atoms = l.boxes.filter((b) => b.atom && !b.chip);
+    for (const c of chips) for (const a of atoms) if (byAddr(c.address, a.address) >= 0) out.push(`atoms: chip ${c.name} after ${a.name}`);
   }
   return out;
 }

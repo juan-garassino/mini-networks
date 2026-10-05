@@ -14,6 +14,7 @@ export const COLOR = {
   ink: "#2E2742",       // every edge, outline and word
   inkSoft: "#5D5672",   // secondary text (≥ 6:1 on the sheet)
   rule: "#E4E1EA",      // swim-lane rules, drawer dividers, the sheet grabber
+  shelf: "#F3F1F6",     // the shelf's tray (standalone atoms), a step off the paper
   head: "#8A84A0",      // column headers (Atoms / Gen n), the phone ruler
   accent: "#2F5FD0",    // the one accent: selection, lit lineage, pipeline order, focus ring
   onAccent: "#FFFFFF",  // text on the accent
@@ -51,7 +52,7 @@ export const TYPE = {
   address: 9.5,             // a derived box's header strip
   index: 12,                // an atom's index cell
   lane: 13,                 // swim-lane name
-  shelf: DFD_SHELF_PX,      // "standalone atoms" under the name of a lane with chips
+  shelf: DFD_SHELF_PX,      // the shelf's caption under its title ("no lines in or out yet")
   head: 12,                 // column headers, the phone ruler
   small: 12,                // drawer addresses, captions
   ui: 13,                   // buttons, legend, search
@@ -84,7 +85,7 @@ export const SPACE = {
   lanePad: 24,              // region view: air around the framed lane
 } as const;
 
-export const RADIUS = { ui: 7, panel: 8, sheet: 14, chip: 4 } as const;
+export const RADIUS = { ui: 7, panel: 8, sheet: 14, chip: 4, shelf: 10 } as const;
 
 export const STROKE = {
   edge: 1.5,                // every line at rest

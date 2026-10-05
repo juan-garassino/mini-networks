@@ -12,7 +12,7 @@ import type { ModelEvidence } from "@/lib/types";
 import type { DfdLayout } from "@/lib/world/dfd";
 import { useWorld } from "@/hooks/use-world";
 import { useLesson } from "@/hooks/use-lesson";
-import { installLabHook, LabMotion, useLabReady, useLabView, useStill } from "@/lib/lab-contract";
+import { installLabHook, LabMotion, labLoading, loadPhase, useLabReady, useLabView, useStill } from "@/lib/lab-contract";
 import { cardModel, evidenceState } from "@/components/lab/shared/card-model";
 import { forwardPassOrder, forwardPassSchedule, GROKKING_EGG, useCritterClicks, useKonami, useLongFocus, useRealLossCurve } from "@/components/lab/shared/eggs";
 import { FlowDrawer } from "./drawer";
@@ -192,7 +192,7 @@ export function FlowBoard() {
         data-names-placed={layout ? `${layout.boxes.length}/${layout.boxes.length}` : undefined}>
         {!mobile && header}
         {!layout && (
-          <p className="absolute left-6 font-bold" style={{ top: SPACE.barDesktop + 24, color: COLOR.inkSoft, fontSize: TYPE.body }}>
+          <p {...labLoading(loadPhase(taxonomy, { laidOut: false })!)} className="absolute left-6 font-bold" style={{ top: SPACE.barDesktop + 24, color: COLOR.inkSoft, fontSize: TYPE.body }}>
             {taxonomy ? "Routing the sheet…" : "Waiting for the zoo’s API…"}
           </p>
         )}
