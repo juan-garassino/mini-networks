@@ -21,7 +21,7 @@ export const METRO_ENCODING = {
   "track geometry": "0°, 45° and 90° only, on one 20-px grid, one corner radius; the drawing is authored like the periodic table's placement (components/metro/layout.ts STATIONS + ROUTES)",
   "dashed spur": "a station the drafting does not know yet, placed by the engine's fallback (system.ts placeAuto) on a straight spur off a station of its line: under construction until it is drafted",
   "station order": "every path starts at an origin (or at a station nearer one), so riding away from an origin follows the way models build on each other; a station's exact parents are in its spec sheet",
-  district: "where each family's stations sit: the painted maps' geography (Perception west, Representation north, Structure a north-east island, Sequence centre, Decision east, Generative south); the quiet area name is the family",
+  geography: "where each family's stations sit: the painted maps' geography (Perception west, Representation north, Structure a north-east island, Sequence centre, Decision east, Generative south); no area names, the line colour carries the family",
   "origin bullet": "an atom (elementary model), lettered with its element symbol, in its line's colour",
   "station tick": "a derived model served by one line; the tick points at its name",
   "terminus bar": "a station on one line where that line's path ends: nothing further on this line builds from here",
@@ -29,8 +29,12 @@ export const METRO_ENCODING = {
   "label weight": "semibold = an atom or an interchange (where you change), regular = a station on one line",
   train: "one per line, riding the line's longest path outward from its origin; motion only, frozen under ?still=1 and prefers-reduced-motion",
   "through service": "a composition (pipeline): its name and the stations it calls at, each bullet in that station's line colour; hovering one lights those stations on the map",
-  "line count": "in the key: how many stations the line calls at (its own models + the models built on them)",
+  "key: models": "in the key: the family's own models (the same count every design prints)",
+  "key: stops": "in the key: how many stations the line calls at (its own models + every model built on one of them)",
 } as const;
+
+/** The key's two count columns, in order. */
+export const KEY_COLUMNS = { models: "models", stops: "stops" } as const;
 
 export type MetroMark = "origin" | "tick" | "terminus" | "interchange" | "train" | "spur";
 

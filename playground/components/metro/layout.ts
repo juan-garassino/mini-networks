@@ -115,18 +115,12 @@ export const ROUTES: Record<string, PathEntry[][]> = {
   ],
 };
 
-/** Quiet area names: each district's name sits in its own land. */
-export const DISTRICTS: { family: string; x: number; y: number; anchor: "start" | "middle" | "end" }[] = [
-  { family: "perception", x: 10, y: 33.2, anchor: "middle" },
-  { family: "representation", x: 31, y: 2.4, anchor: "middle" },
-  { family: "structure", x: 54, y: 6.9, anchor: "middle" },
-  { family: "sequence", x: 48, y: 22, anchor: "middle" },
-  { family: "decision", x: 59, y: 27, anchor: "middle" },
-  { family: "generative", x: 28, y: 39.6, anchor: "middle" },
-];
+// No district names: they floated in leftover space (Sequence beside
+// Decision, Perception under convnext), and the line colour + the key already
+// say the family. The engine still takes `areas` for a map that wants them.
 
 /** The map's own cartouche (title + key), in the empty south-east (cells). */
-export const CARTOUCHE = { x: 46, y: 28.5, w: 22.5, h: 11 };
+export const CARTOUCHE = { x: 46, y: 27.5, w: 22.5, h: 12 };
 
 export const labelOf = (name: string) => name.replace(/_/g, " ");
 
@@ -165,7 +159,6 @@ export function zooSpec(tax: TaxonomyResponse): SystemSpec {
     cols: COLS, rows: ROWS,
     lines: LINE_ORDER.map((id) => ({ id, name: LINE_NAMES[id], color: LINE_COLORS[id] ?? SHEET.unknownLine })),
     stations, routes: ROUTES,
-    areas: DISTRICTS.map((d) => ({ id: d.family, name: LINE_NAMES[d.family], x: d.x, y: d.y, anchor: d.anchor })),
     reserved: [{ id: "cartouche", ...CARTOUCHE }],
   };
 }

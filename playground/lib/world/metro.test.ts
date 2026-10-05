@@ -83,13 +83,15 @@ test("the fallback serves a two-family model on both of its lines when a clean s
 });
 
 test("an auto-placed station never hides on a trunk, and a line it cannot reach is reported, not faked", () => {
-  const m = buildMetro({ ...tax, models: [...tax.models, model("tiny_vit", ["vit"]), model("gan_rlhf", ["gan", "rlhf"])] });
+  const m = buildMetro({ ...tax, models: [...tax.models, model("tiny_vit", ["vit"]), model("gnn_vae", ["gnn", "vae"])] });
   assert.deepEqual(clean(m), ZERO, m.audit.details.join("\n"));
   const tiny = m.stations.find((s) => s.id === "tiny_vit")!;
   const trunk = m.stations.filter((s) => s.x === tiny.x && s.id !== "tiny_vit").map((s) => s.y);
   assert.ok(!(tiny.x === m.stations.find((s) => s.id === "vit")!.x && trunk.some((y) => y > tiny.y) && trunk.some((y) => y < tiny.y)), "tiny vit sits between two trunk stops");
-  // gan (south) and rlhf (east) are too far apart for one clean, short spur
-  assert.deepEqual(m.audit.serviceMismatch, ["gan_rlhf: data decision,generative ≠ drawn generative"]);
+  // gnn (the north-east island) and vae (the south-west) are too far apart for
+  // one clean, short spur. (gan + rlhf used to be the example; with the
+  // district names gone their cells are free and the spur now fits.)
+  assert.deepEqual(m.audit.serviceMismatch, ["gnn_vae: data generative,structure ≠ drawn structure"]);
 });
 
 test("the engine maps any graph: a stub drafting grows by the fallback into a clean map", () => {

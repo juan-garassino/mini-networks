@@ -9,7 +9,9 @@ import { TitleBlock, type EditionId, type SheetId } from "@/components/title-blo
 import { ElementSheet } from "@/components/element-sheet";
 import { PERIODIC_SKINS, applySkin, isPeriodicSkin } from "@/components/periodic/skins";
 import { PeriodicTable } from "@/components/periodic/periodic-table";
-import { ChartMetro } from "@/components/metro/metro-chart";
+import { ChartMetro, METRO_TITLE } from "@/components/metro/metro-chart";
+import { MetroTabs } from "@/components/metro/tabs";
+import { usePageTitle } from "@/components/metro/hooks";
 import { applySheet as applyMetroSheet } from "@/components/metro/tokens";
 import { ChartAtlas } from "@/components/views/chart-atlas";
 import { ChartPaper } from "@/components/views/chart-paper";
@@ -63,6 +65,8 @@ export default function Page() {
     const undoSheet = edition === "metro" ? applyMetroSheet(document.documentElement) : () => {};
     return () => { undoTiles(); undoSheet(); };
   }, [edition]);
+  // transit names its own page (the root title names the periodic table)
+  usePageTitle(edition === "metro" ? METRO_TITLE : null);
 
   return (
     <MotionConfig reducedMotion={still ? "always" : "user"}>
@@ -100,7 +104,11 @@ export default function Page() {
           onClose={() => setSelected(null)}
         />
       </main>
-      <TitleBlock sheet={sheet} setSheet={setSheet} ok={ok} runCount={runs.length} edition={edition} setEdition={setEdition} />
+      {/* transit has its own title (the in-map cartouche) and a Jost tab row; the
+          blueprint title block belongs to the editions without one */}
+      {edition === "metro"
+        ? <MetroTabs sheet={sheet} setSheet={setSheet} editions={EDITION_IDS} edition={edition} setEdition={setEdition} />
+        : <TitleBlock sheet={sheet} setSheet={setSheet} ok={ok} runCount={runs.length} edition={edition} setEdition={setEdition} />}
     </MotionConfig>
   );
 }

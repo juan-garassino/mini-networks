@@ -14,21 +14,22 @@ touching anything). The audit counts are on the SVG as `data-*`.
 
 | Token | What it holds |
 |---|---|
-| `SHEET` | paper, paper-deep, ink, ink-dim, line-faint, accent (hover), sample track, bullet letter, unknown line |
+| `SHEET` | paper, paper-deep, ink, ink-dim, line-faint, accent (hover), sample track, bullet letter (ink), unknown line |
 | `SHEET_VARS` / `applySheet` | the sheet as CSS vars (`--paper`, `--ink`, ...) painted on `<html>`, so shared chrome reads the same colours |
-| `LINE_COLORS` | one pastel per line, each holds a white letter |
-| `TYPE` | the face, sizes (label 13, district 15, title 21, note 12, key 12.5), weights, glyph-width metrics |
+| `LINE_COLORS` | one pastel per line, each holds an ink letter |
+| `TYPE` | the face, sizes (label 13, title 21, note 12, key 12.5, key heads 11, bullet 11), weights, glyph-width metrics |
 | `GRID` | pitch 20, corner 14, track 6 |
 | `MARK` | origin / ring / tick / terminus / train sizes, each with its `extent` toward the name; `labelClear` 4.5 |
-| `SPACE` | cartouche padding and rows, phone min width, page max width |
+| `SPACE` | cartouche padding, key columns + rows, phone min width + frame fade, page max width, tab row height |
 | `MOTION` | train speed, still pose, fade, the dim on hover |
 
 ## Type scale
 
 One face, Jost (a geometric sans in the Johnston lineage). Station names are
 13 px, semibold for origins and interchanges (where you change), regular for
-stations on one line. District names are 15 px in ink-dim at 75%. The
-cartouche title is 21 px semibold over 12 px notes. A name always sits at
+stations on one line. Bullet letters are 11 px ink on the pastel (white failed
+contrast). The cartouche title is 21 px semibold over 12 px notes. No district
+names: they floated in leftover space; line colour + key carry the family. A name always sits at
 `mark extent + labelClear` from the station centre, measured per kind, so a
 terminus bar never crowds its name.
 
@@ -36,9 +37,10 @@ terminus bar never crowds its name.
 
 The sheet is `cols × rows` cells (69 × 40 here). Stations and bare corners
 sit on whole cells. The cartouche is a reserved rect in the empty south-east.
-On desktop the map fits the viewport height. On a phone the map keeps 1180 px,
-pans sideways inside its frame (it opens on the knot), and the key moves above
-it as HTML (`PhoneKey`).
+On desktop the map fits the viewport height. Phone rule: the map keeps 1180 px
+and pans sideways inside its frame (it opens on the knot; the frame's sides
+fade over `SPACE.frameFade` so a name never ends in a hard cut), and the key
+sits above it as HTML (`PhoneKey`), folded into a disclosure so the map leads.
 
 ## Components
 
@@ -50,9 +52,10 @@ it as HTML (`PhoneKey`).
 | `station.tsx` | one station: mark, name, hit area, keyboard + tooltip |
 | `train.tsx` | one train per line: SMIL when live, parked when still |
 | `marks.tsx` | `Mark`, `TrainBody`, `KeyGlyph` (key sample = the real mark), `Bullet` |
-| `key.tsx` | `Cartouche` (in-SVG key in the reserved rect) and `PhoneKey`, from the same data |
+| `key.tsx` | `Cartouche` (in-SVG key in the reserved rect) and `PhoneKey`, from the same data: per line `models` (its family) and `stops` (every station it calls at) |
+| `tabs.tsx` | the Jost sheet row (Map / Reactions / Observatory + edition picker) that replaces the classic title block |
 | `services.tsx` | through services: a list whose rows light their stations on the map |
-| `metro-chart.tsx` | the page: header, key, map frame, under-construction list, services |
+| `metro-chart.tsx` | the page: header, key, map frame, under-construction list, services; `METRO_TITLE` (also the tab title) |
 | `hooks.ts` | `?still=1` / `?specimen=1` flags and reduced motion |
 
 ## Marks
@@ -68,6 +71,12 @@ from its origin, fading at each end. `?still=1` and `prefers-reduced-motion`
 park every train mid-leg (`MOTION.trainStillT`), never on a station.
 Hovering a through service dims the rest of the map (160 ms). Nothing loops
 on page load.
+
+## Views (the /lab contract)
+
+`/?edition=metro&still=1` (and `&specimen=1`). The map's SVG carries
+`data-lab-ready="1"` once it is in the DOM, Jost has loaded and two frames have
+painted it (`useDrawn`); the audit counts sit beside it as `data-*`.
 
 ## Lifting it into another project
 
@@ -100,5 +109,5 @@ shows up in `audit.serviceMismatch`. It is never faked. Draft only what
 matters and let the fallback hold the rest.
 
 Replace: `tokens.ts` (sheet, line colours, face), `encoding.ts` (mark copy),
-`TITLE` / `NOTE` in `metro-chart.tsx`, and the `Services` data. Keep the
+`METRO_TITLE` / `NOTE` in `metro-chart.tsx`, and the `Services` data. Keep the
 audit at zero: `lib/world/metro.test.ts` shows the invariants worth testing.

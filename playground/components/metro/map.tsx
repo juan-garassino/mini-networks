@@ -11,7 +11,7 @@ import { GRID, INK_DIM, MOTION, TYPE } from "./tokens";
 
 export interface MapView { x: number; y: number; w: number; h: number }
 
-export function MetroMap({ layout, onSelect, lit, live, view, className, minWidth, children }: {
+export function MetroMap({ layout, onSelect, lit, live, view, className, minWidth, ready = false, children }: {
   layout: SystemLayout;
   onSelect: (id: string) => void;
   /** station ids to light (a through service under the pointer); the rest dims */
@@ -21,6 +21,8 @@ export function MetroMap({ layout, onSelect, lit, live, view, className, minWidt
   view?: MapView;
   className?: string;
   minWidth?: number;
+  /** the /lab contract: the page says when the map is drawn (fonts in, final frame painted) */
+  ready?: boolean;
   children?: ReactNode;
 }) {
   const { width, height, stations, lines, audit, areas } = layout;
@@ -38,7 +40,7 @@ export function MetroMap({ layout, onSelect, lit, live, view, className, minWidt
       data-crossings={audit.crossings} data-overlaps={audit.overlaps} data-pass-through={audit.passThrough}
       data-label-collisions={audit.labelCollisions} data-off-grid={audit.offGrid}
       data-service-mismatch={audit.serviceMismatch.length} data-stations={stations.length} data-auto={layout.auto.length}
-      data-metro-ready="1">
+      data-metro-ready="1" data-lab-ready={ready ? "1" : undefined}>
       {areas.map((a) => (
         <text key={a.id} x={a.x * G} y={a.y * G} textAnchor={a.anchor} fontSize={TYPE.district}
           fill={INK_DIM} opacity={TYPE.districtOpacity} letterSpacing={TYPE.districtTracking} className="select-none">

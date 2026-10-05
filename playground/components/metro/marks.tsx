@@ -13,7 +13,7 @@ export function Mark({ kind, x, y, color, tick = { x: 0, y: -1 }, terminus = fal
       return (
         <g>
           <circle cx={x} cy={y} r={MARK.origin.r} fill={color} stroke={PAPER} strokeWidth={MARK.origin.halo} />
-          <text x={x} y={y + 3.6} textAnchor="middle" fontSize={TYPE.bulletLetter} fontWeight={TYPE.bold} fill={SHEET.bulletInk}>{symbol}</text>
+          <text x={x} y={y + 3.9} textAnchor="middle" fontSize={TYPE.bulletLetter} fontWeight={TYPE.bold} fill={SHEET.bulletInk}>{symbol}</text>
         </g>
       );
     case "tick":
@@ -66,7 +66,7 @@ export function Bullet({ label, symbol, color }: { label: string; symbol: string
     <svg width={20} height={20} viewBox="-10 -10 20 20" aria-label={label} role="img">
       <title>{label}</title>
       <circle r={9} fill={color} />
-      <text y={3.2} textAnchor="middle" fontSize={TYPE.serviceLetter} fontWeight={TYPE.bold} fill={SHEET.bulletInk}
+      <text y={3.5} textAnchor="middle" fontSize={TYPE.serviceLetter} fontWeight={TYPE.bold} fill={SHEET.bulletInk}
         style={{ fontFamily: TYPE.family }}>{symbol}</text>
     </svg>
   );

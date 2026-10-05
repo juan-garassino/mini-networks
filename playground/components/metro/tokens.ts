@@ -13,14 +13,15 @@ export const SHEET = {
   accent: "#cf4f3e",
   /** the key's neutral sample track (a line of no family) */
   sampleTrack: "#9a9d9f",
-  /** the letter on an origin bullet */
-  bulletInk: "#ffffff",
+  /** the letter on an origin bullet: ink, not white — white on these pastels
+   * fails contrast at bullet size (mustard ~1.9:1); ink holds 6:1 or more */
+  bulletInk: "#1f2327",
   /** a line with no colour of its own (a family not in LINE_COLORS) */
   unknownLine: "#888888",
 } as const;
 
 /** One line per family. Pastel signage: told apart at a glance, never loud on the
- * neutral sheet; each still holds a white letter on its origin bullet. */
+ * neutral sheet; each holds an ink letter on its origin bullet. */
 export const LINE_COLORS: Record<string, string> = {
   perception: "#e2826d",
   sequence: "#6b8fd0",
@@ -67,8 +68,10 @@ export const TYPE = {
   note: 12,
   key: 12.5,
   /** letter in an origin bullet (map) / service bullet (list) */
-  bulletLetter: 10,
-  serviceLetter: 9,
+  bulletLetter: 11,
+  serviceLetter: 10,
+  /** the key's column heads (models / stops) */
+  keyHead: 11,
   regular: 400,
   semibold: 600,
   bold: 700,
@@ -108,7 +111,14 @@ export const MARK = {
 /** Spacing inside the in-map cartouche and the page. */
 export const SPACE = {
   cartouchePad: 18,
-  cartoucheColB: 172,
+  /** the key's line rows: name at +keyName, the two counts end at +keyModels / +keyStops */
+  keyName: 36,
+  keyModels: 150,
+  keyStops: 184,
+  /** the mark column's left edge */
+  cartoucheColB: 204,
+  /** the key rows start this far below the cartouche top (under the column heads) */
+  keyTop: 120,
   cartoucheRadius: 3,
   cartoucheStroke: 1.5,
   keyRow: 19,
@@ -117,6 +127,11 @@ export const SPACE = {
   phoneMinWidth: 1180,
   /** desktop: the page column */
   maxWidth: 1480,
+  /** phone: the pan frame fades out over this many px at each side, so a name
+   * running off the frame dims away instead of being chopped mid-letter */
+  frameFade: 18,
+  /** the sheet tab row under the map (tabs.tsx) */
+  tabsH: 40,
 } as const;
 
 /** Motion: one train per line; nothing else moves on its own. */
