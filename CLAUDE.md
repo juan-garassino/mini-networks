@@ -106,27 +106,28 @@ playground/ (repo root)  Next.js 16 + React 19 + TS + Tailwind v4 + Recharts +
                      set data-lab-ready when drawn; every mark is declared in
                      components/lab/<skin>/encoding.ts.
                      /lab/flow = the Kawaii DFD (spec .lab-shots/rework/flow/brief.md,
-                     owner reference: an IxDF data-flow diagram): lib/world/dfd.ts
-                     lays models on a strict grid (desktop: two stacks of family
-                     lanes x generation columns, one left x per column; phone: one
-                     file-tree column between two routing gutters) and routes every
-                     builds_on edge orthogonally (one elbow radius, arrowhead at its
-                     own input port, inline labels in gaps on cross-family edges) with
-                     ZERO crossings/overlaps/box hits — desktop by a maze router
-                     (the 4 best stack arrangements are routed and the one with the
-                     best wireQuality — length, bends, detours past 1.3× reach —
-                     wins; no line runs along a lane rule; a parent in the other
-                     stack may enter a childless box on its right side), phone by a
-                     two-page channel annealer on a 48-px pitch (off-sheet connector
-                     fallback, budget 2; labels on gutter lines are turned to read up
-                     the line); dfd.test.ts proves it on the fixture + 5 shuffles +
-                     5 perturbations, plus detour / lane-rule / phone-label bounds;
-                     the board carries data-crossings / data-overlaps. Boxes: atom =
-                     store (index cell), derived = process (strip with lineage
-                     address 4.1.2 + evidence mark), creature = silhouette (family)
-                     + face (evidence). Node view frames the selection + ancestors +
-                     the nearest children that fit at names ≥ 13 px. Docked drawer
-                     (phone: bottom sheet ≤55%), packets ride the lit lineage;
+                     owner reference: an IxDF data-flow diagram; boilerplate guide
+                     components/lab/flow/DESIGN.md): lib/world/dfd.ts lays models on
+                     a strict grid (desktop: two stacks of family lanes x generation
+                     columns, one left x per column, 48-px boxes; phone: one file
+                     tree indented 16 px per generation under a sticky generation
+                     ruler) and routes every builds_on edge orthogonally (one elbow
+                     radius, arrowhead at its own input port) with ZERO crossings/
+                     overlaps/box hits — desktop by a maze router (arrangements
+                     scored by the finished sheet; a child wholly to the left gets a
+                     left-side out-port), phone by a two-page channel annealer.
+                     Route-quality rule: a line > 1.6x the Manhattan distance between
+                     its box centres (or straying outside its two stacks) becomes an
+                     off-sheet connector pair (stub + tag naming the far end, budget
+                     2, priced as wire); island atoms (no edges) are chips on their
+                     lane's title row; ONE inline label per trunk, never a bare
+                     address. dfd.test.ts proves it on the fixture + 5 shuffles + 5
+                     perturbations; the board carries data-crossings / data-overlaps
+                     / data-detours. tokens.ts is the one style source; components
+                     split by role (box, edges, sheet, top-bar, legend, use-camera,
+                     ruler, pipelines, keeper, drawer, packets). Node view frames
+                     the selection + ancestors + the nearest children that fit at
+                     names ≥ 13 px; docked drawer (phone: bottom sheet ≤55%);
                      /lab/flow/specimen = the router alone (?mode=mobile).
                      /lab/painted = the owner's two painted maps (pixel 768×512
                      128-colour, paper 1536×1024; local, gitignored under

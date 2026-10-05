@@ -32,7 +32,7 @@ export function Legend({ column }: { column?: boolean }) {
       </span>
       <span className={item}>
         <svg width="34" height="14" viewBox="0 0 34 14" aria-hidden><path d="M1 7 H8" stroke={COLOR.ink} strokeWidth={STROKE.edge} /><path d={tagD({ x: 8.5, y: 1.5, w: 24, h: 11, tip: "right" }, 5)} fill={strip} stroke={COLOR.ink} strokeWidth={STROKE.tag} /></svg>
-        {column ? "line continues at the tag's address (it would take the long way round)" : "continues at"}
+        {column ? "the line jumps to the box on the tag (drawn whole, it would take the long way round)" : "jumps to"}
       </span>
       <span className={`${column ? "flex flex-col items-start gap-1.5" : `${item} gap-2.5`}`}>
         {STATES.map((st) => (

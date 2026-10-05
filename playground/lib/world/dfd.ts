@@ -73,7 +73,7 @@ const D = {
   headRow: 16, // the column header row (Atoms / Gen 1 …)
   topChan: 16,
   bottom: 0, // the last lane already ends one row gap below its last box
-  gutter: 40, // 4 tracks between generation columns
+  gutter: 40, // 4 tracks between generation columns (32 routes the zoo, but whole combs then fail round the margin on perturbed graphs)
   margin: 16, // 2 tracks: nothing routes round the outside (that would be a detour)
   corridor: 48, // between the two stacks: 5 tracks
 };
@@ -436,6 +436,14 @@ function sheetDesktop(g: Graph, arr: Arrangement, rows: Map<string, number>, add
     if (total(widths) <= maxWidth) break;
     choice.set(c.n, c.best);
     widths = colW();
+  }
+  // the greedy pass can overshoot: give back every wrap the sheet can still afford, cheapest first
+  for (const c of [...cands].reverse()) {
+    if (choice.get(c.n)!.length === 1) continue;
+    choice.set(c.n, [words(c.n)]);
+    const w = colW();
+    if (total(w) <= maxWidth) widths = w;
+    else choice.set(c.n, c.best);
   }
   const boxes: DfdBox[] = [], lanes: DfdLane[] = [], headers: DfdHeader[] = [], blocks: Rect[] = [];
   const colBands: [number, number][] = [];
