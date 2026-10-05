@@ -75,6 +75,11 @@ playground/ (repo root)  Next.js 16 + React 19 + TS + Tailwind v4 + Recharts +
                      collisions (data-* on the SVG; lib/world/metro.test.ts),
                      ?specimen=1 = the knot crop; components/metro/
                      {layout,encoding}.ts),
+                     blueprint/wall chart/terminal = three token skins of ONE
+                     table (components/periodic/: skins/*.ts → CSS vars via
+                     applySkin on <html>, periodic.css, encoding.ts; the
+                     drawer's spec tile reuses element-tile; DESIGN.md: a
+                     fourth skin = one tokens file),
                      animated per-species forward-pass anatomy (PRs #18–#22).
                      Static-exported (output:'export' → playground/out) and
                      served by FastAPI StaticFiles at /. Pure client of
@@ -130,8 +135,16 @@ playground/ (repo root)  Next.js 16 + React 19 + TS + Tailwind v4 + Recharts +
                      `card` token), chrome only in the
                      corners (corners/: cartouche + search, Pixel/Paper sheet
                      tabs, compass navigation + scale bar of models by evidence,
-                     legend↔minimap plate), a right drawer for the selected model
-                     (drawer.tsx, text card; full-stage diagram view);
+                     legend↔minimap plate) on ONE system (corners/plate.tsx
+                     CORNER_W/CORNER_PAD: same margin + padding, cartouche and
+                     legend share a column width, the compass stands on the
+                     scale bar and scale bar + legend share the bottom edge;
+                     while the map plate needs their corner the scale bar,
+                     then the minimap, fold away), a right drawer for the
+                     selected model (drawer.tsx + card.tsx: a reading panel —
+                     place, name, evidence stamp, introduces, the lineage as a
+                     signposted road, pipelines, the quality gate; full-stage
+                     diagram view);
                      on desktop the "How <model> works" diagram is a MAP PLATE
                      hung beside the castle on a leader line (map-plate.tsx:
                      full animated diagram at 1 art px = 1 CSS px, scrubber/keys

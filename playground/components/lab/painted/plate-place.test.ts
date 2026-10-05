@@ -10,7 +10,7 @@ const base = (over: Partial<PlateInput> = {}): PlateInput => ({
 
 const screenPlate = (inp: PlateInput) => {
   const p = composePlate(inp)!;
-  const r = plateRect(p.side, p.slide, inp.castle, p.k, inp.plate, inp.gap);
+  const r = plateRect(p.side, p.slide, inp.castle, p.k, inp.plate, p.gap);
   return { p, r: { x: p.at.x + r.x, y: p.at.y + r.y, w: r.w, h: r.h } };
 };
 
@@ -70,4 +70,25 @@ test("block: the leader never crosses a blocked box either (a name under the cas
   const block = [{ x: 90, y: 104, w: 20, h: 10 }];
   const p = composePlate(base({ block, keep: [{ pts: [{ x: 100, y: 60 }, { x: 160, y: 100 }, { x: 40, y: 100 }], weight: 5000 }] }))!;
   assert.notEqual(p.side, "below");
+});
+
+test("gap: the leader grows to carry the plate past a blocked box beside the castle", () => {
+  // the model's own name plate runs right of the castle: with the standard
+  // gap the plate would touch it on every side but the right, and the right
+  // only fits once the leader is long enough to clear it
+  const block = [{ x: 96, y: 104, w: 54, h: 12 }];
+  const keep = [{ pts: [{ x: 30, y: 100 }, { x: 100, y: 30 }, { x: 100, y: 170 }], weight: 5000 }];
+  const p = composePlate(base({ block, keep }))!;
+  assert.equal(p.side, "right");
+  assert.ok(p.gap > 40);
+  const r = plateRect(p.side, p.slide, base().castle, p.k, base().plate, p.gap);
+  assert.ok(r.x >= (block[0].x + block[0].w - 100) * p.k);
+});
+
+test("soft: when titles cannot all be avoided the plate covers as little of them as it can", () => {
+  const soft = [{ x: 120, y: 0, w: 400, h: 400 }];
+  const { p, r } = screenPlate(base({ soft }));
+  assert.notEqual(p.side, "right");
+  const b = { x: p.at.x + (soft[0].x - 100) * p.k, w: soft[0].w * p.k };
+  assert.ok(r.x + r.w <= b.x || r.x >= b.x + b.w);
 });

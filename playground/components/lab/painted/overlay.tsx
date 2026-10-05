@@ -4,7 +4,7 @@
 // 1536×1024) scaled with the image. Plates, signs and the cartouche are
 // painted-scale (they grow with zoom, like the painter's own lettering); tags,
 // markers, rings and the critter are screen-steady (sizes divided by scale).
-import { memo } from "react";
+import { memo, useId } from "react";
 import { CRITTER } from "@/components/lab/shared/critter";
 import { displayName, type EvidenceState } from "@/components/lab/shared/card-model";
 import { IMAGE, type BakedText, type Box, type PaintedMap, type Pt } from "./anchors";
@@ -36,6 +36,8 @@ export interface OverlayProps {
    * painter's plate partly under them keeps its blank cardstock (it hides the
    * old lettering) but loses its name — never a half-covered label */
   hard?: Box[];
+  /** the painting's URL (paper): a half-covered plate is healed with a clone of it */
+  painting?: string;
 }
 
 const d = (pts: Pt[]) => pts.map((p, i) => `${i ? "L" : "M"}${p.x.toFixed(1)} ${p.y.toFixed(1)}`).join("");
@@ -57,8 +59,8 @@ function plateLines(text: string, maxW: number): string[] {
  * error never shows the old lettering): the real model name, or an honest
  * "no model yet" where the painter invented one. Acts as that model's tag.
  * Cut cardstock: a hard unblurred offset drop, a pressed inner rule. */
-function PaperPlate({ b, theme, sel, hov, dim, lit, hard, onSelect, onHover }: {
-  b: BakedText; theme: Material; sel: boolean; hov: boolean; dim: boolean; lit: boolean; hard?: Box[];
+function PaperPlate({ b, theme, sel, hov, dim, lit, hard, heal, onSelect, onHover }: {
+  b: BakedText; theme: Material; sel: boolean; hov: boolean; dim: boolean; lit: boolean; hard?: Box[]; heal?: HealSrc;
   onSelect: (n: string) => void; onHover: (n: string | null) => void;
 }) {
   const pad = 4;
@@ -74,7 +76,7 @@ function PaperPlate({ b, theme, sel, hov, dim, lit, hard, onSelect, onHover }: {
   const x = cx - w / 2, y = cy - h / 2;
   const fill = sel ? theme.loud : hov ? theme.plateHi : "url(#pp-plate)";
   const cut = !sel && !lit && (hard ?? []).some((o) => x < o.x + o.w && o.x < x + w && y < o.y + o.h && o.y < y + h);
-  if (cut) return <rect x={x} y={y} width={w} height={h} rx={3} fill="url(#pp-plate)" filter="url(#pp-grain)" aria-hidden />;
+  if (cut) return heal ? <Heal box={{ x, y, w, h }} heal={heal} /> : <rect x={x} y={y} width={w} height={h} rx={3} fill="url(#pp-plate)" filter="url(#pp-grain)" aria-hidden />;
   return (
     // never dim with opacity: the painter's lettering underneath would show through
     <g className={name ? "cursor-pointer" : undefined} aria-hidden
@@ -88,6 +90,48 @@ function PaperPlate({ b, theme, sel, hov, dim, lit, hard, onSelect, onHover }: {
         {lines.map((l, i) => <tspan key={i} x={cx} dy={i ? lh : 0}>{l}</tspan>)}
       </text>
       {dim && <rect x={x} y={y} width={w} height={h} rx={3} fill="#e9dcc4" opacity={0.55} />}
+    </g>
+  );
+}
+
+/** What a healed patch is cloned from: the painting, and the painter's own
+ * lettering boxes (a patch never clones another plate or a title). */
+interface HealSrc { painting: string; baked: readonly BakedText[] }
+
+const HEAL_PAD = 8;   // the patch overlaps the old plate by this much, feathered
+/** Where to clone a patch for `box` from: the nearest same-size stretch of the
+ * painting beside it that holds no lettering — below first (the painter hung
+ * his plates under the buildings, so below is ground or water), then left,
+ * right, above. Image px offset, or null. Exported for tests. */
+export function healSource(box: Box, baked: readonly { box: Box }[], img: { w: number; h: number }): { dx: number; dy: number } | null {
+  const p = HEAL_PAD + 4;
+  const steps = [[0, 1], [-1, 0], [1, 0], [0, -1], [-1, 1], [1, 1]] as const;
+  for (const reach of [1, 1.6]) for (const [sx, sy] of steps) {
+    const dx = sx * (box.w + p) * reach, dy = sy * (box.h + p) * reach;
+    const src = { x: box.x + dx - p, y: box.y + dy - p, w: box.w + 2 * p, h: box.h + 2 * p };
+    if (src.x < 0 || src.y < 0 || src.x + src.w > img.w || src.y + src.h > img.h) continue;
+    if (baked.some((t) => src.x < t.box.x + t.box.w && t.box.x < src.x + src.w && src.y < t.box.y + t.box.h && t.box.y < src.y + src.h)) continue;
+    return { dx, dy };
+  }
+  return null;
+}
+
+/** A painter's plate the map plate (or a corner plate) half covers: rather
+ * than a blank card that reads as an empty sign, the plate is painted out —
+ * a feathered patch of the painting beside it is cloned over it (a restorer's
+ * clone stamp), softened a touch so the seam melts into the brushwork. */
+function Heal({ box, heal }: { box: Box; heal: HealSrc }) {
+  const id = useId().replace(/:/g, "");
+  const src = healSource(box, heal.baked, IMAGE);
+  const r = { x: box.x - HEAL_PAD, y: box.y - HEAL_PAD, w: box.w + 2 * HEAL_PAD, h: box.h + 2 * HEAL_PAD };
+  if (!src) return <rect x={box.x} y={box.y} width={box.w} height={box.h} rx={3} fill="url(#pp-plate)" filter="url(#pp-grain)" aria-hidden />;
+  return (
+    <g aria-hidden pointerEvents="none">
+      <mask id={`heal-${id}`} maskUnits="userSpaceOnUse" x={r.x - 8} y={r.y - 8} width={r.w + 16} height={r.h + 16}>
+        <rect x={r.x} y={r.y} width={r.w} height={r.h} rx={6} fill="#fff" filter="url(#pp-feather)" />
+      </mask>
+      <image href={heal.painting} x={-src.dx} y={-src.dy} width={IMAGE.w} height={IMAGE.h} preserveAspectRatio="none"
+        mask={`url(#heal-${id})`} filter="url(#pp-soften)" />
     </g>
   );
 }
@@ -236,6 +280,9 @@ export const PaintedOverlay = memo(function PaintedOverlay(p: OverlayProps) {
           <feComposite in="g" in2="SourceGraphic" operator="in" result="gi" />
           <feMerge><feMergeNode in="SourceGraphic" /><feMergeNode in="gi" /></feMerge>
         </filter>
+        {/* healed patches: a feathered mask edge, and a slight softening of the clone */}
+        <filter id="pp-feather" x="-20%" y="-20%" width="140%" height="140%"><feGaussianBlur stdDeviation="2.6" /></filter>
+        <filter id="pp-soften" x="0" y="0" width="100%" height="100%"><feGaussianBlur stdDeviation="0.9" /></filter>
         <linearGradient id="pp-plate" x1="0" y1="0" x2="0" y2="1">
           <stop offset="0" stopColor="#f4ddb6" /><stop offset="1" stopColor="#e5c595" />
         </linearGradient>
@@ -302,6 +349,7 @@ export const PaintedOverlay = memo(function PaintedOverlay(p: OverlayProps) {
       {p.heal && map.baked.filter((b) => b.kind === "model" || b.kind === "invented").map((b, i) => (
         <PaperPlate key={`pl${i}`} b={b} theme={theme} sel={Boolean(b.name) && p.selected === b.name} hov={Boolean(b.name) && p.hovered === b.name}
           dim={hasSel && !(b.name && p.lineageSet.has(b.name))} lit={hasSel && Boolean(b.name && p.lineageSet.has(b.name))} hard={p.hard}
+          heal={p.painting ? { painting: p.painting, baked: map.baked } : undefined}
           onSelect={p.onSelect} onHover={p.onHover} />
       ))}
 

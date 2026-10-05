@@ -41,6 +41,7 @@ import { SheetTabs, type Labels, type Render } from "./corners/sheet-tabs";
 import { Compass } from "./corners/compass";
 import { ScaleBar } from "./corners/scale-bar";
 import { CornerPlate } from "./corners/corner-plate";
+import { CORNER_W } from "./corners/plate";
 import { SeaCanvas, useSeaFurniture } from "./stage";
 import { TrueMapLayers, spotClear, useTrueMap } from "./true-map";
 import { PIXELMAP_CMD } from "./pixelmap";
@@ -345,6 +346,10 @@ export function PaintedSkin() {
   // the plate never lands on one.
   const rootRef = useRef<HTMLDivElement | null>(null);
   const [corners, setCorners] = useState<PBox[]>([]);
+  // the top corners and the legend / minimap as measured, and the compass and
+  // scale bar measured apart (sticky: the scale bar's last size is kept while
+  // it is folded away), so the plate can be planned with or without it
+  const [cornerAt, setCornerAt] = useState<{ tl?: PBox; tr?: PBox; br?: PBox; compass?: { w: number; h: number }; scale?: { w: number; h: number } }>({});
   const plateEl = useRef<HTMLElement | null>(null);
   const [plateMeasured, setPlateMeasured] = useState<{ name: string; zoom: number; w: number; h: number } | null>(null);
   const plateWanted = !mobile && !!selected && plateOpen && !uiHidden && view?.zoom === "node";
@@ -372,7 +377,8 @@ export function PaintedSkin() {
   }, [selected, isTrue, td, atoms]);
   const castleSpot = selected && isTrue && td ? spotClear(selected, atoms, td.markers) : 0;
   const PLATE_GAP = 40;
-  const plan: PlatePlan | null = useMemo(() => {
+  // fold: 0 = every corner plate stays; 1 = the scale bar folds; 2 = the minimap too
+  const planned: { plan: PlatePlan | null; fold: 0 | 1 | 2 } | null = useMemo(() => {
     if (!plateWanted || !selected || !family?.[selected] || vp.w <= 1) return null;
     const fam = family[selected] as Family;
     const lb = landFrame(fam);
@@ -400,7 +406,20 @@ export function PaintedSkin() {
     const titles = heal ? map.baked.filter((b) => b.kind === "family" || b.kind === "subtitle").map((b) => b.box) : [];
     const view = { x: 0, y: 0, w: visW, h: visH };
     const bounded = mapId === "paper" ? { w: W, h: H } : undefined;
-    const base = { anchor: a, castle: castleBox, plate: plateSize, land: lb, view, avoid: corners, keep, gap: PLATE_GAP, bounded };
+    // the corner plates the plate keeps off: all four; or, when the pair fits
+    // nowhere between them (1280×800: the cartouche, scale bar and minimap
+    // leave no 596×406 hole), the scale bar folds away and the compass drops
+    // to the bottom margin — the chrome yields rather than the plate clipping
+    const { tl, tr, br, compass: cp, scale: sc } = cornerAt;
+    const M = 20;
+    const top = [tl, tr].filter((c): c is PBox => Boolean(c));
+    const right = br ? [br] : [];
+    const avoidFull = cp && sc ? [...top, ...right, { x: M, y: vp.h - M - sc.h, w: sc.w, h: sc.h }, { x: M, y: vp.h - M - sc.h - 12 - cp.h, w: cp.w, h: cp.h }] : corners;
+    const compassDown = cp ? [{ x: M, y: vp.h - M - cp.h, w: cp.w, h: cp.h }] : [];
+    const avoidYield = cp ? [...top, ...right, ...compassDown] : corners;
+    // and if even that leaves no hole, the minimap folds too (the plate is the focus)
+    const avoidBare = cp ? [...top, ...compassDown] : corners;
+    const base0 = { anchor: a, castle: castleBox, plate: plateSize, land: lb, view, keep, gap: PLATE_GAP, bounded };
     // the land-centred framing (paper: kept on the painting), for the last resort
     const wv = visW / kLand, hv = visH / kLand;
     const camX = bounded ? clamp(lb.x + lb.w / 2 - wv / 2, 0, Math.max(0, W - wv)) : lb.x + lb.w / 2 - wv / 2;
@@ -410,17 +429,33 @@ export function PaintedSkin() {
     // if the plate then covers more of its land. If no framing on the painting
     // fits the pair with the lineage's names whole, there is no plate: the
     // diagram goes back into the (wide) drawer — the card fallback
-    if (heal) {
-      return composePlate({ ...base, block: [...named, ...titles], castlePad: 14, scales, inset: 16 })
-        ?? composePlate({ ...base, block: [...named, ...titles], castlePad: 0, scales, inset: 4 })
-        ?? composePlate({ ...base, block: named, castlePad: 14, scales, inset: 16 })
-        ?? composePlate({ ...base, block: named, castlePad: 0, scales, inset: 4 });
-    }
-    return composePlate({ ...base, castlePad: 14, scales, inset: 16 })
-      ?? composePlate({ ...base, castlePad: 0, scales, inset: 4 })
-      // last resort: the land-centred framing, the plate on its least-bad side
-      ?? composePlate({ ...base, castlePad: 0, scales: [kLand], inset: 4, fixed: { x: (a.x - camX) * kLand, y: (a.y - camY) * kLand } });
-  }, [plateWanted, selected, family, vp.w, landFrame, crispK, landFitK, isTrue, crisp, levels, anchorPt, names, lineage, lineageSet, map, visW, visH, mapId, W, H, castleBox, plateSize, corners, heal]);
+    const attempt = (avoid: PBox[]) => {
+      const base = { ...base0, avoid };
+      // a model wedged between titles (transformer under "Sequence & State")
+      // has no framing clear of them all: then the plate covers as little of
+      // any title as it can, rather than wherever the land-centred framing put it
+      if (heal) {
+        return composePlate({ ...base, block: [...named, ...titles], castlePad: 14, scales, inset: 16 })
+          ?? composePlate({ ...base, block: [...named, ...titles], castlePad: 0, scales, inset: 4 })
+          ?? composePlate({ ...base, block: named, soft: titles, castlePad: 14, scales, inset: 16 })
+          ?? composePlate({ ...base, block: named, soft: titles, castlePad: 0, scales, inset: 4 });
+      }
+      return composePlate({ ...base, castlePad: 14, scales, inset: 16 })
+        ?? composePlate({ ...base, castlePad: 0, scales, inset: 4 });
+    };
+    const full = attempt(avoidFull);
+    if (full) return { plan: full, fold: 0 };
+    const folded = attempt(avoidYield);
+    if (folded) return { plan: folded, fold: 1 };
+    const bare = attempt(avoidBare);
+    if (bare || heal) return { plan: bare, fold: bare ? 2 : 0 };
+    // last resort: the land-centred framing, the plate on its least-bad side
+    return { plan: composePlate({ ...base0, avoid: avoidBare, castlePad: 0, scales: [kLand], inset: 4, fixed: { x: (a.x - camX) * kLand, y: (a.y - camY) * kLand } }), fold: 2 };
+  }, [plateWanted, selected, family, vp.w, vp.h, landFrame, crispK, landFitK, isTrue, crisp, levels, anchorPt, names, lineage, lineageSet, map, visW, visH, mapId, W, H, castleBox, plateSize, corners, cornerAt, heal]);
+  const plan: PlatePlan | null = planned?.plan ?? null;
+  // the scale bar (and, at need, the minimap) fold away while the plate needs their corner
+  const fold = planned?.fold ?? 0;
+  const foldScale = fold >= 1;
 
   const target: CamBox = useMemo(() => {
     const zoom = view?.zoom ?? "overview";
@@ -534,7 +569,7 @@ export function PaintedSkin() {
   const plateRest: Box[] = useMemo(() => {
     if (!plan || !selected) return [];
     const a = anchorPt(selected);
-    const r = plateRect(plan.side, plan.slide, castleBox, layoutS, plateSize, PLATE_GAP);
+    const r = plateRect(plan.side, plan.slide, castleBox, layoutS, plateSize, plan.gap);
     const air = 6 / layoutS;
     const box = { x: a.x + r.x / layoutS - air, y: a.y + r.y / layoutS - air, w: r.w / layoutS + 2 * air, h: r.h / layoutS + 2 * air };
     // the leader's half-width: 2 art px of ink + 1 of halo either side, + air
@@ -579,7 +614,23 @@ export function PaintedSkin() {
       return { x: Math.round(r.left - o.left), y: Math.round(r.top - o.top), w: Math.round(r.width), h: Math.round(r.height) };
     }).filter((r) => r.w > 0 && r.h > 0);
     setCorners((cur) => (cur.length === next.length && cur.every((c, i) => Math.abs(c.x - next[i].x) + Math.abs(c.y - next[i].y) + Math.abs(c.w - next[i].w) + Math.abs(c.h - next[i].h) < 4) ? cur : next));
-  }, [vp.w, vp.h, mobile, uiHidden, selected, focusFam, fontsReady, zoomedIn_, drawerPx, opts]);
+    const rect = (sel: string) => {
+      const el = root.querySelector<HTMLElement>(sel);
+      if (!el) return undefined;
+      const r = el.getBoundingClientRect();
+      return { x: Math.round(r.left - o.left), y: Math.round(r.top - o.top), w: Math.round(r.width), h: Math.round(r.height) };
+    };
+    const tl = rect('[data-corner="tl"]'), tr = rect('[data-corner="tr"]'), br = rect('[data-corner="br"]');
+    const cpr = rect("[data-compass]"), scr = rect("[data-scale]");
+    setCornerAt((cur) => {
+      // sticky: a folded plate keeps its last measured place (else folding it
+      // would make room, unfold it, and loop)
+      const nx = { tl, tr, br: br ?? cur.br, compass: cpr ? { w: cpr.w, h: cpr.h } : cur.compass, scale: scr ? { w: scr.w, h: scr.h } : cur.scale };
+      const same = (p?: { w: number; h: number; x?: number; y?: number }, q?: { w: number; h: number; x?: number; y?: number }) =>
+        (!p && !q) || (!!p && !!q && Math.abs(p.w - q.w) + Math.abs(p.h - q.h) + Math.abs((p.x ?? 0) - (q.x ?? 0)) + Math.abs((p.y ?? 0) - (q.y ?? 0)) < 4);
+      return same(cur.tl, nx.tl) && same(cur.tr, nx.tr) && same(cur.br, nx.br) && same(cur.compass, nx.compass) && same(cur.scale, nx.scale) ? cur : nx;
+    });
+  }, [vp.w, vp.h, mobile, uiHidden, selected, focusFam, fontsReady, zoomedIn_, drawerPx, sheetPx, opts, foldScale, ap, cornerAt.scale?.w]);
   const plateShown = Boolean(plan && plateWanted && !fullDiagram && selected);
   // the card fallback, decided at the narrow drawer: a wider drawer only leaves
   // less room, so once set it holds until the selection changes
@@ -623,18 +674,59 @@ export function PaintedSkin() {
     const x1 = Math.min(W, restBox.x + (visW / vp.w) * restBox.w), y1 = Math.min(H, restBox.y + (visH / vp.h) * restBox.h);
     return { x: x0 + 2, y: y0 + 2, w: Math.max(40, x1 - x0 - 4), h: Math.max(40, y1 - y0 - 4) };
   }, [restBox.x, restBox.y, restBox.w, restBox.h, W, H, visW, visH, vp.w, vp.h]);
+  // the corner furniture at rest, in map units (+ a little air): a land sign
+  // never sits under the compass, the cartouche or the tabs
+  const chrome: Box[] = useMemo(() => corners.map((c) => ({
+    x: restBox.x + (c.x - 6) / layoutS, y: restBox.y + (c.y - 6) / layoutS, w: (c.w + 12) / layoutS, h: (c.h + 12) / layoutS,
+  })), [corners, restBox.x, restBox.y, layoutS]);
   const signs: PlacedRibbon[] = useMemo(() => {
     if (!isTrue || !ours) return [];
-    return FAMILIES.map((f) => {
+    const V = visible;
+    const placed: Box[] = [];
+    const out: PlacedRibbon[] = [];
+    const blockers = [...chrome, ...labelHard];
+    // top to bottom, so a sign pushed off its spot moves away from the ones above it
+    const order = [...FAMILIES].sort((a, b) => map.signs[a][1] - map.signs[b][1]);
+    // every sign's painted spot, so a sign that steps aside never lands on one
+    const home = (f: Family) => {
+      const { w, h } = ribbonSize(FAMILY_TITLE[f].toUpperCase(), gSign, false, true);
+      const x = clamp(Math.round(map.signs[f][0] - w / 2), V.x + 4, V.x + V.w - w - 5), y = clamp(Math.round(map.signs[f][1] - h / 2), V.y + 2, V.y + V.h - h - 3);
+      return { x: x - 4, y: y - 1, w: w + 8, h: h + 3 };
+    };
+    for (const f of order) {
       const text = FAMILY_TITLE[f].toUpperCase();
       const { w, h } = ribbonSize(text, gSign, false, true);
       const [sx, sy] = map.signs[f];
-      const V = visible;
-      const x = clamp(Math.round(sx - w / 2), V.x + 4, V.x + V.w - w - 5), y = clamp(Math.round(sy - h / 2), V.y + 2, V.y + V.h - h - 3);
-      return { name: `sign-${f}`, text, x, y, g: gSign, tail: null, tailAt: 0, sign: { count: famCount[f] ?? 0 }, dim: focusFam !== null && f !== focusFam, box: { x: x - 4, y: y - 1, w: w + 8, h: h + 3 } };
-    // a land sign the plate or its leader would cut is left out (signs do not move)
-    }).filter((sg) => !labelHard.some((o) => overlaps(sg.box, o)));
-  }, [isTrue, ours, gSign, map, famCount, focusFam, visible, labelHard]);
+      const fitX = (x: number) => clamp(Math.round(x), V.x + 4, V.x + V.w - w - 5);
+      const fitY = (y: number) => clamp(Math.round(y), V.y + 2, V.y + V.h - h - 3);
+      const boxOf = (x: number, y: number) => ({ x: x - 4, y: y - 1, w: w + 8, h: h + 3 });
+      const x0 = fitX(sx - w / 2), y0 = fitY(sy - h / 2);
+      // its painted spot, as always; a sign the plate or its leader would cut
+      // is left out (signs do not move under the plate). A sign that sits
+      // under the corner furniture alone (the compass + zoom rail on a phone,
+      // the cartouche) steps to the nearest spot — one sign height up/down or
+      // a third of its width sideways — that clears the furniture and the
+      // signs already placed, still inside the view
+      const b0 = boxOf(x0, y0);
+      if (labelHard.some((o) => overlaps(b0, o))) continue;
+      let at: [number, number] = [x0, y0];
+      if (chrome.some((o) => overlaps(b0, o))) {
+        const cands: [number, number][] = [];
+        for (let i = 1; i <= 6; i++) for (const [dx, dy] of [[0, -i], [0, i], [i, 0], [-i, 0], [i, -i], [-i, -i], [i, i], [-i, i]]) {
+          cands.push([fitX(x0 + (dx * w) / 3), fitY(y0 + dy * (h + 4))]);
+        }
+        const hit = cands.find(([x, y]) => { const b = boxOf(x, y); return !placed.some((o) => overlaps(b, o)) && !blockers.some((o) => overlaps(b, o))
+          && !order.some((g) => g !== f && overlaps(b, home(g))); });
+        if (!hit) continue;
+        at = hit;
+      }
+      const [x, y] = at;
+      const box = boxOf(x, y);
+      placed.push(box);
+      out.push({ name: `sign-${f}`, text, x, y, g: gSign, tail: null, tailAt: 0, sign: { count: famCount[f] ?? 0 }, dim: focusFam !== null && f !== focusFam, box });
+    }
+    return out;
+  }, [isTrue, ours, gSign, map, famCount, focusFam, visible, labelHard, chrome]);
 
   const ribbons: PlacedRibbon[] = useMemo(() => {
     if (!isTrue || !td || !taxonomy) return [];
@@ -851,7 +943,7 @@ export function PaintedSkin() {
                   className="absolute inset-0 block h-full w-full max-w-none"
                   style={{ imageRendering: mapId === "pixel" ? "pixelated" : "auto" }} />
                 {taxonomy && (
-                  <PaintedOverlay map={map} theme={m} scale={S} heal={heal} ours={ours} hard={labelHard}
+                  <PaintedOverlay map={map} theme={m} scale={S} heal={heal} ours={ours} hard={labelHard} painting={heal ? imgSrc : undefined}
                     tags={tags} tagFont={tagFont} markerR={markerR} states={states} famCount={famCount} counts={counts}
                     selected={selected} hovered={hovered} lineage={lineage} lineageSet={lineageSet}
                     critter={critter} still={still} onSelect={onSelect} onHover={setHovered} onCritter={onCritter} />
@@ -868,7 +960,7 @@ export function PaintedSkin() {
           const snap = (v: number) => Math.round(v * dpr) / dpr;
           const a = anchorPt(selected);
           const cx = a.x * S + ox, cy = a.y * S + oy;
-          const r = plateRect(plan.side, plan.slide, castleBox, S, plateSize, PLATE_GAP);
+          const r = plateRect(plan.side, plan.slide, castleBox, S, plateSize, plan.gap);
           const px = snap(cx + r.x), py = snap(cy + r.y);
           // the dot: at the edge of the model's own spot (its flag / stone),
           // on the plate's side; the line crosses the landmark to the plate
@@ -903,25 +995,33 @@ export function PaintedSkin() {
         {opts && !uiHidden && (
           <div className="pointer-events-none absolute inset-0 z-20" style={{ right: drawerPx, bottom: sheetPx }}>
             {/* paper: flush to the top so it covers the painter's own cartouche at the whole-map view */}
-            <div data-corner className={`${corner} left-3 sm:left-5 ${m.crisp ? "top-3 sm:top-5" : "top-0"}`} style={stamp(0, still)}>
+            <div data-corner="tl" className={`${corner} left-3 sm:left-5 ${m.crisp ? "top-3 sm:top-5" : "top-0"}`} style={stamp(0, still)}>
               <Cartouche m={m} counts={counts} names={names} focusFam={focusFam} famCount={famCount} famProven={famProven}
                 onPick={onSelect} onWhole={fitWhole} compact={mobile} />
             </div>
-            <div data-corner className={`${corner} right-3 top-0 sm:right-5`} style={stamp(1, still)}>
+            <div data-corner="tr" className={`${corner} right-3 top-0 sm:right-5`} style={stamp(1, still)}>
               <SheetTabs m={m} mapId={mapId} dev={opts.dev} render={render} labels={labels} setOpts={set} devOpen={devOpen} setDevOpen={setDevOpen} compact={mobile}
                 onHideUi={() => setUiHidden(true)} />
             </div>
-            <div data-corner className={`${corner} bottom-3 left-3 flex flex-col items-start gap-3 sm:bottom-5 sm:left-5`} style={stamp(2, still)}>
-              {!mobile && (
-                <ScaleBar m={m} names={names} family={family} states={states} atoms={atoms} pipelines={pipelines} counts={counts}
-                  selected={selected} onPick={onSelect} onLand={jumpLand} focusFam={focusFam} />
+            {/* the compass stands on the scale bar, as on a printed map: the
+                scale bar and the legend share the bottom margin */}
+            <div data-corner="bl" className={`${corner} bottom-3 left-3 flex flex-col items-start gap-3 sm:bottom-5 sm:left-5`} style={stamp(2, still)}>
+              <div data-compass>
+                <Compass m={m} unit={mobile ? 3.5 : compassUnit} onPan={panBy} onWhole={fitWhole} onZoom={(d) => stepZoom(d)}
+                  canIn={curScale() < levels.max - 1e-3} canOut={curScale() > levels.min + 1e-3} whole={whole} />
+              </div>
+              {/* folded away while the "How it works" plate needs its corner (planned above) */}
+              {!mobile && !(foldScale && plateShown) && (
+                <div data-scale>
+                  <ScaleBar m={m} names={names} family={family} states={states} atoms={atoms} pipelines={pipelines} counts={counts}
+                    selected={selected} onPick={onSelect} onLand={jumpLand} focusFam={focusFam} />
+                </div>
               )}
-              <Compass m={m} unit={mobile ? 3.5 : compassUnit} onPan={panBy} onWhole={fitWhole} onZoom={(d) => stepZoom(d)}
-                canIn={curScale() < levels.max - 1e-3} canOut={curScale() > levels.min + 1e-3} whole={whole} />
             </div>
-            {!mobile && (
-              <div data-corner className={`${corner} bottom-3 right-3 sm:bottom-5 sm:right-5`} style={stamp(3, still)}>
-                <CornerPlate m={m} face={zoomedIn_ ? "minimap" : "legend"} world={{ w: W, h: H }} box={cam.box} source={minimap} onCenter={centerAt} />
+            {!mobile && !(fold >= 2 && plateShown) && (
+              <div data-corner="br" className={`${corner} bottom-3 right-3 sm:bottom-5 sm:right-5`} style={stamp(3, still)}>
+                <CornerPlate m={m} face={zoomedIn_ ? "minimap" : "legend"} world={{ w: W, h: H }} box={cam.box} source={minimap} onCenter={centerAt}
+                  width={cornerAt.scale ? clamp(visW - 2 * 20 - cornerAt.scale.w - 24, 264, CORNER_W) : CORNER_W} />
               </div>
             )}
           </div>

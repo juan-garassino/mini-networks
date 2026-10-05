@@ -11,7 +11,7 @@ import { useState } from "react";
 import { displayName, type EvidenceState } from "@/components/lab/shared/card-model";
 import { FAMILIES, type Family } from "../anchors";
 import { FAMILY_TITLE, type Material } from "../material";
-import { plateStyle } from "./plate";
+import { CORNER_PAD, plateStyle } from "./plate";
 
 const CELL = 7, H = 12, LAND_GAP = 6, PIPE_H = 6, PIPE_STEP = 6;
 
@@ -45,7 +45,7 @@ export function ScaleBar({ m, names, family, states, atoms, pipelines, counts, s
     };
   };
   return (
-    <div className="p-3" style={{ ...plateStyle(m), fontFamily: m.bodyFont, color: m.ink }} role="group" aria-label="Scale: every model, by evidence">
+    <div style={{ ...plateStyle(m), padding: CORNER_PAD, fontFamily: m.bodyFont, color: m.ink }} role="group" aria-label="Scale: every model, by evidence">
       <div className="relative flex items-end" style={{ gap: LAND_GAP }}>
         {groups.map(({ f, models }) => (
           // a land = one framed segment; the frame colour shows between cells as the divisions

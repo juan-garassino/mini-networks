@@ -19,9 +19,9 @@ import type { PlateSide } from "./plate-place";
 
 export const ART_W = 560;
 export const ART_H = 316;
-const PAD = 8;       // plate padding
+const PAD = 12;      // plate padding: the corner plates' (corners/plate.tsx CORNER_PAD)
 const MAT = 6;       // mat padding around the drawing
-const HEAD = 30;     // title row
+const HEAD = 34;     // title row (a 26-px button + air)
 const FOOT = 24;     // caption row
 
 /** The plate's size before it is measured (CSS px). `ap` = the border width. */
@@ -44,7 +44,8 @@ export const MapPlate = forwardRef<HTMLElement, {
   const def = diagramFor(name);
   const th = THEMES[m.diagram];
   const title = `How ${displayName(name)} works`;
-  const btn: CSSProperties = { fontSize: 13, minHeight: 22, padding: "0 7px" };
+  // the drawer's and the full view's buttons: one size for every plate button
+  const btn: CSSProperties = { fontSize: 14, minHeight: 26, padding: "0 8px", fontWeight: 500 };
   return (
     <section ref={ref} aria-label={title} data-map-plate {...data}
       // a tap on the plate is never a tap on the sea (the plate sits outside

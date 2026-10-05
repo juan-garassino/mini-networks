@@ -47,6 +47,17 @@ export function plateStyle(m: Material, opts: { loud?: boolean; shadow?: boolean
   };
 }
 
+// The four corners share one system: the same outer margin (12 px on a
+// phone, 20 px from sm up — the skins' bottom-3/left-3 sm:bottom-5 sm:left-5),
+// the same inner padding, and one column width for the two side plates
+// (cartouche top-left, legend / minimap bottom-right). The scale bar takes the
+// width of its cells and stands on the bottom margin with the legend, so the
+// two bottom plates share their bottom edge; the compass stands on the scale bar.
+/** the side plates' column width (cartouche, legend / minimap), CSS px */
+export const CORNER_W = 324;
+/** every corner plate's inner padding, CSS px */
+export const CORNER_PAD = 12;
+
 /** A large sheet's ground (drawer, sheet, full diagram): the cardstock print on paper, flat elsewhere. */
 export const sheetGround = (m: Material) => (m.card ? `${m.card.grain}, ${m.plateHi}` : m.plateHi);
 

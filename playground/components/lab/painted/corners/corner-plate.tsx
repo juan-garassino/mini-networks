@@ -4,12 +4,12 @@
 // legend (the map's own evidence sprites and what they mean); zoomed in it
 // turns into the minimap, because then the learner needs orientation, not a
 // key. Same frame, same width.
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useEffect, useRef, type ReactNode } from "react";
 import type { CamBox } from "@/components/lab/shared/camera";
 import type { EvidenceState } from "@/components/lab/shared/card-model";
 import type { Material } from "../material";
 import { EvidenceIcon } from "../pixel-icon";
-import { plateStyle } from "./plate";
+import { CORNER_PAD, CORNER_W, plateStyle } from "./plate";
 
 export type MinimapSource = { canvas: HTMLCanvasElement | null; version: number } | { img: string; pixelated: boolean };
 
@@ -20,7 +20,7 @@ const LEGEND: { s: EvidenceState; t: string }[] = [
   { s: "untrained", t: "not trained yet" },
 ];
 
-export function CornerPlate({ m, face, world, box, source, onCenter, width = 276, note, glyph }: {
+export function CornerPlate({ m, face, world, box, source, onCenter, width = CORNER_W, note, glyph }: {
   m: Material; face: "legend" | "minimap"; world: { w: number; h: number }; box: CamBox; source: MinimapSource; onCenter: (x: number, y: number) => void; width?: number;
   /** the legend's closing line (default: the painted maps' banner/stone note) */
   note?: string;
@@ -28,8 +28,9 @@ export function CornerPlate({ m, face, world, box, source, onCenter, width = 276
   glyph?: (s: EvidenceState) => ReactNode;
 }) {
   return (
-    <aside aria-label={face === "legend" ? "Legend" : "Minimap"} className="p-3" style={{ ...plateStyle(m), width, fontFamily: m.bodyFont, color: m.ink }}>
-      {face === "legend" ? <Legend m={m} note={note} glyph={glyph} /> : <Minimap m={m} world={world} box={box} source={source} onCenter={onCenter} width={width - 24 - 4} />}
+    <aside aria-label={face === "legend" ? "Legend" : "Minimap"} style={{ ...plateStyle(m), width, padding: CORNER_PAD, fontFamily: m.bodyFont, color: m.ink }}>
+      {/* minimap: the plate's inner width less both frames (the plate's and its own, ≤ 3 px a side) */}
+      {face === "legend" ? <Legend m={m} note={note} glyph={glyph} /> : <Minimap m={m} world={world} box={box} source={source} onCenter={onCenter} width={width - 2 * CORNER_PAD - 12} />}
     </aside>
   );
 }
@@ -40,7 +41,9 @@ function Legend({ m, note, glyph }: { m: Material; note?: string; glyph?: (s: Ev
       {LEGEND.map(({ s, t }) => (
         <li key={s} className="flex items-center gap-2">
           {glyph ? glyph(s) : m.crisp
-            ? <span className="flex w-10 items-center justify-center gap-1"><EvidenceIcon state={s} atom scale={1} /><EvidenceIcon state={s} atom={false} scale={2} /></span>
+            // banner + stone; an untrained model has no banner (atom or not it is
+            // the same grey stone on the map), so its row shows the stone alone
+            ? <span className="flex w-10 items-center justify-center gap-1">{s !== "untrained" && <EvidenceIcon state={s} atom scale={1} />}<EvidenceIcon state={s} atom={false} scale={2} /></span>
             : <span aria-hidden className="inline-block h-3 w-3 flex-none rounded-full" style={{ background: m.evidence[s].fill, border: `1.5px solid ${m.evidence[s].stroke}` }} />}
           <span>{t}</span>
         </li>
@@ -58,7 +61,7 @@ function Minimap({ m, world, box, source, onCenter, width }: {
   const wrap = useRef<HTMLDivElement | null>(null);
   const cv = useRef<HTMLCanvasElement | null>(null);
   const dragging = useRef(false);
-  const [mw] = useState(width);
+  const mw = width;
   const k = mw / world.w;
   const mh = Math.round(world.h * k);
   const srcCanvas = "canvas" in source ? source.canvas : null;

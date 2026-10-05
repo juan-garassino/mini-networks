@@ -729,13 +729,14 @@ export function SkySkin() {
             <div className={`${corner} right-3 top-0 sm:right-5`}>
               <NightTabs compact={mobile} onHideUi={() => setUiHidden(true)} />
             </div>
+            {/* the compass stands on the scale bar; scale bar + legend share the bottom margin (corners/plate.tsx) */}
             <div className={`${corner} bottom-3 left-3 flex flex-col items-start gap-3 sm:bottom-5 sm:left-5`}>
+              <Compass m={m} unit={mobile ? 3.5 : 5} onPan={panBy} onWhole={fitWhole} onZoom={stepZoom}
+                canIn={camBox.w > minW + 1} canOut={camBox.w < maxW - 1} whole={whole} />
               {!mobile && (
                 <ScaleBar m={m} names={names} family={family} states={states} atoms={atoms} pipelines={pipelines} counts={counts}
                   selected={selected} onPick={onSelect} onLand={jumpLand} focusFam={focusFam} />
               )}
-              <Compass m={m} unit={mobile ? 3.5 : 5} onPan={panBy} onWhole={fitWhole} onZoom={stepZoom}
-                canIn={camBox.w > minW + 1} canOut={camBox.w < maxW - 1} whole={whole} />
             </div>
             {!mobile && !drawerPx && (
               <div className={`${corner} bottom-3 right-3 sm:bottom-5 sm:right-5`}>

@@ -58,17 +58,20 @@ export function Drawer(p: DrawerProps) {
       diagramOn={p.mobile ? "drawer" : p.diagramOn ?? "drawer"} onShowDiagram={p.onShowDiagram} />
   );
   const back = (
-    <Btn m={m} onClick={p.onBack} label="Back to the map" style={{ fontSize: 14, minHeight: 26 }}>← Back to the map</Btn>
+    // the same words as the cartouche's link and the compass hub: it closes the
+    // card and returns to the whole map
+    <Btn m={m} onClick={p.onBack} label="Close the card: whole map" title="Whole map (Esc)" style={{ fontSize: 14, minHeight: 28, fontWeight: 500 }}>← Whole map</Btn>
   );
   if (p.fullDiagram) {
     return (
       <div role="dialog" aria-label={`How ${displayName(card.name)} works`} className="absolute inset-0 z-30 overflow-auto"
         style={{ background: sheetGround(m), color: m.ink, fontFamily: m.bodyFont }}>
-        <div className="flex items-center gap-3 px-5 pt-4">
-          <Btn m={m} onClick={() => p.setFullDiagram(false)} label="Back to the map" style={{ fontSize: 14, minHeight: 26 }}>← Back to the map</Btn>
+        {/* the map plate's title bar, at stage size: title left, the way back right */}
+        <div className="mx-auto flex items-center justify-between gap-4 px-5 pt-5" style={{ maxWidth: Math.min(1120, p.stageW - 64) + 40 }}>
           <h2 className="leading-none" style={{ fontFamily: m.signFont, fontWeight: 700, fontSize: 24, color: m.crisp ? m.border : m.ink }}>
             How {displayName(card.name)} works
           </h2>
+          <Btn m={m} onClick={() => p.setFullDiagram(false)} label="Back to the map (Esc)" title="Back to the map (Esc)" style={{ fontSize: 14, minHeight: 28, fontWeight: 500 }}>Back to the map</Btn>
         </div>
         <div className="px-5 pb-8 pt-4">
           <DiagramMat m={m} className="mx-auto w-fit">

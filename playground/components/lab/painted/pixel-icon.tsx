@@ -7,8 +7,12 @@ import { useEffect, useRef } from "react";
 import type { EvidenceState } from "@/components/lab/shared/card-model";
 import { Raster, drawBanner, drawDisc } from "./pixel-art";
 
-export function EvidenceIcon({ state, atom, scale = 2, label }: { state: EvidenceState; atom: boolean; scale?: number; label?: string }) {
+export function EvidenceIcon({ state, atom: atom0, scale = 2, label }: { state: EvidenceState; atom: boolean; scale?: number; label?: string }) {
   const ref = useRef<HTMLCanvasElement | null>(null);
+  // an untrained atom flies no banner: on the map it is the plain grey stone
+  // (drawBanner → drawDisc), so its icon is the stone too, not a stone drawn
+  // at the foot of an empty banner canvas (that clipped to one dark pixel)
+  const atom = atom0 && state !== "untrained";
   const w = atom ? 14 : 9, h = atom ? 20 : 9;
   useEffect(() => {
     const ctx = ref.current?.getContext("2d");
