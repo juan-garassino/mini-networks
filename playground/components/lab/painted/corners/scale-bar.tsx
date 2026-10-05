@@ -17,6 +17,8 @@ import { CORNER, FAMILY_TITLE, TYPE, type Material } from "../material";
 import { plateStyle, plateTitle } from "./plate";
 
 const CELL = 7, H = 12, LAND_GAP = 6, PIPE_H = 6, PIPE_STEP = 6;
+/** the scale bar's cell and segment gap (the loading bar is built the same way) */
+export const SCALE_CELL = { w: CELL, h: H, landGap: LAND_GAP } as const;
 
 export function ScaleBar({ m, names, family, states, atoms, pipelines, counts, selected, onPick, onLand, focusFam, slim = false }: {
   m: Material;

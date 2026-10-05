@@ -47,10 +47,11 @@ import { Cartouche } from "./corners/cartouche";
 import { SheetTabs, type Labels, type Render } from "./corners/sheet-tabs";
 import { Compass } from "./corners/compass";
 import { ScaleBar } from "./corners/scale-bar";
-import { CornerPlate } from "./corners/corner-plate";
+import { CornerPlate, PhoneKey } from "./corners/corner-plate";
 import { PhoneBar } from "./corners/phone-bar";
 import { plateStyle } from "./corners/plate";
 import { EdgeSigns, type EdgeSign } from "./corners/edge-signs";
+import { UNROLL_KEYFRAMES, Unrolling } from "./corners/unrolling";
 import { SeaCanvas, useSeaFurniture } from "./stage";
 import { TrueMapLayers, spotClear, useTrueMap } from "./true-map";
 import { PIXELMAP_CMD } from "./pixelmap";
@@ -71,6 +72,8 @@ const TRUE_MAX = 6;      // × the 768-px true map (= 3× the 1536 renders)
 const MOBILE_BP = 640;
 // the camera's "viewport not final yet" (useCamera targetViewport): jump, never fly
 const UNSETTLED = { w: -1, h: -1 };
+// art px of sea round the lands when the whole map is framed
+const CONTINENT_AIR = 14;
 // the first framing counts as settled once its target holds this long
 const SETTLE_MS = 180;
 // desktop: the diagram hangs on the map as a plate, so the drawer is text only
@@ -83,17 +86,20 @@ const KEYFRAMES = `
 @keyframes painted-stamp { from { opacity: 0; transform: translate(0, 3px); } to { opacity: 1; transform: none; } }
 @keyframes painted-restamp-a { from { opacity: .35; transform: translate(0, 2px); } to { opacity: 1; transform: none; } }
 @keyframes painted-restamp-b { from { opacity: .35; transform: translate(0, 2px); } to { opacity: 1; transform: none; } }
-[data-painted-root][data-veiled] > :not(style) { opacity: 0 !important; }
+[data-painted-root][data-veiled] > :not(style):not([data-painted-loading]) { opacity: 0 !important; }
+${UNROLL_KEYFRAMES}
 @media (prefers-reduced-motion: reduce) { [data-painted-root] [data-corner], [data-painted-root] [data-map-plate] { animation: none !important; } }
 `;
-// the load moment: the four corners stamp onto the sea, two frames each, in
-// turn; afterwards (flips > 0) each change of focus mode re-stamps them in
-// place, quicker and without leaving the sea bare (the two names alternate so
-// the animation restarts without remounting the plates). Timings: MOTION.
+// the load moment: the cartouche is already on the sea (the loading plate,
+// corners/unrolling.tsx, stood in its place), so it does not stamp; the other
+// corners stamp on together, two frames, on one frame. Afterwards (flips > 0)
+// each change of focus mode re-stamps them in place, quicker and without
+// leaving the sea bare (the two names alternate so the animation restarts
+// without remounting the plates). Timings: MOTION.
 const stamp = (i: number, still: boolean, flips = 0): CSSProperties => {
   const { stamp: a, restamp: b } = MOTION;
   return still ? {}
-    : flips === 0 ? { animation: `painted-stamp ${a.ms}ms steps(${a.steps}, end) both`, animationDelay: `${a.delay + i * a.stagger}ms` }
+    : flips === 0 ? (i === 0 ? {} : { animation: `painted-stamp ${a.ms}ms steps(${a.steps}, end) both`, animationDelay: `${a.delay}ms` })
     : { animation: `painted-restamp-${flips % 2 ? "a" : "b"} ${b.ms}ms steps(${b.steps}, end) both`, animationDelay: `${i * b.stagger}ms` };
 };
 
@@ -215,6 +221,16 @@ export function PaintedSkin() {
     if (optPlate !== undefined) setPlateOpen(optPlate);
   }
   const furniture = useSeaFurniture(td?.pm ?? null, td?.sea ?? null, td?.lands ?? null);
+  // the map is painted one painted frame after it is decoded, so the loading
+  // plate shows "Painting the lands" while the long paint runs (it would
+  // otherwise jump from "Unrolling the map" straight to the reveal)
+  const [paintGo, setPaintGo] = useState(false);
+  useEffect(() => {
+    if (!td || paintGo) return;
+    let t = 0;
+    const id = requestAnimationFrame(() => { t = window.setTimeout(() => setPaintGo(true), 0); });
+    return () => { cancelAnimationFrame(id); clearTimeout(t); };
+  }, [td, paintGo]);
 
   // ——— data
   const names = useMemo(() => taxonomy?.models.map((m) => m.name).filter((n) => map.anchors[n]) ?? [], [taxonomy, map]);
@@ -320,7 +336,7 @@ export function PaintedSkin() {
     if (!td) return { x: 0, y: 0, w: W, h: H };
     let x0 = W, y0 = H, x1 = 0, y1 = 0;
     for (const f of FAMILIES) { const b = td.landBox[f]; if (!b || !b.w) continue; x0 = Math.min(x0, b.x); y0 = Math.min(y0, b.y); x1 = Math.max(x1, b.x + b.w); y1 = Math.max(y1, b.y + b.h); }
-    const m = 14;
+    const m = CONTINENT_AIR;
     return x1 > x0 ? { x: x0 - m, y: y0 - m, w: x1 - x0 + 2 * m, h: y1 - y0 + 2 * m } : { x: 0, y: 0, w: W, h: H };
   }, [td, W, H]);
   const fit = isTrue ? Math.min(visW / continent.w, visH / continent.h)
@@ -334,17 +350,22 @@ export function PaintedSkin() {
     if (isTrue) {
       // whole map at the largest crisp scale that fits (the parchment sea
       // runs on past the map's edge, so the margin reads as more sea). A
-      // portrait phone frames the map by its HEIGHT instead (between the top
-      // bar and the compass), at a whole crisp scale: the continent then runs
-      // off both sides and pans, starting at its middle; "−" still steps out
-      // to the whole map (min)
+      // portrait phone frames the map by its HEIGHT instead: the continent
+      // fills the screen from under the top bar to the bottom edge, at the
+      // largest crisp scale that fits (×1.5 at 390×844 @2x — only the land
+      // signs show here, and they keep 15 px), and the corners float over it
+      // as on desktop. It runs off both sides and pans, starting at its
+      // middle; off-screen lands sign on the edges; "−" still steps out to
+      // the whole map (min). Lands still go in at whole crisp scales (inBase)
       const whole = down(fit);
-      let base = whole;
+      let base = whole, inBase = whole;
       if (mobile && vp.h > vp.w) {
-        const byHeight = (visH - PHONE.reserveTop - PHONE.reserveBottom) / continent.h;
-        base = Math.max(whole, Math.floor(byHeight) || down(byHeight));
+        // (the lands themselves, without the whole map's air: that is sea)
+        const byHeight = (visH - PHONE.reserveTop) / (continent.h - 2 * CONTINENT_AIR);
+        base = Math.max(whole, down(byHeight));
+        inBase = Math.max(whole, Math.floor(byHeight) || down(byHeight));
       }
-      return { overview: base, region: upTo(base * 1.8), node: upTo(Math.max(2, base * 2)), min: whole, max: TRUE_MAX };
+      return { overview: base, region: upTo(Math.max(inBase * 1.8, base + 1 / dpr)), node: upTo(Math.max(2, inBase * 2, base + 1 / dpr)), min: whole, max: TRUE_MAX };
     }
     if (snapGrid) {
       const snap = (k: number) => [...GRID_SCALES].reverse().find((s) => s <= k + 1e-3) ?? GRID_SCALES[0];
@@ -354,7 +375,7 @@ export function PaintedSkin() {
     }
     const max = mapId === "paper" ? PAPER_MAX : IMG_MAX;
     return { overview: fit, region: Math.min(max, fit * 1.8), node: Math.min(max, Math.max(fit * 2.2, 1.2)), min: mapId === "paper" ? fit : fit * 0.8, max };
-  }, [isTrue, snapGrid, mapId, fit, down, upTo, mobile, vp.w, vp.h, visH, continent.h]);
+  }, [isTrue, snapGrid, mapId, fit, down, upTo, mobile, vp.w, vp.h, visH, continent.h, dpr]);
 
   const boxAt = useCallback((cx: number, cy: number, k: number, free = false): CamBox => {
     // centre (cx, cy) in the VISIBLE part of the view (left of the drawer,
@@ -566,8 +587,8 @@ export function PaintedSkin() {
       // filling the visible view and let the land sit off-centre instead
       return boxAt(lb.x + lb.w / 2, lb.y + lb.h / 2, k, mapId !== "paper");
     }
-    // (a portrait phone centres it in the band between the top bar and the compass)
-    const lift = isTrue && mobile && vp.h > vp.w ? (PHONE.reserveBottom - PHONE.reserveTop) / 2 / levels.overview : 0;
+    // (a portrait phone centres it in the band under the top bar)
+    const lift = isTrue && mobile && vp.h > vp.w ? -PHONE.reserveTop / 2 / levels.overview : 0;
     if (isTrue) return boxAt(continent.x + continent.w / 2, continent.y + continent.h / 2 + lift, levels.overview, lift !== 0);
     // paper: the cover crop takes its loss from the bottom (sea, ships and the
     // painter's painted-out scale bar), never from the land titles along the top
@@ -791,6 +812,8 @@ export function PaintedSkin() {
   // small plate on the screen edge nearest the land, at the land's height,
   // pointing at it; pressing it opens that land. While a model is open the
   // sheet is the subject: those lands go unsigned
+  // a land sign's size: one out of focus signs at the names' size, never louder than them
+  const signG = useCallback((f: Family) => (focusFam !== null && f !== focusFam ? Math.min(gSign, g) : gSign), [focusFam, gSign, g]);
   const offView = useMemo(() => {
     const out = new Map<Family, { side: "l" | "r" | "u" | "d"; at: number }>();
     if (!mobile || !isTrue || !ours) return out;
@@ -799,14 +822,23 @@ export function PaintedSkin() {
       // the land in focus keeps its sign on the map (stepped into view)
       if (f === focusFam) continue;
       const [sx, sy] = map.signs[f];
-      const side = sx < V.x ? "l" : sx > V.x + V.w ? "r" : sy < V.y ? "u" : sy > V.y + V.h ? "d" : null;
+      // a sign whose painted spot is off the screen is signed on that edge;
+      // so is one that would have to slide in by more than a third of its
+      // width to stay whole ("SEQUENC…" at the edge): it would no longer
+      // stand on its land. On a phone every land sign is whole on the map,
+      // near its spot, or a chip on the edge
+      const { w: sw, h: sh } = ribbonSize(FAMILY_TITLE[f].toUpperCase(), signG(f), false, true);
+      const over = { l: V.x - (sx - sw / 2 - 4), r: sx + sw / 2 + 5 - (V.x + V.w), u: V.y - (sy - sh / 2 - 2), d: sy + sh / 2 + 3 - (V.y + V.h) };
+      const far = { l: over.l > sw / 3, r: over.r > sw / 3, u: over.u > sh, d: over.d > sh };
+      const side = sx < V.x ? "l" : sx > V.x + V.w ? "r" : sy < V.y ? "u" : sy > V.y + V.h ? "d"
+        : (["l", "r", "u", "d"] as const).filter((k) => far[k]).sort((a, b) => over[b] - over[a])[0] ?? null;
       if (!side) continue;
       // the screen coordinate along that edge (CSS px)
       const at = side === "l" || side === "r" ? (sy - restBox.y) * layoutS : (sx - restBox.x) * layoutS;
       out.set(f, { side, at });
     }
     return out;
-  }, [mobile, isTrue, ours, focusFam, visible, map, restBox.x, restBox.y, layoutS]);
+  }, [mobile, isTrue, ours, focusFam, visible, map, restBox.x, restBox.y, layoutS, signG]);
   const signs: PlacedRibbon[] = useMemo(() => {
     if (!isTrue || !ours) return [];
     const V = visible;
@@ -816,8 +848,7 @@ export function PaintedSkin() {
     // top to bottom, so a sign pushed off its spot moves away from the ones above it
     const order = [...FAMILIES].sort((a, b) => map.signs[a][1] - map.signs[b][1]);
     // every sign's painted spot, so a sign that steps aside never lands on one
-    // a land out of focus signs at the names' size, never louder than them
-    const gOf = (f: Family) => (focusFam !== null && f !== focusFam ? Math.min(gSign, g) : gSign);
+    const gOf = signG;
     const home = (f: Family) => {
       const { w, h } = ribbonSize(FAMILY_TITLE[f].toUpperCase(), gOf(f), false, true);
       const x = clamp(Math.round(map.signs[f][0] - w / 2), V.x + 4, V.x + V.w - w - 5), y = clamp(Math.round(map.signs[f][1] - h / 2), V.y + 2, V.y + V.h - h - 3);
@@ -860,7 +891,7 @@ export function PaintedSkin() {
       out.push({ name: `sign-${f}`, text, x, y, g: gs, tail: null, tailAt: 0, sign: { count: famCount[f] ?? 0 }, dim: focusFam !== null && f !== focusFam, box });
     }
     return out;
-  }, [isTrue, ours, gSign, g, map, famCount, focusFam, visible, labelHard, chrome, offView]);
+  }, [isTrue, ours, signG, map, famCount, focusFam, visible, labelHard, chrome, offView]);
 
   // paper: the painter's land titles, redrawn on our stock (the painting
   // under them is retouched), so a title can do what a painted one cannot:
@@ -1127,6 +1158,8 @@ export function PaintedSkin() {
   // real size) — the veil lifts and the camera cuts straight to it
   const tKey = `${Math.round(target.x)},${Math.round(target.y)},${Math.round(target.w)},${Math.round(target.h)}`;
   const framingIn = Boolean(opts && view && ready && pictureReady && fontsReady && vp.w > 1 && (uiHidden || corners.length > 0));
+  // the loading plate's steps (corners/unrolling.tsx LOAD_STEPS), each true once its work is in
+  const loadDone = [ready, isTrue ? td !== null || trueState.status === "missing" || trueState.status === "error" : imgLoaded !== null, pictureReady && fontsReady, false];
   useEffect(() => {
     if (revealed || !framingIn) return;
     const t = setTimeout(() => setRevealed(true), SETTLE_MS);
@@ -1134,7 +1167,7 @@ export function PaintedSkin() {
   }, [revealed, framingIn, tKey]);
   // lab contract (lib/lab-contract.ts): ready once painted, revealed, the
   // camera landed and the corners' stamp-on finished
-  const entranceMs = still ? 0 : MOTION.stamp.delay + 4 * MOTION.stamp.stagger + MOTION.stamp.ms;
+  const entranceMs = still ? 0 : MOTION.stamp.delay + MOTION.stamp.ms;
   const labReady = useLabReady(drawn && revealed && cam.landed, rootRef, entranceMs);
   useEffect(() => (labReady ? installLabHook({
     select: (name: string) => onSelect(name),
@@ -1169,7 +1202,7 @@ export function PaintedSkin() {
           )}
           <div data-painted-map className="absolute left-0 top-0" style={{ width: W * S, height: H * S, transform: `translate(${ox}px, ${oy}px)` }}>
             {isTrue ? (
-              td && taxonomy ? (
+              td && taxonomy && paintGo ? (
                 <TrueMapLayers data={td} map={map} states={states} atoms={atoms} focusFam={focusFam}
                   focusStrength={focusStrength} focusAt={focusAt}
                   ribbons={ribbons} signs={signs} lineage={lineage.map((l) => l.pts)} travellers={travellers}
@@ -1226,6 +1259,9 @@ export function PaintedSkin() {
           );
         })()}
 
+        {/* ——— the load moment: the cartouche on the bare sea, saying what is coming in */}
+        {!revealed && <Unrolling m={m} quiet={quietView} still={still} done={loadDone} />}
+
         {/* ——— the four corners (the map stays draggable between them) */}
         {opts && uiHidden && (
           // "map only": one small plate of the map's own stock brings the panels back
@@ -1276,6 +1312,12 @@ export function PaintedSkin() {
                 </div>
               )}
             </div>}
+            {/* phones, no card open: the key folds behind a Key button in the bottom-right corner */}
+            {mobile && !selected && (
+              <div data-corner="br" className={`${corner} bottom-3 right-3`} style={stamp(3, still || !revealed, flips)}>
+                <PhoneKey m={m} maxW={vp.w - 24} />
+              </div>
+            )}
             {!mobile && !(fold >= 2 && plateShown) && (
               <div data-corner="br" className={`${corner} bottom-3 right-3 sm:bottom-5 sm:right-5`} style={stamp(3, still || !revealed, flips)}>
                 {/* focus mode: the minimap is a small inset (orientation, not a second map) */}

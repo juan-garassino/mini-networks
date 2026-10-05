@@ -157,8 +157,8 @@ export const PHONE = {
   bar: 44,           // the top bar's height (cartouche + sheets + map only)
   control: 28,       // every control in it, and an edge sign's height
   searchW: 300,      // the unfolded search field (the sheets step aside)
-  reserveTop: 64,    // overview framing: the bar + its margin + air
-  reserveBottom: 124, // overview framing: compass + zoom rail + slim scale bar
+  reserveTop: 64,    // overview framing: the map fills the screen below the bar + its margin + air
+  reserveBottom: 124, // edge signs stay above the compass + zoom rail + slim scale bar
   edgeGap: 6,        // between two edge signs stacked on one edge
 } as const;
 
@@ -174,7 +174,8 @@ export const DRAWER = {
  * the phone sheet's height; all of it is frozen under still=1 and reduced
  * motion (LabMotion + the keyframes' media query). */
 export const MOTION = {
-  stamp: { ms: 160, steps: 2, delay: 120, stagger: 90 },  // the load moment: corners stamp on in turn
+  stamp: { ms: 160, steps: 2, delay: 60 },                // the load moment: the corners stamp on together, one frame (the cartouche is already there)
+  unroll: { ms: 640 },                                     // the loading bar's current segment blinks cell by cell
   restamp: { ms: 140, steps: 2, stagger: 40 },            // a focus-mode change re-stamps them in place
   plateFade: { ms: 180, steps: 3 },                        // the map plate on landing
   sheet: "220ms ease",                                     // the phone sheet's height

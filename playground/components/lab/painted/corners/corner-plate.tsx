@@ -6,10 +6,10 @@
 // key. Same frame, same width. quiet (focus mode): the minimap shrinks to a
 // small inset on half padding. The legend carries the corner plates' one
 // title treatment ("Map key", the sign voice).
-import { useEffect, useRef, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import type { CamBox } from "@/components/lab/shared/camera";
 import type { EvidenceState } from "@/components/lab/shared/card-model";
-import { CHROME, CORNER, TYPE, type Material } from "../material";
+import { CHROME, CORNER, PHONE, TYPE, sign, type Material } from "../material";
 import { EvidenceIcon } from "../pixel-icon";
 import { MarkIcon } from "../marker";
 import { plateStyle, plateTitle } from "./plate";
@@ -105,6 +105,31 @@ function Minimap({ m, world, box, source, onCenter, width }: {
         : <img src={source.img} alt="" draggable={false} className="block" style={{ width: mw, height: mh, imageRendering: source.pixelated ? "pixelated" : "auto" }} />}
       <div className="pointer-events-none absolute"
         style={{ left: vx * k, top: vy * k, width: Math.max(4, vw * k), height: Math.max(4, vh * k), outline: `2px solid ${m.crisp ? m.road : m.loud}`, boxShadow: `0 0 0 999px ${CHROME.minimapVeil}` }} />
+    </div>
+  );
+}
+
+/** Phones: the legend folds behind one "Key" button in the bottom-right
+ * corner (as the star atlas does); pressed, the key unfolds above it. The
+ * unfolded plate is not part of the corner's measured box, so the land signs
+ * do not move when it opens: it lies over the map until it is closed. */
+export function PhoneKey({ m, maxW }: { m: Material; maxW: number }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <div className="relative">
+      {open && (
+        <div className="absolute bottom-full right-0" style={{ marginBottom: PHONE.edgeGap + 2 }}>
+          <aside aria-label="Legend" style={{ ...plateStyle(m), width: Math.min(CORNER.w, maxW), padding: CORNER.pad, fontFamily: m.bodyFont, color: m.ink }}>
+            <Legend m={m} />
+          </aside>
+        </div>
+      )}
+      <button type="button" onClick={() => setOpen((v) => !v)} aria-expanded={open} aria-label={open ? "Close the map key" : "Open the map key"}
+        className="px-2.5 leading-none focus-visible:outline-2 focus-visible:outline-offset-2"
+        style={{ ...plateStyle(m, { loud: open }), height: PHONE.control, fontFamily: m.signFont, fontWeight: 700, fontSize: sign(m, TYPE.tabSmall) }}>
+        {/* one label, open or shut (pressed = open): the button never grows into the scale bar */}
+        Key
+      </button>
     </div>
   );
 }
