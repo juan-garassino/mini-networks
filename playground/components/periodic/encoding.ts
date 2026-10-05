@@ -13,8 +13,11 @@ export const ENCODING = defineEncoding({
   "top-right glyph": { encodes: "the mechanism icon of the model (lib/icons)" },
   symbol: { encodes: "the chart symbol, unique across models AND reactions (lib/blueprint symbolFor / reactionSymbols; rule in DESIGN.md); compounds print dimmer in single-ink skins" },
   "bottom name": { encodes: "the model or composition name as words (lib/copy displayName), in the skin's name face, wrapping between words, never cut off" },
-  "family head": { encodes: "the family's name (a skin may prefix its numeral, I-VI, in FAMILY_BLOCKS order)" },
+  "family head": { encodes: "the family's name (never numbered: the families are not a sequence)" },
   "f-block": { encodes: "compositions (reactions): whole models wired into one pipeline" },
+  "sheet tabs": { encodes: "which sheet is open (Chart, Reactions, Observatory): the open one is inked", kind: "interaction" },
+  "api status": { encodes: "drawn only while the zoo's API is offline", kind: "chrome" },
+  "loading line": { encodes: "the load phase (lib/lab-contract loadPhase), in the skin's voice (voice.loading / voice.offline)", kind: "chrome" },
   "masthead counts": { encodes: "live totals from /web/taxonomy (lib/copy zooCounts): models, atoms, reactions", kind: "chrome" },
   "accent colour": { encodes: "interaction only — hover, focus, the selected spec sheet", kind: "interaction" },
 });

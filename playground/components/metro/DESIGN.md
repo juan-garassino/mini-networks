@@ -54,6 +54,7 @@ sits above it as HTML (`PhoneKey`), folded into a disclosure so the map leads.
 | `marks.tsx` | `Mark`, `TrainBody`, `KeyGlyph` (key sample = the real mark), `Bullet` |
 | `key.tsx` | `Cartouche` (in-SVG key in the reserved rect) and `PhoneKey`, from the same data: per line `models` (its family) and `stops` (every station it calls at) |
 | `tabs.tsx` | the Jost sheet row (Map / Reactions / Observatory + edition picker) that replaces the classic title block |
+| `loading.tsx` | the loading surface (library § Loading): the system name and a stub of neutral track with `VOICE.loading` / `VOICE.offline` |
 | `services.tsx` | through services: a list whose rows light their stations on the map |
 | `metro-chart.tsx` | the page: header, key, map frame, under-construction list, services; `METRO_TITLE` (cartouche + phone header; the tab reads `Transit \| mini_networks`) |
 | `hooks.ts` | the `?specimen=1` flag and the tab title (still: `lib/lab-contract.ts` `useStill`) |

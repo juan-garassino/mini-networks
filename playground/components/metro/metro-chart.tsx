@@ -9,6 +9,7 @@ import type { TaxonomyResponse } from "@/lib/types";
 import { useLabReady, useStill } from "@/lib/lab-contract";
 import { useQueryFlag } from "./hooks";
 import { Cartouche, PhoneKey } from "./key";
+import { MetroLoading } from "./loading";
 import { COLS, G, buildMetro, labelOf } from "./layout";
 import { MetroMap } from "./map";
 import { Services } from "./services";
@@ -26,7 +27,12 @@ function openOnTheKnot(el: HTMLDivElement | null) {
   }
 }
 
-export function ChartMetro({ taxonomy, onSelect }: { taxonomy: TaxonomyResponse | null; onSelect: (name: string) => void }) {
+export function ChartMetro({ taxonomy, onSelect, offline = false }: {
+  taxonomy: TaxonomyResponse | null;
+  onSelect: (name: string) => void;
+  /** the API refused the last request (the caller retries) */
+  offline?: boolean;
+}) {
   const layout = useMemo(() => (taxonomy ? buildMetro(taxonomy) : null), [taxonomy]);
   const [lit, setLit] = useState<string[] | null>(null);
   const specimen = useQueryFlag("specimen");
@@ -36,7 +42,8 @@ export function ChartMetro({ taxonomy, onSelect }: { taxonomy: TaxonomyResponse 
   const still = useStill();
   const rootRef = useRef<HTMLDivElement>(null);
   const drawn = useLabReady(!!layout, rootRef) === "1";
-  if (!taxonomy || !layout) return null;
+  // until the taxonomy is in: transit's own loading surface (loading.tsx)
+  if (!taxonomy || !layout) return <MetroLoading phase={offline ? "offline" : "api"} title={METRO_TITLE} />;
   const live = !still;
 
   if (specimen) {

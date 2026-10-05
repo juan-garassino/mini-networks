@@ -26,16 +26,16 @@ export const wallchart: PeriodicSkin = {
   type: {
     display: "--font-instrument",  // Instrument Serif (one weight)
     body: "--font-draft",
+    symbol: "--font-instrument",
     name: "--font-instrument",     // the poster's serif: names read as words, not identifiers
     singleWeight: true,
-    textCase: "none",
-    titleTracking: "0.14em",
+    titleTracking: "0.02em",
     size: {
       title: "2.75rem", symbolAtom: "30px", symbolCompound: "26px", symbolReaction: "18px",
       number: "10px", name: "14px", nameLeading: "1", nameReaction: "12px", small: "11px", famhead: "14px",
     },
   },
-  space: { row: "5.25rem", reactionRow: "4.75rem", stackCell: "5rem", gap: "4px", tilePad: "4px 5px 5px" },
+  space: { row: "5.25rem", reactionRow: "4.75rem", stackCell: "5rem", gap: "4px", tilePad: "4px 5px 5px", tabs: "2.75rem" },
   border: {
     atom: "1.5px solid var(--line)",
     compound: "1px solid color-mix(in srgb, var(--line) 35%, var(--paper))",
@@ -43,7 +43,7 @@ export const wallchart: PeriodicSkin = {
     famRule: "0",
     famBand: "5px",
   },
-  famhead: { numeral: true, textCase: "none", rule: "below", gap: "8px" },
+  famhead: { rule: "below", gap: "8px" },
   fill: { atom: "100%", compound: "50%", reaction: "0%", under: "var(--paper)" },
   compoundSymbol: "var(--ink)",
   radius: { tile: "1px" },
@@ -57,7 +57,11 @@ export const wallchart: PeriodicSkin = {
     grain: 0.07,
   },
   interaction: "accent",
-  chrome: { zoom: 1, drawerZoom: 1, stampTilt: "-2deg" },
+  chrome: { drawerZoom: 1, stampTilt: "-2deg" },
   motion: { enter: 0.3, rowStagger: 0.07, colStagger: 0.015, reactionStart: 0.55, reactionStagger: 0.02 },
+  voice: {
+    loading: "Printing the chart…",
+    offline: "The zoo’s API is not answering. Start it with python main.py serve; retrying every 3 s.",
+  },
   masthead: "title",
 };

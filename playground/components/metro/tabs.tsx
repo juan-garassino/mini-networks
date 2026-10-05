@@ -4,7 +4,7 @@
 // Map / Reactions / Observatory on the left, the edition picker on the right.
 // The active tab carries a track-weight ink bar along its top edge, the way
 // the map draws a line. Colours come from the sheet vars (tokens.ts SHEET_VARS).
-import type { EditionId, SheetId } from "@/components/title-block";
+import { EDITION_LABEL, type EditionId, type SheetId } from "@/lib/editions";
 import { GRID, SPACE, TYPE } from "./tokens";
 
 const SHEETS: { id: SheetId; label: string }[] = [
@@ -12,11 +12,6 @@ const SHEETS: { id: SheetId; label: string }[] = [
   { id: "reactions", label: "Reactions" },
   { id: "observatory", label: "Observatory" },
 ];
-
-const EDITION_LABEL: Record<EditionId, string> = {
-  blueprint: "Blueprint", wallchart: "Wall chart", terminal: "Terminal",
-  metro: "Transit", atlas: "Atlas", paper: "Paper",
-};
 
 export function MetroTabs({ sheet, setSheet, editions, edition, setEdition }: {
   sheet: SheetId;

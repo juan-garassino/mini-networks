@@ -1,11 +1,11 @@
 "use client";
 
+import { EDITION_IDS as EDITIONS, type EditionId, type SheetId } from "@/lib/editions";
+
 // The blueprint's title block — every real drawing has one. Doubles as the
 // sheet navigation: CHART / REACTIONS / OBSERVATORY plus the live status cell.
-export type SheetId = "chart" | "reactions" | "observatory";
-export type EditionId = "blueprint" | "wallchart" | "terminal" | "metro" | "atlas" | "paper";
-
-const EDITIONS: EditionId[] = ["blueprint", "wallchart", "terminal", "metro", "atlas", "paper"];
+// Legacy chrome: only the dropped editions (atlas, paper) still wear it; the
+// periodic skins have their sheet tabs, transit its own tab row.
 
 const SHEETS: { id: SheetId; no: string; label: string }[] = [
   { id: "chart", no: "01", label: "Chart" },

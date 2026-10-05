@@ -134,6 +134,12 @@ export const SPACE = {
   tabsH: 40,
 } as const;
 
+/** The loading surface's status line (loading.tsx; lib/lab-contract.ts LOADING). */
+export const VOICE = {
+  loading: "Drawing the lines…",
+  offline: "The zoo’s API is not answering. Start it with python main.py serve; retrying every 3 s.",
+} as const;
+
 /** Motion: one train per line; nothing else moves on its own. */
 export const MOTION = {
   /** px per second along the path */

@@ -30,13 +30,13 @@ export interface PeriodicSkin {
   type: {
     display: FontVar;   // masthead, symbols, family heads, chrome titles
     body: FontVar;      // numbers, the key
+    /** The tile symbol's face: its l must never read as an I ("Ml", not "MI"). */
+    symbol: FontVar;
     /** Tile names, set as words (≥ 11 px rendered; a narrow face keeps 12 letters on a line). */
     name: FontVar;
     /** Faces with one weight (Instrument Serif, VT323): never synthesise bold. */
     singleWeight: boolean;
-    /** Symbols, masthead, family heads: "uppercase" = drafting caps (CV); "none" = as written (Cv). */
-    textCase: "uppercase" | "none";
-    titleTracking: string;            // .bp-title letter-spacing
+    titleTracking: string;            // family heads, key title, f-block label, tabs
     size: {
       title: string;                  // masthead h1 at desktop
       symbolAtom: string;
@@ -57,6 +57,7 @@ export interface PeriodicSkin {
     stackCell: string;   // tile width in the narrow-screen family stack
     gap: string;         // between tiles
     tilePad: string;     // inside a tile
+    tabs: string;        // the sheet tab row's height (Chart / Reactions / Observatory)
   };
 
   border: {
@@ -66,9 +67,10 @@ export interface PeriodicSkin {
     famRule: string;     // under a family head; "0" for none
     famBand: string;     // family-colour band height under a head; "0px" for none
   };
-  /** How a family head is set: "I · Perception" (numeral) or "Perception"; its case; where its
-   * hairline runs (a bracket under it, or a rule above); the air between neighbouring heads. */
-  famhead: { numeral: boolean; textCase: "uppercase" | "none"; rule: "below" | "above"; gap: string };
+  /** How a family head is set: where its hairline runs (a bracket under it, or a rule above) and
+   * the air between neighbouring heads. Heads are family names, never numbered, in every
+   * skin (a numeral marks a sequence, and the families are not one). */
+  famhead: { rule: "below" | "above"; gap: string };
   /** How much of the tile tint a level prints, over `fillUnder`. */
   fill: { atom: string; compound: string; reaction: string; under: string };
   /** Compound symbols: dimmer than atoms in single-ink skins. */
@@ -80,8 +82,13 @@ export interface PeriodicSkin {
   backdrop: { image: string; size: string; grain: number };
   /** Hover/focus: "accent" recolours a tile; "inverse" = terminal inverse video. */
   interaction: "accent" | "inverse";
-  /** Shared chrome adjustments for faces that run small (VT323). */
-  chrome: { zoom: number; drawerZoom: number; stampTilt: string };
+  /** Shared chrome adjustments for faces that run small (VT323): the spec-sheet
+   * drawer's zoom, and the edition stamp's tilt. */
+  chrome: { drawerZoom: number; stampTilt: string };
+
+  /** The loading surface's one status line, in the skin's voice (lib/lab-contract.ts
+   * LOADING): while the zoo's API is answering, and when it is not. */
+  voice: { loading: string; offline: string };
 
   motion: {
     enter: number;          // s, one tile's fade-in

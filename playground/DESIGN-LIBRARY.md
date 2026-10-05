@@ -42,6 +42,38 @@ useEffect(() => (ready ? installLabHook({ select, view }) : undefined), [ready, 
 return <LabMotion still={still}><div ref={rootRef} data-lab-ready={ready}>…</div></LabMotion>;
 ```
 
+## Loading (`lib/lab-contract.ts` `labLoading`, `loadPhase`)
+
+One convention, every design its own look. Until its data is in and laid out, a design draws its
+**own** loading surface from its **own** tokens, at first paint:
+
+- its ground (sheet, sky, parchment) and the chrome it already knows (title, tabs, corners),
+  each where it will stay, so nothing jumps when the data lands;
+- one quiet status line in its own voice where the content will land, on an element spread
+  with `labLoading(phase)` (`role="status"`, `aria-live`, `data-lab-loading=<phase>`);
+- the phase from `loadPhase(data, { offline, laidOut })`: `api` (waiting for `/web/*`),
+  `offline` (the API refused and the design retries: say how to start it), `layout` (data in,
+  routing or fitting the camera);
+- never a neighbour's loader, never a spinner, never `data-lab-ready` (that comes after).
+
+```tsx
+const phase = loadPhase(taxonomy, { offline, laidOut: !!layout });
+if (phase) return <div className="…own tokens…"><Title /><p {...labLoading(phase)}>{VOICE[phase]}</p></div>;
+```
+
+A design switched in place on one route (the classic editions at `/`) must know which design
+it is before first paint. The static export cannot read `?edition=`, so the server renders every
+edition's loading shell under `data-boot-for=<id>`, and the boot script in
+`app/(classic)/layout.tsx` (`lib/editions.ts` `editionBootScript`) paints the chosen edition's
+tokens on `<html>` and shows only its shell before the frame is parsed.
+
+| Design | Loading surface | Status line |
+|---|---|---|
+| Periodic skins | `components/periodic/loading.tsx`: the masthead in place, the line where the table lands | `voice.loading` per skin ("Drafting the table…", "Printing the chart…", `reading /web/taxonomy` + block cursor) |
+| Transit | `components/metro/loading.tsx`: the system name, a stub of the key's neutral track | `VOICE.loading` "Drawing the lines…" |
+| Kawaii flow | the sheet and its title bar, `board.tsx` | "Waiting for the zoo's API…" / "Routing the sheet…" (adopts `labLoading` next round) |
+| Pixel, paper map, star atlas, diagrams | not yet: see *What the lab designs need* below | |
+
 ## Encoding shape (`lib/encoding.ts`)
 
 Each design's `encoding.ts` exports `ENCODING = defineEncoding({ "<mark name>": { encodes,
@@ -64,6 +96,9 @@ clear digits keep them: the periodic skins (Martian Mono, VT323), transit (Jost)
 ## Names, counts, titles (`lib/copy.ts`)
 
 - `displayName(id)`: underscores become spaces. Case belongs to the design (CSS), not the string.
+- Families are named, never numbered ("Perception", not "I · Perception"): they are not a
+  sequence. Element symbols keep chemistry case in every face ("Cv", "Ml", never "CV"), set in
+  a face whose l cannot read as I.
 - `zooCounts(taxonomy, evidence?, family?)` returns `{ models, atoms, pipelines, families, proven }`.
   `NOUNS` and `countOf()` give the words. A design may name pipelines in its own vocabulary
   (periodic "reactions", transit "through services") but takes the number from here.
@@ -98,8 +133,8 @@ own chrome). The classic `ElementSheet` is legacy, so do not copy it.
    `pixelDigits` for a pixel face). Keep the page itself a thin client component.
 3. Put every value in one `tokens.ts`, then write `encoding.ts` before drawing. Each mark gets a
    row with a kind; each key renders from `defineKey`.
-4. Wire the contract: `useLabView`, `useStill`, `useLabReady`, `installLabHook`. Take counts and
-   names from `lib/copy.ts`.
+4. Wire the contract: `useLabView`, `useStill`, `useLabReady`, `installLabHook`, and a loading
+   surface of your own (`labLoading`, `loadPhase`). Take counts and names from `lib/copy.ts`.
 5. Write `DESIGN.md` (≤ 120 lines). Add the route to `scripts/ports.mjs` and the table above.
    Shoot it with `still=1` at 1440×900 @2x and 390×844.
 
@@ -111,6 +146,30 @@ the camera's `landed` in `painted-skin.tsx` (a node deep link is ready only once
 (paper's key has drifted); `pixelDigits` from `lib/fonts.ts` in place of its copy in
 `app/lab/painted/layout.tsx` (move the font files to a shared folder then); cartouche counts
 from `zooCounts`; and a `metadata.title` for `/lab/painted`, which shows only "mini_networks".
+
+## What the lab designs need for the loading convention
+
+Their folders belong to their builders; each needs its own round:
+
+- **Kawaii flow** (`components/lab/flow/board.tsx`): one line. Spread
+  `{...labLoading(loadPhase(taxonomy, { laidOut: !!layout })!)}` on the existing status `<p>`.
+- **Pixel and paper map** (`components/lab/painted/painted-skin.tsx`): today 4–8 s of blank
+  parchment (pixel) or a flat sea-blue slab (paper), then the corners pop in one by one. Paint
+  the cartouche and the map's ground (a low-res copy of the painting) at first paint with
+  "Unrolling the map…", and bring all four corners in on one frame.
+- **Star atlas** (`components/lab/sky/`): plaques and the count move after first paint. Hold
+  them, with a status line, until evidence is in (or place them from the taxonomy alone).
+- **Pixel diagrams** (`/lab/anatomy`): a status line in the kit's bitmap voice while the
+  champion data loads.
+
+## Lab furniture
+
+The **Feedback** tab (`components/lab/shared/feedback.tsx`, mounted by `app/lab/layout.tsx`) is
+the owner's inbox, not part of any design, and is hidden under `?still=1`. Closed, it docks to
+the first free spot on the viewport's edges (right, left, bottom, top; middles, then thirds)
+and never covers a drawer, sheet, plate, corner, chip or label: it re-checks every second and
+moves when a drawer opens under it. A design needs nothing for this, but its chrome must be
+real chrome (interactive, text, `aside`/`[role=dialog]`, or a filled/bordered panel).
 
 ## Not part of the library
 

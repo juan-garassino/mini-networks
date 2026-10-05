@@ -17,6 +17,7 @@
 //          frames have painted the result.
 //   hook   window.__lab = { select(name), view({ zoom, focus }) , …}: the test
 //          hook onto the real interaction paths, installed once ready.
+//   load   before ready, the design's own loading surface (labLoading, below).
 //
 // URL views (?zoom=overview|region|node&focus=<model>) live in
 // components/lab/shared/url-state.ts; Motion's global freeze in
@@ -85,6 +86,31 @@ export function useLabReady(settled: boolean, ref?: RefObject<Element | null>, a
     return () => { alive = false; cancelAnimationFrame(raf); };
   }, [settled, ready, ref, afterMs]);
   return ready ? "1" : undefined;
+}
+
+// LOADING — one convention, every design its own look (DESIGN-LIBRARY.md
+// § Loading). Until its data is in and laid out, a design draws its OWN
+// loading surface from its OWN tokens, at first paint: its ground, the chrome
+// it already knows (title, tabs, corners) where they will stay, and one quiet
+// status line in its own voice where the content will land. Never a
+// neighbour's loader, never a spinner, never data-lab-ready. The phases:
+//   api      waiting for the zoo's API (/web/*)
+//   offline  the API refused; the design is retrying (say how to start it)
+//   layout   data in, being laid out (routing, camera fit, painting)
+
+export type LoadPhase = "api" | "offline" | "layout";
+
+/** The phase to show, or null once the design can draw itself. */
+export function loadPhase(data: unknown, { offline = false, laidOut = true } = {}): LoadPhase | null {
+  if (!data) return offline ? "offline" : "api";
+  return laidOut ? null : "layout";
+}
+
+/** Spread on the loading surface's root: a polite live status the shooter and
+ * screen readers can find (`[data-lab-loading]`), naming its phase.
+ *   <div {...labLoading(phase)} className="…own tokens…">Routing the sheet…</div> */
+export function labLoading(phase: LoadPhase) {
+  return { role: "status", "aria-live": "polite", "data-lab-loading": phase } as const;
 }
 
 /** The window.__lab test hook (scripts/README-shoot.md). */

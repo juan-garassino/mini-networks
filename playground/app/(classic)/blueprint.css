@@ -48,8 +48,7 @@ body::after {
   transform: rotate(var(--skin-stamp-tilt, -2deg));
 }
 
-/* faces that run small (VT323) zoom the px-sized chrome instead of re-sizing it */
-footer { zoom: var(--skin-chrome-zoom, 1); }
+/* faces that run small (VT323) zoom the px-sized drawer instead of re-sizing it */
 .pt-drawer-body { zoom: var(--skin-drawer-zoom, 1); }
 
 /* stroke draw-in for the load moment */

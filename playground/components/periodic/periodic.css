@@ -12,13 +12,24 @@
   color: var(--ink);
 }
 @media (min-width: 640px) { .pt-sheet { padding: 1.5rem 2.5rem 2.5rem; } }
+/* the loading surface's one status line (loading.tsx), where the table will land */
 .pt-loading {
-  display: grid;
-  place-items: center;
-  font-family: var(--pt-display), sans-serif;
-  font-size: 1.125rem;
+  margin-top: 1.25rem;
+  max-width: 62ch;
+  font-size: calc(var(--pt-small) * 1.2);
+  line-height: 1.5;
   color: var(--ink-dim);
 }
+/* a console skin prints it after its command, with the block cursor */
+.pt-loading[data-variant="prompt"]::after {
+  content: "\2588";
+  margin-left: 0.5ch;
+  color: var(--line);
+  animation: pt-cursor 1.06s steps(1) infinite;
+}
+@keyframes pt-cursor { 50% { opacity: 0; } }
+html[data-still] .pt-loading::after { animation: none; }
+@media (prefers-reduced-motion: reduce) { .pt-loading::after { animation: none; } }
 
 /* ————— masthead: title left, ruled count block right ————— */
 .pt-masthead {
@@ -37,7 +48,6 @@
   font-weight: 800;
   line-height: 0.95;
   letter-spacing: 0.04em;
-  text-transform: var(--pt-case);
   text-wrap: balance;
   color: var(--ink);
 }
@@ -96,10 +106,8 @@
   font-family: var(--pt-display), sans-serif;
   font-size: var(--pt-famhead);
   letter-spacing: var(--skin-title-tracking);
-  text-transform: var(--pt-fam-case);
   color: var(--ink-dim);
 }
-.pt-famnum { display: var(--pt-famnum); }
 
 /* narrow: each family as its own small table, flowing side by side */
 .pt-stack { display: flex; flex-wrap: wrap; gap: 1.25rem 1.5rem; }
@@ -142,13 +150,12 @@
 .pt-icon { width: 13px; height: 13px; flex: none; color: var(--ink-dim); transition: color 0.15s ease; }
 .pt-sym {
   padding-top: 2px;
-  font-family: var(--pt-display), sans-serif;
+  font-family: var(--pt-symbol-face), sans-serif;
   font-size: var(--pt-sym-atom);
   font-weight: 800;
   line-height: 1;
   letter-spacing: 0.02em;
   text-align: center;
-  text-transform: var(--pt-case);
   color: var(--ink);
 }
 .pt-tile[data-level="compound"] .pt-sym { font-size: var(--pt-sym-compound); font-weight: 700; color: var(--pt-sym-compound-ink); }
@@ -187,14 +194,13 @@ html[data-pt-interaction="inverse"] button.pt-tile:is(:hover, :focus-visible) :i
   font-family: var(--pt-display), sans-serif;
   font-size: calc(var(--pt-famhead) * 1.1);
   letter-spacing: var(--skin-title-tracking);
-  text-transform: var(--pt-case);
   color: var(--ink);
 }
 .pt-fblock-label p { margin-top: 0.25rem; font-size: var(--pt-small); line-height: 1.4; color: var(--ink-dim); }
 .pt-fblock-tiles {
   display: grid;
   margin-top: 0.75rem;
-  grid-template-columns: repeat(auto-fill, var(--pt-stack-cell));
+  grid-template-columns: repeat(auto-fill, minmax(var(--pt-stack-cell), 1fr));
   grid-auto-rows: var(--pt-reaction-row);
   gap: var(--pt-gap);
 }
@@ -222,7 +228,6 @@ html[data-pt-interaction="inverse"] button.pt-tile:is(:hover, :focus-visible) :i
   font-family: var(--pt-display), sans-serif;
   font-size: var(--pt-famhead);
   letter-spacing: var(--skin-title-tracking);
-  text-transform: var(--pt-case);
   color: var(--ink);
 }
 .pt-key-sample { display: grid; grid-template-columns: var(--pt-stack-cell) 1fr; height: var(--pt-row); }
@@ -233,12 +238,66 @@ html[data-pt-interaction="inverse"] button.pt-tile:is(:hover, :focus-visible) :i
 .pt-key-levels li { display: flex; align-items: center; gap: 0.5rem; }
 .pt-swatch { width: 0.75rem; height: 0.75rem; flex: none; }
 
+/* phone: each family grows by its column count until its line is full, so no
+   line ends in a blank third (Repr. and Structure share one line) */
+@media (max-width: 639px) {
+  .pt-family {
+    flex: var(--pt-cols) 1 calc(var(--pt-cols) * var(--pt-stack-cell) + (var(--pt-cols) - 1) * var(--pt-gap));
+    min-width: 0;
+  }
+  .pt-family .pt-grid { grid-template-columns: repeat(var(--pt-cols), minmax(0, 1fr)); }
+}
+
+/* ————— sheet tabs (sheet-tabs.tsx): the sheets left, the edition right ————— */
+.pt-tabs {
+  display: flex;
+  align-items: stretch;
+  justify-content: space-between;
+  height: var(--pt-tabs);
+  border-top: var(--pt-border-atom);
+  background: var(--paper);
+  font-family: var(--pt-display), sans-serif;
+  font-size: var(--pt-famhead);
+  letter-spacing: var(--skin-title-tracking);
+  color: var(--ink-dim);
+}
+.pt-tabs [role="tablist"] { display: flex; align-items: stretch; }
+.pt-tab {
+  padding: 0 0.9rem;
+  white-space: nowrap;
+  border-right: var(--pt-border-compound);
+  transition: color 0.15s ease, background-color 0.15s ease;
+}
+.pt-tab:hover { color: var(--ink); }
+.pt-tab:focus-visible, .pt-edition select:focus-visible { outline: 2px solid var(--redline); outline-offset: -2px; }
+/* the open sheet is inked: a line-weight bar on its top edge, or inverse video in a console skin */
+.pt-tab[aria-selected="true"] { color: var(--ink); box-shadow: inset 0 3px 0 var(--line); }
+html[data-pt-interaction="inverse"] .pt-tab[aria-selected="true"] { background: var(--line); color: var(--paper-deep); box-shadow: none; }
+.pt-tabs-end { display: flex; align-items: center; gap: 1rem; padding: 0 0.9rem; white-space: nowrap; }
+.pt-offline { display: flex; align-items: center; gap: 0.4rem; color: var(--ink); }
+.pt-offline::before { content: ""; width: 0.5rem; height: 0.5rem; border-radius: 50%; background: var(--alert); }
+.pt-edition { display: flex; align-items: center; gap: 0.5rem; }
+.pt-edition select {
+  padding: 0.1rem 0;
+  border-bottom: var(--pt-border-compound);
+  background: transparent;
+  color: var(--ink);
+  font: inherit;
+  cursor: pointer;
+}
+.pt-edition option { background: var(--paper); color: var(--ink); }
+@media (max-width: 639px) {
+  .pt-tab { padding: 0 0.6rem; }
+  .pt-tabs-end { padding: 0 0.6rem; }
+  .pt-edition-label, .pt-offline-label { display: none; }
+}
+
 /* ————— breakpoint: the wide table from lg up, the family stack below ————— */
 @media (min-width: 1024px) {
   .pt-wide { display: block; min-width: 62rem; }
   .pt-stack, .pt-narrow-only { display: none; }
 }
 
-/* ————— the skin reaches the shared chrome (title block, drawer, page) ————— */
+/* ————— the skin reaches the shared chrome (tabs, drawer, page) ————— */
 html[data-pt-single-weight] { font-synthesis: none; }
 html[data-pt-single-weight] :is(.bp-title, .pt-title, .pt-sym, .pt-counts dd) { font-weight: 400 !important; }

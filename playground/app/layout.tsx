@@ -32,7 +32,9 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   return (
-    <html lang="en" className={`${display.variable} ${draft.variable} ${instrument.variable} ${vt.variable} ${jost.variable} ${cormorant.variable} ${patrick.variable} h-full antialiased`}>
+    // suppressHydrationWarning: the classic editions' boot script paints the chosen
+    // edition's tokens (style, data-*) on <html> before React hydrates (lib/editions.ts)
+    <html lang="en" suppressHydrationWarning className={`${display.variable} ${draft.variable} ${instrument.variable} ${vt.variable} ${jost.variable} ${cormorant.variable} ${patrick.variable} h-full antialiased`}>
       <body className="h-full overflow-hidden">{children}</body>
     </html>
   );

@@ -17,7 +17,7 @@ const FAMILIES: FamilyId[] = ["perception", "sequence", "generative", "represent
 
 /** A skin as CSS custom properties. The global names (--paper, --ink, …) are
  * the ones globals.css maps to Tailwind colours, so the shared chrome (title
- * block, spec-sheet drawer) follows the skin too; --pt-* are the table's own. */
+ * tabs, spec-sheet drawer) follows the skin too; --pt-* are the table's own. */
 export function skinVars(s: PeriodicSkin): Record<string, string> {
   const v: Record<string, string> = {
     "--paper": s.color.paper,
@@ -29,7 +29,7 @@ export function skinVars(s: PeriodicSkin): Record<string, string> {
     "--redline": s.color.accent,
     "--pt-display": `var(${s.type.display})`,
     "--pt-body": `var(${s.type.body})`,
-    "--pt-case": s.type.textCase,
+    "--pt-symbol-face": `var(${s.type.symbol})`,
     "--pt-famhead": s.type.size.famhead,
     "--pt-title": s.type.size.title,
     "--pt-sym-atom": s.type.size.symbolAtom,
@@ -46,13 +46,12 @@ export function skinVars(s: PeriodicSkin): Record<string, string> {
     "--pt-stack-cell": s.space.stackCell,
     "--pt-gap": s.space.gap,
     "--pt-pad": s.space.tilePad,
+    "--pt-tabs": s.space.tabs,
     "--pt-border-atom": s.border.atom,
     "--pt-border-compound": s.border.compound,
     "--pt-border-reaction": s.border.reaction,
     "--pt-fam-rule": s.border.famRule,
     "--pt-fam-band": s.border.famBand,
-    "--pt-famnum": s.famhead.numeral ? "inline" : "none",
-    "--pt-fam-case": s.famhead.textCase,
     "--pt-fam-rule-below": s.famhead.rule === "below" ? s.border.famRule : "0",
     "--pt-fam-rule-above": s.famhead.rule === "above" ? s.border.famRule : "0",
     "--pt-fam-gap": s.famhead.gap,
@@ -67,7 +66,6 @@ export function skinVars(s: PeriodicSkin): Record<string, string> {
     "--skin-backdrop-size": s.backdrop.size,
     "--skin-grain": String(s.backdrop.grain),
     "--skin-title-tracking": s.type.titleTracking,
-    "--skin-chrome-zoom": String(s.chrome.zoom),
     "--skin-drawer-zoom": String(s.chrome.drawerZoom),
     "--skin-stamp-tilt": s.chrome.stampTilt,
   };

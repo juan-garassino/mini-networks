@@ -1,7 +1,8 @@
 import type { PeriodicSkin } from "./types";
 
 // Blueprint: a cyanotype drawing — chalk-white line-work on Prussian blue,
-// drafting caps, single ink. Family is told by column block only.
+// condensed drafting face, single ink. Family is told by column block only.
+// Symbols keep chemistry case (Cv, Ml) like every skin: caps read as acronyms.
 export const blueprint: PeriodicSkin = {
   id: "blueprint",
   label: "Blueprint",
@@ -18,16 +19,16 @@ export const blueprint: PeriodicSkin = {
   type: {
     display: "--font-display",  // Big Shoulders
     body: "--font-draft",       // Martian Mono
+    symbol: "--font-draft",  // Martian Mono: a tailed l, so Ml never reads MI in the condensed display face
     name: "--font-display",     // Big Shoulders: condensed, so names stay words at 13 px
     singleWeight: false,
-    textCase: "uppercase",
-    titleTracking: "0.14em",
+    titleTracking: "0.03em",
     size: {
       title: "2.75rem", symbolAtom: "27px", symbolCompound: "23px", symbolReaction: "18px",
       number: "10px", name: "13px", nameLeading: "1.05", nameReaction: "12px", small: "11px", famhead: "14px",
     },
   },
-  space: { row: "5.25rem", reactionRow: "4.75rem", stackCell: "5rem", gap: "4px", tilePad: "4px 5px 5px" },
+  space: { row: "5.25rem", reactionRow: "4.75rem", stackCell: "5rem", gap: "4px", tilePad: "4px 5px 5px", tabs: "2.75rem" },
   border: {
     atom: "1.5px solid var(--line)",
     compound: "1px solid var(--line-faint)",
@@ -35,7 +36,7 @@ export const blueprint: PeriodicSkin = {
     famRule: "1px solid var(--line-faint)",
     famBand: "0px",
   },
-  famhead: { numeral: false, textCase: "none", rule: "above", gap: "8px" },
+  famhead: { rule: "above", gap: "8px" },
   fill: { atom: "80%", compound: "40%", reaction: "30%", under: "transparent" },
   compoundSymbol: "var(--ink-dim)",
   radius: { tile: "0px" },
@@ -53,7 +54,11 @@ export const blueprint: PeriodicSkin = {
     grain: 0.07,
   },
   interaction: "accent",
-  chrome: { zoom: 1, drawerZoom: 1, stampTilt: "-2deg" },
+  chrome: { drawerZoom: 1, stampTilt: "-2deg" },
   motion: { enter: 0.3, rowStagger: 0.07, colStagger: 0.015, reactionStart: 0.55, reactionStagger: 0.02 },
+  voice: {
+    loading: "Drafting the table…",
+    offline: "The zoo’s API is not answering. Start it with python main.py serve; retrying every 3 s.",
+  },
   masthead: "title",
 };
