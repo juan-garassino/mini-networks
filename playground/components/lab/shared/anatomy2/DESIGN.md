@@ -79,7 +79,8 @@ drawing on the hot wire. Cards never tick. The page chrome has no motion.
 
 1. Copy `pixel-font.ts`, `themes.ts`, `tokens.ts`, `encoding.ts`, `prims.tsx`,
    `tick.ts`, `mechanism.tsx`, `registry.tsx`, `index.tsx`, `specimen/`.
-   React 19 only; no CSS framework.
+   React 19 only; no CSS framework. Also `lib/lab-contract.ts` (`useStill`), `lib/copy.ts`
+   (`displayName`) and `lib/encoding.ts`.
 2. Empty `registry.tsx` and add your entries. The data shape:
    ```ts
    { view: { w: 560, h: 316 }, title: "build — compile, test, ship",
@@ -99,4 +100,4 @@ drawing on the hot wire. Cards never tick. The page chrome has no motion.
 6. New palette = one more `Theme` entry; keep every role, check both themes.
 
 URL contract: `?model=&theme=pixel|paper&t=&still=1&from=&variant=card`;
-the page sets `data-lab-ready="1"` once painted.
+the page sets `data-lab-ready="1"` once painted (`useLabReady`, `lib/lab-contract.ts`).

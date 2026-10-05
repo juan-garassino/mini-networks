@@ -35,8 +35,8 @@ pixel stays one flat colour.
 ## Type scale
 
 Three voices, loaded by `app/lab/sky/layout.tsx`. Text: Pixelify Sans, with
-the painted map's digits-only family over it for 0-9 (VT323 / Jersey 15, files
-imported from `app/lab/painted/fonts`): numerals are data and Pixelify's 5 reads
+the library's digit face over it for 0-9 (`lib/fonts.ts` `pixelDigits`, VT323 / Jersey 15;
+the numerals rule, `lib/numerals.ts` `withDigits`): numerals are data and Pixelify's 5 reads
 as S. Signs (cartouche title, tabs, plate titles): Jersey 15, whose C and Z
 stay legible. Never set prose in the sign voice. Sizes are whole CSS px. Star
 names 13 / 12 px (atom / derived; 11 / 10 on a phone), outlined 3 px in
@@ -65,7 +65,7 @@ names 13 / 12 px (atom / derived; 11 / 10 on a phone), outlined 3 px in
 | `layout.ts` | `placeWords`: plaques, names, pipeline arcs / chevrons, leaders, in one greedy obstacle pass |
 | `plaque.tsx` | a group's sign (emblem, name, count, Latin line) + `plaqueWidth` |
 | `chrome.tsx` | Day / Night tabs, the show-UI button, the off-screen partner `Chevron` |
-| `key.tsx` | `StarKey` (bottom-right: rows from `encoding.ts` `KEY_ROWS`, real sprites) and the phone's `PhoneStarKey` button |
+| `key.tsx` | `StarKey` (bottom-right: rows from `encoding.ts` `KEY`, real sprites) and the phone's `PhoneStarKey` button |
 | `icon.tsx` | a sprite as a small pixelated UI image (`SpriteIcon`, legend `StarPair`) |
 | `sky-skin.tsx` | the page: data → frame coords → bake → camera → layers + words + corners + drawer |
 | `specimen.tsx` | `?specimen=1`: sprites, one nebula, emblems and ramps at 4× |
@@ -92,7 +92,7 @@ nothing moves; `?still=1`, `prefers-reduced-motion` and a hidden tab hold it.
 group's nebula and ghosts the others. Node frames the selected star and its own
 nebula left of the drawer (the star keeps `SPACE.nodeMargin` from the edge);
 partners off screen are edge chevrons, which never slip under a corner plate. `data-lab-ready="1"` is set once the
-bake is painted for the current camera, and `window.__lab.{select,view}`
+camera has landed and the bake is painted (`lib/lab-contract.ts`), and `window.__lab.{select,view}`
 drives it from scripts. Phone rule: the frame turns a quarter so a landscape
 graph fills the tall screen; a sign looks within `SPACE.signReach` of its stars
 first, else sits further out with a leader; the key folds behind a Key button.
@@ -101,7 +101,7 @@ first, else sits further out with a leader; the key folds behind a Key button.
 
 1. Copy `tokens.ts`, `bake.ts`, `paint.ts`, `sprites.ts`, `motion.ts`,
    `layers.tsx`, `layout.ts` and `icon.tsx`. Bake, paint, sprites and motion
-   are pure, so they run under node (`bake.test.ts` shows how).
+   are pure, so they run under node (`bake.test.ts` shows how). `tokens.ts` reads `lib/numerals.ts`.
 2. Feed it this shape. Positions can come from any layout (force, dagre, hand):
    ```ts
    stars: { name; family; x; y; atom: boolean; parents: string[]; state: "champion"|"trained"|"provisional"|"untrained" }[]

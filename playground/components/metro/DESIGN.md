@@ -55,13 +55,13 @@ sits above it as HTML (`PhoneKey`), folded into a disclosure so the map leads.
 | `key.tsx` | `Cartouche` (in-SVG key in the reserved rect) and `PhoneKey`, from the same data: per line `models` (its family) and `stops` (every station it calls at) |
 | `tabs.tsx` | the Jost sheet row (Map / Reactions / Observatory + edition picker) that replaces the classic title block |
 | `services.tsx` | through services: a list whose rows light their stations on the map |
-| `metro-chart.tsx` | the page: header, key, map frame, under-construction list, services; `METRO_TITLE` (also the tab title) |
-| `hooks.ts` | `?still=1` / `?specimen=1` flags and reduced motion |
+| `metro-chart.tsx` | the page: header, key, map frame, under-construction list, services; `METRO_TITLE` (cartouche + phone header; the tab reads `Transit \| mini_networks`) |
+| `hooks.ts` | the `?specimen=1` flag and the tab title (still: `lib/lab-contract.ts` `useStill`) |
 
 ## Marks
 
-Every mark and what it encodes is in `encoding.ts` (`METRO_ENCODING`), and
-the key renders `METRO_LEGEND`, so the key cannot drift from the marks. The
+Every mark and what it encodes is in `encoding.ts` (`ENCODING`, `lib/encoding.ts`), and
+the key renders `KEY` (`defineKey` rows naming their marks), so it cannot drift. The
 dashed-spur row appears only when the fallback placed something.
 
 ## Motion
@@ -75,13 +75,13 @@ on page load.
 ## Views (the /lab contract)
 
 `/?edition=metro&still=1` (and `&specimen=1`). The map's SVG carries
-`data-lab-ready="1"` once it is in the DOM, Jost has loaded and two frames have
-painted it (`useDrawn`); the audit counts sit beside it as `data-*`.
+`data-lab-ready="1"` once it is laid out, Jost has loaded, the sheet fade is over and
+two frames have painted it (`useLabReady`, `lib/lab-contract.ts`); the audit counts sit beside it as `data-*`.
 
 ## Lifting it into another project
 
 Copy `components/metro/` except `layout.ts`, plus `lib/world/path.ts`
-(`roundedD`, `polylineLength`, `samplePolyline`). Write your own drafting
+(`roundedD`, `polylineLength`, `samplePolyline`) and `lib/{lab-contract,copy,encoding}.ts`. Write your own drafting
 file that returns a `SystemSpec`:
 
 ```ts

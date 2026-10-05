@@ -97,7 +97,7 @@ the Konami pass hops each generation. All frozen at frame 0 under `?still=1` / r
      only for the zoo's group order and atom families; stub `FAMILY_BLOCKS`/`ATOMS` with your
      own, or leave them empty;
    - this folder's `tokens.ts`, `box.tsx`, `edges.tsx`, `sheet.tsx`, `critter.tsx`,
-     `flow.module.css` and `use-dfd.ts`.
+     `flow.module.css` and `use-dfd.ts`, with `lib/copy.ts` (names) and `lib/lab-contract.ts`.
 
    `/lab/flow/specimen` is the smallest working page.
 2. **The data shape:**

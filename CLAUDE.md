@@ -92,6 +92,7 @@ playground/ (repo root)  Next.js 16 + React 19 + TS + Tailwind v4 + Recharts +
                      gitignored (build with `make playground`). Read
                      playground/AGENTS.md before UI work — this Next.js version
                      differs from training data.
+                     Design library: playground/DESIGN-LIBRARY.md + lib/lab-contract.ts.
                      Route groups: app/(classic)/ = the edition UI at / and
                      /atlas (blueprint.css scoped there; the atlas edition's
                      plates and the /atlas Network Atlas — ?focus=<model>,

@@ -38,7 +38,7 @@ symbol from `placed.ts` (`tileSymbol` for the drawer).
 | `reaction-block.tsx` | the f-block of compositions (11 across when wide, wrapping when narrow) |
 | `element-tile.tsx` | one tile, used by the table, the key and the spec-sheet drawer (`size="spec"`) |
 | `family-head.tsx` | a family head's text: numeral span (a skin may hide it) + name |
-| `entrance.ts` | `useFrozen` (still / reduced motion), `entranceEnd`, `useReady` (the ready flag) |
+| `entrance.ts` | `entranceEnd` (the entrance's length); still and ready are `lib/lab-contract.ts` |
 | `chart-key.tsx` | annotated sample tile and the three tile kinds |
 | `placed.ts` | taxonomy → `PlacedModel[]` / `PlacedReaction[]` (the shape both layouts draw) |
 | `encoding.ts` | mark → data table, plus the key's text |
@@ -85,17 +85,17 @@ f-block included, fits 1440×900 without scrolling.
 
 ## Mark → data
 
-See `encoding.ts` (`TABLE_ENCODING`): column block = family, row = generation,
+See `encoding.ts` (`ENCODING`, shape `lib/encoding.ts`): column block = family, row = generation,
 border style = level, number = atomic number / ✻n, glyph = mechanism, symbol =
 chart symbol, accent = interaction only. The key renders `KEY_PARTS` and
-`KEY_LEVELS`, so it cannot drift from the marks.
+`KEY_LEVELS` (`defineKey` rows naming their marks), so it cannot drift.
 
 ## Motion
 
 One entry: tiles fade in row by row (`motion.rowStagger`) and column by column
 (`motion.colStagger`). After that the f-block follows (`reactionStart`). Nothing
 loops. Under `?still=1` or `prefers-reduced-motion` there is no entrance: every
-tile is drawn final (`useFrozen` → `motion = null`). Hover and focus transitions
+tile is drawn final (`useStill` → `motion = null`). Hover and focus transitions
 take 150ms and only recolour; they never move anything.
 
 ## Add a fourth skin
@@ -111,7 +111,7 @@ take 150ms and only recolour; they never move anything.
 ## Lift it into another project
 
 Copy `components/periodic/` and `lib/blueprint.ts` (placements, symbols, atomic
-numbers), plus `lib/icons.tsx` for the glyphs (lucide-react). Import `periodic.css`
+numbers), `lib/icons.tsx` (lucide-react glyphs) and `lib/{lab-contract,copy,encoding}.ts`. Import `periodic.css`
 once, from the layout. Data shape: `{ models: { name, level: "elementary"|"derived",
 introduces[], note }[], compositions: { name, composes[] }[] }`, the
 `/web/taxonomy` response (`lib/types.ts`). Call
