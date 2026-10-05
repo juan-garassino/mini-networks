@@ -71,8 +71,10 @@ tokens on `<html>` and shows only its shell before the frame is parsed.
 |---|---|---|
 | Periodic skins | `components/periodic/loading.tsx`: the masthead in place, the line where the table lands | `voice.loading` per skin ("Drafting the table…", "Printing the chart…", `reading /web/taxonomy` + block cursor) |
 | Transit | `components/metro/loading.tsx`: the system name, a stub of the key's neutral track | `VOICE.loading` "Drawing the lines…" |
-| Kawaii flow | the sheet and its title bar, `board.tsx` | "Waiting for the zoo's API…" / "Routing the sheet…" (adopts `labLoading` next round) |
-| Pixel, paper map, star atlas, diagrams | not yet: see *What the lab designs need* below | |
+| Kawaii flow | the sheet and its title bar, `board.tsx` | "Waiting for the zoo's API…" / "Routing the sheet…" |
+| Pixel and paper map | `components/lab/painted/corners/unrolling.tsx`: the cartouche and a progress bar at first paint (paper: a blurred copy of the painting behind it); all corners arrive on one frame | "Unrolling the map…" |
+| Star atlas | the sky and tabs first; stars, plaques and corners appear together once the data is in | one status line in the sky's voice |
+| Pixel diagrams | `components/lab/shared/anatomy2/specimen/loading.tsx`: the masthead in place | "inking the plates…" (bitmap face) |
 
 ## Encoding shape (`lib/encoding.ts`)
 
@@ -138,29 +140,13 @@ own chrome). The classic `ElementSheet` is legacy, so do not copy it.
 5. Write `DESIGN.md` (≤ 120 lines). Add the route to `scripts/ports.mjs` and the table above.
    Shoot it with `still=1` at 1440×900 @2x and 390×844.
 
-## Painted kit: what it adopts next
+## Painted kit: conventions adopted
 
-`components/lab/painted/**` keeps its own copies until its round. It needs: `useLabReady` with
-the camera's `landed` in `painted-skin.tsx` (a node deep link is ready only once landed);
-`encoding.ts` as `defineEncoding`, with the key and legend plates rendered from `defineKey`
-(paper's key has drifted); `pixelDigits` from `lib/fonts.ts` in place of its copy in
-`app/lab/painted/layout.tsx` (move the font files to a shared folder then); cartouche counts
-from `zooCounts`; and a `metadata.title` for `/lab/painted`, which shows only "mini_networks".
-
-## What the lab designs need for the loading convention
-
-Their folders belong to their builders; each needs its own round:
-
-- **Kawaii flow** (`components/lab/flow/board.tsx`): one line. Spread
-  `{...labLoading(loadPhase(taxonomy, { laidOut: !!layout })!)}` on the existing status `<p>`.
-- **Pixel and paper map** (`components/lab/painted/painted-skin.tsx`): today 4–8 s of blank
-  parchment (pixel) or a flat sea-blue slab (paper), then the corners pop in one by one. Paint
-  the cartouche and the map's ground (a low-res copy of the painting) at first paint with
-  "Unrolling the map…", and bring all four corners in on one frame.
-- **Star atlas** (`components/lab/sky/`): plaques and the count move after first paint. Hold
-  them, with a status line, until evidence is in (or place them from the taxonomy alone).
-- **Pixel diagrams** (`/lab/anatomy`): a status line in the kit's bitmap voice while the
-  champion data loads.
+`components/lab/painted/**` uses `useLabReady` (a node deep link is ready only once the camera
+has landed), `defineEncoding`/`defineKey` (key and legend plates render from them), `zooCounts`
+for the cartouche, `withDigits` for its pixel stacks and the title "The Model Zoo map". It keeps
+its own digit-face loading in `app/lab/painted/layout.tsx` (its Jersey 15 carries a Z fix the
+shared `pixelDigits` lacks); merge them once `lib/fonts.ts` has that fix.
 
 ## Lab furniture
 
