@@ -96,12 +96,14 @@ export function Drawer(p: DrawerProps) {
   return <SheetShell {...p} header={back} close={close} body={body} />;
 }
 
-/** ×, stepped on a 5-unit grid (crisp on the pixel map) in the plate's ink */
+/** ×, in the material's hand: stepped on a 5-unit grid on the pixel map, two pen strokes on paper */
 function CloseGlyph({ m }: { m: Material }) {
   const cells = [0, 1, 2, 3, 4].flatMap((i) => (i === 2 ? [[2, 2]] : [[i, i], [4 - i, i]]));
   return (
     <svg aria-hidden width={10} height={10} viewBox="0 0 5 5" shapeRendering={m.crisp ? "crispEdges" : undefined} style={{ display: "block" }}>
-      <g fill={m.crisp ? m.border : m.ink}>{cells.map(([x, y]) => <rect key={`${x}-${y}`} x={x} y={y} width={1} height={1} />)}</g>
+      {m.crisp
+        ? <g fill={m.border}>{cells.map(([x, y]) => <rect key={`${x}-${y}`} x={x} y={y} width={1} height={1} />)}</g>
+        : <path d="M0.6 0.6L4.4 4.4M4.4 0.6L0.6 4.4" stroke={m.ink} strokeWidth={0.8} strokeLinecap="round" />}
     </svg>
   );
 }
