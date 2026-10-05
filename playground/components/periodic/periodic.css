@@ -27,8 +27,8 @@
   align-items: flex-end;
   justify-content: space-between;
   gap: 1rem 2rem;
-  margin-bottom: 1.5rem;
-  padding-bottom: 1rem;
+  margin-bottom: 1rem;
+  padding-bottom: 0.75rem;
   border-bottom: var(--pt-border-atom);
 }
 .pt-title {
@@ -76,25 +76,30 @@
   display: flex;
   align-items: flex-end;
   min-width: 0;
+  padding-top: 4px;
   padding-bottom: calc(4px + var(--pt-fam-band));
-  border-bottom: var(--pt-fam-rule);
+  border-top: var(--pt-fam-rule-above);
+  border-bottom: var(--pt-fam-rule-below);
   box-shadow: inset 0 calc(-1 * var(--pt-fam-band)) 0 var(--fam, transparent);
 }
+/* the bracket ends: only under a head ruled below */
 .pt-famhead::before, .pt-famhead::after {
-  content: ""; position: absolute; bottom: -1px; height: 5px; border-left: var(--pt-fam-rule);
+  content: ""; position: absolute; bottom: -1px; height: 5px; border-left: var(--pt-fam-rule-below);
 }
 .pt-famhead::before { left: 0; }
 .pt-famhead::after { right: 0; }
-.pt-famhead span {
+.pt-famhead > span {
   overflow: hidden;
+  padding-right: var(--pt-fam-gap);   /* neighbouring heads never touch */
   white-space: nowrap;
   text-overflow: ellipsis;
   font-family: var(--pt-display), sans-serif;
   font-size: var(--pt-famhead);
   letter-spacing: var(--skin-title-tracking);
-  text-transform: var(--pt-case);
+  text-transform: var(--pt-fam-case);
   color: var(--ink-dim);
 }
+.pt-famnum { display: var(--pt-famnum); }
 
 /* narrow: each family as its own small table, flowing side by side */
 .pt-stack { display: flex; flex-wrap: wrap; gap: 1.25rem 1.5rem; }
@@ -149,27 +154,23 @@
 .pt-tile[data-level="compound"] .pt-sym { font-size: var(--pt-sym-compound); font-weight: 700; color: var(--pt-sym-compound-ink); }
 .pt-tile[data-level="reaction"] .pt-sym { font-size: var(--pt-sym-reaction); font-weight: 700; color: var(--ink-dim); }
 .pt-name {
-  /* a 12-letter word (segmentation) fits one line: a mono advance is ~0.68em,
-     so the size is capped at 12cqi of the tile; breaks fall at underscores */
-  display: -webkit-box;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 2;
-  height: 2.4em;
-  overflow: hidden;
-  overflow-wrap: break-word;
-  font-size: min(var(--pt-name), var(--pt-name-fit));
-  line-height: 1.2;
-  letter-spacing: -0.02em;
+  /* names are words (underscore drawn as a space) in the skin's name face, wrapping
+     between words; a word too long for the tile is hyphenated, never cut off */
+  font-family: var(--pt-name-face), sans-serif;
+  font-size: var(--pt-name);
+  line-height: var(--pt-name-leading);
   text-align: center;
+  overflow-wrap: break-word;
   color: var(--ink-dim);
 }
-/* compositions have the longest names: three lines in the taller f-block row */
-.pt-tile[data-level="reaction"] .pt-name { -webkit-line-clamp: 3; height: 3.6em; font-size: min(var(--pt-name), calc(var(--pt-name-fit) * 0.96)); }
+.pt-long { hyphens: auto; }
+/* compositions have the longest names (up to three lines): one step smaller */
+.pt-tile[data-level="reaction"] .pt-name { font-size: var(--pt-name-reaction); }
 
 /* spec-sheet drawer: the same tile, larger, symbol in the accent */
 .pt-tile[data-size="spec"] { width: 6rem; height: 6rem; flex: none; }
 .pt-tile[data-size="spec"] .pt-sym { font-size: 44px; color: var(--redline); }
-.pt-tile[data-size="spec"] .pt-name { -webkit-line-clamp: 1; height: 1.2em; }
+.pt-tile[data-size="spec"] .pt-name { display: none; }  /* the drawer prints the name beside it */
 
 /* interaction — the only use of the accent on the table */
 button.pt-tile { cursor: pointer; }
@@ -181,7 +182,7 @@ html[data-pt-interaction="inverse"] button.pt-tile:is(:hover, :focus-visible) { 
 html[data-pt-interaction="inverse"] button.pt-tile:is(:hover, :focus-visible) :is(.pt-z, .pt-sym, .pt-icon, .pt-name) { color: var(--paper-deep); }
 
 /* ————— f-block: reactions ————— */
-.pt-fblock { margin-top: 1.75rem; }
+.pt-fblock { margin-top: 1rem; }
 .pt-fblock-label h2 {
   font-family: var(--pt-display), sans-serif;
   font-size: calc(var(--pt-famhead) * 1.1);

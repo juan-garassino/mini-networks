@@ -8,7 +8,8 @@ export function ReactionBlock({
   reactions, motion, onSelect,
 }: {
   reactions: PlacedReaction[];
-  motion: PeriodicSkin["motion"];
+  /** null: no entrance (still / reduced motion) */
+  motion: PeriodicSkin["motion"] | null;
   onSelect: (name: string) => void;
 }) {
   return (
@@ -24,10 +25,11 @@ export function ReactionBlock({
             key={r.name}
             name={r.name}
             number={r.number}
+            symbol={r.symbol}
             level="reaction"
             title={r.title}
             onSelect={onSelect}
-            enter={{ delay: motion.reactionStart + i * motion.reactionStagger, duration: motion.enter }}
+            enter={motion ? { delay: motion.reactionStart + i * motion.reactionStagger, duration: motion.enter } : undefined}
           />
         ))}
       </div>

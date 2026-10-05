@@ -18,12 +18,13 @@ export const blueprint: PeriodicSkin = {
   type: {
     display: "--font-display",  // Big Shoulders
     body: "--font-draft",       // Martian Mono
+    name: "--font-display",     // Big Shoulders: condensed, so names stay words at 13 px
     singleWeight: false,
     textCase: "uppercase",
     titleTracking: "0.14em",
     size: {
       title: "2.75rem", symbolAtom: "27px", symbolCompound: "23px", symbolReaction: "18px",
-      number: "9px", name: "8.5px", nameFit: "12cqi", small: "10px", famhead: "10px",
+      number: "10px", name: "13px", nameLeading: "1.05", nameReaction: "12px", small: "11px", famhead: "14px",
     },
   },
   space: { row: "5.25rem", reactionRow: "4.75rem", stackCell: "5rem", gap: "4px", tilePad: "4px 5px 5px" },
@@ -34,6 +35,7 @@ export const blueprint: PeriodicSkin = {
     famRule: "1px solid var(--line-faint)",
     famBand: "0px",
   },
+  famhead: { numeral: false, textCase: "none", rule: "above", gap: "8px" },
   fill: { atom: "80%", compound: "40%", reaction: "30%", under: "transparent" },
   compoundSymbol: "var(--ink-dim)",
   radius: { tile: "0px" },

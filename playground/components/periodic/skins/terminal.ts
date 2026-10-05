@@ -19,16 +19,18 @@ export const terminal: PeriodicSkin = {
   type: {
     display: "--font-vt",
     body: "--font-vt",
+    name: "--font-vt",
     singleWeight: true,
     textCase: "none",
     titleTracking: "0.05em",
     size: {
       // VT323 sits ~25% smaller than Martian Mono at the same px
-      title: "2.5rem", symbolAtom: "34px", symbolCompound: "30px", symbolReaction: "22px",
-      number: "13px", name: "13px", nameFit: "19cqi", small: "14px", famhead: "16px",
+      title: "2rem", symbolAtom: "29px", symbolCompound: "25px", symbolReaction: "20px",
+      number: "13px", name: "15px", nameLeading: "0.88", nameReaction: "14px", small: "14px", famhead: "16px",
     },
   },
-  space: { row: "5.25rem", reactionRow: "5.5rem", stackCell: "5rem", gap: "4px", tilePad: "3px 5px 4px" },  // three VT323 name lines need the taller f-block row
+  // rows sized so the whole sheet, f-block included, fits a 1440×900 screen
+  space: { row: "4.75rem", reactionRow: "5rem", stackCell: "5rem", gap: "4px", tilePad: "3px 3px 4px" },
   border: {
     atom: "1px solid var(--line)",
     compound: "1px solid var(--line-faint)",
@@ -36,6 +38,7 @@ export const terminal: PeriodicSkin = {
     famRule: "1px dashed var(--line-faint)",
     famBand: "0px",
   },
+  famhead: { numeral: false, textCase: "none", rule: "below", gap: "12px" },
   fill: { atom: "0%", compound: "0%", reaction: "0%", under: "transparent" },
   compoundSymbol: "var(--ink-dim)",
   radius: { tile: "0px" },

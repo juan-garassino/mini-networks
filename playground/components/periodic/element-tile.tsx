@@ -1,6 +1,6 @@
 "use client";
 
-import { Fragment, createElement, type CSSProperties } from "react";
+import { createElement, type CSSProperties } from "react";
 import { motion } from "motion/react";
 import { familyOf, symbolFor } from "@/lib/blueprint";
 import { iconFor } from "@/lib/icons";
@@ -10,16 +10,17 @@ import type { TileLevel } from "./encoding";
 // all draw this. Looks come from periodic.css (--pt-* vars set by the skin);
 // what each mark means is in encoding.ts.
 
-/** Break long snake_case names only at underscores. */
-function Name({ name }: { name: string }) {
-  const parts = name.split("_");
+/** A word longer than this may not fit a tile line even in a narrow face: only it may hyphenate. */
+const LONG_WORD = 12;
+
+/** A name as words (the underscore drawn as a space), so lines break between words; only an
+ * over-long word ("melspectrogram") is allowed to hyphenate. */
+function Words({ name }: { name: string }) {
+  const ws = name.split("_");
   return (
     <>
-      {parts.map((p, i) => (
-        <Fragment key={i}>
-          {p}
-          {i < parts.length - 1 && <>_<wbr /></>}
-        </Fragment>
+      {ws.map((w, i) => (
+        <span key={i} className={w.length > LONG_WORD ? "pt-long" : undefined}>{w}{i < ws.length - 1 ? " " : ""}</span>
       ))}
     </>
   );
@@ -29,6 +30,8 @@ export interface ElementTileProps {
   name: string;
   /** Atomic number, or "✻n" for a reaction. */
   number: number | string;
+  /** The printed symbol (a reaction's comes from the ✻ order: placed.ts); default symbolFor(name). */
+  symbol?: string;
   level: TileLevel;
   /** "spec" = the large tile heading the spec-sheet drawer. */
   size?: "table" | "spec";
@@ -43,7 +46,7 @@ export interface ElementTileProps {
 }
 
 export function ElementTile({
-  name, number, level, size = "table", onSelect, title, enter, cell,
+  name, number, symbol, level, size = "table", onSelect, title, enter, cell,
 }: ElementTileProps) {
   const Icon = iconFor(name);
   const family = level === "reaction" ? undefined : familyOf(name);
@@ -53,8 +56,8 @@ export function ElementTile({
         <span className="pt-z">{number}</span>
         {Icon && createElement(Icon, { strokeWidth: 1.5, className: "pt-icon", "aria-hidden": true })}
       </span>
-      <span className="pt-sym">{symbolFor(name)}</span>
-      <span className="pt-name"><Name name={name} /></span>
+      <span className="pt-sym">{symbol ?? symbolFor(name)}</span>
+      <span className="pt-name" lang="en"><Words name={name} /></span>
     </>
   );
   const props = {
@@ -74,7 +77,8 @@ export function ElementTile({
       type="button"
       onClick={() => onSelect(name)}
       title={title}
-      initial={enter && { opacity: 0 }}
+      // no `enter` (still=1, reduced motion): the tile is drawn in its final state
+      initial={enter ? { opacity: 0 } : false}
       animate={{ opacity: 1 }}
       transition={enter}
     >

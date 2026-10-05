@@ -1,6 +1,7 @@
 import type { CSSProperties } from "react";
 import { FAMILY_BLOCKS } from "@/lib/blueprint";
 import { ElementTile } from "./element-tile";
+import { FamilyHead } from "./family-head";
 import type { PlacedModel } from "./placed";
 import type { PeriodicSkin } from "./skins";
 
@@ -11,7 +12,8 @@ export function FamilyStack({
   models, motion, onSelect,
 }: {
   models: PlacedModel[];
-  motion: PeriodicSkin["motion"];
+  /** null: no entrance (still / reduced motion) */
+  motion: PeriodicSkin["motion"] | null;
   onSelect: (name: string) => void;
 }) {
   return (
@@ -22,7 +24,7 @@ export function FamilyStack({
         const style = { "--pt-cols": width, "--fam": `var(--pt-fam-${b.family})` } as CSSProperties;
         return (
           <section key={b.family} className="pt-family" style={style}>
-            <div className="pt-famhead"><span>{b.label}</span></div>
+            <div className="pt-famhead"><FamilyHead label={b.label} /></div>
             <div className="pt-grid">
               {members.map((m) => (
                 <ElementTile
@@ -33,7 +35,7 @@ export function FamilyStack({
                   title={m.title}
                   onSelect={onSelect}
                   cell={{ col: m.col - b.cols[0] + 1, row: m.row }}
-                  enter={{ delay: (m.row - 1) * motion.rowStagger, duration: motion.enter }}
+                  enter={motion ? { delay: (m.row - 1) * motion.rowStagger, duration: motion.enter } : undefined}
                 />
               ))}
             </div>

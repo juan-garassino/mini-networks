@@ -73,17 +73,65 @@ export function familyOf(name: string): string | undefined {
 export const TABLE_COLS = 16;
 export const TABLE_ROWS = 5;
 
-/** Deterministic 2-letter symbol for derived models (first letter + first
- * distinct consonant), uppercased-then-lowercased chemistry-style. */
-export function derivedSymbol(name: string): string {
-  const clean = name.replace(/[^a-z]/g, "");
-  const first = clean[0] ?? "x";
-  const rest = clean.slice(1).split("").find((c) => c !== first) ?? "x";
-  return first.toUpperCase() + rest;
+/**
+ * Chart symbols, unique across the whole chart (models AND reactions). The rule
+ * (components/periodic/DESIGN.md "Symbols"):
+ *   atoms keep their hand-set chemistry symbols (ATOMS);
+ *   every other name, in chart order (derived models by atomic number, then
+ *   reactions by ✻ index), takes the FIRST candidate no earlier name holds:
+ *     1. first letter + the initial of each later word   (text_seq2seq → Ts)
+ *     2. first letter + its first different letter        (resnet → Re)
+ *     3. first letter + each later consonant, then each later letter
+ *     4. three letters: first + two later letters, in order
+ * Candidates are Capital + lower case, so they stay unique in caps skins too.
+ */
+const VOWELS = "aeiou";
+
+export function symbolCandidates(name: string): string[] {
+  const words = name.toLowerCase().split("_").map((w) => w.replace(/[^a-z]/g, "")).filter(Boolean);
+  const letters = words.join("");
+  const f = letters[0] ?? "x";
+  const F = f.toUpperCase();
+  const later = letters.slice(1).split("");
+  const out = [
+    ...words.slice(1).map((w) => F + w[0]),
+    ...later.filter((c) => c !== f).slice(0, 1).map((c) => F + c),
+    ...later.filter((c) => !VOWELS.includes(c)).map((c) => F + c),
+    ...later.map((c) => F + c),
+    ...later.flatMap((c, i) => later.slice(i + 1).map((d) => F + c + d)),
+  ];
+  // a doubled letter ("Ll") reads as a typo
+  return [...new Set(out)].filter((c) => c[1] !== f);
 }
 
+/** Give each name in `names` (in order) its first candidate not in `taken`; `taken` grows. */
+export function assignSymbols(names: string[], taken: Set<string>): Map<string, string> {
+  const out = new Map<string, string>();
+  for (const n of names) {
+    const s = symbolCandidates(n).find((c) => !taken.has(c)) ?? `${n.slice(0, 2)}${taken.size}`;
+    taken.add(s);
+    out.set(n, s);
+  }
+  return out;
+}
+
+const ATOM_SYMBOLS = new Set(Object.values(ATOMS).map((a) => a.symbol));
+/** Derived models in atomic-number order (reading order of the table). */
+const DERIVED_ORDER = Object.entries(PLACEMENT)
+  .filter(([name]) => !ATOMS[name])
+  .sort(([, a], [, b]) => a.row - b.row || a.col - b.col)
+  .map(([name]) => name);
+const MODEL_SYMBOLS = assignSymbols(DERIVED_ORDER, new Set(ATOM_SYMBOLS));
+const TAKEN_BY_MODELS = new Set([...ATOM_SYMBOLS, ...MODEL_SYMBOLS.values()]);
+
+/** A model's chart symbol (a model not on the chart yet still avoids every charted symbol). */
 export function symbolFor(name: string): string {
-  return ATOMS[name]?.symbol ?? derivedSymbol(name);
+  return ATOMS[name]?.symbol ?? MODEL_SYMBOLS.get(name) ?? assignSymbols([name], new Set(TAKEN_BY_MODELS)).get(name)!;
+}
+
+/** Reaction symbols for the compositions in ✻ order: unique among themselves and every model's. */
+export function reactionSymbols(names: string[]): Map<string, string> {
+  return assignSymbols(names, new Set(TAKEN_BY_MODELS));
 }
 
 /** Atomic number: atoms keep 1-16; derived models are numbered 17.. in
@@ -91,11 +139,8 @@ export function symbolFor(name: string): string {
 export function atomicNumbers(): Record<string, number> {
   const z: Record<string, number> = {};
   for (const [name, a] of Object.entries(ATOMS)) z[name] = a.z;
-  const derived = Object.entries(PLACEMENT)
-    .filter(([name]) => !ATOMS[name])
-    .sort(([, a], [, b]) => a.row - b.row || a.col - b.col);
   let next = 17;
-  for (const [name] of derived) z[name] = next++;
+  for (const name of DERIVED_ORDER) z[name] = next++;
   return z;
 }
 

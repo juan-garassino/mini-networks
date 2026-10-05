@@ -7,6 +7,7 @@ import type { RunSummary, TaxonomyResponse } from "@/lib/types";
 import { STATUS_INK, atomicNumbers, familyOf, symbolFor } from "@/lib/blueprint";
 import { NetworkFlow } from "@/components/network-flow";
 import { ElementTile } from "@/components/periodic/element-tile";
+import { tileSymbol } from "@/components/periodic/placed";
 import { schematicFor } from "@/lib/schematics";
 
 export function ElementSheet({
@@ -66,6 +67,7 @@ export function ElementSheet({
               <ElementTile
                 name={name}
                 number={specimenNo}
+                symbol={tileSymbol(name, taxonomy)}
                 level={composition ? "reaction" : model?.level === "elementary" ? "atom" : "compound"}
                 size="spec"
               />

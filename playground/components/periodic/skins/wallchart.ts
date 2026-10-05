@@ -26,12 +26,13 @@ export const wallchart: PeriodicSkin = {
   type: {
     display: "--font-instrument",  // Instrument Serif (one weight)
     body: "--font-draft",
+    name: "--font-instrument",     // the poster's serif: names read as words, not identifiers
     singleWeight: true,
     textCase: "none",
     titleTracking: "0.14em",
     size: {
-      title: "3rem", symbolAtom: "30px", symbolCompound: "26px", symbolReaction: "20px",
-      number: "9px", name: "8.5px", nameFit: "12cqi", small: "10px", famhead: "13px",
+      title: "2.75rem", symbolAtom: "30px", symbolCompound: "26px", symbolReaction: "18px",
+      number: "10px", name: "14px", nameLeading: "1", nameReaction: "12px", small: "11px", famhead: "14px",
     },
   },
   space: { row: "5.25rem", reactionRow: "4.75rem", stackCell: "5rem", gap: "4px", tilePad: "4px 5px 5px" },
@@ -42,6 +43,7 @@ export const wallchart: PeriodicSkin = {
     famRule: "0",
     famBand: "5px",
   },
+  famhead: { numeral: true, textCase: "none", rule: "below", gap: "8px" },
   fill: { atom: "100%", compound: "50%", reaction: "0%", under: "var(--paper)" },
   compoundSymbol: "var(--ink)",
   radius: { tile: "1px" },

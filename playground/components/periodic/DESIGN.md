@@ -3,15 +3,25 @@
 The 44 mini_networks models as a periodic table: atoms in row 1, each lower row
 a generation that builds on the rows above, families as column blocks,
 compositions set apart as an f-block. **Signature element:** the element tile,
-with its number, mechanism glyph, two-letter symbol and name, drawn the same
-way in every skin. Only the ink changes.
-
-The boilerplate value is the **skin system**. There is one table structure (the
-`.tsx` files here) and N token sets (`skins/*.ts`). A skin can change how a mark
-looks but never what it means.
+with its number, mechanism glyph, unique two-letter symbol and name, drawn the
+same way in every skin. Only the ink changes. The boilerplate value is the
+**skin system**: one table structure (the `.tsx` files here), N token sets
+(`skins/*.ts`); a skin changes how a mark looks, never what it means.
 
 Routes: `/?edition=blueprint`, `/?edition=wallchart`, `/?edition=terminal`
-(`&still=1` freezes motion). The chart sets `data-lab-ready="1"` once it has drawn.
+(`&still=1`: no entrance at all). `data-lab-ready="1"` fires only after the last
+tile has landed and the sheet is fully opaque (`entrance.ts`).
+
+## Symbols (unique across the chart: `lib/world/chart-symbols.test.ts`)
+
+Atoms keep their hand-set chemistry symbols. Every other name, in chart order
+(derived models by atomic number, then reactions by ✻ index), takes the first
+candidate no earlier tile holds: (1) first letter + the initial of each later
+word (`text_seq2seq` Ts); (2) first letter + its first different letter
+(`resnet` Re); (3) first letter + each later consonant, then each later letter;
+(4) three letters. Never a doubled letter. Code: `lib/blueprint.ts`
+`symbolCandidates` / `symbolFor` / `reactionSymbols`; tiles get a reaction's
+symbol from `placed.ts` (`tileSymbol` for the drawer).
 
 ## Files
 
@@ -27,6 +37,8 @@ Routes: `/?edition=blueprint`, `/?edition=wallchart`, `/?edition=terminal`
 | `family-stack.tsx` | narrow layout: each family as its own small table, same rows |
 | `reaction-block.tsx` | the f-block of compositions (11 across when wide, wrapping when narrow) |
 | `element-tile.tsx` | one tile, used by the table, the key and the spec-sheet drawer (`size="spec"`) |
+| `family-head.tsx` | a family head's text: numeral span (a skin may hide it) + name |
+| `entrance.ts` | `useFrozen` (still / reduced motion), `entranceEnd`, `useReady` (the ready flag) |
 | `chart-key.tsx` | annotated sample tile and the three tile kinds |
 | `placed.ts` | taxonomy → `PlacedModel[]` / `PlacedReaction[]` (the shape both layouts draw) |
 | `encoding.ts` | mark → data table, plus the key's text |
@@ -39,12 +51,14 @@ Routes: `/?edition=blueprint`, `/?edition=wallchart`, `/?edition=terminal`
 | `color.line / lineFaint` | `#9fdcf5` / `#1d4468` | `#5b2320` / `#c9b58e` | `#4ddc72` / `#174a28` |
 | `color.accent` (interaction only) | `#f2c27e` soft amber | `#8a1f1c` oxblood | `#e9d47e` amber cursor |
 | `family` tints | none (single ink) | six pastels | none |
-| `type.display / body` | Big Shoulders / Martian Mono | Instrument Serif / Martian Mono | VT323 / VT323 |
+| `type.display / body / name` | Big Shoulders / Martian Mono / Big Shoulders | Instrument Serif / Martian Mono / Instrument Serif | VT323 ×3 |
+| `famhead` numeral · rule | none · hairline above | I–VI · tint band | none · dashed below |
 | `type.textCase` | uppercase (CV) | none (Cv) | none |
 | `border.atom / compound / reaction` | 1.5 solid / 1 solid faint / 1 dashed | same, oxblood mixes | 1 solid / 1 faint / 1 dashed |
 | `fill` atom / compound | 80% / 40% paper-deep | 100% / 50% family tint | none |
 | `interaction` | accent | accent | inverse video |
 | `motion.enter / rowStagger` | 0.30s / 0.07s | 0.30s / 0.07s | 0.18s / 0.05s |
+| `space.row / reactionRow` | 5.25 / 4.75rem | 5.25 / 4.75rem | 4.75 / 5rem (fits 900 px) |
 | `masthead` | title | title | prompt |
 
 The global names (`--paper --ink --line --redline …`) are the ones `globals.css`
@@ -53,9 +67,10 @@ maps to Tailwind colours, so the shared chrome (title block, drawer) follows the
 ## Type scale (blueprint values; each skin sets its own)
 
 Title 2.75rem, clamped down to 1.75rem on phones · atom symbol 27px · compound 23px ·
-reaction 18px · family head 10px · tile number 9px · tile name 8.5px, capped at
-`nameFit` (12cqi), so a 12-letter word fits one tile line · small text 10px.
-VT323 runs about 25% small, so the terminal raises every size and zooms the chrome.
+reaction 18px · family head 14px · tile number 10px · tile name 13px (reactions 12px)
+in the skin's name face · small text 11px. The floor: no tile name below 11px. Names
+wrap between words; only a word over 12 letters may hyphenate. Every skin's sheet,
+f-block included, fits 1440×900 without scrolling.
 
 ## Layout grid
 
@@ -79,21 +94,19 @@ chart symbol, accent = interaction only. The key renders `KEY_PARTS` and
 
 One entry: tiles fade in row by row (`motion.rowStagger`) and column by column
 (`motion.colStagger`). After that the f-block follows (`reactionStart`). Nothing
-loops. `?still=1` and `prefers-reduced-motion` both go through the page's
-`<MotionConfig reducedMotion>`. That leaves only the opacity fade, which is
-over within a second. Hover and focus transitions
+loops. Under `?still=1` or `prefers-reduced-motion` there is no entrance: every
+tile is drawn final (`useFrozen` → `motion = null`). Hover and focus transitions
 take 150ms and only recolour; they never move anything.
 
 ## Add a fourth skin
 
-1. Copy `skins/terminal.ts` to `skins/<id>.ts`, rename the export and fill every
-   token. TypeScript refuses a skin with a missing field.
-2. If it needs a new face, load it in `app/layout.tsx` with `next/font` and pass its
-   variable (`"--font-x"`) as `type.display` / `type.body`.
-3. Register it in `PERIODIC_SKINS` (`skins/index.ts`) and add the id to `EditionId` /
-   `EDITIONS` in `components/title-block.tsx` and `EDITION_IDS` in `app/(classic)/page.tsx`.
-4. Shoot `/?edition=<id>&still=1` at 1440×900 and 390×844. No CSS changes are needed.
-   If you reach for a CSS block, add a token to `types.ts` instead.
+1. Copy `skins/terminal.ts` to `skins/<id>.ts` and fill every token (TypeScript
+   refuses a missing one). A new face: load it in `app/layout.tsx` with `next/font`
+   and pass its variable (`"--font-x"`) as `type.display` / `body` / `name`.
+2. Register it in `PERIODIC_SKINS` (`skins/index.ts`), `EditionId` / `EDITIONS`
+   (`components/title-block.tsx`) and `EDITION_IDS` (`app/(classic)/page.tsx`).
+3. Shoot `/?edition=<id>&still=1` at 1440×900 and 390×844: the sheet must not scroll
+   at 900 px. No CSS changes; if you reach for a CSS block, add a token instead.
 
 ## Lift it into another project
 

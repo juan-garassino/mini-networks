@@ -29,7 +29,9 @@ export interface PeriodicSkin {
 
   type: {
     display: FontVar;   // masthead, symbols, family heads, chrome titles
-    body: FontVar;      // numbers, names, the key
+    body: FontVar;      // numbers, the key
+    /** Tile names, set as words (≥ 11 px rendered; a narrow face keeps 12 letters on a line). */
+    name: FontVar;
     /** Faces with one weight (Instrument Serif, VT323): never synthesise bold. */
     singleWeight: boolean;
     /** Symbols, masthead, family heads: "uppercase" = drafting caps (CV); "none" = as written (Cv). */
@@ -42,10 +44,9 @@ export interface PeriodicSkin {
       symbolReaction: string;
       number: string;                 // atomic number / ✻n
       famhead: string;                // family head labels
-      name: string;                   // cap on the tile's model name
-      /** Name fit: 100 / (glyph advance in em × 12 letters), so a 12-letter
-       * word fits one tile line (Martian Mono ≈ 12cqi, VT323 ≈ 17cqi). */
-      nameFit: string;
+      name: string;                   // the tile's model name (never below the 11-px floor)
+      nameLeading: string;            // its line height (names wrap on words, never truncate)
+      nameReaction: string;           // a reaction's name (up to three lines in the f-block row)
       small: string;                  // key, counts labels, subtitle, f-block note
     };
   };
@@ -65,6 +66,9 @@ export interface PeriodicSkin {
     famRule: string;     // under a family head; "0" for none
     famBand: string;     // family-colour band height under a head; "0px" for none
   };
+  /** How a family head is set: "I · Perception" (numeral) or "Perception"; its case; where its
+   * hairline runs (a bracket under it, or a rule above); the air between neighbouring heads. */
+  famhead: { numeral: boolean; textCase: "uppercase" | "none"; rule: "below" | "above"; gap: string };
   /** How much of the tile tint a level prints, over `fillUnder`. */
   fill: { atom: string; compound: string; reaction: string; under: string };
   /** Compound symbols: dimmer than atoms in single-ink skins. */

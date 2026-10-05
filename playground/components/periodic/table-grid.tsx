@@ -2,6 +2,7 @@ import type { CSSProperties } from "react";
 import { FAMILY_BLOCKS, PLACEMENT, TABLE_COLS, TABLE_ROWS } from "@/lib/blueprint";
 import { ChartKey } from "./chart-key";
 import { ElementTile } from "./element-tile";
+import { FamilyHead } from "./family-head";
 import type { PlacedModel } from "./placed";
 import type { PeriodicSkin } from "./skins";
 
@@ -22,7 +23,8 @@ export function TableGrid({
 }: {
   models: PlacedModel[];
   sampleNumber: number;
-  motion: PeriodicSkin["motion"];
+  /** null: no entrance (still / reduced motion) */
+  motion: PeriodicSkin["motion"] | null;
   onSelect: (name: string) => void;
 }) {
   const cols = { "--pt-cols": TABLE_COLS, "--pt-rows": TABLE_ROWS } as CSSProperties;
@@ -35,7 +37,7 @@ export function TableGrid({
             className="pt-famhead"
             style={{ gridColumn: `${b.cols[0]} / ${b.cols[1] + 1}`, "--fam": `var(--pt-fam-${b.family})` } as CSSProperties}
           >
-            <span>{b.label}</span>
+            <FamilyHead label={b.label} />
           </div>
         ))}
       </div>
@@ -48,7 +50,7 @@ export function TableGrid({
             level={m.level}
             title={m.title}
             onSelect={onSelect}
-            enter={{ delay: (m.row - 1) * motion.rowStagger + m.col * motion.colStagger, duration: motion.enter }}
+            enter={motion ? { delay: (m.row - 1) * motion.rowStagger + m.col * motion.colStagger, duration: motion.enter } : undefined}
             cell={{ col: m.col, row: m.row }}
           />
         ))}
