@@ -18,7 +18,7 @@ so page and plate read as one printed object. Everything else stays quiet.
 |---|---|
 | `tokens.ts` | the one import for values: `ART`, `PIXEL`, `TYPE`, `SPACE`, `BORDER`, `MOTION`, re-exports `THEMES` and `LEGIBLE` |
 | `legible.ts` | the legibility floor: `LEGIBLE`, `labelPx`, `legibleZooms(dpr)`, `fallbackFor` (pure) |
-| `themes.ts` | colour: a `Theme` is 14 role tokens + an 8-step data `ramp` + an 8-step `heat`; `pixel` (plum dusk) and `paper` (cut card with hard shadows) |
+| `themes.ts` | colour: a `Theme` is 14 role tokens + an 8-step data `ramp` + an 8-step `heat`; `pixel` (plum dusk), `dusk` (pixel's roles on warm umber: the painted pixel map's host theme) and `paper` (cut card with hard shadows) |
 | `encoding.ts` | every mark → primitive → token → meaning |
 | `prims.tsx` | `Wire`, `PText`, `Thumb`, `Frame`, `Bars`, `Diamond`, `Node`, plus `PixelLabel` / `displayName` for chrome |
 | `pixel-font.ts` | the face: `textPath`, `textWidth`, `_{sub}` mini face |

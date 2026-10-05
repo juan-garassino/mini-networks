@@ -236,7 +236,7 @@ export const MATERIALS: Record<MapId, MapMaterial> = {
   // (index in the comment) — the UI is cut from the same world as the map
   pixel: {
     id: "pixel",
-    diagram: "pixel",
+    diagram: "dusk",      // anatomy2 themes.ts: the pastel roles on a warm umber ground (plum read as pasted in)
     sea: "#f0e1ae",       // 0   the parchment sea
     plate: "#f0e1ae",     // 0
     plateHi: "#fdf4c1",   // 62

@@ -7,8 +7,15 @@
 //         plum→rose→peach→cream ramp; attention/similarity a periwinkle heat.
 // paper — the same drawing on a cardboard panel: cut-paper blocks with a hard
 //         offset shadow, ink wiring, data printed in ink on cream stock.
+// dusk  — pixel's pastel roles on a warm umber ground, for a diagram hung
+//         on the painted pixel map (its plate, its drawer): the plum slab
+//         read as pasted into the warm world. Same network, wiring, mint and
+//         rose; the ground, panel, frame, wire and text are cut toward the
+//         map's own darks (between its #221316 shadow and #3a1d2a ink); the data
+//         ramp runs umber→wine→rose→peach→cream. Every role keeps at least
+//         pixel's contrast on its ground (painted/plate-theme.test.ts).
 
-export type ThemeName = "pixel" | "paper";
+export type ThemeName = "pixel" | "paper" | "dusk";
 
 export interface Theme {
   name: ThemeName;
@@ -55,6 +62,25 @@ export const THEMES: Record<ThemeName, Theme> = {
     spark: "#ffffff",
     ramp: ["#1f1b33", "#3b2f5c", "#5e4682", "#8a5f9e", "#b97fa8", "#e0a3a8", "#f4c9a8", "#fdeccb"],
     heat: ["#24223a", "#2e3358", "#3c4a80", "#5267a8", "#7389cc", "#9eb0e6", "#cad5f6", "#eef2ff"],
+  },
+  dusk: {
+    name: "dusk",
+    ground: "#26181a",
+    panel: "#2f1f22",
+    frame: "#5c4244",
+    wire: "#614648",
+    wireHot: "#9fe6cf",
+    accent: "#8c9fe6",
+    accentHi: "#c6d0fa",
+    accentLo: "#5d6aa8",
+    text: "#d4bfa2",
+    textDim: "#a88a7a",
+    loss: "#f4a0b0",
+    lossHi: "#ffd6de",
+    shadow: null,
+    spark: "#ffffff",
+    ramp: ["#2a1b1d", "#45292c", "#663741", "#8c4f5a", "#b9757a", "#e0a3a0", "#f4c9a8", "#fdeccb"],
+    heat: ["#2f1f22", "#3a3049", "#464a78", "#5767a2", "#7389cc", "#9eb0e6", "#cad5f6", "#eef2ff"],
   },
   paper: {
     name: "paper",

@@ -65,12 +65,16 @@ A control that cannot act is sunk flat (`disabledStyle`), never a ghost.
 `DRAWER`: 440 with the diagram, 336 text-only, phone snaps 0.2 / 0.5 / 0.88.
 
 **Phones** (`PHONE`, < 640 px): one top bar in every view
-(`corners/phone-bar.tsx`). The overview frames the map by its height between
-bar and compass at a whole crisp scale; the continent pans sideways from its
-middle ("−" steps out to all of it). Lands go in at whole crisp scales too
-(between two, names drop to 7.5 px). An off-screen land keeps an edge sign
-(`corners/edge-signs.tsx`), none while a card is open. The sheet's top is the
-corners' floor; pulled up full, the bottom stack steps away.
+(`corners/phone-bar.tsx`). The overview fills the screen under the bar with
+the lands at the largest crisp scale (×1.5 at 390×844 @2x; only land signs
+show there); the corners float over it and it pans sideways from its middle
+("−" steps out to all of it). Lands go in at whole crisp scales (between
+two, names drop to 7.5 px). Every land sign is whole near its spot or an
+edge chip (`corners/edge-signs.tsx`, pixel and paper): a sign whose spot is
+off screen, or that would slide a third of its width to stay whole, becomes
+a chip; chips are hard for names. None while a card is open. A **Key**
+button (bottom right) unfolds the map key. The sheet's top is the corners'
+floor; pulled up full, the bottom stack steps away.
 
 ## Focus mode
 
@@ -93,7 +97,9 @@ It stays a vignette: at most half the visible map's area, and it may not push
 the map below ×2 (pixel) or one step out of the land (paper). Otherwise the
 card at ×2 takes its place; a tap or Enlarge opens the full drawing. So
 1440×900 and 1920×1080 show the full drawing, 1280×800 the card; phones keep
-the card in the sheet.
+the card in the sheet. The pixel map hangs it in the kit's `dusk` theme
+(`Material.diagram`): pixel's pastel roles on a warm umber ground, so the
+plate reads as part of the map (plum read as pasted in); paper uses `paper`.
 
 ## Label obstacle rules
 
@@ -106,7 +112,9 @@ the card in the sheet.
   (`heal.ts`: clone stamp for plates, a rim wash + grain for large chrome), so
   a plate we leave off leaves painting, not old letters. Titles are redrawn on
   our stock, set to fit, kept whole in view, and keep their whole-sheet screen
-  size when zoomed; past ×1.4 every name is screen-steady.
+  size when zoomed; past ×1.4 every name is screen-steady. With a land's
+  names open, the painter's plates take the live tags' size and weight: one
+  label size per land. Boards he lettered for models the zoo lacks stay painting.
 - Openness has three levels: whole map = land signs only (hover names a
   model); in a land = that land's names; a model = its card + named lineage.
 
@@ -114,14 +122,18 @@ the card in the sheet.
 
 A view opens framed. Until everything its framing depends on is in (data,
 picture, fonts, the corners and the plate measured — each re-plans it) and its
-target has held for `SETTLE_MS`, the page is veiled (the sea alone) and the
-camera jumps; then the veil lifts in one cut, already in focus mode, and the
-corners stamp on. `data-lab-ready` (lib/lab-contract.ts `useLabReady`) waits for
+target has held for `SETTLE_MS`, the page is veiled and the camera jumps. The
+veil is the library's loading surface (`corners/unrolling.tsx`, `labLoading`):
+from the first paint the cartouche stands in its corner on the map's ground
+(parchment; paper: a blurred 192-px copy of the painting) with one status
+line ("Unrolling the map…"; offline, how to start the API) over a bar of four
+segments, one per real step. Then the veil lifts in one cut, already in focus
+mode; the cartouche stays put and the other corners stamp on together. `data-lab-ready` (lib/lab-contract.ts `useLabReady`) waits for
 the reveal, the camera's `landed` and the stamp-on.
 
 ## Motion and life
 
-`MOTION`: corners stamp on in turn (160 ms, `steps(2)`, 90 ms stagger),
+`MOTION`: corners stamp on together (160 ms, `steps(2)`; the cartouche is already there),
 re-stamp on a focus change (140 ms), the plate fades in on landing (180 ms,
 `steps(3)`), the phone sheet eases (220 ms), roads march, the ring pulses.
 Interface motion is stepped, never eased. The pixel map's life layer

@@ -164,7 +164,14 @@ this; `T.accent` + the note is the honest reading.
   none. Even the Diamond's 1-px core is a token (`theme.spark`). The
   `"#ffffff"` uses (transformer/recur ok-glyphs, gnn labelled nodes, deepseek
   window text) are drift — on paper they are white boxes on cream.
-- Data uses `ramp` (−1..1, plum→rose→peach→cream in pixel) or `heat` (0..1); the network
+- A host may pick a theme that matches its material, never a new set of
+  roles: `dusk` is `pixel` with the ground, panel, frame, wire, text and the
+  ramp's dark end cut toward the painted pixel map's own darks (umber,
+  maroon), so a diagram hung on that map (its plate, its drawer card) reads
+  as part of it, not a cold plum slab pasted in. Every role keeps at least
+  pixel's contrast on the ground and the panels
+  (`painted/plate-theme.test.ts`). The star atlas keeps `pixel` (a night host).
+- Data uses `ramp` (−1..1, plum→rose→peach→cream in pixel; umber→wine→rose→peach→cream in dusk) or `heat` (0..1); the network
   uses the `accent` trio; wiring the `wire` pair; `loss`/`lossHi` the
   objective. Never draw data in accent blue, never draw a block in the ramp.
   Accepted exception: gnn's four communities borrow `accentHi, loss, ramp[6],
