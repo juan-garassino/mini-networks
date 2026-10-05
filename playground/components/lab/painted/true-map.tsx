@@ -312,17 +312,27 @@ export const TrueMapLayers = memo(function TrueMapLayers(p: TrueMapProps) {
   }, [pm, map, data.markers, stateKey, p.atoms]);
   useCanvasPaint(baseRef, base);
 
-  // ghost levels 1..L of the whole base (level 0 = the base itself)
+  // ghost levels 1..L of the whole base (level 0 = the base itself). The base
+  // holds a few hundred colours (the 128-colour palette + our marker inks), so
+  // each colour's ghosts are worked out once and copied per pixel: per pixel
+  // this was the cold load's longest task (≈2 s of 5 on the dev build)
   const ghosts = useMemo(() => {
-    const out: Uint8ClampedArray[] = [base.data];
-    for (let l = 1; l <= GHOST_LEVELS; l++) {
-      const d = new Uint8ClampedArray(base.data.length);
-      const a = l / GHOST_LEVELS;
-      for (let q = 0; q < W * H; q++) {
-        const [r, g, b] = ghostRGB(base.data[q * 4], base.data[q * 4 + 1], base.data[q * 4 + 2], a);
-        d[q * 4] = r; d[q * 4 + 1] = g; d[q * 4 + 2] = b; d[q * 4 + 3] = 255;
+    const L = GHOST_LEVELS, n = W * H, src = base.data;
+    const out: Uint8ClampedArray[] = [src];
+    for (let l = 1; l <= L; l++) out.push(new Uint8ClampedArray(src.length));
+    const memo = new Map<number, Uint8Array>();
+    for (let q = 0; q < n; q++) {
+      const i = q * 4, key = (src[i] << 16) | (src[i + 1] << 8) | src[i + 2];
+      let rgb = memo.get(key);
+      if (!rgb) {
+        rgb = new Uint8Array(L * 3);
+        for (let l = 1; l <= L; l++) rgb.set(ghostRGB(src[i], src[i + 1], src[i + 2], l / L), (l - 1) * 3);
+        memo.set(key, rgb);
       }
-      out.push(d);
+      for (let l = 1; l <= L; l++) {
+        const d = out[l], o = (l - 1) * 3;
+        d[i] = rgb[o]; d[i + 1] = rgb[o + 1]; d[i + 2] = rgb[o + 2]; d[i + 3] = 255;
+      }
     }
     return out;
   }, [base, W, H]);

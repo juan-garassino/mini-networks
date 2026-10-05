@@ -3,7 +3,7 @@
 // paints from it — the base image, the sea mask, per-land masks, the dimmed
 // "focus" layers and land swatches. Pure (no DOM, no "@/" imports) apart from
 // paintIndices(), so .lab-shots/painted/*.ts can run it under plain node.
-import { insidePolygon, type Family, type PaintedMap } from "./anchors.ts";
+import type { Family, PaintedMap } from "./anchors.ts";
 
 export const PIXELMAP_URL = "/local/pixel-map.json";
 export const PIXELMAP_CMD =
@@ -93,11 +93,29 @@ export function landIds(pm: PixelMap, map: PaintedMap, families: readonly Family
     const poly = map.lands[f];
     let x0 = Infinity, x1 = -Infinity, y0 = Infinity, y1 = -Infinity;
     for (const [px, py] of poly) { x0 = Math.min(x0, px); x1 = Math.max(x1, px); y0 = Math.min(y0, py); y1 = Math.max(y1, py); }
+    // one scanline per row through the pixel centres: the even-odd crossings
+    // of the polygon's edges, sorted once, give insidePolygon's answer for
+    // every pixel in the row (a pixel is in when an odd number of crossings
+    // lie strictly right of its centre) — the same fill, without testing
+    // every pixel against every edge (it was a third of the map's decode)
+    const xs: number[] = [];
     for (let y = Math.max(0, Math.floor(y0)); y <= Math.min(h - 1, Math.ceil(y1)); y++) {
+      const cy = y + 0.5;
+      xs.length = 0;
+      for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
+        const [xi, yi] = poly[i], [xj, yj] = poly[j];
+        if ((yi > cy) !== (yj > cy)) xs.push(((xj - xi) * (cy - yi)) / (yj - yi) + xi);
+      }
+      if (!xs.length) continue;
+      xs.sort((a, b) => a - b);
+      let k = 0;   // crossings at or left of the centre
       for (let x = Math.max(0, Math.floor(x0)); x <= Math.min(w - 1, Math.ceil(x1)); x++) {
+        const cx = x + 0.5;
+        while (k < xs.length && xs[k] <= cx) k++;
+        if ((xs.length - k) % 2 === 0) continue;
         const p = y * w + x;
         if (out[p] >= 0 || sea[p]) continue;
-        if (insidePolygon({ x: x + 0.5, y: y + 0.5 }, poly)) out[p] = fi;
+        out[p] = fi;
       }
     }
   });
