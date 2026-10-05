@@ -3,14 +3,16 @@
 // Top-left corner: the map's title cartouche. Title, one live sentence about
 // the zoo (or about the focused land, with a way back to the whole map), and
 // the search field as its bottom row. On the paper map it sits exactly where
-// the painter put the cartouche.
+// the painter put the cartouche. quiet (focus mode: a land or a model open, or
+// zoomed in): one row — the title, "Whole map" and a magnifier that unfolds
+// the field — so the map plate and the drawer are the two things to read.
 import type { Family } from "../anchors";
 import { FAMILY_TITLE, PAPER_SUBLINE, type Material } from "../material";
-import { CORNER_PAD, CORNER_W, Plate, Search } from "./plate";
+import { CORNER_PAD, CORNER_PAD_Q, CORNER_W, Plate, Search } from "./plate";
 
 const WORDS = ["no", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine"];
 
-export function Cartouche({ m, counts, names, focusFam, famCount, famProven, onPick, onWhole, compact, title = "The Model Zoo", noun = "lands" }: {
+export function Cartouche({ m, counts, names, focusFam, famCount, famProven, onPick, onWhole, compact, quiet = false, wholeLink = true, title = "The Model Zoo", noun = "lands" }: {
   m: Material;
   title?: string;
   /** what a family is called in the sentence: lands, constellations… */
@@ -23,12 +25,35 @@ export function Cartouche({ m, counts, names, focusFam, famCount, famProven, onP
   onPick: (n: string) => void;
   onWhole: () => void;
   compact: boolean;
+  /** focus mode: condense to one row (title, Whole map, a search magnifier) */
+  quiet?: boolean;
+  /** quiet: show the "Whole map" link (phones leave it to the sheet's own) */
+  wholeLink?: boolean;
 }) {
   const lands = WORDS[counts.lands] ?? String(counts.lands);
   const sentence = focusFam
     ? `${FAMILY_TITLE[focusFam]}: ${famCount[focusFam] ?? 0} models, ${famProven[focusFam] ?? 0} proven.`
     : `${counts.models} models in ${lands} ${noun}, ${counts.champions} proven.`;
   const sub = focusFam && !m.crisp ? PAPER_SUBLINE[focusFam] : null;
+  if (quiet) {
+    return (
+      <Plate m={m} as="header" label={title} style={{ padding: `${CORNER_PAD_Q}px ${CORNER_PAD_Q + 2}px`, width: "max-content", maxWidth: CORNER_W }}>
+        <div className="flex items-center gap-3">
+          <h1 className="whitespace-nowrap leading-none" style={{ fontFamily: m.signFont, fontWeight: 700, fontSize: compact ? 16 : 20, color: m.crisp ? m.border : m.ink }}>
+            {title}
+          </h1>
+          {wholeLink && (
+            <button type="button" onClick={onWhole} title="Whole map (Esc)"
+              className="whitespace-nowrap leading-none underline decoration-dotted underline-offset-4 focus-visible:outline-2"
+              style={{ color: m.border, fontFamily: m.bodyFont, fontSize: 14 }}>
+              Whole map
+            </button>
+          )}
+          <Search m={m} names={names} onPick={onPick} compact={compact} collapsed />
+        </div>
+      </Plate>
+    );
+  }
   return (
     <Plate m={m} as="header" label={title} className={compact ? "p-2.5" : undefined} style={{ width: compact ? 168 : CORNER_W, padding: compact ? undefined : CORNER_PAD }}>
       <h1 className="leading-none" style={{ fontFamily: m.signFont, fontWeight: 700, fontSize: compact ? 20 : 32, color: m.crisp ? m.border : m.ink }}>

@@ -10,10 +10,14 @@
 //   quality gate it is judged by.
 // With diagramOn="map" (the painted maps on desktop) the diagram is a plate on
 // the map instead (map-plate.tsx) and the card is text only.
-// One rhythm: 8-px steps (a section every 28 px, a label 10 px above its
+// One rhythm: 8-px steps (a section every 24 px, a header 10 px above its
 // content, chips 6 px apart). One face, the map's own: Pixelify Sans at three
-// weights — 700 for the name and the section labels (the map's sign voice),
-// 500 for anything you can press, 400 for reading.
+// weights — 700 for the name and the section headers (the map's sign voice),
+// 500 for anything you can press and the small labels, 400 for reading.
+// One type scale (TYPE): name 28, section header 14 (bold, border ink, ruled
+// to the edge), body 15/1.4, notes 13/1.35, meta 12 — and running text keeps
+// a measure of at most 38 characters. Three sections, one header each:
+// Lineage (built on / leads to as its two sub-labels), Pipelines, Quality gate.
 import type { CSSProperties, ReactNode } from "react";
 import { displayName, EVIDENCE_COPY, type CardModel, type EvidenceState } from "@/components/lab/shared/card-model";
 import { MechanismDiagram } from "@/components/lab/shared/anatomy2";
@@ -23,8 +27,12 @@ import { EvidenceIcon } from "./pixel-icon";
 import { plateStyle } from "./corners/plate";
 
 const fmt = (n: number) => (Math.abs(n) >= 100 ? n.toFixed(0) : Math.abs(n) >= 1 ? n.toFixed(2) : n.toFixed(3));
-const SECTION = 28;   // px between sections
-const LABEL_GAP = 10; // px from a section label to its content
+const SECTION = 24;   // px between sections
+const LABEL_GAP = 10; // px from a section header to its content
+/** the drawer's type scale, CSS px */
+export const TYPE = { name: 28, head: 14, body: 15, note: 13, meta: 12 } as const;
+/** running text's measure (em, so a note at 13 px keeps the same count) */
+const MEASURE = "19em";   // ≈ 38 Pixelify characters at any of the scale's sizes
 
 /** The model's evidence as the map draws it: its banner (atom) or stone
  * (derived) sprite on the pixel maps, a filled dot on the paper map. */
@@ -34,19 +42,26 @@ function Glyph({ m, state, atom, big = false }: { m: Material; state: EvidenceSt
   return <span aria-hidden className="inline-block flex-none rounded-full" style={{ width: s, height: s, background: m.evidence[state].fill, border: `1.5px solid ${m.evidence[state].stroke}` }} />;
 }
 
-/** A section label in the map's sign voice, with the count badge the land
- * signs carry when there is something to count. */
+/** A section header in the map's sign voice, with the count badge the land
+ * signs carry when there is something to count, ruled out to the edge so the
+ * three sections read as three. */
 function Label({ m, children, count, id }: { m: Material; children: ReactNode; count?: number; id?: string }) {
   return (
-    <h3 id={id} className="flex items-center gap-2 leading-none" style={{ fontFamily: m.signFont, fontWeight: 700, fontSize: 15, color: m.crisp ? m.border : m.ink, marginBottom: LABEL_GAP }}>
+    <h3 id={id} className="flex items-center gap-2 leading-none" style={{ fontFamily: m.signFont, fontWeight: 700, fontSize: TYPE.head, color: m.crisp ? m.border : m.ink, marginBottom: LABEL_GAP }}>
       {children}
       {count != null && (
-        <span className="px-1.5 py-0.5 leading-none" style={{ background: m.crisp ? m.border : m.loud, color: m.loudInk, fontSize: 12, fontWeight: 700, borderRadius: m.crisp ? 0 : 3 }}>
+        <span className="px-1.5 py-0.5 leading-none" style={{ background: m.crisp ? m.border : m.loud, color: m.loudInk, fontSize: 11, fontWeight: 700, borderRadius: m.crisp ? 0 : 3 }}>
           {count}
         </span>
       )}
+      <span aria-hidden className="block flex-1" style={{ height: "var(--ap, 2px)", background: m.crisp ? m.rule : m.inkSoft, opacity: m.crisp ? 1 : 0.35 }} />
     </h3>
   );
+}
+
+/** A sub-label inside a section (the lineage's "Built on" / "Leads to"). */
+function SubLabel({ m, children }: { m: Material; children: ReactNode }) {
+  return <p className="leading-none" style={{ fontSize: TYPE.meta, fontWeight: 500, color: m.inkSoft, marginBottom: 6 }}>{children}</p>;
 }
 
 /** A neighbour on the road: a plate you press to travel there, with its
@@ -54,8 +69,8 @@ function Label({ m, children, count, id }: { m: Material; children: ReactNode; c
 function Signpost({ name, theme: m, onPick, state, atom }: { name: string; theme: Material; onPick: (n: string) => void; state: CardModel["state"]; atom: boolean }) {
   return (
     <button type="button" onClick={() => onPick(name)} title={`Go to ${displayName(name)}`}
-      className="inline-flex min-h-[30px] items-center gap-1.5 px-2 py-1 leading-none hover:brightness-105 focus-visible:outline-2 focus-visible:outline-offset-2"
-      style={{ ...plateStyle(m), fontFamily: m.bodyFont, fontWeight: 500, fontSize: 15 }}>
+      className="inline-flex min-h-[28px] items-center gap-1.5 px-2 py-1 leading-none hover:brightness-105 focus-visible:outline-2 focus-visible:outline-offset-2"
+      style={{ ...plateStyle(m), fontFamily: m.bodyFont, fontWeight: 500, fontSize: 14 }}>
       <Glyph m={m} state={state} atom={atom} />
       {displayName(name)}
     </button>
@@ -64,7 +79,7 @@ function Signpost({ name, theme: m, onPick, state, atom }: { name: string; theme
 
 /** A stretch of the road between the groups of signposts: the dashed ink of
  * the map's lineage roads, under the signposts' sprites. */
-function Road({ m, h = 18 }: { m: Material; h?: number }) {
+function Road({ m, h = 14 }: { m: Material; h?: number }) {
   const ink = m.crisp ? m.border : m.inkSoft;
   return <span aria-hidden className="block" style={{ height: h, width: 4, marginLeft: 14, background: `repeating-linear-gradient(180deg, ${ink} 0 4px, transparent 4px 7px)` }} />;
 }
@@ -82,7 +97,7 @@ function Stamp({ m, state, version }: { m: Material; state: EvidenceState; versi
     ? { background: m.plateHi, color: m.border, border: `var(--ap, 2px) dashed ${m.border}` }
     : { background: ev.fill, color: ink, border: `var(--ap, 2px) solid ${m.crisp ? m.border : ev.stroke}` };
   return (
-    <span className="inline-flex items-center gap-1.5 px-2 py-1 leading-none" style={{ ...style, fontFamily: m.signFont, fontWeight: 700, fontSize: 14, borderRadius: m.crisp ? 0 : 3 }}>
+    <span className="inline-flex flex-none items-center gap-1.5 px-2 py-1 leading-none" style={{ ...style, fontFamily: m.signFont, fontWeight: 700, fontSize: 13, borderRadius: m.crisp ? 0 : 3 }}>
       {head}{version ? ` ${version}` : ""}
     </span>
   );
@@ -125,26 +140,30 @@ export function CardBody({ card, theme: m, still, onPick, stateOf, isAtom, diagr
   const head = m.crisp ? m.border : m.ink;
   const section: CSSProperties = { marginTop: SECTION };
   const pipes = card.compositions;
+  const text: CSSProperties = { maxWidth: MEASURE };
+  const note: CSSProperties = { fontSize: TYPE.note, lineHeight: 1.35, color: m.inkSoft, maxWidth: MEASURE };
   return (
-    <section aria-label={`${name} lesson card`} style={{ color: m.ink, fontFamily: m.bodyFont, fontSize: 16, lineHeight: 1.5 }}>
-      {/* where it is, then who */}
-      <p className="leading-none" style={{ fontSize: 13, fontWeight: 500, color: m.inkSoft }}>{where}</p>
-      <h2 className="mt-2.5 flex items-end gap-2.5 leading-none" style={{ fontFamily: m.signFont, fontWeight: 700, fontSize: 30, color: head }}>
+    <section aria-label={`${name} lesson card`} style={{ color: m.ink, fontFamily: m.bodyFont, fontSize: TYPE.body, lineHeight: 1.4 }}>
+      {/* where it is, then who, then how far it has got */}
+      <p className="leading-none" style={{ fontSize: TYPE.meta, fontWeight: 500, color: m.inkSoft }}>{where}</p>
+      <h2 className="mt-2 flex items-end gap-2.5 leading-none" style={{ fontFamily: m.signFont, fontWeight: 700, fontSize: TYPE.name, color: head }}>
         <Glyph m={m} state={card.state} atom={card.atom} big />
         <span style={{ overflowWrap: "anywhere" }}>{name}</span>
       </h2>
-      <div className="mt-3"><Stamp m={m} state={card.state} version={version} /></div>
-      {gloss && <p className="mt-2 leading-snug" style={{ fontSize: 14, color: m.inkSoft }}>{gloss[0].toUpperCase() + gloss.slice(1)}.</p>}
+      <div className="mt-3 flex items-center gap-2.5">
+        <Stamp m={m} state={card.state} version={version} />
+        {gloss && <p style={{ ...note, lineHeight: 1.25 }}>{gloss[0].toUpperCase() + gloss.slice(1)}.</p>}
+      </div>
 
       {/* what it does, and the one idea it adds to the zoo */}
-      {card.description && <p style={{ marginTop: 20 }}>{card.description}</p>}
+      {card.description && <p style={{ ...text, marginTop: 16 }}>{card.description}</p>}
       {card.introduces.map((i) => (
-        <div key={i.key} className="mt-3 px-3 py-2.5" style={{ background: m.crisp ? m.plate : `${m.plate}`, border: `var(--ap, 2px) solid ${m.crisp ? m.rule : m.border}`, borderRadius: m.crisp ? 0 : 3, boxShadow: m.crisp ? `inset 0 0 0 1px ${m.rule}` : undefined }}>
-          <p className="flex items-center gap-2 leading-none" style={{ fontSize: 13, fontWeight: 500, color: m.inkSoft }}>
+        <div key={i.key} className="mt-3 px-2.5 py-2" style={{ background: m.plate, border: `var(--ap, 2px) solid ${m.crisp ? m.rule : m.border}`, borderRadius: m.crisp ? 0 : 3, boxShadow: m.crisp ? `inset 0 0 0 1px ${m.rule}` : undefined }}>
+          <p className="flex items-center gap-2 leading-none" style={{ fontSize: TYPE.meta, fontWeight: 500, color: m.inkSoft }}>
             <span aria-hidden className="inline-block h-2 w-2 flex-none" style={{ background: m.road, boxShadow: `0 0 0 1px ${m.border}` }} />
             Introduces
           </p>
-          <p className="mt-1.5" style={{ lineHeight: 1.4 }}>
+          <p className="mt-1.5" style={{ fontSize: 14, lineHeight: 1.35, maxWidth: MEASURE }}>
             <b style={{ fontWeight: 700, color: head }}>{displayName(i.key)}</b>
             {i.description ? <span>: {i.description}</span> : null}
           </p>
@@ -161,64 +180,55 @@ export function CardBody({ card, theme: m, still, onPick, stateOf, isAtom, diagr
         </div>
       ) : onShowDiagram ? (
         <button type="button" onClick={onShowDiagram}
-          className="mt-4 inline-flex min-h-[30px] items-center gap-2 px-2.5 py-1 leading-none hover:brightness-105 focus-visible:outline-2 focus-visible:outline-offset-2"
-          style={{ ...plateStyle(m), fontFamily: m.bodyFont, fontWeight: 500, fontSize: 15 }}>
+          className="mt-4 inline-flex min-h-[28px] items-center gap-2 px-2.5 py-1 leading-none hover:brightness-105 focus-visible:outline-2 focus-visible:outline-offset-2"
+          style={{ ...plateStyle(m), fontFamily: m.bodyFont, fontWeight: 500, fontSize: 14 }}>
           Show how {name} works on the map
         </button>
       ) : null}
 
       {/* its road: built on → itself → leads to, as the map draws a lineage */}
       <nav aria-label={`${name}'s road`} style={section}>
+        <Label m={m}>Lineage</Label>
+        <SubLabel m={m}>Built on</SubLabel>
         {card.parents.length ? (
-          <>
-            <Label m={m} count={card.parents.length}>Built on</Label>
-            <div className="flex flex-wrap gap-1.5">
-              {card.parents.map((p) => <Signpost key={p} name={p} theme={m} onPick={onPick} state={stateOf(p)} atom={isAtom(p)} />)}
-            </div>
-          </>
+          <div className="flex flex-wrap gap-1.5">
+            {card.parents.map((p) => <Signpost key={p} name={p} theme={m} onPick={onPick} state={stateOf(p)} atom={isAtom(p)} />)}
+          </div>
         ) : (
-          <>
-            <Label m={m}>Built on</Label>
-            <p className="leading-snug" style={{ fontSize: 14, color: m.inkSoft, marginBottom: 10 }}>Nothing: {name} is an atom, where its roads begin.</p>
-          </>
+          <p style={{ ...note, marginBottom: 8 }}>Nothing: {name} is an atom, where its roads begin.</p>
         )}
         {/* an atom is where the road begins: no road runs into it */}
         {card.parents.length > 0 && <Road m={m} />}
         <div className="flex items-center gap-2">
-          <span className="inline-flex min-h-[30px] items-center gap-1.5 px-2 py-1 leading-none" aria-current="true"
-            style={{ ...plateStyle(m, { loud: true, shadow: false }), fontFamily: m.bodyFont, fontWeight: 700, fontSize: 15 }}>
+          <span className="inline-flex min-h-[28px] items-center gap-1.5 px-2 py-1 leading-none" aria-current="true"
+            style={{ ...plateStyle(m, { loud: true, shadow: false }), fontFamily: m.bodyFont, fontWeight: 700, fontSize: 14 }}>
             <Glyph m={m} state={card.state} atom={card.atom} />
             {name}
           </span>
-          <span style={{ fontSize: 13, color: m.inkSoft }}>you are here</span>
+          <span style={{ fontSize: TYPE.meta, color: m.inkSoft }}>you are here</span>
         </div>
         <Road m={m} />
+        <SubLabel m={m}>Leads to</SubLabel>
         {card.children.length ? (
-          <>
-            <Label m={m} count={card.children.length}>Leads to</Label>
-            <div className="flex flex-wrap gap-1.5">
-              {card.children.map((c) => <Signpost key={c} name={c} theme={m} onPick={onPick} state={stateOf(c)} atom={isAtom(c)} />)}
-            </div>
-          </>
+          <div className="flex flex-wrap gap-1.5">
+            {card.children.map((c) => <Signpost key={c} name={c} theme={m} onPick={onPick} state={stateOf(c)} atom={isAtom(c)} />)}
+          </div>
         ) : (
-          <>
-            <Label m={m}>Leads to</Label>
-            {/* the road's end, drawn as a signpost with nothing on it yet */}
-            <p className="inline-flex px-2 py-1 leading-snug" style={{ fontSize: 14, color: m.inkSoft, border: `var(--ap, 2px) dashed ${m.crisp ? m.border : m.inkSoft}`, borderRadius: m.crisp ? 0 : 3 }}>
-              The road ends here: no model builds on {name} yet.
-            </p>
-          </>
+          // the road's end, drawn as a signpost with nothing on it yet
+          <p className="inline-flex px-2 py-1" style={{ ...note, border: `var(--ap, 2px) dashed ${m.crisp ? m.border : m.inkSoft}`, borderRadius: m.crisp ? 0 : 3 }}>
+            The road ends here: no model builds on {name} yet.
+          </p>
         )}
       </nav>
 
       {pipes.length > 0 && (
         <div style={section}>
-          <Label m={m} count={pipes.length}>{pipes.length === 1 ? "In a pipeline" : "In pipelines"}</Label>
-          <ul className="space-y-2.5">
+          <Label m={m} count={pipes.length}>{pipes.length === 1 ? "Pipeline" : "Pipelines"}</Label>
+          <ul className="space-y-2">
             {pipes.slice(0, 6).map((c) => (
-              <li key={c.name} className="leading-snug">
-                <span className="block" style={{ fontWeight: 700, fontSize: 15 }}>{displayName(c.name)}</span>
-                <span className="block" style={{ fontSize: 14, color: m.inkSoft }}>
+              <li key={c.name} style={{ lineHeight: 1.3, maxWidth: MEASURE }}>
+                <span className="block" style={{ fontWeight: 700, fontSize: 14 }}>{displayName(c.name)}</span>
+                <span className="block" style={{ fontSize: TYPE.note, color: m.inkSoft }}>
                   {c.composes.map((n, i) => (
                     <span key={n}>
                       {i > 0 && " + "}
@@ -232,19 +242,19 @@ export function CardBody({ card, theme: m, still, onPick, stateOf, isAtom, diagr
               </li>
             ))}
           </ul>
-          {pipes.length > 6 && <p className="mt-2" style={{ fontSize: 14, color: m.inkSoft }}>And {pipes.length - 6} more.</p>}
+          {pipes.length > 6 && <p className="mt-2" style={note}>And {pipes.length - 6} more.</p>}
         </div>
       )}
 
       {ev?.gate_metric && (
         <div style={section}>
-          <Label m={m}>The quality gate</Label>
+          <Label m={m}>Quality gate</Label>
           {ev.best_metric != null && (
-            <div className="mb-3">
+            <div className="mb-2.5">
               <MetricBar m={m} metric={ev.gate_metric} best={ev.best_metric} bar={ev.threshold_m ?? null} higher={Boolean(ev.higher_is_better)} passes={card.passesBar} />
             </div>
           )}
-          <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1.5 leading-snug" style={{ fontSize: 14 }}>
+          <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1" style={{ fontSize: TYPE.note, lineHeight: 1.35 }}>
             <dt style={{ color: m.inkSoft }}>Judged on</dt>
             <dd>{displayName(ev.gate_metric)}, {ev.higher_is_better ? "higher is better" : "lower is better"}</dd>
             {ev.threshold_m != null && (

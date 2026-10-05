@@ -57,6 +57,15 @@ export function plateStyle(m: Material, opts: { loud?: boolean; shadow?: boolean
 export const CORNER_W = 324;
 /** every corner plate's inner padding, CSS px */
 export const CORNER_PAD = 12;
+/** focus mode (a model or a land open, or zoomed in): the corner plates step
+ * back to half padding and the side column to a small inset */
+export const CORNER_PAD_Q = 6;
+export const CORNER_W_Q = 176;
+/** a plate's title in the map's sign voice: the one title treatment every
+ * corner plate shares (the cartouche's is the large one) */
+export function plateTitle(m: Material, size = 15): CSSProperties {
+  return { fontFamily: m.signFont, fontWeight: 700, fontSize: size, lineHeight: 1, color: m.crisp ? m.border : m.ink };
+}
 
 /** A large sheet's ground (drawer, sheet, full diagram): the cardstock print on paper, flat elsewhere. */
 export const sheetGround = (m: Material) => (m.card ? `${m.card.grain}, ${m.plateHi}` : m.plateHi);
@@ -88,14 +97,35 @@ export function Btn({ m, children, onClick, disabled, pressed, label, className 
   );
 }
 
-/** Find a model: the cartouche's bottom row. "/" focuses it from anywhere. */
-export function Search({ m, names, onPick, compact = false }: { m: Material; names: string[]; onPick: (n: string) => void; compact?: boolean }) {
+/** A magnifier drawn on a 7-unit grid (crisp on the pixel map), in the plate's ink. */
+export function MagnifierIcon({ m, size = 14 }: { m: Material; size?: number }) {
+  const ink = m.crisp ? m.border : m.ink;
+  return (
+    <svg aria-hidden width={size} height={size} viewBox="0 0 7 7" shapeRendering={m.crisp ? "crispEdges" : undefined} style={{ display: "block" }}>
+      {m.crisp ? (
+        <g fill={ink}>
+          <rect x="1" y="0" width="3" height="1" /><rect x="0" y="1" width="1" height="3" /><rect x="4" y="1" width="1" height="3" />
+          <rect x="1" y="4" width="3" height="1" /><rect x="4" y="4" width="1" height="1" /><rect x="5" y="5" width="1" height="1" /><rect x="6" y="6" width="1" height="1" />
+        </g>
+      ) : (
+        <g fill="none" stroke={ink} strokeWidth={0.9} strokeLinecap="round"><circle cx="2.8" cy="2.8" r="2.1" /><path d="M4.4 4.4 6.4 6.4" /></g>
+      )}
+    </svg>
+  );
+}
+
+/** Find a model: the cartouche's bottom row. "/" focuses it from anywhere.
+ * collapsed (focus mode): a magnifier button until it is pressed (or "/"), then
+ * the field unfolds in place and folds back when it is left empty. */
+export function Search({ m, names, onPick, compact = false, collapsed = false }: { m: Material; names: string[]; onPick: (n: string) => void; compact?: boolean; collapsed?: boolean }) {
   const [q, setQ] = useState("");
   const [open, setOpen] = useState(false);
+  const [unfolded, setUnfolded] = useState(false);
   const ref = useRef<HTMLInputElement | null>(null);
+  const folded = collapsed && !unfolded && !q;
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "/" && document.activeElement?.tagName !== "INPUT") { e.preventDefault(); ref.current?.focus(); }
+      if (e.key === "/" && document.activeElement?.tagName !== "INPUT") { e.preventDefault(); setUnfolded(true); requestAnimationFrame(() => ref.current?.focus()); }
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
@@ -105,16 +135,27 @@ export function Search({ m, names, onPick, compact = false }: { m: Material; nam
     if (!s) return [];
     return names.filter((n) => n.includes(s)).sort((a, b) => a.indexOf(s) - b.indexOf(s) || a.length - b.length).slice(0, 7);
   }, [q, names]);
-  const pick = (n: string) => { onPick(n); setQ(""); setOpen(false); ref.current?.blur(); };
+  const pick = (n: string) => { onPick(n); setQ(""); setOpen(false); setUnfolded(false); ref.current?.blur(); };
+  if (folded) {
+    return (
+      <button type="button" onClick={() => { setUnfolded(true); requestAnimationFrame(() => ref.current?.focus()); }}
+        aria-label="Find a model (/)" title="Find a model (/)"
+        className="inline-flex flex-none items-center justify-center focus-visible:outline-2 focus-visible:outline-offset-2"
+        style={{ width: 28, height: 28, background: m.field, border: `var(--ap, 2px) solid ${m.border}`, borderRadius: m.radius,
+          boxShadow: m.crisp ? `inset var(--ap) var(--ap) 0 ${m.rule}` : `inset 0 1px 2px ${m.shadow}` }}>
+        <MagnifierIcon m={m} />
+      </button>
+    );
+  }
   return (
-    <div className="relative">
+    <div className="relative" style={collapsed ? { width: compact ? 150 : 196 } : undefined}>
       <label className="sr-only" htmlFor="painted-search">Find a model</label>
-      <input id="painted-search" ref={ref} value={q} placeholder={compact ? "Find a model" : "Find a model, press /"} autoComplete="off"
+      <input id="painted-search" ref={ref} value={q} placeholder={compact || collapsed ? "Find a model" : "Find a model, press /"} autoComplete="off"
         onChange={(e) => { setQ(e.target.value); setOpen(true); }}
-        onFocus={() => setOpen(true)} onBlur={() => setTimeout(() => setOpen(false), 150)}
+        onFocus={() => setOpen(true)} onBlur={() => setTimeout(() => { setOpen(false); setUnfolded(false); }, 150)}
         onKeyDown={(e) => { if (e.key === "Enter" && hits[0]) pick(hits[0]); if (e.key === "Escape") { setQ(""); ref.current?.blur(); } }}
-        className="w-full px-2.5 py-1.5 outline-none focus-visible:ring-2"
-        style={{ background: m.field, color: m.ink, fontFamily: m.bodyFont, fontSize: 16,
+        className={`w-full ${collapsed ? "px-2 py-0.5" : "px-2.5 py-1.5"} outline-none focus-visible:ring-2`}
+        style={{ background: m.field, color: m.ink, fontFamily: m.bodyFont, fontSize: collapsed ? 15 : 16,
           border: `var(--ap, 2px) solid ${m.border}`, borderRadius: m.radius,
           boxShadow: m.crisp ? `inset var(--ap) var(--ap) 0 ${m.rule}` : `inset 0 1px 2px ${m.shadow}` }} />
       {open && hits.length > 0 && (

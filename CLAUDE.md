@@ -140,14 +140,22 @@ playground/ (repo root)  Next.js 16 + React 19 + TS + Tailwind v4 + Recharts +
                      legend share a column width, the compass stands on the
                      scale bar and scale bar + legend share the bottom edge;
                      while the map plate needs their corner the scale bar,
-                     then the minimap, fold away), a right drawer for the
-                     selected model (drawer.tsx + card.tsx: a reading panel —
-                     place, name, evidence stamp, introduces, the lineage as a
-                     signposted road, pipelines, the quality gate; full-stage
-                     diagram view);
+                     then the minimap, fold away; FOCUS MODE — a land or model
+                     open, or zoomed in — quiets them: one-row cartouche with
+                     a search magnifier, slim scale strip, 176-px minimap
+                     inset, smaller compass + tabs, re-stamped in place), a
+                     right drawer for the selected model (drawer.tsx +
+                     card.tsx: a reading panel on one type scale, card.tsx
+                     TYPE + a 19em measure — place, name, evidence stamp +
+                     gloss, introduces, then three ruled sections: Lineage
+                     (built on / leads to as a signposted road), Pipelines,
+                     Quality gate; sticky way back, a fade while more lies
+                     below; full-stage diagram view);
                      on desktop the "How <model> works" diagram is a MAP PLATE
                      hung beside the castle on a leader line (map-plate.tsx:
-                     full animated diagram at 1 art px = 1 CSS px, scrubber/keys
+                     full animated diagram at 1 art px = 1 CSS px — ×1.5/×2
+                     only at whole device px within half the visible map —
+                     in a compact frame, scrubber/keys
                      kept, Enlarge → full stage, Close keeps the selection;
                      plate-place.ts composes camera scale + castle spot + plate
                      side so the pair fits the visible map clear of the corner

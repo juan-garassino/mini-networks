@@ -10,8 +10,10 @@ import { Btn } from "./plate";
 
 const N = 17, C = 8.5;
 
-export function Compass({ m, unit, onPan, onWhole, onZoom, canIn, canOut, whole }: {
+export function Compass({ m, unit, onPan, onWhole, onZoom, canIn, canOut, whole, rail = 36 }: {
   m: Material;
+  /** the zoom rail's button size, CSS px (focus mode passes a smaller one) */
+  rail?: number;
   /** CSS px per grid unit */
   unit: number;
   onPan: (dx: number, dy: number) => void;
@@ -68,9 +70,9 @@ export function Compass({ m, unit, onPan, onWhole, onZoom, canIn, canOut, whole 
         </g>
         <text x={C} y={-1.1} textAnchor="middle" fontSize={3.4} fontFamily={m.signFont} fontWeight={700} fill={ink}>N</text>
       </svg>
-      <div className="flex flex-col gap-1.5">
-        <Btn m={m} onClick={() => onZoom(1)} disabled={!canIn} label="Zoom in" title="Zoom in (+)" className="w-9" style={{ fontSize: 22, minHeight: 36, padding: 0 }}>+</Btn>
-        <Btn m={m} onClick={() => onZoom(-1)} disabled={!canOut} label="Zoom out" title="Zoom out (−)" className="w-9" style={{ fontSize: 22, minHeight: 36, padding: 0 }}>−</Btn>
+      <div className={`flex flex-col ${rail < 32 ? "gap-1" : "gap-1.5"}`}>
+        <Btn m={m} onClick={() => onZoom(1)} disabled={!canIn} label="Zoom in" title="Zoom in (+)" style={{ width: rail, fontSize: Math.round(rail * 0.6), minHeight: rail, padding: 0 }}>+</Btn>
+        <Btn m={m} onClick={() => onZoom(-1)} disabled={!canOut} label="Zoom out" title="Zoom out (−)" style={{ width: rail, fontSize: Math.round(rail * 0.6), minHeight: rail, padding: 0 }}>−</Btn>
       </div>
     </div>
   );

@@ -11,8 +11,10 @@ import { Btn, plateStyle } from "./plate";
 export type Render = "true" | "clean" | "grid" | "baked";
 export type Labels = "ours" | "baked";
 
-export function SheetTabs({ m, mapId, dev, render, labels, setOpts, devOpen, setDevOpen, compact = false, onHideUi }: {
+export function SheetTabs({ m, mapId, dev, render, labels, setOpts, devOpen, setDevOpen, compact = false, onHideUi, mapOnly = true }: {
   m: Material; mapId: MapId; dev: boolean; render: Render; labels: Labels; compact?: boolean; onHideUi: () => void;
+  /** show the "map only" tab (a phone with a model open leaves it out: the sheet is what matters) */
+  mapOnly?: boolean;
   setOpts: (next: Partial<{ map: MapId; render: Render; labels: Labels }>) => void;
   devOpen: boolean; setDevOpen: (v: boolean) => void;
 }) {
@@ -36,11 +38,11 @@ export function SheetTabs({ m, mapId, dev, render, labels, setOpts, devOpen, set
       <div role="tablist" className={`flex items-start ${compact ? "gap-1" : "gap-1.5"}`}>
         {tab("pixel", "Pixel")}
         {tab("paper", "Paper")}
-        <button type="button" onClick={onHideUi} aria-label="Map only: hide the UI (h)" title="Map only (h)"
+        {mapOnly && <button type="button" onClick={onHideUi} aria-label="Map only: hide the UI (h)" title="Map only (h)"
           className={`${compact ? "px-1.5 pb-1.5 pt-1.5" : "px-3 pb-2 pt-2"} leading-none focus-visible:outline-2`}
           style={{ ...plateStyle(m, { shadow: true }), borderTop: "none", fontFamily: m.bodyFont, fontSize: compact ? 12 : 14 }}>
           map only
-        </button>
+        </button>}
         {dev && (
           <button type="button" aria-expanded={devOpen} onClick={() => setDevOpen(!devOpen)}
             className="px-3 pb-2 pt-2 leading-none focus-visible:outline-2"

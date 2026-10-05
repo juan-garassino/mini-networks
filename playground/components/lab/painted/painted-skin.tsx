@@ -21,6 +21,11 @@
 // and a legend that turns into a minimap when zoomed (bottom-right). Selecting
 // a model opens the drawer (drawer.tsx) on the right; the camera refits to the
 // width that is left. One component tree, two materials (material.ts).
+// Focus mode (`quiet`: a land or a model open, or zoomed in): the corners step
+// back — the cartouche to one row, the scale bar to a slim strip, the minimap
+// to a small inset, the compass and tabs smaller — so the map plate and the
+// drawer are the two things to read; they re-stamp in place (two frames) as
+// they change, and hold still under still=1 / reduced motion.
 // /lab contract: URL view → useWorld → camera → paint → data-lab-ready → window.__lab.
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import { useWorld } from "@/hooks/use-world";
@@ -41,7 +46,7 @@ import { SheetTabs, type Labels, type Render } from "./corners/sheet-tabs";
 import { Compass } from "./corners/compass";
 import { ScaleBar } from "./corners/scale-bar";
 import { CornerPlate } from "./corners/corner-plate";
-import { CORNER_W } from "./corners/plate";
+import { CORNER_W, CORNER_W_Q } from "./corners/plate";
 import { SeaCanvas, useSeaFurniture } from "./stage";
 import { TrueMapLayers, spotClear, useTrueMap } from "./true-map";
 import { PIXELMAP_CMD } from "./pixelmap";
@@ -66,10 +71,18 @@ const KEYFRAMES = `
 @keyframes painted-march { to { stroke-dashoffset: -32; } }
 @keyframes painted-pulse { 0%,100% { transform: scale(1); opacity: 1; } 50% { transform: scale(1.22); opacity: .5; } }
 @keyframes painted-stamp { from { opacity: 0; transform: translate(0, 3px); } to { opacity: 1; transform: none; } }
+@keyframes painted-restamp-a { from { opacity: .35; transform: translate(0, 2px); } to { opacity: 1; transform: none; } }
+@keyframes painted-restamp-b { from { opacity: .35; transform: translate(0, 2px); } to { opacity: 1; transform: none; } }
+@media (prefers-reduced-motion: reduce) { [data-painted-root] [data-corner], [data-painted-root] [data-map-plate] { animation: none !important; } }
 `;
-// the load moment: the four corners stamp onto the sea, two frames each, in turn
-const stamp = (i: number, still: boolean): CSSProperties =>
-  still ? {} : { animation: `painted-stamp 160ms steps(2, end) both`, animationDelay: `${120 + i * 90}ms` };
+// the load moment: the four corners stamp onto the sea, two frames each, in
+// turn; afterwards (flips > 0) each change of focus mode re-stamps them in
+// place, quicker and without leaving the sea bare (the two names alternate so
+// the animation restarts without remounting the plates)
+const stamp = (i: number, still: boolean, flips = 0): CSSProperties =>
+  still ? {}
+    : flips === 0 ? { animation: `painted-stamp 160ms steps(2, end) both`, animationDelay: `${120 + i * 90}ms` }
+    : { animation: `painted-restamp-${flips % 2 ? "a" : "b"} 140ms steps(2, end) both`, animationDelay: `${i * 40}ms` };
 
 interface Opts { map: MapId; render: Render; labels: Labels; dev: boolean; ui: boolean; plate: boolean }
 
@@ -227,6 +240,11 @@ export function PaintedSkin() {
 
   const graph = useMemo(() => buildRoadGraph(map), [map]);
   const selected = view?.zoom === "node" && view.focus && map.anchors[view.focus] ? view.focus : null;
+  // focus mode by the view (a land or a model open); zooming in by hand also
+  // quiets the corners (quiet, below, once the camera is known)
+  const quietView = (view?.zoom ?? "overview") !== "overview";
+  // the compass stands this far above the scale bar (the bottom-left stack's gap)
+  const BL_GAP = quietView ? 8 : 12;
   const [hovered, setHovered] = useState<string | null>(null);
   const lineage = useMemo(() => (selected && taxonomy ? lineageRoutes(graph, selected, parentsOf) : []), [selected, graph, parentsOf, taxonomy]);
   // the carts: every builds_on edge travelled parent → child in the child's
@@ -353,8 +371,11 @@ export function PaintedSkin() {
   const plateEl = useRef<HTMLElement | null>(null);
   const [plateMeasured, setPlateMeasured] = useState<{ name: string; zoom: number; w: number; h: number } | null>(null);
   const plateWanted = !mobile && !!selected && plateOpen && !uiHidden && view?.zoom === "node";
-  // ×2 only when the visible map could hold a doubled plate with room to spare
-  const plateZoom = visW >= 2 * 560 + 420 && visH >= 2 * 316 + 380 ? 2 : 1;
+  // the largest crisp zoom (a whole number of device px per art px) at which
+  // the plate keeps to half the visible width and 60 % of its height — the
+  // castle and its land are the subject; ×1 whatever the screen otherwise
+  const plateZoom = [2, 1.5].find((z) => Number.isInteger(z * dpr) && plateEstimate(selected ?? "", z, 2).w <= visW * 0.5
+    && plateEstimate(selected ?? "", z, 2).h <= visH * 0.6) ?? 1;
   const plateSize = selected && plateMeasured?.name === selected && plateMeasured.zoom === plateZoom
     ? plateMeasured : plateEstimate(selected ?? "", plateZoom, 2);
   const anchorPt = useCallback((n: string): PPt => {
@@ -414,7 +435,7 @@ export function PaintedSkin() {
     const M = 20;
     const top = [tl, tr].filter((c): c is PBox => Boolean(c));
     const right = br ? [br] : [];
-    const avoidFull = cp && sc ? [...top, ...right, { x: M, y: vp.h - M - sc.h, w: sc.w, h: sc.h }, { x: M, y: vp.h - M - sc.h - 12 - cp.h, w: cp.w, h: cp.h }] : corners;
+    const avoidFull = cp && sc ? [...top, ...right, { x: M, y: vp.h - M - sc.h, w: sc.w, h: sc.h }, { x: M, y: vp.h - M - sc.h - BL_GAP - cp.h, w: cp.w, h: cp.h }] : corners;
     const compassDown = cp ? [{ x: M, y: vp.h - M - cp.h, w: cp.w, h: cp.h }] : [];
     const avoidYield = cp ? [...top, ...right, ...compassDown] : corners;
     // and if even that leaves no hole, the minimap folds too (the plate is the focus)
@@ -451,7 +472,7 @@ export function PaintedSkin() {
     if (bare || heal) return { plan: bare, fold: bare ? 2 : 0 };
     // last resort: the land-centred framing, the plate on its least-bad side
     return { plan: composePlate({ ...base0, avoid: avoidBare, castlePad: 0, scales: [kLand], inset: 4, fixed: { x: (a.x - camX) * kLand, y: (a.y - camY) * kLand } }), fold: 2 };
-  }, [plateWanted, selected, family, vp.w, vp.h, landFrame, crispK, landFitK, isTrue, crisp, levels, anchorPt, names, lineage, lineageSet, map, visW, visH, mapId, W, H, castleBox, plateSize, corners, cornerAt, heal]);
+  }, [plateWanted, selected, family, vp.w, vp.h, landFrame, crispK, landFitK, isTrue, crisp, levels, anchorPt, names, lineage, lineageSet, map, visW, visH, mapId, W, H, castleBox, plateSize, corners, cornerAt, heal, BL_GAP]);
   const plan: PlatePlan | null = planned?.plan ?? null;
   // the scale bar (and, at need, the minimap) fold away while the plate needs their corner
   const fold = planned?.fold ?? 0;
@@ -561,6 +582,11 @@ export function PaintedSkin() {
   const ap = isTrue ? clamp(Math.round(layoutS * dpr) / dpr, 1, 3) : 2;
   const theme_ = theme;
   const zoomedIn_ = curScale() > levels.overview + 1e-3;
+  const quiet = quietView || zoomedIn_;
+  // each change of focus mode re-stamps the corners (stamp(), a render-time adjustment)
+  const [quietSeen, setQuietSeen] = useState<{ q: boolean; flips: number } | null>(null);
+  if (opts && (quietSeen === null || quietSeen.q !== quiet)) setQuietSeen({ q: quiet, flips: quietSeen === null ? 0 : quietSeen.flips + 1 });
+  const flips = quietSeen?.flips ?? 0;
 
   // the plate and its leader at rest, in map units, with a little air (the
   // plate's hard shadow, the leader's halo + notch): drawn OVER the map, so
@@ -630,7 +656,7 @@ export function PaintedSkin() {
         (!p && !q) || (!!p && !!q && Math.abs(p.w - q.w) + Math.abs(p.h - q.h) + Math.abs((p.x ?? 0) - (q.x ?? 0)) + Math.abs((p.y ?? 0) - (q.y ?? 0)) < 4);
       return same(cur.tl, nx.tl) && same(cur.tr, nx.tr) && same(cur.br, nx.br) && same(cur.compass, nx.compass) && same(cur.scale, nx.scale) ? cur : nx;
     });
-  }, [vp.w, vp.h, mobile, uiHidden, selected, focusFam, fontsReady, zoomedIn_, drawerPx, sheetPx, opts, foldScale, ap, cornerAt.scale?.w]);
+  }, [vp.w, vp.h, mobile, uiHidden, selected, focusFam, fontsReady, zoomedIn_, drawerPx, sheetPx, opts, foldScale, ap, cornerAt.scale?.w, quiet]);
   const plateShown = Boolean(plan && plateWanted && !fullDiagram && selected);
   // the card fallback, decided at the narrow drawer: a wider drawer only leaves
   // less room, so once set it holds until the selection changes
@@ -909,6 +935,8 @@ export function PaintedSkin() {
   const m = theme_;
   const whole = !manual && (view?.zoom ?? "overview") === "overview";
   const compassUnit = m.crisp ? clamp(Math.round(ap * 3), 4, 6) : 5;
+  // focus mode: 2 art px a grid unit (≈ two thirds of the size)
+  const compassUnitQ = m.crisp ? clamp(Math.round(ap * 2), 3, 4) : 3.5;
   const minimap = isTrue ? { canvas: baseCanvas.current, version: trueVersion } : { img: imgSrc, pixelated: mapId === "pixel" };
   const corner = "pointer-events-auto absolute z-20";
 
@@ -995,33 +1023,37 @@ export function PaintedSkin() {
         {opts && !uiHidden && (
           <div className="pointer-events-none absolute inset-0 z-20" style={{ right: drawerPx, bottom: sheetPx }}>
             {/* paper: flush to the top so it covers the painter's own cartouche at the whole-map view */}
-            <div data-corner="tl" className={`${corner} left-3 sm:left-5 ${m.crisp ? "top-3 sm:top-5" : "top-0"}`} style={stamp(0, still)}>
+            <div data-corner="tl" className={`${corner} left-3 sm:left-5 ${m.crisp || quiet ? "top-3 sm:top-5" : "top-0"}`} style={stamp(0, still, flips)}>
+              {/* a phone with a model open leaves "Whole map" to the sheet's own button */}
               <Cartouche m={m} counts={counts} names={names} focusFam={focusFam} famCount={famCount} famProven={famProven}
-                onPick={onSelect} onWhole={fitWhole} compact={mobile} />
+                onPick={onSelect} onWhole={fitWhole} compact={mobile} quiet={quiet} wholeLink={!(mobile && selected)} />
             </div>
-            <div data-corner="tr" className={`${corner} right-3 top-0 sm:right-5`} style={stamp(1, still)}>
-              <SheetTabs m={m} mapId={mapId} dev={opts.dev} render={render} labels={labels} setOpts={set} devOpen={devOpen} setDevOpen={setDevOpen} compact={mobile}
-                onHideUi={() => setUiHidden(true)} />
+            <div data-corner="tr" className={`${corner} right-3 top-0 sm:right-5`} style={stamp(1, still, flips)}>
+              <SheetTabs m={m} mapId={mapId} dev={opts.dev} render={render} labels={labels} setOpts={set} devOpen={devOpen} setDevOpen={setDevOpen} compact={mobile || quiet}
+                mapOnly={!(mobile && selected)} onHideUi={() => setUiHidden(true)} />
             </div>
             {/* the compass stands on the scale bar, as on a printed map: the
                 scale bar and the legend share the bottom margin */}
-            <div data-corner="bl" className={`${corner} bottom-3 left-3 flex flex-col items-start gap-3 sm:bottom-5 sm:left-5`} style={stamp(2, still)}>
+            <div data-corner="bl" className={`${corner} bottom-3 left-3 flex flex-col items-start sm:bottom-5 sm:left-5`} style={{ gap: BL_GAP, ...stamp(2, still, flips) }}>
               <div data-compass>
-                <Compass m={m} unit={mobile ? 3.5 : compassUnit} onPan={panBy} onWhole={fitWhole} onZoom={(d) => stepZoom(d)}
-                  canIn={curScale() < levels.max - 1e-3} canOut={curScale() > levels.min + 1e-3} whole={whole} />
+                <Compass m={m} unit={mobile ? (selected ? 3 : 3.5) : quiet ? compassUnitQ : compassUnit} onPan={panBy} onWhole={fitWhole} onZoom={(d) => stepZoom(d)}
+                  canIn={curScale() < levels.max - 1e-3} canOut={curScale() > levels.min + 1e-3} whole={whole}
+                  rail={mobile ? (selected ? 30 : 36) : quiet ? 28 : 36} />
               </div>
               {/* folded away while the "How it works" plate needs its corner (planned above) */}
               {!mobile && !(foldScale && plateShown) && (
                 <div data-scale>
                   <ScaleBar m={m} names={names} family={family} states={states} atoms={atoms} pipelines={pipelines} counts={counts}
-                    selected={selected} onPick={onSelect} onLand={jumpLand} focusFam={focusFam} />
+                    selected={selected} onPick={onSelect} onLand={jumpLand} focusFam={focusFam} slim={quiet} />
                 </div>
               )}
             </div>
             {!mobile && !(fold >= 2 && plateShown) && (
-              <div data-corner="br" className={`${corner} bottom-3 right-3 sm:bottom-5 sm:right-5`} style={stamp(3, still)}>
+              <div data-corner="br" className={`${corner} bottom-3 right-3 sm:bottom-5 sm:right-5`} style={stamp(3, still, flips)}>
+                {/* focus mode: the minimap is a small inset (orientation, not a second map) */}
                 <CornerPlate m={m} face={zoomedIn_ ? "minimap" : "legend"} world={{ w: W, h: H }} box={cam.box} source={minimap} onCenter={centerAt}
-                  width={cornerAt.scale ? clamp(visW - 2 * 20 - cornerAt.scale.w - 24, 264, CORNER_W) : CORNER_W} />
+                  quiet={quiet && zoomedIn_}
+                  width={quiet && zoomedIn_ ? CORNER_W_Q : cornerAt.scale ? clamp(visW - 2 * 20 - cornerAt.scale.w - 24, 264, CORNER_W) : CORNER_W} />
               </div>
             )}
           </div>

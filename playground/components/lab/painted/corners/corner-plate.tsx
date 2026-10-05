@@ -3,13 +3,15 @@
 // Bottom-right corner: one plate, two faces. At the whole-map view it is the
 // legend (the map's own evidence sprites and what they mean); zoomed in it
 // turns into the minimap, because then the learner needs orientation, not a
-// key. Same frame, same width.
+// key. Same frame, same width. quiet (focus mode): the minimap shrinks to a
+// small inset on half padding. The legend carries the corner plates' one
+// title treatment ("Map key", the sign voice).
 import { useEffect, useRef, type ReactNode } from "react";
 import type { CamBox } from "@/components/lab/shared/camera";
 import type { EvidenceState } from "@/components/lab/shared/card-model";
 import type { Material } from "../material";
 import { EvidenceIcon } from "../pixel-icon";
-import { CORNER_PAD, CORNER_W, plateStyle } from "./plate";
+import { CORNER_PAD, CORNER_PAD_Q, CORNER_W, plateStyle, plateTitle } from "./plate";
 
 export type MinimapSource = { canvas: HTMLCanvasElement | null; version: number } | { img: string; pixelated: boolean };
 
@@ -20,23 +22,28 @@ const LEGEND: { s: EvidenceState; t: string }[] = [
   { s: "untrained", t: "not trained yet" },
 ];
 
-export function CornerPlate({ m, face, world, box, source, onCenter, width = CORNER_W, note, glyph }: {
+export function CornerPlate({ m, face, world, box, source, onCenter, width = CORNER_W, note, glyph, quiet = false }: {
   m: Material; face: "legend" | "minimap"; world: { w: number; h: number }; box: CamBox; source: MinimapSource; onCenter: (x: number, y: number) => void; width?: number;
   /** the legend's closing line (default: the painted maps' banner/stone note) */
   note?: string;
   /** the legend's swatch per state (default: the painted maps' own evidence sprites / dots) */
   glyph?: (s: EvidenceState) => ReactNode;
+  /** focus mode: half padding (the skin passes the small width) */
+  quiet?: boolean;
 }) {
+  const pad = quiet ? CORNER_PAD_Q : CORNER_PAD;
   return (
-    <aside aria-label={face === "legend" ? "Legend" : "Minimap"} style={{ ...plateStyle(m), width, padding: CORNER_PAD, fontFamily: m.bodyFont, color: m.ink }}>
+    <aside aria-label={face === "legend" ? "Legend" : "Minimap"} style={{ ...plateStyle(m), width, padding: pad, fontFamily: m.bodyFont, color: m.ink }}>
       {/* minimap: the plate's inner width less both frames (the plate's and its own, ≤ 3 px a side) */}
-      {face === "legend" ? <Legend m={m} note={note} glyph={glyph} /> : <Minimap m={m} world={world} box={box} source={source} onCenter={onCenter} width={width - 2 * CORNER_PAD - 12} />}
+      {face === "legend" ? <Legend m={m} note={note} glyph={glyph} /> : <Minimap m={m} world={world} box={box} source={source} onCenter={onCenter} width={width - 2 * pad - 12} />}
     </aside>
   );
 }
 
 function Legend({ m, note, glyph }: { m: Material; note?: string; glyph?: (s: EvidenceState) => ReactNode }) {
   return (
+    <>
+    <h2 className="mb-2.5" style={plateTitle(m)}>Map key</h2>
     <ul className="space-y-1.5" style={{ fontSize: 14 }}>
       {LEGEND.map(({ s, t }) => (
         <li key={s} className="flex items-center gap-2">
@@ -49,9 +56,10 @@ function Legend({ m, note, glyph }: { m: Material; note?: string; glyph?: (s: Ev
         </li>
       ))}
       <li className="pt-1 leading-snug" style={{ color: m.inkSoft, fontSize: 13 }}>
-        {note ?? (m.crisp ? "Banners fly over the atoms; the stones on the roads are models built from them." : "Signs mark the atoms; the markers on the roads are models built from them.")}
+        {note ?? (m.crisp ? "Banners mark atoms; stones, models built on them." : "Signs mark atoms; markers, models built on them.")}
       </li>
     </ul>
+    </>
   );
 }
 

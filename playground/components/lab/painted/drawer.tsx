@@ -6,6 +6,9 @@
 // (or the map plate's Enlarge) takes over the whole stage with the mechanism
 // diagram and a way back. diagramOn="map": the desktop card is text only, so
 // the drawer narrows to DRAWER_W_MAP and the map gets the width back.
+// The way back stays put while the card scrolls (a sticky bar on desktop; on
+// phones it shares the drag handle's row), and a stepped fade at the foot says
+// there is more below until the end is reached.
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { MechanismDiagram } from "@/components/lab/shared/anatomy2";
 import { displayName, type CardModel } from "@/components/lab/shared/card-model";
@@ -60,7 +63,7 @@ export function Drawer(p: DrawerProps) {
   const back = (
     // the same words as the cartouche's link and the compass hub: it closes the
     // card and returns to the whole map
-    <Btn m={m} onClick={p.onBack} label="Close the card: whole map" title="Whole map (Esc)" style={{ fontSize: 14, minHeight: 28, fontWeight: 500 }}>← Whole map</Btn>
+    <Btn m={m} onClick={p.onBack} label="Close the card: whole map" title="Whole map (Esc)" style={{ fontSize: 13, minHeight: 26, fontWeight: 500 }}>← Whole map</Btn>
   );
   if (p.fullDiagram) {
     return (
@@ -81,18 +84,55 @@ export function Drawer(p: DrawerProps) {
       </div>
     );
   }
-  if (!p.mobile) {
-    return (
-      <aside aria-label={`${displayName(card.name)} card`} className="absolute inset-y-0 right-0 z-20 flex flex-col overflow-y-auto"
-        style={{ width: dw, background: sheetGround(m), color: m.ink, fontFamily: m.bodyFont,
-          borderLeft: `var(--ap, 2px) solid ${m.border}`,
-          boxShadow: m.crisp ? `inset var(--ap) 0 0 ${m.rule}, calc(var(--ap) * -1) 0 0 ${m.shadow}` : `-3px 0 0 ${m.card ? "rgba(58,38,22,.62)" : m.shadow}` }}>
-        <div className={`flex-none ${narrow ? "px-5" : "px-6"} pt-4`}>{back}</div>
-        <div className={`${narrow ? "px-5" : "px-6"} pb-8 pt-3`}>{body}</div>
-      </aside>
-    );
-  }
+  if (!p.mobile) return <DeskSheet {...p} dw={dw} narrow={narrow} back={back} body={body} />;
   return <SheetShell {...p} header={back} body={body} />;
+}
+
+/** true while the scroller has more below its fold (re-checked on scroll + resize) */
+function useMoreBelow(key: unknown) {
+  const ref = useRef<HTMLDivElement | null>(null);
+  const [more, setMore] = useState(false);
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    // more than the sheet's own foot padding still below the fold
+    const on = () => setMore(el.scrollHeight - el.scrollTop - el.clientHeight > 24);
+    on();
+    el.addEventListener("scroll", on, { passive: true });
+    const ro = new ResizeObserver(on);
+    ro.observe(el);
+    for (const c of el.children) ro.observe(c);
+    return () => { el.removeEventListener("scroll", on); ro.disconnect(); };
+  }, [key]);
+  return { ref, more };
+}
+
+/** the foot of a scrolling sheet while there is more below: the ground
+ * fading up over the last lines */
+function MoreFade({ m, more }: { m: Material; more: boolean }) {
+  const g = /^#[0-9a-f]{6}$/i.test(m.plateHi) ? m.plateHi : "#fbf0c8";
+  return (
+    <div aria-hidden className="pointer-events-none sticky bottom-0 -mt-8 h-8 flex-none"
+      style={{ opacity: more ? 1 : 0, background: `linear-gradient(180deg, ${g}00, ${g}e6 70%, ${g})`}} />
+  );
+}
+
+function DeskSheet(p: DrawerProps & { dw: number; narrow: boolean; back: ReactNode; body: ReactNode }) {
+  const { m, card } = p;
+  const { ref, more } = useMoreBelow(card.name);
+  const pad = p.narrow ? "px-5" : "px-6";
+  // a new model starts at the top of its card
+  useEffect(() => { ref.current?.scrollTo({ top: 0 }); }, [card.name, ref]);
+  return (
+    <aside ref={ref} aria-label={`${displayName(card.name)} card`} className="absolute inset-y-0 right-0 z-20 flex flex-col overflow-y-auto"
+      style={{ width: p.dw, background: sheetGround(m), color: m.ink, fontFamily: m.bodyFont,
+        borderLeft: `var(--ap, 2px) solid ${m.border}`,
+        boxShadow: m.crisp ? `inset var(--ap) 0 0 ${m.rule}, calc(var(--ap) * -1) 0 0 ${m.shadow}` : `-3px 0 0 ${m.card ? "rgba(58,38,22,.62)" : m.shadow}` }}>
+      <div className={`sticky top-0 z-10 flex-none ${pad} pb-3 pt-4`} style={{ background: sheetGround(m) }}>{p.back}</div>
+      <div className={`${pad} pb-8 pt-1`}>{p.body}</div>
+      <MoreFade m={m} more={more} />
+    </aside>
+  );
 }
 
 function SheetShell(p: DrawerProps & { header: ReactNode; body: ReactNode }) {
@@ -115,21 +155,26 @@ function SheetShell(p: DrawerProps & { header: ReactNode; body: ReactNode }) {
     setDrag(null);
     start.current = null;
   };
+  const { ref, more } = useMoreBelow(p.card.name);
   return (
     <aside aria-label="Model card" className="absolute inset-x-0 bottom-0 z-20 flex flex-col"
       style={{ height: h, background: sheetGround(m), color: m.ink, borderTop: `var(--ap, 2px) solid ${m.border}`, boxShadow: `0 calc(var(--ap, 2px) * -1) 0 ${m.shadow}`, fontFamily: m.bodyFont,
         transition: drag == null && !p.still ? "height 220ms ease" : "none" }}>
-      <button type="button" aria-label={p.sheet === "full" ? "Collapse the card" : "Expand the card"}
-        className="flex h-6 w-full flex-none touch-none items-center justify-center"
-        onClick={() => p.setSheet(p.sheet === "peek" ? "half" : p.sheet === "half" ? "full" : "peek")}
-        onPointerDown={(e) => { start.current = { y: e.clientY, h }; (e.currentTarget as Element).setPointerCapture(e.pointerId); }}
-        onPointerMove={(e) => { if (start.current) setDrag(Math.max(120, Math.min(vh * 0.92, start.current.h + start.current.y - e.clientY))); }}
-        onPointerUp={release} onPointerCancel={release}>
-        <span aria-hidden className="block h-1.5 w-12" style={{ background: m.border }} />
-      </button>
-      <div className="flex-1 overflow-y-auto px-4 pb-4">
-        {p.header}
-        <div className="mt-3">{p.body}</div>
+      {/* one row: the drag handle across it, the way back on its left */}
+      <div className="relative flex h-11 flex-none items-center px-4">
+        <button type="button" aria-label={p.sheet === "full" ? "Collapse the card" : "Expand the card"}
+          className="absolute inset-0 flex touch-none items-center justify-center"
+          onClick={() => p.setSheet(p.sheet === "peek" ? "half" : p.sheet === "half" ? "full" : "peek")}
+          onPointerDown={(e) => { start.current = { y: e.clientY, h }; (e.currentTarget as Element).setPointerCapture(e.pointerId); }}
+          onPointerMove={(e) => { if (start.current) setDrag(Math.max(120, Math.min(vh * 0.92, start.current.h + start.current.y - e.clientY))); }}
+          onPointerUp={release} onPointerCancel={release}>
+          <span aria-hidden className="block h-1.5 w-12" style={{ background: m.border }} />
+        </button>
+        <div className="relative">{p.header}</div>
+      </div>
+      <div ref={ref} className="flex flex-1 flex-col overflow-y-auto px-4 pb-4">
+        <div className="pt-1">{p.body}</div>
+        <MoreFade m={m} more={more} />
       </div>
     </aside>
   );
