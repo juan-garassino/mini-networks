@@ -68,7 +68,8 @@ export interface Placed {
 export function placeWords(I: WordsInput): Placed {
   const { stars, byName, scr, S, cam, bake, visW, visH, mobile, regionish, selected, hovered, focusFam } = I;
   const AP = GRID.ap;
-  const obstacles: (Box & { star?: string })[] = I.corners.map((c) => pad(c, SPACE.cornerHalo));
+  const corners = I.corners.map((c) => pad(c, SPACE.cornerHalo));
+  const obstacles: (Box & { star?: string })[] = [...corners];
   const partnerSet = new Set(I.partners.map((p) => p.name));
   for (const s of stars) {
     // the selection / hover ring sits 3 art px out: keep words clear of it too
@@ -103,8 +104,13 @@ export function placeWords(I: WordsInput): Placed {
       t = Math.max(0, t);
       const dir: ChevronDir = Math.abs(dx) > Math.abs(dy) ? (dx > 0 ? "r" : "l") : dy > 0 ? "d" : "u";
       let c = { x: clamp(a.x + dx * t, inner.x0, inner.x1), y: clamp(a.y + dy * t, inner.y0, inner.y1) };
-      // two chevrons never stack: step along the edge
-      for (let k = 0; k < 6 && chevrons.some((o) => Math.abs(o.x - c.x) < cw && Math.abs(o.y - c.y) < ch); k++) c = { x: c.x, y: c.y + ch + 6 };
+      // a chevron never stacks on another or slips under a corner plate:
+      // step along its own edge (across a top / bottom edge, down a side),
+      // away from the corner it met
+      const cbox = (q: { x: number; y: number }) => ({ x: q.x - cw / 2, y: q.y - ch / 2, w: cw, h: ch });
+      const blocked = (q: { x: number; y: number }) => chevrons.some((o) => Math.abs(o.x - q.x) < cw && Math.abs(o.y - q.y) < ch) || corners.some((o) => hit(cbox(q), o));
+      const along = dir === "u" || dir === "d" ? { x: c.x < visW / 2 ? 1 : -1, y: 0 } : { x: 0, y: c.y < visH / 2 ? 1 : -1 };
+      for (let k = 0; k < 12 && blocked(c); k++) c = { x: clamp(c.x + along.x * 24, inner.x0, inner.x1), y: clamp(c.y + along.y * (ch + 6), inner.y0, inner.y1) };
       chevrons.push({ name: p.name, ...c, dir });
       obstacles.push({ x: c.x - cw / 2, y: c.y - ch / 2, w: cw, h: ch });
     }
@@ -166,18 +172,26 @@ export function placeWords(I: WordsInput): Placed {
       // whose closest star is a neighbour's costs more, but is allowed: the
       // leader drawn below ties the sign back to its own stars
       const a0 = cands[0];
-      let best: { q: { x: number; y: number }; cost: number } | null = null;
       const R = mobile ? 220 : 180;
-      for (let y = tl.y - plaqueH - R; y <= br.y + R; y += 8) {
-        for (let x = tl.x - pw - R; x <= br.x + R; x += 8) {
-          const q = { x: snap(x), y: snap(y) };
-          if (q.x < E || q.y < E || q.x + pw > visW - E || q.y + plaqueH > visH - E) continue;
-          if (obstacles.some((o) => hit(box(q), o))) continue;
-          const cost = near(own, q) * 2 + Math.hypot(q.x - a0.x, q.y - a0.y) * 0.5 + foreign(q) * 520 + (owned(q) ? 0 : 80);
-          if (!best || cost < best.cost) best = { q, cost };
+      // two rings: first a free spot within signReach of the family's own
+      // stars (on a packed phone sky a sign beside its stars, even over a
+      // neighbour's rim, reads as theirs; one across the sky never does),
+      // then the wider search, where a neighbour's cloud costs the most
+      const search = (reach: number, foreignCost: number) => {
+        let best: { q: { x: number; y: number }; cost: number } | null = null;
+        for (let y = tl.y - plaqueH - R; y <= br.y + R; y += 8) {
+          for (let x = tl.x - pw - R; x <= br.x + R; x += 8) {
+            const q = { x: snap(x), y: snap(y) };
+            if (q.x < E || q.y < E || q.x + pw > visW - E || q.y + plaqueH > visH - E) continue;
+            const d = near(own, q);
+            if (d > reach || obstacles.some((o) => hit(box(q), o))) continue;
+            const cost = d * 2 + Math.hypot(q.x - a0.x, q.y - a0.y) * 0.5 + foreign(q) * foreignCost + (owned(q) ? 0 : 80);
+            if (!best || cost < best.cost) best = { q, cost };
+          }
         }
-      }
-      if (best) pick = best.q;
+        return best?.q;
+      };
+      pick = (mobile ? search(SPACE.signReach, 160) : undefined) ?? search(Infinity, 520);
     }
     if (!pick) {
       // zoomed in, another family's sign with no clean spot is left out; the

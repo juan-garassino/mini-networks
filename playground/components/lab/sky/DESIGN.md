@@ -21,9 +21,9 @@ dust fills the margins. Everything else stays quiet so the sky reads first.
 | `GOLD` `MINT` `LILAC` `GREY` | evidence sprite ramps (sprite letters → colours) |
 | `INK` | marks over the sky: lit lineage, ring, cross lineage, pipeline aqua, names, outline |
 | `SKY_MATERIAL` | chrome for the shared corner components: indigo plates, brass rim, one filled gold |
-| `FONT`, `TYPE` | the single face (Pixelify Sans) and the type scale, `[desktop, phone]` |
+| `FONT`, `SIGN_FONT`, `TYPE` | text voice (Pixelify + clear pixel digits), sign voice (Jersey 15), the type scale `[desktop, phone]` |
 | `GRID` | `ap` (CSS px per art px, 2), `cell` (world px per sky px, 4), phone breakpoint, bake padding |
-| `SPACE` | camera insets, word-to-edge gap, corner halo, plaque padding, plaque spacing, leader threshold |
+| `SPACE` | camera insets, node margin, word-to-edge gap, corner halo, plaque padding / spacing / reach, leader threshold, key plate |
 | `LINE` | gap at stars, fan ring, fade distances and mix, dash, pipeline dots, leader stop + dim |
 | `MOTION` | 12 fps, 120 s loop, twinkle / glint / comet / meteor periods |
 
@@ -34,10 +34,13 @@ pixel stays one flat colour.
 
 ## Type scale
 
-One face, Pixelify Sans, loaded by `app/lab/sky/layout.tsx` as `--font-pixel`.
-Sizes are whole CSS px. Star names are 13 / 12 px (atom / derived; 11 / 10 on a
-phone), outlined 3 px in `NIGHT[0]`. Plaques are 15 px bold in sentence case,
-with a 12 px Latin line at region zoom. Chevrons are 13 px and tabs 20 px.
+Three voices, loaded by `app/lab/sky/layout.tsx`. Text: Pixelify Sans, with
+the painted map's digits-only family over it for 0-9 (VT323 / Jersey 15, files
+imported from `app/lab/painted/fonts`): numerals are data and Pixelify's 5 reads
+as S. Signs (cartouche title, tabs, plate titles): Jersey 15, whose C and Z
+stay legible. Never set prose in the sign voice. Sizes are whole CSS px. Star
+names 13 / 12 px (atom / derived; 11 / 10 on a phone), outlined 3 px in
+`NIGHT[0]`. Plaques 15 px bold, sentence case, a 12 px Latin line at region zoom.
 
 ## Grids
 
@@ -62,6 +65,7 @@ with a 12 px Latin line at region zoom. Chevrons are 13 px and tabs 20 px.
 | `layout.ts` | `placeWords`: plaques, names, pipeline arcs / chevrons, leaders, in one greedy obstacle pass |
 | `plaque.tsx` | a group's sign (emblem, name, count, Latin line) + `plaqueWidth` |
 | `chrome.tsx` | Day / Night tabs, the show-UI button, the off-screen partner `Chevron` |
+| `key.tsx` | `StarKey` (bottom-right: rows from `encoding.ts` `KEY_ROWS`, real sprites) and the phone's `PhoneStarKey` button |
 | `icon.tsx` | a sprite as a small pixelated UI image (`SpriteIcon`, legend `StarPair`) |
 | `sky-skin.tsx` | the page: data → frame coords → bake → camera → layers + words + corners + drawer |
 | `specimen.tsx` | `?specimen=1`: sprites, one nebula, emblems and ramps at 4× |
@@ -69,30 +73,29 @@ with a 12 px Latin line at region zoom. Chevrons are 13 px and tabs 20 px.
 
 ## Marks → data
 
-See `encoding.ts`. In short: nebula = group; star sprite shape = evidence
-(gold sparkle champion, mint gem trained, broken lilac ring provisional, grey
-point untrained); size = atom vs derived; line = builds_on edge, full ink near
-both stars and sinking into the nebula mid-run; comet = edge direction; gold
-line = selected lineage; dashed = secondary / cross-group (on focus only);
-dotted aqua arc = a pipeline partner; leader = a sign set away from its stars.
-Field stars, Milky Way and meteors are decoration and say so in the table.
+See `encoding.ts`. In short: nebula = group; sprite shape = evidence (gold
+sparkle champion, mint gem trained, lilac ring provisional, grey point
+untrained); large + always named = atom; line = builds_on edge; comet = its
+direction; gold = selected lineage; dashed = secondary (focus only); dotted aqua
+arc = pipeline partner; leader = a sign away from its stars. Field stars, Milky
+Way and meteors are decoration and say so.
 
 ## Motion
 
 A 12 fps flip-book (`MOTION`), never a glide. Field stars twinkle, champions
-glint, comets run parent → child, and a meteor crosses now and then. Every
-motion function returns "nothing moves" at frame 0. `?still=1`,
-`prefers-reduced-motion` and a hidden tab hold frame 0, so screenshots and
-reduced motion show exactly the bake and the marks.
+glint, comets run parent → child, a meteor crosses now and then. Frame 0 =
+nothing moves; `?still=1`, `prefers-reduced-motion` and a hidden tab hold it.
 
 ## Views (the /lab contract)
 
 `?zoom=overview|region|node&focus=<name>&still=1&ui=0`. Region fits the
-group's nebula and ghosts the others. Node fits the nebula plus its nearest
-pipeline partners and opens the drawer. `data-lab-ready="1"` is set once the
+group's nebula and ghosts the others. Node frames the selected star and its own
+nebula left of the drawer (the star keeps `SPACE.nodeMargin` from the edge);
+partners off screen are edge chevrons, which never slip under a corner plate. `data-lab-ready="1"` is set once the
 bake is painted for the current camera, and `window.__lab.{select,view}`
-drives it from scripts. On a portrait phone the frame turns a quarter so a
-landscape graph fills the tall screen.
+drives it from scripts. Phone rule: the frame turns a quarter so a landscape
+graph fills the tall screen; a sign looks within `SPACE.signReach` of its stars
+first, else sits further out with a leader; the key folds behind a Key button.
 
 ## Lifting it into another project
 

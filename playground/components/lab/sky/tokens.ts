@@ -106,8 +106,15 @@ const CHROME = {
 
 // ——— type ——————————————————————————————————————————————————————————————
 
-/** One face (Pixelify Sans, loaded in app/lab/sky/layout.tsx as --font-pixel). */
-export const FONT = "var(--font-pixel), ui-monospace, monospace";
+/** The text voice: Pixelify Sans for letters, with the painted pixel map's
+ * digits-only family laid over it for 0-9 (VT323 regular, Jersey 15 bold),
+ * because Pixelify's 5 reads as S and its 8 as B and numbers are data. Both
+ * loaded in app/lab/sky/layout.tsx; unset vars fall back to Pixelify alone. */
+export const FONT = "var(--font-pixel-digits, var(--font-pixel)), var(--font-pixel), ui-monospace, monospace";
+/** The sign voice (cartouche title, tab and plate titles): Jersey 15, whose
+ * capital C stays open and whose Z is square; Pixelify's bold C closes into
+ * an O and its Z reads as 2. */
+export const SIGN_FONT = "var(--font-sky-sign, var(--font-pixel)), var(--font-pixel), ui-monospace, monospace";
 
 /** The type scale in CSS px, [desktop, phone]. Pixelify reads best on whole
  * px; the steps follow a 1.2 ratio from the 12 px derived name. */
@@ -118,6 +125,11 @@ export const TYPE = {
   plaqueSub: [12, 10],    // the Latin constellation line
   chevron: [13, 12],      // off-screen partner plate
   tab: [20, 14],          // Day | Night
+  /** the star key plate (bottom-right; the phone opens it from a Key button):
+   * title, rows, note — the painted kit's corner-plate sizes */
+  keyTitle: 15,
+  keyRow: 14,
+  keyNote: 13,
   button: [14, 12],       // sky only / UI
   /** the specimen sheet (?specimen=1): title, section heads, captions */
   sheet: { title: 28, head: 16, body: 14 },
@@ -145,6 +157,8 @@ export const GRID = {
 export const SPACE = {
   /** screen insets the camera fits the sky into: [desktop, phone] */
   fit: [{ t: 64, r: 40, b: 140, l: 40 }, { t: 118, r: 10, b: 100, l: 10 }],
+  /** node view: the selected star keeps this share of its nebula's size as margin to the frame */
+  nodeMargin: 0.3,
   /** a zoomed (region / node) view on desktop leaves less top, more bottom */
   fitZoom: { t: 40, b: 150 },
   /** px kept between a word and the screen edge */
@@ -159,6 +173,12 @@ export const SPACE = {
   plaqueApart: 6,
   /** the plaque's leader: drawn when the sign has to sit this far (px) from its nearest star */
   leaderAt: 34,
+  /** a packed sky (the phone): a sign first looks for a free spot within this
+   * many px of its own stars, and only then searches further out */
+  signReach: 64,
+  /** the star key plate: width and padding, [desktop, phone] (the painted kit's corner plate) */
+  keyW: [324, 260],
+  keyPad: [12, 10],
 } as const;
 
 // ——— lines (art px) ——————————————————————————————————————————————————————
@@ -209,7 +229,7 @@ export const MOTION = {
 } as const;
 
 /** The chrome material the shared corner components (Cartouche, Compass,
- * ScaleBar, CornerPlate, Drawer) read. Built from the tokens above, so the
+ * ScaleBar, Drawer; the sky's own key.tsx) read. Built from the tokens above, so the
  * night material has exactly one source. */
 export const SKY_MATERIAL: Material = {
   id: "sky",
@@ -230,7 +250,7 @@ export const SKY_MATERIAL: Material = {
   rule: CHROME.bevel,
   roseInk: CHROME.ink, // the compass outline + N: cream, the night has no dark ink to spare
   tagFont: FONT,
-  signFont: FONT,
+  signFont: SIGN_FONT,
   bodyFont: FONT,
   crisp: true,
   radius: 0,

@@ -36,7 +36,6 @@ import { FAMILIES, type Family } from "@/components/lab/painted/anchors";
 import { Cartouche } from "@/components/lab/painted/corners/cartouche";
 import { Compass } from "@/components/lab/painted/corners/compass";
 import { ScaleBar } from "@/components/lab/painted/corners/scale-bar";
-import { CornerPlate } from "@/components/lab/painted/corners/corner-plate";
 import { Drawer, DRAWER_W, sheetHeight, type Sheet } from "@/components/lab/painted/drawer";
 import { bakeSky, type Bake } from "./bake";
 import { FAMILY_INK, GRID, INK, LINE, SKY_MATERIAL as m, SPACE, TYPE } from "./tokens";
@@ -44,7 +43,7 @@ import { dim, mix } from "./paint";
 import { EVIDENCE_RUN, SkyCanvas, SkyMarks, type FStar, type Line } from "./layers";
 import { clamp, pad, placeWords, union, type Box } from "./layout";
 import { Chevron, NightTabs, ShowUi } from "./chrome";
-import { StarPair } from "./icon";
+import { PhoneStarKey, StarKey } from "./key";
 import { Plaque } from "./plaque";
 
 const AP = GRID.ap;
@@ -218,19 +217,18 @@ export function SkySkin() {
     let b: Box = mobile ? pad(union(Object.values(hulls) as Box[]), 40, 110) : all;
     if (view.zoom === "region" && focusFam) b = nebBox(focusFam) ?? all;
     if (view.zoom === "node" && focusStar && focusFam) {
-      // the star's nebula, plus its pipeline partners nearest first, within 2.5× the nebula
+      // the selected star and its own nebula, in the area the drawer leaves:
+      // the view is about this star. A star on its nebula's rim gets a margin
+      // of a quarter nebula past it, so it never sits on the frame's edge.
+      // Pipeline partners outside are named edge chevrons (layout.ts), not a
+      // reason to pull the camera across the sky
       const nb = nebBox(focusFam)!;
-      const capW = nb.w * 2.5, capH = nb.h * 2.5;
-      b = nb;
-      const near = partners.map((p) => byName.get(p.name)!).sort((p, r) => Math.hypot(p.x - focusStar.x, p.y - focusStar.y) - Math.hypot(r.x - focusStar.x, r.y - focusStar.y));
-      for (const p of near) {
-        const u = union([b, { x: p.x - 70, y: p.y - 60, w: 140, h: 120 }]);
-        if (u.w <= capW && u.h <= capH) b = u;
-      }
+      const mx = nb.w * SPACE.nodeMargin, my = nb.h * SPACE.nodeMargin;
+      b = union([nb, { x: focusStar.x - mx, y: focusStar.y - my, w: 2 * mx, h: 2 * my }]);
     }
     const zin = view.zoom === "overview" || mobile ? ins : { ...ins, ...SPACE.fitZoom };
     return fitInto(b, vp.w, vp.h, zin, visW, visH, view.zoom === "overview" ? q : 0, mobile ? 0.12 : 1);
-  }, [world, view, measured, frameWorld, mobile, hulls, nebBox, focusFam, focusStar, partners, byName, vp.w, vp.h, visW, visH, q]);
+  }, [world, view, measured, frameWorld, mobile, hulls, nebBox, focusFam, focusStar, vp.w, vp.h, visW, visH, q]);
   useEffect(() => { setManual(null); }, [view?.zoom, view?.focus, vp.w, vp.h, drawerPx]);
   const camClamp = useMemo(() => ({ right: drawerPx, bottom: sheetPx }), [drawerPx, sheetPx]);
   const { ref: camRef, box: camBox, size: camSize, handlers: camHandlers, dragged: camDragged } = useCamera({ world: skyBox, target: manual ?? target, still, targetViewport: vp, minWidth: 120, clamp: camClamp });
@@ -421,11 +419,9 @@ export function SkySkin() {
                 </div>
               )}
             </div>
-            {!mobile && !drawerPx && (
+            {!drawerPx && !sheetPx && (
               <div ref={corners.refFor("legend")} className={`${corner} bottom-3 right-3 sm:bottom-5 sm:right-5`}>
-                <CornerPlate m={m} face="legend" world={{ w: wb.w, h: wb.h }} box={camBox} source={{ img: "", pixelated: true }} onCenter={() => {}}
-                  glyph={(s) => <StarPair state={s} />}
-                  note="Each nebula is a family. A line runs from a parent star to a model built on it, brightest near the stars; comets run along it, parent to child." />
+                {mobile ? <PhoneStarKey /> : <StarKey />}
               </div>
             )}
           </div>

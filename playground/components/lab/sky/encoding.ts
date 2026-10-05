@@ -1,5 +1,8 @@
 // The Night Map (skin "sky") — every visual mark → the datum it encodes.
 // Tokens: tokens.ts. Sprites: sprites.ts. Bake: bake.ts. Life: motion.ts.
+// The star key (key.tsx) renders KEY_ROWS + KEY_NOTE below, so it cannot drift.
+import type { EvidenceState } from "@/components/lab/shared/card-model";
+
 export const ENCODING = {
   // the baked sky (1 sky px = 4 lib/world px, pixelated)
   nebula: "one family: a Bayer-dithered cloud on the family's own hue-shifted 5-step ramp, grown from its stars (atoms denser) and its primary lineage edges; a model's star always lies inside its family's nebula (bake.test.ts). Dark lanes = where two families meet",
@@ -18,13 +21,27 @@ export const ENCODING = {
   // the words
   "sign plaque": "a family: emblem (Eye, Serpent, Furnace, Mirrors, Lattice, Arrow) + Family name + model count, bordered in the family's pastel, on its nebula's top-left (taken: the free spot nearest the family's stars that sits on none of another family's cloud, read off the bake); zoomed in, the Latin constellation name under it; click opens the family",
   "sign leader": "a sign that had to sit away from its stars (a packed phone sky): a dotted line in the family's pastel from the sign to its nearest star",
-  "star name": "the model's name (Pixelify): atoms always; derived on hover, selection, lineage, as a pipeline partner (aqua), in the focused family or when zoomed in",
+  "star name": "the model's name (Pixelify): every atom, the stars that start a lineage, is named at every zoom (the star key says so); derived on hover, selection, lineage, as a pipeline partner (aqua), in the focused family or when zoomed in",
   meteor: "decoration only: a pixel meteor every ~11 s",
   motion: "12-fps flip-book (twinkle, glint, comets, meteor); frame 0 only under ?still=1 and prefers-reduced-motion",
   // the corners (shared with the painted maps, night material)
   "day | night tabs": "the two sides of the zoo: Day = the painted pixel map, Night = this sky",
+  "star key": "the evidence vocabulary, each row drawn with the sky's own atom + derived sprites, and the naming rule; on a phone it folds behind a Key button",
   "cartouche sentence": "live counts: models, nebulae, proven champions (or the focused family's)",
   "compass points": "pan direction; hub = whole sky",
   "scale bar tick": "one model in family order, filled by evidence",
-  "legend row": "the evidence vocabulary, drawn with the sky's own atom + derived sprites",
 } as const;
+
+/** The star key's rows, in order: evidence state → what it means. */
+export const KEY_TITLE = "Star key";
+export const KEY_ROWS: { state: EvidenceState; label: string }[] = [
+  { state: "champion", label: "champion, passed the gate" },
+  { state: "trained", label: "trained, no champion yet" },
+  { state: "provisional", label: "new, bar still provisional" },
+  { state: "untrained", label: "not trained yet" },
+];
+/** The key's closing lines: size and names, then the nebulae and the lines. */
+export const KEY_NOTE = [
+  "Large, named stars are atoms: each starts a lineage. Small stars are models built on them; point at one for its name.",
+  "Each nebula is a family. A line runs from a parent star to a model built on it; comets run along it, parent to child.",
+];
