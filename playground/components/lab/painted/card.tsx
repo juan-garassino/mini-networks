@@ -11,7 +11,8 @@
 // With diagramOn="map" (the painted maps on desktop) the diagram is a plate on
 // the map instead (map-plate.tsx) and the card is text only.
 // One rhythm: 8-px steps (a section every 24 px, a header 10 px above its
-// content, chips 6 px apart). One face, the map's own: Pixelify Sans at three
+// content, chips 6 px apart). One face, the map's own: Pixelify Sans (its
+// digits from clearer pixel faces, material.ts PIXEL_FONT: 5 never reads S) at three
 // weights — 700 for the name and the section headers (the map's sign voice),
 // 500 for anything you can press and the small labels, 400 for reading.
 // One type scale (TYPE): name 28, section header 14 (bold, border ink, ruled
@@ -50,7 +51,7 @@ function Label({ m, children, count, id }: { m: Material; children: ReactNode; c
     <h3 id={id} className="flex items-center gap-2 leading-none" style={{ fontFamily: m.signFont, fontWeight: 700, fontSize: TYPE.head, color: m.crisp ? m.border : m.ink, marginBottom: LABEL_GAP }}>
       {children}
       {count != null && (
-        <span className="px-1.5 py-0.5 leading-none" style={{ background: m.crisp ? m.border : m.loud, color: m.loudInk, fontSize: 11, fontWeight: 700, borderRadius: m.crisp ? 0 : 3 }}>
+        <span className="px-1.5 py-0.5 leading-none" style={{ background: m.crisp ? m.border : m.loud, color: m.loudInk, fontSize: 11, fontWeight: 700, borderRadius: m.crisp ? 0 : 3, fontVariantNumeric: "tabular-nums" }}>
           {count}
         </span>
       )}
@@ -254,7 +255,8 @@ export function CardBody({ card, theme: m, still, onPick, stateOf, isAtom, diagr
               <MetricBar m={m} metric={ev.gate_metric} best={ev.best_metric} bar={ev.threshold_m ?? null} higher={Boolean(ev.higher_is_better)} passes={card.passesBar} />
             </div>
           )}
-          <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1" style={{ fontSize: TYPE.note, lineHeight: 1.35 }}>
+          {/* tabular figures: the bar and the best score stack in one column, digit over digit */}
+          <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1" style={{ fontSize: TYPE.note, lineHeight: 1.35, fontVariantNumeric: "tabular-nums" }}>
             <dt style={{ color: m.inkSoft }}>Judged on</dt>
             <dd>{displayName(ev.gate_metric)}, {ev.higher_is_better ? "higher is better" : "lower is better"}</dd>
             {ev.threshold_m != null && (

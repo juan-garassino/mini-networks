@@ -37,6 +37,13 @@ export interface Material {
   evidence: Record<EvidenceState, { fill: string; stroke: string; dash?: string }>;
 }
 
+// The pixel map's one face: Pixelify Sans for letters, with clearer pixel
+// digits laid over it for 0-9 only (unicode-range faces: VT323 regular, Jersey
+// 15 bold; app/lab/painted/layout.tsx): Pixelify's 5 reads as S and its 8 as
+// B, and numbers are data. Where a route does not load the digits family
+// (the var is unset), this falls back to Pixelify alone.
+const PIXEL_FONT = "var(--font-pixel-digits, var(--font-pixel)), var(--font-pixel), ui-monospace, monospace";
+
 // The night material for /lab/sky: the pixel map's chrome after dark — the
 // same plates (1-art-px border, inner bevel, hard shadow, Pixelify, square
 // corners), cut from the night's own ramps (components/lab/sky/palette.ts):
@@ -93,9 +100,9 @@ export const MATERIALS: Record<MaterialId, Material> = {
     field: "#fffedb",     // 61
     shadow: "#221316",    // 38
     rule: "#e9deb0",      // 120
-    tagFont: "var(--font-pixel), ui-monospace, monospace",
-    signFont: "var(--font-pixel), ui-monospace, monospace",
-    bodyFont: "var(--font-pixel), ui-monospace, monospace",
+    tagFont: PIXEL_FONT,
+    signFont: PIXEL_FONT,
+    bodyFont: PIXEL_FONT,
     crisp: true,
     radius: 0,
     evidence: {

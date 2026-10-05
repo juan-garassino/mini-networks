@@ -754,6 +754,12 @@ export function PaintedSkin() {
     return out;
   }, [isTrue, ours, gSign, map, famCount, focusFam, visible, labelHard, chrome]);
 
+  // phones have no map plate, so labelHard is empty there; the corner
+  // furniture (the condensed cartouche, the tabs, the compass rail) is hard
+  // for the model names instead, as the corner plates are on desktop: a name
+  // half under the cartouche ("…CNN" peeking out) reads as cut. The land
+  // signs join them: pushed off the cartouche, a name must not land on a sign
+  const ribbonHard: Box[] = useMemo(() => (mobile ? [...labelHard, ...chrome, ...signs.map((s) => s.box)] : labelHard), [mobile, labelHard, chrome, signs]);
   const ribbons: PlacedRibbon[] = useMemo(() => {
     if (!isTrue || !td || !taxonomy) return [];
     const inView = (n: string) => {
@@ -776,9 +782,9 @@ export function PaintedSkin() {
       return spotBoxes({ ax: Math.floor(a[0]), ay: Math.floor(a[1]), clear: spotClear(n, atoms, td.markers), banner: atoms.has(n) });
     });
     const obstacles = signs.map((s) => s.box);
-    return layoutRibbons(items, { g, spots, obstacles, bounds: visible, clutter: td.clutter, hard: labelHard })
+    return layoutRibbons(items, { g, spots, obstacles, bounds: visible, clutter: td.clutter, hard: ribbonHard })
       .map((rb) => ({ ...rb, dim: focusFam !== null && family?.[rb.name] !== focusFam && !lineageSet.has(rb.name) && rb.name !== hovered }));
-  }, [isTrue, td, taxonomy, names, ours, showName, selected, hovered, map, atoms, lineageSet, depthOf, g, signs, visible, focusFam, family, labelHard]);
+  }, [isTrue, td, taxonomy, names, ours, showName, selected, hovered, map, atoms, lineageSet, depthOf, g, signs, visible, focusFam, family, ribbonHard]);
 
   // ——— image renders: SVG overlay tags
   const screenFont = layoutS < 1.5 ? 11 : layoutS < 2.5 ? 13 : 14;

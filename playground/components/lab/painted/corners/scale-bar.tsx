@@ -53,7 +53,8 @@ export function ScaleBar({ m, names, family, states, atoms, pipelines, counts, s
   return (
     <div style={{ ...plateStyle(m), padding: slim ? CORNER_PAD_Q : CORNER_PAD, fontFamily: m.bodyFont, color: m.ink }} role="group" aria-label="Scale: every model, by evidence">
       {!slim && (
-        <p className="mb-2.5 flex items-baseline justify-between gap-4">
+        // tabular figures: the counts change as runs land; the line must not jitter
+        <p className="mb-2.5 flex items-baseline justify-between gap-4" style={{ fontVariantNumeric: "tabular-nums" }}>
           <span style={plateTitle(m)}>{counts.models} models, {counts.champions} proven</span>
           <span style={{ fontSize: 13, lineHeight: 1, color: m.inkSoft }}>{counts.pipelines} pipelines</span>
         </p>
