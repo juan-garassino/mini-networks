@@ -1,8 +1,8 @@
 // Pixel primitives shared by every mechanism diagram. Coordinates are in
 // "art pixels" (the SVG viewBox unit); everything snaps to the integer grid
 // and renders with shape-rendering="crispEdges", so nothing anti-aliases.
-import type { ReactNode } from "react";
-import { textPath } from "./pixel-font";
+import type { CSSProperties, ReactNode } from "react";
+import { FONT_H, textPath, textWidth } from "./pixel-font";
 import { heatIndex, rampIndex, type Theme } from "./themes";
 
 type Pt = readonly [number, number];
@@ -59,6 +59,29 @@ export function PText({ x, y, text, fill, s = 1, anchor = "start" }: {
 }) {
   return <path d={textPath(text, x, y, s, anchor)} fill={fill} />;
 }
+
+/**
+ * Pixel text as its own inline SVG, for page chrome around the diagrams
+ * (headings, nav). `s` CSS px per font pixel (integer); paints currentColor so
+ * CSS decides the colour. label="" marks it decorative. Underscores would read as subscripts, so names pass
+ * through `displayName` first.
+ */
+export function PixelLabel({ text, s = 2, label = text, style }: {
+  text: string; s?: number; label?: string; style?: CSSProperties;
+}) {
+  const w = textWidth(text) * s;
+  const h = (FONT_H + 2) * s; // + 2 descender rows
+  return (
+    <svg width={w} height={h} viewBox={`0 0 ${w} ${h}`} shapeRendering="crispEdges" role={label ? "img" : undefined}
+      aria-label={label || undefined} aria-hidden={label ? undefined : true}
+      style={{ display: "block", flex: "none", ...style }}>
+      <path d={textPath(text, 0, 0, s)} fill="currentColor" />
+    </svg>
+  );
+}
+
+/** A model id as words for the pixel face: text_seq2seq → "text seq2seq". */
+export const displayName = (id: string) => id.replace(/_/g, " ");
 
 /**
  * An n×n map (values −1..1, row-major) as a thumbnail with `px` art pixels per
@@ -137,7 +160,7 @@ export function Diamond({ cx, cy, r = 6, theme }: { cx: number; cy: number; r?: 
     <g>
       <path d={outer} fill={theme.loss} />
       <path d={inner} fill={theme.lossHi} />
-      <rect x={cx} y={cy} width={1} height={1} fill="#ffffff" />
+      <rect x={cx} y={cy} width={1} height={1} fill={theme.spark} />
     </g>
   );
 }

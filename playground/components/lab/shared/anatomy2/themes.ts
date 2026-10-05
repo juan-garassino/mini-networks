@@ -25,6 +25,7 @@ export interface Theme {
   loss: string;         // the loss diamond
   lossHi: string;
   shadow: string | null; // cut-paper drop shadow (paper only)
+  spark: string;        // the 1-px glint at the loss diamond's core
   /** 8 colours, value −1 → ramp[0] … +1 → ramp[7]. */
   ramp: readonly string[];
   /** heat ramp for attention / similarity (0 → 1). */
@@ -51,6 +52,7 @@ export const THEMES: Record<ThemeName, Theme> = {
     loss: "#f4a0b0",
     lossHi: "#ffd6de",
     shadow: null,
+    spark: "#ffffff",
     ramp: ["#1f1b33", "#3b2f5c", "#5e4682", "#8a5f9e", "#b97fa8", "#e0a3a8", "#f4c9a8", "#fdeccb"],
     heat: ["#24223a", "#2e3358", "#3c4a80", "#5267a8", "#7389cc", "#9eb0e6", "#cad5f6", "#eef2ff"],
   },
@@ -69,6 +71,7 @@ export const THEMES: Record<ThemeName, Theme> = {
     loss: "#c23a22",
     lossHi: "#f08a62",
     shadow: "#8a6c45",
+    spark: "#ffffff",
     ramp: ["#f4e9d2", "#e6d6b6", "#cdb994", "#a99473", "#7e6c55", "#57493a", "#352c25", "#1b1714"],
     heat: ["#ecdcbc", "#e2c79b", "#d8a877", "#c98452", "#b45f36", "#94412a", "#6b2c20", "#3f1a14"],
   },

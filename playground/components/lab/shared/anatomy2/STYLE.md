@@ -161,7 +161,7 @@ this; `T.accent` + the note is the honest reading.
 
 - Paint only with `Theme` tokens. A theme is a palette swap plus `shadow`:
   paper puts a hard +2,+2 shadow under Thumbs and +1,+1 under Bars; pixel has
-  none. The sole literal is the Diamond's 1-px `#ffffff` core. The other
+  none. Even the Diamond's 1-px core is a token (`theme.spark`). The
   `"#ffffff"` uses (transformer/recur ok-glyphs, gnn labelled nodes, deepseek
   window text) are drift — on paper they are white boxes on cream.
 - Data uses `ramp` (−1..1, plum→rose→peach→cream in pixel) or `heat` (0..1); the network
