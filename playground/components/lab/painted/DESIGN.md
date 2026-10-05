@@ -59,7 +59,7 @@ headings. Signs run at `sign(m, px)`; running text keeps `DRAWER.measure`
 `CORNER`: one outer margin (12 phone / 20 desktop), one padding (12), one side
 column (324) for cartouche and legend/minimap; the compass stands `stack`
 (12, 8 quiet) on the scale bar; scale bar and legend share the bottom edge;
-every sheet tab hangs to `tab` (36, 26 quiet; the open one `tabDrop` lower).
+every sheet tab hangs to `tab` (36, 26 quiet); the open one is inked and pressed, not longer.
 A control that cannot act is sunk flat (`disabledStyle`), never a ghost.
 `SPACE` (card): section 24 · header→content 10 · sub-label 6 · lede 16.
 `DRAWER`: 440 with the diagram, 336 text-only, phone snaps 0.2 / 0.5 / 0.88.

@@ -1377,7 +1377,7 @@ export function PaintedSkin() {
         {/* ——— the drawer */}
         {card && !uiHidden && (
           <Drawer m={m} mobile={mobile} sheet={sheet === "peek" ? "half" : sheet} setSheet={setSheet} card={card} still={still}
-            onPick={onSelect} onBack={fitWhole}
+            onPick={onSelect} onBack={fitWhole} onClose={() => update({ zoom: "region", focus: selected })}
             stateOf={(n) => states[n] ?? "untrained"} isAtom={(n) => atoms.has(n)}
             fullDiagram={fullDiagram} setFullDiagram={setFullDiagram} stageW={vp.w}
             diagramOn={diagramOn} onShowDiagram={plateOpen ? undefined : () => setPlateOpen(true)} />

@@ -20,7 +20,7 @@
 // to the edge), body 15/1.4, notes 13/1.35, meta 12 — and running text keeps
 // a measure of at most 38 characters. Three sections, one header each:
 // Lineage (built on / leads to as its two sub-labels), Pipelines, Quality gate.
-import { createContext, useContext, type CSSProperties, type ReactNode } from "react";
+import { createContext, useContext, useState, type CSSProperties, type ReactNode } from "react";
 import { displayName, EVIDENCE_COPY, type CardModel, type EvidenceState } from "@/components/lab/shared/card-model";
 import { MechanismDiagram } from "@/components/lab/shared/anatomy2";
 import { THEMES } from "@/components/lab/shared/anatomy2/themes";
@@ -140,6 +140,9 @@ export function DiagramMat({ m, children, className = "" }: { m: Material; child
   );
 }
 
+/** pipelines listed before "Show N more" */
+const PIPES_SHOWN = 6;
+
 export function CardBody({ glyph, ...p }: Parameters<typeof CardBodyInner>[0] & { glyph?: CardGlyph }) {
   return <GlyphOverride.Provider value={glyph ?? null}><CardBodyInner {...p} /></GlyphOverride.Provider>;
 }
@@ -163,6 +166,9 @@ function CardBodyInner({ card, theme: m, still, onPick, stateOf, isAtom, diagram
   const head = m.crisp ? m.border : m.ink;
   const section: CSSProperties = { marginTop: SPACE.section };
   const pipes = card.compositions;
+  // the pipelines beyond the first few unfold in place, per card (a new model starts folded)
+  const [pipesFor, setPipesFor] = useState<string | null>(null);
+  const pipesOpen = pipesFor === card.name;
   // sentences in the reading face; names, chips, headings stay in the map's voice
   const prose = textFace(m);
   const text: CSSProperties = { maxWidth: DRAWER.measure, fontFamily: prose };
@@ -252,7 +258,7 @@ function CardBodyInner({ card, theme: m, still, onPick, stateOf, isAtom, diagram
         <div style={section}>
           <Label m={m} count={pipes.length}>{pipes.length === 1 ? "Pipeline" : "Pipelines"}</Label>
           <ul className="space-y-2">
-            {pipes.slice(0, 6).map((c) => (
+            {pipes.slice(0, pipesOpen ? pipes.length : PIPES_SHOWN).map((c) => (
               <li key={c.name} style={{ lineHeight: 1.3, maxWidth: DRAWER.measure }}>
                 <span className="block" style={{ fontWeight: 700, fontSize: TYPE.chip }}>{displayName(c.name)}</span>
                 <span className="block" style={{ fontSize: TYPE.note, color: m.inkSoft }}>
@@ -269,7 +275,14 @@ function CardBodyInner({ card, theme: m, still, onPick, stateOf, isAtom, diagram
               </li>
             ))}
           </ul>
-          {pipes.length > 6 && <p className="mt-2" style={note}>And {pipes.length - 6} more.</p>}
+          {/* the rest unfold in place (the card scrolls; nothing opens elsewhere) */}
+          {pipes.length > PIPES_SHOWN && !pipesOpen && (
+            <button type="button" onClick={() => setPipesFor(card.name)} aria-expanded={false}
+              className="mt-2 underline decoration-dotted underline-offset-4 hover:brightness-110 focus-visible:outline-2"
+              style={{ ...note, color: m.ink, fontFamily: textFace(m) }}>
+              Show {pipes.length - PIPES_SHOWN} more
+            </button>
+          )}
         </div>
       )}
 

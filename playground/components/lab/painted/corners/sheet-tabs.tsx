@@ -1,7 +1,9 @@
 "use client";
 
 // Top-right corner: the two sheets of the atlas, Pixel and Paper, hang from
-// the top edge as tabs. The open sheet's tab is lowered and inked. With
+// the top edge as tabs, all one height (CORNER.tab); the open sheet's tab is
+// inked and pressed in (its fill and a 1-art-px offset, as the phone bar's
+// pair), never longer than the others. With
 // ?dev=1 a third tab opens the render / labels tray (image variants + baked
 // labels — the owner's comparison tools, not part of the learner's UI).
 import type { MapId } from "../anchors";
@@ -18,18 +20,17 @@ export function SheetTabs({ m, mapId, dev, render, labels, setOpts, devOpen, set
   setOpts: (next: Partial<{ map: MapId; render: Render; labels: Labels }>) => void;
   devOpen: boolean; setDevOpen: (v: boolean) => void;
 }) {
-  // every tab hangs to one height and sets its words on one bottom line;
-  // the open sheet's tab hangs lower by the drop
+  // every tab hangs to one height and sets its words on one bottom line
   const H = compact ? CORNER.tabQuiet : CORNER.tab;
-  const drop = compact ? CORNER.tabDropQuiet : CORNER.tabDrop;
-  const hang = (on: boolean) => ({ height: H + (on ? drop : 0), display: "inline-flex", alignItems: "flex-end", borderTop: "none" } as const);
+  const hang = () => ({ height: H, display: "inline-flex", alignItems: "flex-end", borderTop: "none" } as const);
   const tab = (id: MapId, text: string) => {
     const on = mapId === id;
     return (
       <button key={id} type="button" role="tab" aria-selected={on} onClick={() => setOpts({ map: id })}
         className={`${compact ? "px-2 pb-1.5" : "px-4 pb-2"} leading-none focus-visible:outline-2 focus-visible:outline-offset-2`}
         style={{
-          ...plateStyle(m, { loud: on, shadow: on }), ...hang(on),
+          ...plateStyle(m, { loud: on, shadow: !on }), ...hang(),
+          transform: on ? "translate(var(--ap, 1px), var(--ap, 1px))" : undefined,
           fontFamily: m.signFont, fontWeight: 700, fontSize: compact ? TYPE.tabSmall : TYPE.tab,
         }}>
         {text}
@@ -43,13 +44,13 @@ export function SheetTabs({ m, mapId, dev, render, labels, setOpts, devOpen, set
         {tab("paper", "Paper")}
         {mapOnly && <button type="button" onClick={onHideUi} aria-label="Map only: hide the UI (h)" title="Map only (h)"
           className={`${compact ? "px-1.5 pb-1.5" : "px-3 pb-2"} leading-none focus-visible:outline-2`}
-          style={{ ...plateStyle(m, { shadow: true }), ...hang(false), fontFamily: m.bodyFont, fontSize: compact ? TYPE.asideSmall : TYPE.aside }}>
+          style={{ ...plateStyle(m, { shadow: true }), ...hang(), fontFamily: m.bodyFont, fontSize: compact ? TYPE.asideSmall : TYPE.aside }}>
           map only
         </button>}
         {dev && (
           <button type="button" aria-expanded={devOpen} onClick={() => setDevOpen(!devOpen)}
             className="px-3 pb-2 leading-none focus-visible:outline-2"
-            style={{ ...plateStyle(m, { loud: devOpen, shadow: true }), ...hang(false), fontFamily: m.bodyFont, fontSize: TYPE.aside }}>
+            style={{ ...plateStyle(m, { loud: devOpen, shadow: true }), ...hang(), fontFamily: m.bodyFont, fontSize: TYPE.aside }}>
             dev
           </button>
         )}

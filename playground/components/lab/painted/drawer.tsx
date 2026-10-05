@@ -49,6 +49,9 @@ export interface DrawerProps {
   onShowDiagram?: () => void;
   /** the card's evidence glyph (default: the painted maps' banner / stone, or marker) */
   glyph?: CardGlyph;
+  /** × in the card's top-right corner: close the card and stay where you are
+   * (the land), where "← Whole map" goes all the way out. Omitted: no × */
+  onClose?: () => void;
 }
 
 export function Drawer(p: DrawerProps) {
@@ -65,6 +68,10 @@ export function Drawer(p: DrawerProps) {
     // the same words as the cartouche's link and the compass hub: it closes the
     // card and returns to the whole map
     <Btn m={m} onClick={p.onBack} label="Close the card: whole map" title="Whole map (Esc)" style={{ fontSize: TYPE.button, minHeight: 26, fontWeight: 500 }}>← Whole map</Btn>
+  );
+  const close = p.onClose && (
+    <Btn m={m} onClick={p.onClose} label="Close the card (stay in this land)" title="Close the card"
+      style={{ minHeight: 26, minWidth: 26, padding: 0 }}><CloseGlyph m={m} /></Btn>
   );
   if (p.fullDiagram) {
     return (
@@ -85,8 +92,18 @@ export function Drawer(p: DrawerProps) {
       </div>
     );
   }
-  if (!p.mobile) return <DeskSheet {...p} dw={dw} narrow={narrow} back={back} body={body} />;
-  return <SheetShell {...p} header={back} body={body} />;
+  if (!p.mobile) return <DeskSheet {...p} dw={dw} narrow={narrow} back={back} close={close} body={body} />;
+  return <SheetShell {...p} header={back} close={close} body={body} />;
+}
+
+/** ×, stepped on a 5-unit grid (crisp on the pixel map) in the plate's ink */
+function CloseGlyph({ m }: { m: Material }) {
+  const cells = [0, 1, 2, 3, 4].flatMap((i) => (i === 2 ? [[2, 2]] : [[i, i], [4 - i, i]]));
+  return (
+    <svg aria-hidden width={10} height={10} viewBox="0 0 5 5" shapeRendering={m.crisp ? "crispEdges" : undefined} style={{ display: "block" }}>
+      <g fill={m.crisp ? m.border : m.ink}>{cells.map(([x, y]) => <rect key={`${x}-${y}`} x={x} y={y} width={1} height={1} />)}</g>
+    </svg>
+  );
 }
 
 /** true while the scroller has more below its fold (re-checked on scroll + resize) */
@@ -118,7 +135,7 @@ function MoreFade({ m, more }: { m: Material; more: boolean }) {
   );
 }
 
-function DeskSheet(p: DrawerProps & { dw: number; narrow: boolean; back: ReactNode; body: ReactNode }) {
+function DeskSheet(p: DrawerProps & { dw: number; narrow: boolean; back: ReactNode; close: ReactNode; body: ReactNode }) {
   const { m, card } = p;
   const { ref, more } = useMoreBelow(card.name);
   const pad = p.narrow ? "px-5" : "px-6";
@@ -129,14 +146,14 @@ function DeskSheet(p: DrawerProps & { dw: number; narrow: boolean; back: ReactNo
       style={{ width: p.dw, background: sheetGround(m), color: m.ink, fontFamily: m.bodyFont,
         borderLeft: `var(--ap, 2px) solid ${m.border}`,
         boxShadow: m.crisp ? `inset var(--ap) 0 0 ${m.rule}, calc(var(--ap) * -1) 0 0 ${m.shadow}` : m.card ? m.card.dropLeft : `-3px 0 0 ${m.shadow}` }}>
-      <div className={`sticky top-0 z-10 flex-none ${pad} pb-3 pt-4`} style={{ background: sheetGround(m) }}>{p.back}</div>
+      <div className={`sticky top-0 z-10 flex flex-none items-center justify-between ${pad} pb-3 pt-4`} style={{ background: sheetGround(m) }}>{p.back}{p.close}</div>
       <div className={`${pad} pb-8 pt-1`}>{p.body}</div>
       <MoreFade m={m} more={more} />
     </aside>
   );
 }
 
-function SheetShell(p: DrawerProps & { header: ReactNode; body: ReactNode }) {
+function SheetShell(p: DrawerProps & { header: ReactNode; close: ReactNode; body: ReactNode }) {
   const { m } = p;
   const [vh, setVh] = useState(800);
   useEffect(() => {
@@ -172,6 +189,7 @@ function SheetShell(p: DrawerProps & { header: ReactNode; body: ReactNode }) {
           <span aria-hidden className="block h-1.5 w-12" style={{ background: m.border }} />
         </button>
         <div className="relative">{p.header}</div>
+        {p.close && <div className="relative ml-auto">{p.close}</div>}
       </div>
       <div ref={ref} className="flex flex-1 flex-col overflow-y-auto px-4 pb-4">
         <div className="pt-1">{p.body}</div>

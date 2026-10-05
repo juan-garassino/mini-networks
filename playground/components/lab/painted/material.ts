@@ -147,9 +147,9 @@ export const CORNER = {
   stack: 12,         // compass above the scale bar
   stackQuiet: 8,
   wPhone: 168,       // the phone cartouche
-  // the sheet tabs: one height for every tab (Pixel, Paper, map only, dev),
-  // the open sheet's lowered by `drop`; quiet = focus mode's compact tabs
-  tab: 36, tabQuiet: 26, tabDrop: 6, tabDropQuiet: 4,
+  // the sheet tabs: one height for every tab (Pixel, Paper, map only, dev);
+  // the open sheet's is inked and pressed, not longer; quiet = focus mode's compact tabs
+  tab: 36, tabQuiet: 26,
 } as const;
 
 /** Phones (< 640 px wide): one top bar instead of two top corners, and the
