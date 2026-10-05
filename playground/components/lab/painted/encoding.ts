@@ -7,9 +7,12 @@ export const ENCODING = {
   "atom banner": "a root model (no parents); flag colour = evidence state",
   "road stone": "a derived model on the painted roads; stone colour = evidence state",
   "model ribbon": "the model's name; loud (inked) when selected, lit when hovered",
-  "paper plate": "paper map: the model's name over the painter's plate, one type size for all (long names break to two lines); 'no model yet' where the painter invented one",
+  "paper plate": "paper map: the model's name where the painter hung his plate (his lettering is retouched out of the painting), one type size for all at the whole-sheet view (long names break to two lines), one screen size once zoomed in; 'no model yet' where the painter invented one",
+  "paper land title": "paper map: a land's name and the painter's subline, redrawn on our stock at his plate's size, set to fit; stays whole in view (steps clear of the corners) and keeps its whole-sheet screen size when zoomed in",
+  "paper seal": "the number of models in that land (wax seal on the title's corner)",
+  "paper marker": "a model on the paper map: disc in the evidence fill (dashed rim = provisional), star = champion, pip = trained; the same mark in the key, the card and its signposts",
   "lit road": "the selected model's lineage back to its root atom",
-  "focus fade": "lands other than the focused one fade (dithered band = distance from it)",
+  "focus fade": "lands other than the focused one fade (pixel: dithered band = distance from it; paper: a feathered wash of the stock outside the land, and its names dimmed)",
   critter: "walks the lineage road from the root to the selected model",
   "road cart": "one builds_on edge, travelling parent → child in the child's evidence colour; the selected lineage's carts run lit and without gaps",
   // life (the painting breathing — no data beyond the carts; every pixel keeps to its own ramp)
@@ -50,9 +53,9 @@ export const ENCODING = {
   // the map plate (desktop): "How <model> works", hung beside the selected castle
   "map plate": "the selected model's full mechanism diagram at 1 art px = 1 CSS px (×1.5 / ×2 only when that is whole device px and the plate keeps to half the visible width, 60 % of its height), in a compact frame (8-px padding, 22-px buttons), on a plate of the map's own material; follows the castle in map space, never scales; caption = how real the drawing is (the diagram's badge)",
   "leader line": "ties the plate to its castle: 2 art px of maroon ink in a 1-art-px cream halo, straight to the plate's nearest edge, a dot at the model's spot and a stepped notch where it docks into the plate; no name ever sits under it or the plate (they move, or hide); it runs longer only to carry the plate past a name it may not cover",
-  "healed patch": "paper: a painter's plate half under a plate is painted out with a feathered clone of the painting beside it (no blank sign)",
+  "retouch": "paper: none — the painter's own cartouche, compass, scale bar and lettering are painted out once (heal.ts), so the sheet carries one compass, one title, one scale; a plate a corner, the map plate or the screen edge would cut is left off, the painting runs on under it",
   // the drawer
-  "drawer glyph": "the selected model's evidence state, as its own map sprite",
+  "drawer glyph": "the selected model's evidence state, as its own map sprite (paper: its marker); a skin may pass its own (Drawer glyph prop)",
   "drawer place line": "the model's land, and atom or its generation (depth)",
   "evidence stamp": "the evidence state in the colours the map paints it (dashed = provisional), + the champion's registry version",
   "introduces box": "a mechanism the model adds to the zoo (gold square = the taxonomy's 'introduces')",

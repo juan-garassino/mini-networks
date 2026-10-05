@@ -7,8 +7,8 @@
 // zoomed in): one row — the title, "Whole map" and a magnifier that unfolds
 // the field — so the map plate and the drawer are the two things to read.
 import type { Family } from "../anchors";
-import { FAMILY_TITLE, PAPER_SUBLINE, type Material } from "../material";
-import { CORNER_PAD, CORNER_PAD_Q, CORNER_W, Plate, Search } from "./plate";
+import { CORNER, FAMILY_TITLE, PAPER_SUBLINE, TYPE, type Material } from "../material";
+import { Plate, Search } from "./plate";
 
 const WORDS = ["no", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine"];
 
@@ -37,15 +37,15 @@ export function Cartouche({ m, counts, names, focusFam, famCount, famProven, onP
   const sub = focusFam && !m.crisp ? PAPER_SUBLINE[focusFam] : null;
   if (quiet) {
     return (
-      <Plate m={m} as="header" label={title} style={{ padding: `${CORNER_PAD_Q}px ${CORNER_PAD_Q + 2}px`, width: "max-content", maxWidth: CORNER_W }}>
+      <Plate m={m} as="header" label={title} style={{ padding: `${CORNER.padQuiet}px ${CORNER.padQuiet + 2}px`, width: "max-content", maxWidth: CORNER.w }}>
         <div className="flex items-center gap-3">
-          <h1 className="whitespace-nowrap leading-none" style={{ fontFamily: m.signFont, fontWeight: 700, fontSize: compact ? 16 : 20, color: m.crisp ? m.border : m.ink }}>
+          <h1 className="whitespace-nowrap leading-none" style={{ fontFamily: m.signFont, fontWeight: 700, fontSize: compact ? TYPE.displayTiny : TYPE.displaySmall, color: m.crisp ? m.border : m.ink }}>
             {title}
           </h1>
           {wholeLink && (
             <button type="button" onClick={onWhole} title="Whole map (Esc)"
               className="whitespace-nowrap leading-none underline decoration-dotted underline-offset-4 focus-visible:outline-2"
-              style={{ color: m.border, fontFamily: m.bodyFont, fontSize: 14 }}>
+              style={{ color: m.border, fontFamily: m.bodyFont, fontSize: TYPE.link }}>
               Whole map
             </button>
           )}
@@ -55,13 +55,13 @@ export function Cartouche({ m, counts, names, focusFam, famCount, famProven, onP
     );
   }
   return (
-    <Plate m={m} as="header" label={title} className={compact ? "p-2.5" : undefined} style={{ width: compact ? 168 : CORNER_W, padding: compact ? undefined : CORNER_PAD }}>
-      <h1 className="leading-none" style={{ fontFamily: m.signFont, fontWeight: 700, fontSize: compact ? 20 : 32, color: m.crisp ? m.border : m.ink }}>
+    <Plate m={m} as="header" label={title} className={compact ? "p-2.5" : undefined} style={{ width: compact ? CORNER.wPhone : CORNER.w, padding: compact ? undefined : CORNER.pad }}>
+      <h1 className="leading-none" style={{ fontFamily: m.signFont, fontWeight: 700, fontSize: compact ? TYPE.displaySmall : TYPE.display, color: m.crisp ? m.border : m.ink }}>
         {title}
       </h1>
       {!compact && (
         <>
-          <p className="mt-2 leading-snug" style={{ fontSize: 16, color: m.ink, maxWidth: "56ch" }}>
+          <p className="mt-2 leading-snug" style={{ fontSize: TYPE.lead, color: m.ink, maxWidth: "56ch" }}>
             {sentence}{sub ? ` ${sub}.` : ""}
             {focusFam && (
               <>

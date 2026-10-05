@@ -13,8 +13,8 @@
 import { useState } from "react";
 import { displayName, type EvidenceState } from "@/components/lab/shared/card-model";
 import { FAMILIES, type Family } from "../anchors";
-import { FAMILY_TITLE, type Material } from "../material";
-import { CORNER_PAD, CORNER_PAD_Q, plateStyle, plateTitle } from "./plate";
+import { CORNER, FAMILY_TITLE, TYPE, type Material } from "../material";
+import { plateStyle, plateTitle } from "./plate";
 
 const CELL = 7, H = 12, LAND_GAP = 6, PIPE_H = 6, PIPE_STEP = 6;
 
@@ -51,12 +51,12 @@ export function ScaleBar({ m, names, family, states, atoms, pipelines, counts, s
     };
   };
   return (
-    <div style={{ ...plateStyle(m), padding: slim ? CORNER_PAD_Q : CORNER_PAD, fontFamily: m.bodyFont, color: m.ink }} role="group" aria-label="Scale: every model, by evidence">
+    <div style={{ ...plateStyle(m), padding: slim ? CORNER.padQuiet : CORNER.pad, fontFamily: m.bodyFont, color: m.ink }} role="group" aria-label="Scale: every model, by evidence">
       {!slim && (
         // tabular figures: the counts change as runs land; the line must not jitter
         <p className="mb-2.5 flex items-baseline justify-between gap-4" style={{ fontVariantNumeric: "tabular-nums" }}>
           <span style={plateTitle(m)}>{counts.models} models, {counts.champions} proven</span>
-          <span style={{ fontSize: 13, lineHeight: 1, color: m.inkSoft }}>{counts.pipelines} pipelines</span>
+          <span style={{ fontSize: TYPE.note, lineHeight: 1, color: m.inkSoft }}>{counts.pipelines} pipelines</span>
         </p>
       )}
       <div className="relative flex items-end" style={{ gap: slim ? 4 : LAND_GAP }}>
@@ -76,7 +76,7 @@ export function ScaleBar({ m, names, family, states, atoms, pipelines, counts, s
           </div>
         ))}
         {hover && (
-          <span className={`pointer-events-none absolute ${slim ? "-top-8" : "-top-9"} left-0 whitespace-nowrap px-2 py-0.5`} style={{ ...plateStyle(m, { loud: true, shadow: false }), fontSize: 14 }}>
+          <span className={`pointer-events-none absolute ${slim ? "-top-8" : "-top-9"} left-0 whitespace-nowrap px-2 py-0.5`} style={{ ...plateStyle(m, { loud: true, shadow: false }), fontSize: TYPE.link }}>
             {displayName(hover)}, {family?.[hover] ? FAMILY_TITLE[family[hover]] : ""}
           </span>
         )}

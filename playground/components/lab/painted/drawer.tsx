@@ -12,19 +12,18 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { MechanismDiagram } from "@/components/lab/shared/anatomy2";
 import { displayName, type CardModel } from "@/components/lab/shared/card-model";
-import { CardBody, DiagramMat } from "./card";
+import { CardBody, DiagramMat, type CardGlyph } from "./card";
 import { Btn, sheetGround } from "./corners/plate";
-import type { Material } from "./material";
+import { DRAWER, MOTION, TYPE, howItWorks, type Material } from "./material";
 
 export type Sheet = "peek" | "half" | "full";
-export const DRAWER_W = 440;
-/** diagramOn="map": the card is text only — 336 px keeps a ~290-px measure of
- * 16-px body text (≈ 40 characters a line) and hands 104 px back to the map */
-export const DRAWER_W_MAP = 336;
+export const DRAWER_W = DRAWER.w;
+/** diagramOn="map": the card is text only (material.ts DRAWER.wMap) and hands 104 px back to the map */
+export const DRAWER_W_MAP = DRAWER.wMap;
 /** the desktop drawer's width for where the diagram lives (camera + plate placement read this) */
 export const drawerWidth = (diagramOn: "drawer" | "map" = "drawer") => (diagramOn === "map" ? DRAWER_W_MAP : DRAWER_W);
 
-const SNAP: Record<Sheet, number> = { peek: 0.2, half: 0.5, full: 0.88 };
+const SNAP: Record<Sheet, number> = DRAWER.snap;
 export function sheetHeight(s: Sheet, vh: number): number {
   return Math.round(Math.max(150, vh * SNAP[s]));
 }
@@ -48,6 +47,8 @@ export interface DrawerProps {
   diagramOn?: "drawer" | "map";
   /** diagramOn "map" and the plate is closed: reopen it */
   onShowDiagram?: () => void;
+  /** the card's evidence glyph (default: the painted maps' banner / stone, or marker) */
+  glyph?: CardGlyph;
 }
 
 export function Drawer(p: DrawerProps) {
@@ -58,12 +59,12 @@ export function Drawer(p: DrawerProps) {
     <CardBody card={card} theme={m} still={p.still} onPick={p.onPick} stateOf={p.stateOf} isAtom={p.isAtom}
       diagramWidth={p.mobile ? Math.max(240, Math.min(380, p.stageW - 40)) : dw - 48}
       onOpenDiagram={() => p.setFullDiagram(true)}
-      diagramOn={p.mobile ? "drawer" : p.diagramOn ?? "drawer"} onShowDiagram={p.onShowDiagram} />
+      diagramOn={p.mobile ? "drawer" : p.diagramOn ?? "drawer"} onShowDiagram={p.onShowDiagram} glyph={p.glyph} />
   );
   const back = (
     // the same words as the cartouche's link and the compass hub: it closes the
     // card and returns to the whole map
-    <Btn m={m} onClick={p.onBack} label="Close the card: whole map" title="Whole map (Esc)" style={{ fontSize: 13, minHeight: 26, fontWeight: 500 }}>← Whole map</Btn>
+    <Btn m={m} onClick={p.onBack} label="Close the card: whole map" title="Whole map (Esc)" style={{ fontSize: TYPE.button, minHeight: 26, fontWeight: 500 }}>← Whole map</Btn>
   );
   if (p.fullDiagram) {
     return (
@@ -71,10 +72,10 @@ export function Drawer(p: DrawerProps) {
         style={{ background: sheetGround(m), color: m.ink, fontFamily: m.bodyFont }}>
         {/* the map plate's title bar, at stage size: title left, the way back right */}
         <div className="mx-auto flex items-center justify-between gap-4 px-5 pt-5" style={{ maxWidth: Math.min(1120, p.stageW - 64) + 40 }}>
-          <h2 className="leading-none" style={{ fontFamily: m.signFont, fontWeight: 700, fontSize: 24, color: m.crisp ? m.border : m.ink }}>
-            How {displayName(card.name)} works
+          <h2 className="leading-none" style={{ fontFamily: m.signFont, fontWeight: 700, fontSize: TYPE.sheetTitle, color: m.crisp ? m.border : m.ink }}>
+            {howItWorks(m, displayName(card.name))}
           </h2>
-          <Btn m={m} onClick={() => p.setFullDiagram(false)} label="Back to the map (Esc)" title="Back to the map (Esc)" style={{ fontSize: 14, minHeight: 28, fontWeight: 500 }}>Back to the map</Btn>
+          <Btn m={m} onClick={() => p.setFullDiagram(false)} label="Back to the map (Esc)" title="Back to the map (Esc)" style={{ fontSize: TYPE.link, minHeight: 28, fontWeight: 500 }}>Back to the map</Btn>
         </div>
         <div className="px-5 pb-8 pt-4">
           <DiagramMat m={m} className="mx-auto w-fit">
@@ -110,7 +111,7 @@ function useMoreBelow(key: unknown) {
 /** the foot of a scrolling sheet while there is more below: the ground
  * fading up over the last lines */
 function MoreFade({ m, more }: { m: Material; more: boolean }) {
-  const g = /^#[0-9a-f]{6}$/i.test(m.plateHi) ? m.plateHi : "#fbf0c8";
+  const g = m.plateHi; // #rrggbb (material.ts): the fade appends alpha
   return (
     <div aria-hidden className="pointer-events-none sticky bottom-0 -mt-8 h-8 flex-none"
       style={{ opacity: more ? 1 : 0, background: `linear-gradient(180deg, ${g}00, ${g}e6 70%, ${g})`}} />
@@ -127,7 +128,7 @@ function DeskSheet(p: DrawerProps & { dw: number; narrow: boolean; back: ReactNo
     <aside ref={ref} aria-label={`${displayName(card.name)} card`} className="absolute inset-y-0 right-0 z-20 flex flex-col overflow-y-auto"
       style={{ width: p.dw, background: sheetGround(m), color: m.ink, fontFamily: m.bodyFont,
         borderLeft: `var(--ap, 2px) solid ${m.border}`,
-        boxShadow: m.crisp ? `inset var(--ap) 0 0 ${m.rule}, calc(var(--ap) * -1) 0 0 ${m.shadow}` : `-3px 0 0 ${m.card ? "rgba(58,38,22,.62)" : m.shadow}` }}>
+        boxShadow: m.crisp ? `inset var(--ap) 0 0 ${m.rule}, calc(var(--ap) * -1) 0 0 ${m.shadow}` : m.card ? m.card.dropLeft : `-3px 0 0 ${m.shadow}` }}>
       <div className={`sticky top-0 z-10 flex-none ${pad} pb-3 pt-4`} style={{ background: sheetGround(m) }}>{p.back}</div>
       <div className={`${pad} pb-8 pt-1`}>{p.body}</div>
       <MoreFade m={m} more={more} />
@@ -159,7 +160,7 @@ function SheetShell(p: DrawerProps & { header: ReactNode; body: ReactNode }) {
   return (
     <aside aria-label="Model card" className="absolute inset-x-0 bottom-0 z-20 flex flex-col"
       style={{ height: h, background: sheetGround(m), color: m.ink, borderTop: `var(--ap, 2px) solid ${m.border}`, boxShadow: `0 calc(var(--ap, 2px) * -1) 0 ${m.shadow}`, fontFamily: m.bodyFont,
-        transition: drag == null && !p.still ? "height 220ms ease" : "none" }}>
+        transition: drag == null && !p.still ? `height ${MOTION.sheet}` : "none" }}>
       {/* one row: the drag handle across it, the way back on its left */}
       <div className="relative flex h-11 flex-none items-center px-4">
         <button type="button" aria-label={p.sheet === "full" ? "Collapse the card" : "Expand the card"}

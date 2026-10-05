@@ -15,7 +15,7 @@ import { MechanismDiagram, diagramFor } from "@/components/lab/shared/anatomy2";
 import { THEMES } from "@/components/lab/shared/anatomy2/themes";
 import { displayName } from "@/components/lab/shared/card-model";
 import { Btn, plateStyle } from "./corners/plate";
-import type { Material } from "./material";
+import { TYPE, howItWorks, sign, type Material } from "./material";
 import type { PlateSide } from "./plate-place";
 
 export const ART_W = 560;
@@ -47,7 +47,7 @@ export const MapPlate = forwardRef<HTMLElement, {
   const th = THEMES[m.diagram];
   const title = `How ${displayName(name)} works`;
   // the drawer's and the full view's buttons: one size for every plate button
-  const btn: CSSProperties = { fontSize: 13, minHeight: 22, padding: "0 6px", fontWeight: 500 };
+  const btn: CSSProperties = { fontSize: TYPE.button, minHeight: 22, padding: "0 6px", fontWeight: 500 };
   return (
     <section ref={ref} aria-label={title} data-map-plate {...data}
       // a tap on the plate is never a tap on the sea (the plate sits outside
@@ -56,18 +56,18 @@ export const MapPlate = forwardRef<HTMLElement, {
       className="pointer-events-auto absolute left-0 top-0"
       style={{ ...plateStyle(m), fontFamily: m.bodyFont, padding: PAD, width: "max-content", ...style }}>
       <header className="flex items-center justify-between gap-3" style={{ height: HEAD - 4, marginBottom: 4 }}>
-        <h2 className="leading-none" style={{ fontFamily: m.signFont, fontWeight: 700, fontSize: m.crisp ? 15 : 18, color: m.crisp ? m.border : m.ink, whiteSpace: "nowrap" }}>
-          {title}
+        <h2 className="leading-none" style={{ fontFamily: m.signFont, fontWeight: 700, fontSize: sign(m, TYPE.plateTitle), color: m.crisp ? m.border : m.ink, whiteSpace: "nowrap" }}>
+          {howItWorks(m, displayName(name))}
         </h2>
         <div className="flex items-center gap-1.5">
           <Btn m={m} onClick={onEnlarge} label={`Enlarge: ${title}`} title="Enlarge" style={btn}>Enlarge</Btn>
           <Btn m={m} onClick={onClose} label="Close the diagram (Esc)" title="Close (Esc)" style={btn}>Close</Btn>
         </div>
       </header>
-      <div style={{ background: th.ground, padding: MAT, border: `var(--ap, 2px) solid ${m.border}`, borderRadius: m.crisp ? 0 : Math.min(3, m.radius), lineHeight: 0 }}>
+      <div style={{ background: th.ground, padding: MAT, border: `var(--ap, 2px) solid ${m.border}`, borderRadius: m.radius, lineHeight: 0 }}>
         <MechanismDiagram name={name} theme={m.diagram} variant="full" still={still} width={ART_W * zoom} fit={false} caption={false} />
       </div>
-      <p className="truncate" title={def?.truth} style={{ height: FOOT, paddingTop: 6, fontSize: 12, lineHeight: 1.2, color: m.inkSoft, maxWidth: ART_W * zoom + 2 * MAT }}>
+      <p className="truncate" title={def?.truth} style={{ height: FOOT, paddingTop: 6, fontSize: TYPE.caption, lineHeight: 1.2, color: m.inkSoft, maxWidth: ART_W * zoom + 2 * MAT }}>
         {def ? sentence(def.badge) : "A generic sketch, not this model's own diagram."}
         {def && " Enlarge for what is computed and what is drawn."}
       </p>

@@ -39,21 +39,21 @@ import type { Traveller } from "./life";
 import { EVIDENCE_ART } from "./pixel-art";
 import { buildRoadGraph, chainRoute, lineageRoutes, pointAt, polylineLength, rootChain, route } from "./roads";
 import { placeTags, textWidth, type PlacedTag, type TagSpec } from "./labels";
-import { PaintedOverlay } from "./overlay";
+import { PaintedOverlay, type PaperSign } from "./overlay";
 import { Drawer, drawerWidth, sheetHeight, type Sheet } from "./drawer";
 import { Cartouche } from "./corners/cartouche";
 import { SheetTabs, type Labels, type Render } from "./corners/sheet-tabs";
 import { Compass } from "./corners/compass";
 import { ScaleBar } from "./corners/scale-bar";
 import { CornerPlate } from "./corners/corner-plate";
-import { CORNER_W, CORNER_W_Q } from "./corners/plate";
 import { SeaCanvas, useSeaFurniture } from "./stage";
 import { TrueMapLayers, spotClear, useTrueMap } from "./true-map";
 import { PIXELMAP_CMD } from "./pixelmap";
 import { layoutRibbons, spotBoxes, type PlacedRibbon, type RibbonItem } from "./ribbons";
 import { ribbonSize } from "./pixel-art";
-import { FAMILY_TITLE, IMAGES, MATERIALS } from "./material";
+import { CORNER, FAMILY_TITLE, IMAGES, MATERIALS, MOTION, PAPER_TITLE, TYPE } from "./material";
 import { Leader, MapPlate, plateEstimate } from "./map-plate";
+import { retouch, type Pixels } from "./heal";
 import { composePlate, plateRect, sample, type PBox, type PPt, type PlatePlan } from "./plate-place";
 
 // render=grid: 3-px blocks (scripts/pixelate_map.py --cell 3), rests on thirds.
@@ -78,11 +78,13 @@ const KEYFRAMES = `
 // the load moment: the four corners stamp onto the sea, two frames each, in
 // turn; afterwards (flips > 0) each change of focus mode re-stamps them in
 // place, quicker and without leaving the sea bare (the two names alternate so
-// the animation restarts without remounting the plates)
-const stamp = (i: number, still: boolean, flips = 0): CSSProperties =>
-  still ? {}
-    : flips === 0 ? { animation: `painted-stamp 160ms steps(2, end) both`, animationDelay: `${120 + i * 90}ms` }
-    : { animation: `painted-restamp-${flips % 2 ? "a" : "b"} 140ms steps(2, end) both`, animationDelay: `${i * 40}ms` };
+// the animation restarts without remounting the plates). Timings: MOTION.
+const stamp = (i: number, still: boolean, flips = 0): CSSProperties => {
+  const { stamp: a, restamp: b } = MOTION;
+  return still ? {}
+    : flips === 0 ? { animation: `painted-stamp ${a.ms}ms steps(${a.steps}, end) both`, animationDelay: `${a.delay + i * a.stagger}ms` }
+    : { animation: `painted-restamp-${flips % 2 ? "a" : "b"} ${b.ms}ms steps(${b.steps}, end) both`, animationDelay: `${i * b.stagger}ms` };
+};
 
 interface Opts { map: MapId; render: Render; labels: Labels; dev: boolean; ui: boolean; plate: boolean }
 
@@ -230,6 +232,7 @@ export function PaintedSkin() {
     for (const n of names) { const f = family?.[n]; if (f && states[n] === "champion") c[f] = (c[f] ?? 0) + 1; }
     return c;
   }, [names, family, states]);
+  const familyOf = useCallback((n: string) => family?.[n], [family]);
   const pipelines = useMemo(() => taxonomy?.compositions.map((c) => c.name) ?? [], [taxonomy]);
   const counts = useMemo(() => ({
     models: names.length,
@@ -244,7 +247,7 @@ export function PaintedSkin() {
   // quiets the corners (quiet, below, once the camera is known)
   const quietView = (view?.zoom ?? "overview") !== "overview";
   // the compass stands this far above the scale bar (the bottom-left stack's gap)
-  const BL_GAP = quietView ? 8 : 12;
+  const BL_GAP = quietView ? CORNER.stackQuiet : CORNER.stack;
   const [hovered, setHovered] = useState<string | null>(null);
   const lineage = useMemo(() => (selected && taxonomy ? lineageRoutes(graph, selected, parentsOf) : []), [selected, graph, parentsOf, taxonomy]);
   // the carts: every builds_on edge travelled parent → child in the child's
@@ -424,7 +427,7 @@ export function PaintedSkin() {
     // round a long name), so the plate never touches them; the land titles are
     // part of the painting, so it keeps off them too while any framing allows
     const named = heal ? map.baked.filter((b) => b.name && lineageSet.has(b.name)).map((b) => ({ x: b.box.x - 20, y: b.box.y - 10, w: b.box.w + 40, h: b.box.h + 20 })) : [];
-    const titles = heal ? map.baked.filter((b) => b.kind === "family" || b.kind === "subtitle").map((b) => b.box) : [];
+    const titles = heal ? map.baked.filter((b) => b.kind === "family").map((b) => b.box) : [];
     const view = { x: 0, y: 0, w: visW, h: visH };
     const bounded = mapId === "paper" ? { w: W, h: H } : undefined;
     // the corner plates the plate keeps off: all four; or, when the pair fits
@@ -432,7 +435,7 @@ export function PaintedSkin() {
     // leave no 596×406 hole), the scale bar folds away and the compass drops
     // to the bottom margin — the chrome yields rather than the plate clipping
     const { tl, tr, br, compass: cp, scale: sc } = cornerAt;
-    const M = 20;
+    const M = CORNER.margin;
     const top = [tl, tr].filter((c): c is PBox => Boolean(c));
     const right = br ? [br] : [];
     const avoidFull = cp && sc ? [...top, ...right, { x: M, y: vp.h - M - sc.h, w: sc.w, h: sc.h }, { x: M, y: vp.h - M - sc.h - BL_GAP - cp.h, w: cp.w, h: cp.h }] : corners;
@@ -510,7 +513,11 @@ export function PaintedSkin() {
       // filling the visible view and let the land sit off-centre instead
       return boxAt(lb.x + lb.w / 2, lb.y + lb.h / 2, k, mapId !== "paper");
     }
-    return isTrue ? boxAt(continent.x + continent.w / 2, continent.y + continent.h / 2, levels.overview) : boxAt(W / 2, H / 2, levels.overview);
+    if (isTrue) return boxAt(continent.x + continent.w / 2, continent.y + continent.h / 2, levels.overview);
+    // paper: the cover crop takes its loss from the bottom (sea, ships and the
+    // painter's painted-out scale bar), never from the land titles along the top
+    if (mapId === "paper") return boxAt(W / 2, 0, levels.overview);
+    return boxAt(W / 2, H / 2, levels.overview);
   }, [view, map, levels, family, landFrame, boxAt, visW, visH, isTrue, down, W, H, continent, mobile, mapId, plan, anchorPt, vp.w, vp.h, landFitK]);
 
   useEffect(() => { setManual(null); }, [view?.zoom, view?.focus, mapId, render, vp.w, vp.h, drawerPx]);
@@ -610,13 +617,24 @@ export function PaintedSkin() {
   // rest): a sign or a name half under the cartouche or the minimap reads as
   // cut just the same
   const restBox0 = manual ?? target;
-  const labelHard: Box[] = useMemo(() => {
-    if (!plateRest.length) return [];
+  const cornersAtRest: Box[] = useMemo(() => {
     const air = 4;
-    return [...plateRest, ...corners.map((c) => ({
+    return corners.map((c) => ({
       x: restBox0.x + (c.x - air) / layoutS, y: restBox0.y + (c.y - air) / layoutS, w: (c.w + 2 * air) / layoutS, h: (c.h + 2 * air) / layoutS,
-    }))];
-  }, [plateRest, corners, restBox0.x, restBox0.y, layoutS]);
+    }));
+  }, [corners, restBox0.x, restBox0.y, layoutS]);
+  const labelHard: Box[] = useMemo(() => (plateRest.length ? [...plateRest, ...cornersAtRest] : []), [plateRest, cornersAtRest]);
+  // paper: a painter's plate (or a land's seal) half under any corner plate
+  // reads as cut ("pixe…" under the legend) — it is painted out instead, with
+  // or without the map plate up
+  const paperHard: Box[] = useMemo(() => (heal ? [...plateRest, ...cornersAtRest] : labelHard), [heal, plateRest, cornersAtRest, labelHard]);
+  // … and so does one the screen's edge cuts ("vision emb…" on a phone): the
+  // strips just past the visible view are hard too
+  const edgeHard: Box[] = useMemo(() => {
+    if (!heal) return [];
+    const b = manual ?? target, x1 = b.x + (visW / vp.w) * b.w, y1 = b.y + (visH / vp.h) * b.h, far = 4000;
+    return [{ x: b.x - far, y: -far, w: far, h: 3 * far }, { x: x1, y: -far, w: far, h: 3 * far }, { x: -far, y: b.y - far, w: 3 * far, h: far }, { x: -far, y: y1, w: 3 * far, h: far }];
+  }, [heal, manual, target, visW, visH, vp.w, vp.h]);
 
 
   // ——— fonts
@@ -683,6 +701,9 @@ export function PaintedSkin() {
   //   in a land   (zoomed in, or a land in focus) that land's names open
   //   a model     its card opens (the drawer) and its lineage is named
   const zoomedIn = isTrue ? layoutS >= 2 - 1e-3 : layoutS >= levels.overview * 1.8;
+  // paper: past ×1.4 of the whole sheet the painter's plates (painted-scale)
+  // would outgrow the live tags (screen-steady): every name goes screen-steady
+  const steadyNames = !isTrue && layoutS >= levels.overview * 1.4;
   const showName = useCallback((n: string) =>
     n === selected || n === hovered || lineageSet.has(n)
       || (focusFam !== null ? family?.[n] === focusFam : zoomedIn),
@@ -753,6 +774,55 @@ export function PaintedSkin() {
     }
     return out;
   }, [isTrue, ours, gSign, map, famCount, focusFam, visible, labelHard, chrome]);
+
+  // paper: the painter's land titles, redrawn on our stock (the painting
+  // under them is retouched), so a title can do what a painted one cannot:
+  // it stays whole, and it keeps its whole-sheet screen size when the camera
+  // goes in (a sign, not scenery). At its painted spot; if the screen edge or
+  // a corner plate would cut it, it steps to the nearest spot in view (a
+  // title height up or down, a third of its width sideways) that clears the
+  // corners and the titles already placed. With a land in focus only that
+  // land's title may step; the others show only where they were painted, and
+  // one the map plate would cut is left off
+  const paperSigns: PaperSign[] = useMemo(() => {
+    if (!heal) return [];
+    const V = visible, out: PaperSign[] = [], placed: Box[] = [];
+    const fams = Object.keys(PAPER_TITLE) as Family[];
+    // (never below ×0.6 of the painted size: a phone at node zoom keeps a readable title)
+    const k = clamp(levels.overview / layoutS, 0.6, 1);
+    // a title that steps aside never lands on a model's plate
+    const plates = map.baked.filter((b) => b.kind === "model" || b.kind === "invented").map((b) => b.box);
+    const titles = map.baked.filter((b) => b.kind === "family").sort((a, b) => a.box.y - b.box.y);
+    for (const b of titles) {
+      const f = fams.find((q) => PAPER_TITLE[q] === b.text);
+      if (!f) continue;
+      const w = b.box.w * k, h = b.box.h * k;
+      const x0 = b.box.x + (b.box.w - w) / 2, y0 = b.box.y + (b.box.h - h) / 2;
+      const seal = 15 * k;   // the seal rides the top-right corner: keep it in view too
+      const fitX = (x: number) => clamp(x, V.x + 2, V.x + V.w - w - seal - 2);
+      const fitY = (y: number) => clamp(y, V.y + seal + 2, V.y + V.h - h - 2);
+      // a title may step into view only if at least half of it was there
+      // already (a land off the screen's edge is not pulled onto the phone)
+      const ix = Math.max(0, Math.min(x0 + w, V.x + V.w) - Math.max(x0, V.x)), iy = Math.max(0, Math.min(y0 + h, V.y + V.h) - Math.max(y0, V.y));
+      const mayStep = (focusFam === null || focusFam === f) && ix * iy >= (w * h) / 2;
+      const cands: [number, number][] = mayStep ? [[fitX(x0), fitY(y0)]] : [[x0, y0]];
+      if (!mayStep && (x0 < V.x || y0 - seal < V.y || x0 + w + seal > V.x + V.w || y0 + h > V.y + V.h)) continue;
+      if (mayStep) for (let i = 1; i <= 4; i++) for (const [dx, dy] of [[0, i], [0, -i], [i, 0], [-i, 0], [i, i], [-i, i]]) {
+        cands.push([fitX(x0 + (dx * w) / 3), fitY(y0 + dy * (h + 8 * k))]);
+      }
+      const at = cands.find(([x, y], i) => {
+        const box = { x, y: y - seal, w: w + seal, h: h + seal };
+        const moved = i > 0 || Math.abs(x - x0) + Math.abs(y - y0) > 1;
+        return !chrome.some((o) => overlaps(box, o)) && !labelHard.some((o) => overlaps(box, o)) && !placed.some((o) => overlaps(box, o))
+          && !(moved && plates.some((o) => overlaps(box, o)));
+      });
+      if (!at) continue;
+      const box = { x: at[0], y: at[1], w, h };
+      placed.push({ x: box.x - 6, y: box.y - seal - 4, w: w + seal + 12, h: h + seal + 10 });
+      out.push({ fam: f, box, count: famCount[f] ?? 0, k });
+    }
+    return out;
+  }, [heal, visible, map, chrome, labelHard, famCount, focusFam, levels.overview, layoutS]);
 
   // phones have no map plate, so labelHard is empty there; the corner
   // furniture (the condensed cartouche, the tabs, the compass rail) is hard
@@ -862,7 +932,7 @@ export function PaintedSkin() {
     let t0 = 0;
     const step = (now: number) => {
       if (!t0) t0 = now;
-      const k = Math.min(1, (now - t0) / 380);
+      const k = Math.min(1, (now - t0) / MOTION.hopMs);
       setCritter((c) => (c ? { ...c, hop: k < 1 ? k : 0 } : c));
       if (k < 1) hopRaf.current = requestAnimationFrame(step);
     };
@@ -909,6 +979,42 @@ export function PaintedSkin() {
     return cardModel(selected, { taxonomy, evidence, runs, family: family[selected] ?? "", depth: depthOf(selected) });
   }, [selected, taxonomy, evidence, runs, family, depthOf]);
 
+  // ——— paper: the painting retouched once (heal.ts): the painter's own
+  // chrome and his model plates painted out, a few ms at a time so the page
+  // stays live; the stage then shows the clean painting under our plates
+  const [clean, setClean] = useState<{ src: string; url: string } | null>(null);
+  useEffect(() => {
+    if (!heal) return;
+    let alive = true, timer = 0, url = "";
+    const img = new Image();
+    img.src = imgSrc;
+    img.decode().then(() => {
+      const cv = document.createElement("canvas");
+      cv.width = img.naturalWidth; cv.height = img.naturalHeight;
+      const ctx = cv.getContext("2d", { willReadFrequently: true });
+      if (!ctx || !alive) return;
+      ctx.drawImage(img, 0, 0);
+      const px: Pixels = ctx.getImageData(0, 0, cv.width, cv.height);
+      // the chrome first (the largest holes), then the titles and the plates: all redrawn by us
+      const holes = [...map.baked.filter((b) => b.kind === "chrome"), ...map.baked.filter((b) => b.kind !== "chrome")].map((b) => b.box);
+      const it = retouch(px, holes);
+      const slice = () => {
+        const t0 = performance.now();
+        while (performance.now() - t0 < 12) if (it.next().done) {
+          ctx.putImageData(px as ImageData, 0, 0);
+          cv.toBlob((blob) => { if (alive && blob) { url = URL.createObjectURL(blob); setClean({ src: imgSrc, url }); } });
+          return;
+        }
+        timer = window.setTimeout(slice, 0);
+      };
+      slice();
+    }).catch(() => { if (alive) setClean({ src: imgSrc, url: imgSrc }); });
+    return () => { alive = false; clearTimeout(timer); if (url) URL.revokeObjectURL(url); };
+  }, [heal, imgSrc, map]);
+  const shownSrc = heal ? (clean?.src === imgSrc ? clean.url : null) : imgSrc;
+  // until the retouch is done the original shows (our plates cover its lettering)
+  const stageSrc = shownSrc ?? imgSrc;
+
   // ——— ready: data + picture + fonts + first painted frame
   const [imgLoaded, setImgLoaded] = useState<string | null>(null);
   const [trueVersion, setTrueVersion] = useState(0);
@@ -917,7 +1023,8 @@ export function PaintedSkin() {
     baseCanvas.current = document.querySelector<HTMLCanvasElement>("[data-painted-map] canvas");
     setTrueVersion((v) => v + 1);
   }, []);
-  const pictureReady = isTrue ? (trueState.status === "ready" ? trueVersion > 0 : trueState.status === "missing" || trueState.status === "error") : imgLoaded === imgSrc;
+  const pictureReady = isTrue ? (trueState.status === "ready" ? trueVersion > 0 : trueState.status === "missing" || trueState.status === "error")
+    : imgLoaded !== null && imgLoaded === shownSrc;
   const [drawn, setDrawn] = useState(false);
   useEffect(() => {
     setDrawn(false);
@@ -943,15 +1050,19 @@ export function PaintedSkin() {
   const compassUnit = m.crisp ? clamp(Math.round(ap * 3), 4, 6) : 5;
   // focus mode: 2 art px a grid unit (≈ two thirds of the size)
   const compassUnitQ = m.crisp ? clamp(Math.round(ap * 2), 3, 4) : 3.5;
-  const minimap = isTrue ? { canvas: baseCanvas.current, version: trueVersion } : { img: imgSrc, pixelated: mapId === "pixel" };
+  const minimap = isTrue ? { canvas: baseCanvas.current, version: trueVersion } : { img: stageSrc, pixelated: mapId === "pixel" };
   const corner = "pointer-events-auto absolute z-20";
+  // paper on a phone in focus mode: the one-row cartouche and the tabs would
+  // meet across 390 px (Fell runs wider than Pixelify), so "Whole map" is left
+  // to the compass hub and "map only" to the h key, as with a model open
+  const phoneTight = mapId === "paper" && quiet;
 
   return (
     <LabMotion still={still}>
       <style>{KEYFRAMES}</style>
       <div ref={rootRef} data-painted-root data-lab-ready={drawn ? "1" : undefined}
         className="relative h-full w-full select-none overflow-hidden"
-        style={{ background: m.sea, ["--ap" as string]: `${ap}px` } as CSSProperties}>
+        style={{ background: m.sea, fontVariantNumeric: m.numeric, ["--ap" as string]: `${ap}px` } as CSSProperties}>
         {/* ——— the stage: sea to every edge, the map on it */}
         <div ref={cam.ref} {...cam.handlers} onWheel={onWheel}
           onClick={() => { if (!cam.dragged.current && (view?.zoom ?? "overview") !== "overview") fitWhole(); }}
@@ -971,14 +1082,14 @@ export function PaintedSkin() {
             ) : (
               <>
                 {/* eslint-disable-next-line @next/next/no-img-element -- a local, owner-supplied painting */}
-                <img key={imgSrc} src={imgSrc} alt={mapId === "pixel" ? "A pixel-art map of six lands" : "A painted storybook map of six lands"}
-                  width={W} height={H} draggable={false} onLoad={() => setImgLoaded(imgSrc)}
-                  ref={(el) => { if (el?.complete && el.naturalWidth && imgLoaded !== imgSrc) setImgLoaded(imgSrc); }}
+                <img key={imgSrc} src={stageSrc} alt={mapId === "pixel" ? "A pixel-art map of six lands" : "A painted storybook map of six lands"}
+                  width={W} height={H} draggable={false} onLoad={() => setImgLoaded(stageSrc)}
+                  ref={(el) => { if (el?.complete && el.naturalWidth && imgLoaded !== stageSrc) setImgLoaded(stageSrc); }}
                   className="absolute inset-0 block h-full w-full max-w-none"
                   style={{ imageRendering: mapId === "pixel" ? "pixelated" : "auto" }} />
                 {taxonomy && (
-                  <PaintedOverlay map={map} theme={m} scale={S} heal={heal} ours={ours} hard={labelHard} painting={heal ? imgSrc : undefined}
-                    tags={tags} tagFont={tagFont} markerR={markerR} states={states} famCount={famCount} counts={counts}
+                  <PaintedOverlay map={map} theme={m} scale={S} heal={heal} ours={ours} hard={[...paperHard, ...edgeHard]} steady={steadyNames} paperSigns={paperSigns} focusFam={focusFam} familyOf={familyOf}
+                    tags={tags} tagFont={tagFont} markerR={markerR} states={states} famCount={famCount}
                     selected={selected} hovered={hovered} lineage={lineage} lineageSet={lineageSet}
                     critter={critter} still={still} onSelect={onSelect} onHover={setHovered} onCritter={onCritter} />
                 )}
@@ -1007,7 +1118,7 @@ export function PaintedSkin() {
           const landed = manual !== null || Math.abs(S / plan.k - 1) < 0.08;
           return (
             <div className="pointer-events-none absolute inset-0 z-[15]"
-              style={{ right: drawerPx, opacity: landed ? 1 : 0, visibility: landed ? "visible" : "hidden", transition: still ? undefined : "opacity 180ms steps(3, end)" }}>
+              style={{ right: drawerPx, opacity: landed ? 1 : 0, visibility: landed ? "visible" : "hidden", transition: still ? undefined : `opacity ${MOTION.plateFade.ms}ms steps(${MOTION.plateFade.steps}, end)` }}>
               <MapPlate ref={plateEl} m={m} name={selected} still={still} zoom={plateZoom}
                 data={{ "data-plate-side": plan.side, "data-plate-k": String(plan.k), "data-plate-cost": String(Math.round(plan.cost)) }}
                 style={{ left: px, top: py, ...stamp(4, still) }}
@@ -1022,7 +1133,7 @@ export function PaintedSkin() {
         {opts && uiHidden && (
           <button type="button" onClick={() => setUiHidden(false)} aria-label="Show the UI (h)" title="Show the UI (h)"
             className="absolute right-3 top-3 z-20 px-2.5 py-1 leading-none opacity-50 hover:opacity-100 focus-visible:opacity-100 focus-visible:outline-2 sm:right-5 sm:top-5"
-            style={{ background: m.plateHi, color: m.ink, border: `var(--ap) solid ${m.border}`, fontFamily: m.bodyFont, fontSize: 14 }}>
+            style={{ background: m.plateHi, color: m.ink, border: `var(--ap) solid ${m.border}`, fontFamily: m.bodyFont, fontSize: TYPE.link }}>
             UI
           </button>
         )}
@@ -1032,11 +1143,11 @@ export function PaintedSkin() {
             <div data-corner="tl" className={`${corner} left-3 sm:left-5 ${m.crisp || quiet ? "top-3 sm:top-5" : "top-0"}`} style={stamp(0, still, flips)}>
               {/* a phone with a model open leaves "Whole map" to the sheet's own button */}
               <Cartouche m={m} counts={counts} names={names} focusFam={focusFam} famCount={famCount} famProven={famProven}
-                onPick={onSelect} onWhole={fitWhole} compact={mobile} quiet={quiet} wholeLink={!(mobile && selected)} />
+                onPick={onSelect} onWhole={fitWhole} compact={mobile} quiet={quiet} wholeLink={!(mobile && (selected || phoneTight))} />
             </div>
             <div data-corner="tr" className={`${corner} right-3 top-0 sm:right-5`} style={stamp(1, still, flips)}>
               <SheetTabs m={m} mapId={mapId} dev={opts.dev} render={render} labels={labels} setOpts={set} devOpen={devOpen} setDevOpen={setDevOpen} compact={mobile || quiet}
-                mapOnly={!(mobile && selected)} onHideUi={() => setUiHidden(true)} />
+                mapOnly={!(mobile && (selected || phoneTight))} onHideUi={() => setUiHidden(true)} />
             </div>
             {/* the compass stands on the scale bar, as on a printed map: the
                 scale bar and the legend share the bottom margin */}
@@ -1059,14 +1170,14 @@ export function PaintedSkin() {
                 {/* focus mode: the minimap is a small inset (orientation, not a second map) */}
                 <CornerPlate m={m} face={zoomedIn_ ? "minimap" : "legend"} world={{ w: W, h: H }} box={cam.box} source={minimap} onCenter={centerAt}
                   quiet={quiet && zoomedIn_}
-                  width={quiet && zoomedIn_ ? CORNER_W_Q : cornerAt.scale ? clamp(visW - 2 * 20 - cornerAt.scale.w - 24, 264, CORNER_W) : CORNER_W} />
+                  width={quiet && zoomedIn_ ? CORNER.wQuiet : cornerAt.scale ? clamp(visW - 2 * CORNER.margin - cornerAt.scale.w - 24, 264, CORNER.w) : CORNER.w} />
               </div>
             )}
           </div>
         )}
 
         {isTrue && (trueState.status === "missing" || trueState.status === "error") && (
-          <div role="alert" className="absolute inset-x-4 top-24 z-30 mx-auto max-w-xl p-4" style={{ ...{ background: m.plateHi, color: m.ink, border: `var(--ap) solid ${m.border}`, fontFamily: m.bodyFont }, fontSize: 15 }}>
+          <div role="alert" className="absolute inset-x-4 top-24 z-30 mx-auto max-w-xl p-4" style={{ ...{ background: m.plateHi, color: m.ink, border: `var(--ap) solid ${m.border}`, fontFamily: m.bodyFont }, fontSize: TYPE.body }}>
             <p className="font-bold">The true pixel map has not been converted yet.</p>
             <p className="mt-1">Run:</p>
             <pre className="mt-1 whitespace-pre-wrap break-all text-[13px]">{PIXELMAP_CMD}</pre>

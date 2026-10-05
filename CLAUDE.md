@@ -173,7 +173,15 @@ playground/ (repo root)  Next.js 16 + React 19 + TS + Tailwind v4 + Recharts +
                      + corner plates are HARD for labels: a name they would cut
                      moves or is left out, except the selection + its lineage;
                      paper keeps the plate off the painter's land titles);
-                     one component tree, two materials (material.ts). The pixel
+                     one component tree, two materials (material.ts = the kit's
+                     ONE tokens module: colours, faces + digit faces, TYPE,
+                     SPACE, CORNER, DRAWER, MOTION; the kit's design contract +
+                     how to lift it: components/lab/painted/DESIGN.md). Paper:
+                     the painting is retouched once on load (heal.ts paints out
+                     the painter's cartouche, compass, scale bar and lettering);
+                     land titles are redrawn whole in view, names go
+                     screen-steady when zoomed, digits are Alegreya lining
+                     figures under Fell SC (--font-paper-digits). The pixel
                      map is alive (life.ts → a 12-fps canvas above the focus
                      layer): water glints + foam, waterfalls, lava pulse with
                      embers + smoke from the volcano's vents, window flicker,

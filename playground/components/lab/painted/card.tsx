@@ -10,37 +10,39 @@
 //   quality gate it is judged by.
 // With diagramOn="map" (the painted maps on desktop) the diagram is a plate on
 // the map instead (map-plate.tsx) and the card is text only.
-// One rhythm: 8-px steps (a section every 24 px, a header 10 px above its
-// content, chips 6 px apart). One face, the map's own: Pixelify Sans (its
+// One rhythm (material.ts SPACE): a section every 24 px, a header 10 px
+// above its content, chips 6 px apart. One face, the map's own: Pixelify Sans (its
 // digits from clearer pixel faces, material.ts PIXEL_FONT: 5 never reads S) at three
 // weights — 700 for the name and the section headers (the map's sign voice),
 // 500 for anything you can press and the small labels, 400 for reading.
-// One type scale (TYPE): name 28, section header 14 (bold, border ink, ruled
+// One type scale (material.ts TYPE; the sign voice at the material's
+// signScale): name 28, section header 14 (bold, border ink, ruled
 // to the edge), body 15/1.4, notes 13/1.35, meta 12 — and running text keeps
 // a measure of at most 38 characters. Three sections, one header each:
 // Lineage (built on / leads to as its two sub-labels), Pipelines, Quality gate.
-import type { CSSProperties, ReactNode } from "react";
+import { createContext, useContext, type CSSProperties, type ReactNode } from "react";
 import { displayName, EVIDENCE_COPY, type CardModel, type EvidenceState } from "@/components/lab/shared/card-model";
 import { MechanismDiagram } from "@/components/lab/shared/anatomy2";
 import { THEMES } from "@/components/lab/shared/anatomy2/themes";
-import { FAMILY_TITLE, type Material } from "./material";
+import { DRAWER, FAMILY_TITLE, SPACE, TYPE, nameFace, sign, type Material } from "./material";
 import { EvidenceIcon } from "./pixel-icon";
+import { MarkIcon } from "./marker";
 import { plateStyle } from "./corners/plate";
 
 const fmt = (n: number) => (Math.abs(n) >= 100 ? n.toFixed(0) : Math.abs(n) >= 1 ? n.toFixed(2) : n.toFixed(3));
-const SECTION = 24;   // px between sections
-const LABEL_GAP = 10; // px from a section header to its content
-/** the drawer's type scale, CSS px */
-export const TYPE = { name: 28, head: 14, body: 15, note: 13, meta: 12 } as const;
-/** running text's measure (em, so a note at 13 px keeps the same count) */
-const MEASURE = "19em";   // ≈ 38 Pixelify characters at any of the scale's sizes
-
 /** The model's evidence as the map draws it: its banner (atom) or stone
  * (derived) sprite on the pixel maps, a filled dot on the paper map. */
+/** A skin's own evidence glyph for the card (the name, the signposts, "you are
+ * here"); unset, the painted maps' sprite or marker. */
+export type CardGlyph = (state: EvidenceState, atom: boolean, big: boolean) => ReactNode;
+const GlyphOverride = createContext<CardGlyph | null>(null);
+
 function Glyph({ m, state, atom, big = false }: { m: Material; state: EvidenceState; atom: boolean; big?: boolean }) {
+  const own = useContext(GlyphOverride);
+  if (own) return <>{own(state, atom, big)}</>;
   if (m.crisp) return <EvidenceIcon state={state} atom={atom} scale={big ? (atom && state !== "untrained" ? 2 : 3) : (atom && state !== "untrained" ? 1 : 2)} />;
-  const s = big ? 14 : 10;
-  return <span aria-hidden className="inline-block flex-none rounded-full" style={{ width: s, height: s, background: m.evidence[state].fill, border: `1.5px solid ${m.evidence[state].stroke}` }} />;
+  // the map's own marker: disc, star for a champion, pip for trained
+  return <MarkIcon m={m} state={state} size={big ? 22 : 14} />;
 }
 
 /** A section header in the map's sign voice, with the count badge the land
@@ -48,10 +50,10 @@ function Glyph({ m, state, atom, big = false }: { m: Material; state: EvidenceSt
  * three sections read as three. */
 function Label({ m, children, count, id }: { m: Material; children: ReactNode; count?: number; id?: string }) {
   return (
-    <h3 id={id} className="flex items-center gap-2 leading-none" style={{ fontFamily: m.signFont, fontWeight: 700, fontSize: TYPE.head, color: m.crisp ? m.border : m.ink, marginBottom: LABEL_GAP }}>
+    <h3 id={id} className="flex items-center gap-2 leading-none" style={{ fontFamily: m.signFont, fontWeight: 700, fontSize: sign(m, TYPE.head), color: m.crisp ? m.border : m.ink, marginBottom: SPACE.label }}>
       {children}
       {count != null && (
-        <span className="px-1.5 py-0.5 leading-none" style={{ background: m.crisp ? m.border : m.loud, color: m.loudInk, fontSize: 11, fontWeight: 700, borderRadius: m.crisp ? 0 : 3, fontVariantNumeric: "tabular-nums" }}>
+        <span className="px-1.5 py-0.5 leading-none" style={{ background: m.crisp ? m.border : m.loud, color: m.loudInk, fontSize: TYPE.badge, fontWeight: 700, borderRadius: m.radius, fontVariantNumeric: "tabular-nums" }}>
           {count}
         </span>
       )}
@@ -62,7 +64,7 @@ function Label({ m, children, count, id }: { m: Material; children: ReactNode; c
 
 /** A sub-label inside a section (the lineage's "Built on" / "Leads to"). */
 function SubLabel({ m, children }: { m: Material; children: ReactNode }) {
-  return <p className="leading-none" style={{ fontSize: TYPE.meta, fontWeight: 500, color: m.inkSoft, marginBottom: 6 }}>{children}</p>;
+  return <p className="leading-none" style={{ fontSize: TYPE.meta, fontWeight: 500, color: m.inkSoft, marginBottom: SPACE.sub }}>{children}</p>;
 }
 
 /** A neighbour on the road: a plate you press to travel there, with its
@@ -71,7 +73,7 @@ function Signpost({ name, theme: m, onPick, state, atom }: { name: string; theme
   return (
     <button type="button" onClick={() => onPick(name)} title={`Go to ${displayName(name)}`}
       className="inline-flex min-h-[28px] items-center gap-1.5 px-2 py-1 leading-none hover:brightness-105 focus-visible:outline-2 focus-visible:outline-offset-2"
-      style={{ ...plateStyle(m), fontFamily: m.bodyFont, fontWeight: 500, fontSize: 14 }}>
+      style={{ ...plateStyle(m), fontFamily: m.bodyFont, fontWeight: 500, fontSize: TYPE.chip }}>
       <Glyph m={m} state={state} atom={atom} />
       {displayName(name)}
     </button>
@@ -98,7 +100,7 @@ function Stamp({ m, state, version }: { m: Material; state: EvidenceState; versi
     ? { background: m.plateHi, color: m.border, border: `var(--ap, 2px) dashed ${m.border}` }
     : { background: ev.fill, color: ink, border: `var(--ap, 2px) solid ${m.crisp ? m.border : ev.stroke}` };
   return (
-    <span className="inline-flex flex-none items-center gap-1.5 px-2 py-1 leading-none" style={{ ...style, fontFamily: m.signFont, fontWeight: 700, fontSize: 13, borderRadius: m.crisp ? 0 : 3 }}>
+    <span className="inline-flex flex-none items-center gap-1.5 px-2 py-1 leading-none" style={{ ...style, fontFamily: m.signFont, fontWeight: 700, fontSize: sign(m, TYPE.stamp), borderRadius: m.radius }}>
       {head}{version ? ` ${version}` : ""}
     </span>
   );
@@ -122,7 +124,11 @@ export function DiagramMat({ m, children, className = "" }: { m: Material; child
   );
 }
 
-export function CardBody({ card, theme: m, still, onPick, stateOf, isAtom, diagramWidth, onOpenDiagram, diagramOn = "drawer", onShowDiagram }: {
+export function CardBody({ glyph, ...p }: Parameters<typeof CardBodyInner>[0] & { glyph?: CardGlyph }) {
+  return <GlyphOverride.Provider value={glyph ?? null}><CardBodyInner {...p} /></GlyphOverride.Provider>;
+}
+
+function CardBodyInner({ card, theme: m, still, onPick, stateOf, isAtom, diagramWidth, onOpenDiagram, diagramOn = "drawer", onShowDiagram }: {
   card: CardModel; theme: Material; still: boolean; onPick: (n: string) => void;
   stateOf: (n: string) => CardModel["state"]; isAtom: (n: string) => boolean;
   diagramWidth: number; onOpenDiagram: () => void;
@@ -139,15 +145,15 @@ export function CardBody({ card, theme: m, still, onPick, stateOf, isAtom, diagr
   const where = card.atom ? `${land}, an atom` : `${land}, generation ${card.depth}`;
   const [, gloss] = EVIDENCE_COPY[card.state].split(" — ");
   const head = m.crisp ? m.border : m.ink;
-  const section: CSSProperties = { marginTop: SECTION };
+  const section: CSSProperties = { marginTop: SPACE.section };
   const pipes = card.compositions;
-  const text: CSSProperties = { maxWidth: MEASURE };
-  const note: CSSProperties = { fontSize: TYPE.note, lineHeight: 1.35, color: m.inkSoft, maxWidth: MEASURE };
+  const text: CSSProperties = { maxWidth: DRAWER.measure };
+  const note: CSSProperties = { fontSize: TYPE.note, lineHeight: 1.35, color: m.inkSoft, maxWidth: DRAWER.measure };
   return (
     <section aria-label={`${name} lesson card`} style={{ color: m.ink, fontFamily: m.bodyFont, fontSize: TYPE.body, lineHeight: 1.4 }}>
       {/* where it is, then who, then how far it has got */}
       <p className="leading-none" style={{ fontSize: TYPE.meta, fontWeight: 500, color: m.inkSoft }}>{where}</p>
-      <h2 className="mt-2 flex items-end gap-2.5 leading-none" style={{ fontFamily: m.signFont, fontWeight: 700, fontSize: TYPE.name, color: head }}>
+      <h2 className="mt-2 flex items-end gap-2.5 leading-none" style={{ fontFamily: nameFace(m), fontWeight: 700, fontSize: m.nameFont ? TYPE.name : sign(m, TYPE.name), color: head }}>
         <Glyph m={m} state={card.state} atom={card.atom} big />
         <span style={{ overflowWrap: "anywhere" }}>{name}</span>
       </h2>
@@ -157,14 +163,16 @@ export function CardBody({ card, theme: m, still, onPick, stateOf, isAtom, diagr
       </div>
 
       {/* what it does, and the one idea it adds to the zoo */}
-      {card.description && <p style={{ ...text, marginTop: 16 }}>{card.description}</p>}
+      {card.description && <p style={{ ...text, marginTop: SPACE.lede }}>{card.description}</p>}
       {card.introduces.map((i) => (
-        <div key={i.key} className="mt-3 px-2.5 py-2" style={{ background: m.plate, border: `var(--ap, 2px) solid ${m.crisp ? m.rule : m.border}`, borderRadius: m.crisp ? 0 : 3, boxShadow: m.crisp ? `inset 0 0 0 1px ${m.rule}` : undefined }}>
+        // pixel: a recessed panel in the plate's bevel; paper: a sheet of the cardstock laid flat (no drop)
+        <div key={i.key} className="mt-3 px-2.5 py-2" style={m.card ? plateStyle(m, { shadow: false })
+          : { background: m.plate, border: `var(--ap, 2px) solid ${m.crisp ? m.rule : m.border}`, borderRadius: m.radius, boxShadow: m.crisp ? `inset 0 0 0 1px ${m.rule}` : undefined }}>
           <p className="flex items-center gap-2 leading-none" style={{ fontSize: TYPE.meta, fontWeight: 500, color: m.inkSoft }}>
             <span aria-hidden className="inline-block h-2 w-2 flex-none" style={{ background: m.road, boxShadow: `0 0 0 1px ${m.border}` }} />
             Introduces
           </p>
-          <p className="mt-1.5" style={{ fontSize: 14, lineHeight: 1.35, maxWidth: MEASURE }}>
+          <p className="mt-1.5" style={{ fontSize: TYPE.chip, lineHeight: 1.35, maxWidth: DRAWER.measure }}>
             <b style={{ fontWeight: 700, color: head }}>{displayName(i.key)}</b>
             {i.description ? <span>: {i.description}</span> : null}
           </p>
@@ -182,7 +190,7 @@ export function CardBody({ card, theme: m, still, onPick, stateOf, isAtom, diagr
       ) : onShowDiagram ? (
         <button type="button" onClick={onShowDiagram}
           className="mt-4 inline-flex min-h-[28px] items-center gap-2 px-2.5 py-1 leading-none hover:brightness-105 focus-visible:outline-2 focus-visible:outline-offset-2"
-          style={{ ...plateStyle(m), fontFamily: m.bodyFont, fontWeight: 500, fontSize: 14 }}>
+          style={{ ...plateStyle(m), fontFamily: m.bodyFont, fontWeight: 500, fontSize: TYPE.chip }}>
           Show how {name} works on the map
         </button>
       ) : null}
@@ -202,7 +210,7 @@ export function CardBody({ card, theme: m, still, onPick, stateOf, isAtom, diagr
         {card.parents.length > 0 && <Road m={m} />}
         <div className="flex items-center gap-2">
           <span className="inline-flex min-h-[28px] items-center gap-1.5 px-2 py-1 leading-none" aria-current="true"
-            style={{ ...plateStyle(m, { loud: true, shadow: false }), fontFamily: m.bodyFont, fontWeight: 700, fontSize: 14 }}>
+            style={{ ...plateStyle(m, { loud: true, shadow: false }), fontFamily: m.bodyFont, fontWeight: 700, fontSize: TYPE.chip }}>
             <Glyph m={m} state={card.state} atom={card.atom} />
             {name}
           </span>
@@ -216,7 +224,7 @@ export function CardBody({ card, theme: m, still, onPick, stateOf, isAtom, diagr
           </div>
         ) : (
           // the road's end, drawn as a signpost with nothing on it yet
-          <p className="inline-flex px-2 py-1" style={{ ...note, border: `var(--ap, 2px) dashed ${m.crisp ? m.border : m.inkSoft}`, borderRadius: m.crisp ? 0 : 3 }}>
+          <p className="inline-flex px-2 py-1" style={{ ...note, border: `var(--ap, 2px) dashed ${m.crisp ? m.border : m.inkSoft}`, borderRadius: m.radius }}>
             The road ends here: no model builds on {name} yet.
           </p>
         )}
@@ -227,8 +235,8 @@ export function CardBody({ card, theme: m, still, onPick, stateOf, isAtom, diagr
           <Label m={m} count={pipes.length}>{pipes.length === 1 ? "Pipeline" : "Pipelines"}</Label>
           <ul className="space-y-2">
             {pipes.slice(0, 6).map((c) => (
-              <li key={c.name} style={{ lineHeight: 1.3, maxWidth: MEASURE }}>
-                <span className="block" style={{ fontWeight: 700, fontSize: 14 }}>{displayName(c.name)}</span>
+              <li key={c.name} style={{ lineHeight: 1.3, maxWidth: DRAWER.measure }}>
+                <span className="block" style={{ fontWeight: 700, fontSize: TYPE.chip }}>{displayName(c.name)}</span>
                 <span className="block" style={{ fontSize: TYPE.note, color: m.inkSoft }}>
                   {c.composes.map((n, i) => (
                     <span key={n}>

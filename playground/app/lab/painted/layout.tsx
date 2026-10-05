@@ -36,6 +36,20 @@ const digits = localFont({
   ],
 });
 
+// The paper map's digits: IM Fell English SC draws old-style figures, its 1 a
+// small-cap I ("Champion vi"), and a version or a bar is data. So 0-9, and
+// only those, come from Alegreya (the paper map's reading face), and the paper
+// material asks for lining figures (material.ts `numeric`): every number
+// stands on the line at cap height, in signs and text alike. The unmodified
+// Google Fonts latin file of the variable Alegreya, OFL (fonts/OFL-Alegreya.txt).
+const paperDigits = localFont({
+  src: [{ path: "./fonts/Alegreya-latin.woff2", weight: "400 900" }],
+  variable: "--font-paper-digits",
+  display: "block",
+  adjustFontFallback: false,
+  declarations: [{ prop: "unicode-range", value: "U+0030-0039" }],
+});
+
 export default function PaintedLayout({ children }: Readonly<{ children: React.ReactNode }>) {
-  return <div className={`${pixel.variable} ${digits.variable} ${fell.variable} ${alegreya.variable} h-full w-full`}>{children}</div>;
+  return <div className={`${pixel.variable} ${digits.variable} ${paperDigits.variable} ${fell.variable} ${alegreya.variable} h-full w-full`}>{children}</div>;
 }

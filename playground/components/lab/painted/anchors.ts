@@ -34,8 +34,9 @@ export type AnchorRow = readonly [number, number, string];
 export interface RoadRow { a: string; b: string; via?: readonly (readonly [number, number])[]; kind?: "road" | "bridge" | "air" }
 /** Baked lettering (paper): under labels=ours each model plate is covered by OUR plate
  * carrying `name` (the model anchored at that landmark) or "no model yet";
- * family plates are kept and get a count seal; counts/subtitle are refilled. */
-export interface BakedText { text: string; name?: string; box: Box; src?: readonly [number, number]; kind: "family" | "model" | "invented" | "count" | "subtitle" }
+ * family plates are kept and get a count seal; the painter's own chrome
+ * (cartouche, compass, scale bar: ours replaces it) is painted out (heal.ts). */
+export interface BakedText { text: string; name?: string; box: Box; kind: "family" | "model" | "invented" | "chrome" }
 
 export interface PaintedMap {
   id: MapId;
@@ -50,8 +51,6 @@ export interface PaintedMap {
   signs: Record<Family, readonly [number, number]>;
   /** our title cartouche (top-left plate with real counts + search) */
   cartouche: Box;
-  /** where "N pipelines" goes */
-  pipelines: Pt;
   baked: BakedText[];
   /** hand-placed features of the painting that life.ts animates */
   landmarks?: {
@@ -249,7 +248,6 @@ const PIXEL: PaintedMap = {
     decision: [1420, 650],
   },
   cartouche: { x: 24, y: 24, w: 292, h: 140 },
-  pipelines: { x: 1440, y: 990 },
   baked: [],
 };
 
@@ -421,7 +419,6 @@ const TRUE: PaintedMap = {
   },
 
   cartouche: { x: 12, y: 12, w: 146, h: 70 },
-  pipelines: { x: 720, y: 495 },
   baked: [],
   // the volcano's three chimney tops (smoke + embers) and the two lighthouse lamps (beams)
   landmarks: {
@@ -617,7 +614,6 @@ const PIXEL_V1: PaintedMap = {
     decision: [1395, 622],
   },
   cartouche: { x: 60, y: 72, w: 292, h: 140 },
-  pipelines: { x: 1372, y: 946 },
   baked: [],
 };
 
@@ -843,7 +839,6 @@ const PAPER: PaintedMap = {
     decision: [382, 618],
   },
   cartouche: { x: 26, y: 20, w: 310, h: 118 },
-  pipelines: { x: 192, y: 999 },
   baked: [
     // family plates: the painter's names are right, so they stay; we pin a
     // wax seal with the live model count to each
@@ -889,9 +884,11 @@ const PAPER: PaintedMap = {
     { kind: "invented", text: "NeRF (wrong land)", box: { x: 1412, y: 799, w: 63, h: 31 } },
     { kind: "invented", text: "Normalizing Flows", name: "vae", box: { x: 1235, y: 884, w: 97, h: 40 } },
     { kind: "invented", text: "3D Generation", box: { x: 1392, y: 934, w: 110, h: 30 } },
-    // counts + subtitle: refilled with parchment and rewritten from live data
-    { kind: "count", text: "28 pipelines", box: { x: 138, y: 985, w: 110, h: 26 }, src: [0, -36] },
-    { kind: "subtitle", text: "Neural networks across six lands…", box: { x: 50, y: 66, w: 276, h: 64 }, src: [0, 0] },
+    // the painter's own chrome: the four corners replace it, so it is painted
+    // out (one compass, one title, one scale on the sheet)
+    { kind: "chrome", text: "The Model Zoo cartouche", box: { x: 24, y: 16, w: 312, h: 130 } },
+    { kind: "chrome", text: "compass rose", box: { x: 8, y: 866, w: 124, h: 122 } },
+    { kind: "chrome", text: "scale bar, 28 pipelines", box: { x: 132, y: 952, w: 132, h: 54 } },
   ],
 };
 

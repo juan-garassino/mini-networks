@@ -9,9 +9,10 @@
 import { useEffect, useRef, type ReactNode } from "react";
 import type { CamBox } from "@/components/lab/shared/camera";
 import type { EvidenceState } from "@/components/lab/shared/card-model";
-import type { Material } from "../material";
+import { CHROME, CORNER, TYPE, type Material } from "../material";
 import { EvidenceIcon } from "../pixel-icon";
-import { CORNER_PAD, CORNER_PAD_Q, CORNER_W, plateStyle, plateTitle } from "./plate";
+import { MarkIcon } from "../marker";
+import { plateStyle, plateTitle } from "./plate";
 
 export type MinimapSource = { canvas: HTMLCanvasElement | null; version: number } | { img: string; pixelated: boolean };
 
@@ -22,7 +23,7 @@ const LEGEND: { s: EvidenceState; t: string }[] = [
   { s: "untrained", t: "not trained yet" },
 ];
 
-export function CornerPlate({ m, face, world, box, source, onCenter, width = CORNER_W, note, glyph, quiet = false }: {
+export function CornerPlate({ m, face, world, box, source, onCenter, width = CORNER.w, note, glyph, quiet = false }: {
   m: Material; face: "legend" | "minimap"; world: { w: number; h: number }; box: CamBox; source: MinimapSource; onCenter: (x: number, y: number) => void; width?: number;
   /** the legend's closing line (default: the painted maps' banner/stone note) */
   note?: string;
@@ -31,7 +32,7 @@ export function CornerPlate({ m, face, world, box, source, onCenter, width = COR
   /** focus mode: half padding (the skin passes the small width) */
   quiet?: boolean;
 }) {
-  const pad = quiet ? CORNER_PAD_Q : CORNER_PAD;
+  const pad = quiet ? CORNER.padQuiet : CORNER.pad;
   return (
     <aside aria-label={face === "legend" ? "Legend" : "Minimap"} style={{ ...plateStyle(m), width, padding: pad, fontFamily: m.bodyFont, color: m.ink }}>
       {/* minimap: the plate's inner width less both frames (the plate's and its own, ≤ 3 px a side) */}
@@ -44,18 +45,18 @@ function Legend({ m, note, glyph }: { m: Material; note?: string; glyph?: (s: Ev
   return (
     <>
     <h2 className="mb-2.5" style={plateTitle(m)}>Map key</h2>
-    <ul className="space-y-1.5" style={{ fontSize: 14 }}>
+    <ul className="space-y-1.5" style={{ fontSize: TYPE.link }}>
       {LEGEND.map(({ s, t }) => (
         <li key={s} className="flex items-center gap-2">
           {glyph ? glyph(s) : m.crisp
             // banner + stone; an untrained model has no banner (atom or not it is
             // the same grey stone on the map), so its row shows the stone alone
             ? <span className="flex w-10 items-center justify-center gap-1">{s !== "untrained" && <EvidenceIcon state={s} atom scale={1} />}<EvidenceIcon state={s} atom={false} scale={2} /></span>
-            : <span aria-hidden className="inline-block h-3 w-3 flex-none rounded-full" style={{ background: m.evidence[s].fill, border: `1.5px solid ${m.evidence[s].stroke}` }} />}
+            : <MarkIcon m={m} state={s} size={16} />}
           <span>{t}</span>
         </li>
       ))}
-      <li className="pt-1 leading-snug" style={{ color: m.inkSoft, fontSize: 13 }}>
+      <li className="pt-1 leading-snug" style={{ color: m.inkSoft, fontSize: TYPE.note }}>
         {note ?? (m.crisp ? "Banners mark atoms; stones, models built on them." : "Signs mark atoms; markers, models built on them.")}
       </li>
     </ul>
@@ -101,7 +102,7 @@ function Minimap({ m, world, box, source, onCenter, width }: {
         // eslint-disable-next-line @next/next/no-img-element -- local owner-supplied painting, tiny preview
         : <img src={source.img} alt="" draggable={false} className="block" style={{ width: mw, height: mh, imageRendering: source.pixelated ? "pixelated" : "auto" }} />}
       <div className="pointer-events-none absolute"
-        style={{ left: vx * k, top: vy * k, width: Math.max(4, vw * k), height: Math.max(4, vh * k), outline: `2px solid ${m.crisp ? m.road : m.loud}`, boxShadow: "0 0 0 999px rgba(34,19,22,.35)" }} />
+        style={{ left: vx * k, top: vy * k, width: Math.max(4, vw * k), height: Math.max(4, vh * k), outline: `2px solid ${m.crisp ? m.road : m.loud}`, boxShadow: `0 0 0 999px ${CHROME.minimapVeil}` }} />
     </div>
   );
 }

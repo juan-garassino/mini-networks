@@ -7,7 +7,7 @@
 // map a tan label with a dark rule and a thin inner rule, like the painter's.
 import { useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { displayName } from "@/components/lab/shared/card-model";
-import type { Material } from "../material";
+import { sign, TYPE, type Material } from "../material";
 
 export function plateStyle(m: Material, opts: { loud?: boolean; shadow?: boolean } = {}): CSSProperties {
   const { loud = false, shadow = true } = opts;
@@ -32,7 +32,7 @@ export function plateStyle(m: Material, opts: { loud?: boolean; shadow?: boolean
       border: `2px solid ${m.border}`,
       borderRadius: m.radius,
       boxShadow: [
-        `inset 0 0 0 3px ${loud ? base : "rgba(255,248,230,.55)"}`,
+        `inset 0 0 0 3px ${loud ? base : m.card.inset}`,
         `inset 0 0 0 4px ${loud ? m.loudInk : m.rule}`,
         shadow ? m.card.drop : "",
       ].filter(Boolean).join(", "),
@@ -47,28 +47,20 @@ export function plateStyle(m: Material, opts: { loud?: boolean; shadow?: boolean
   };
 }
 
-// The four corners share one system: the same outer margin (12 px on a
-// phone, 20 px from sm up — the skins' bottom-3/left-3 sm:bottom-5 sm:left-5),
-// the same inner padding, and one column width for the two side plates
-// (cartouche top-left, legend / minimap bottom-right). The scale bar takes the
-// width of its cells and stands on the bottom margin with the legend, so the
-// two bottom plates share their bottom edge; the compass stands on the scale bar.
-/** the side plates' column width (cartouche, legend / minimap), CSS px */
-export const CORNER_W = 324;
-/** every corner plate's inner padding, CSS px */
-export const CORNER_PAD = 12;
-/** focus mode (a model or a land open, or zoomed in): the corner plates step
- * back to half padding and the side column to a small inset */
-export const CORNER_PAD_Q = 6;
-export const CORNER_W_Q = 176;
+// The four corners share one system (material.ts CORNER): the same outer
+// margin, the same inner padding, and one column width for the two side
+// plates (cartouche top-left, legend / minimap bottom-right). The scale bar
+// takes the width of its cells and stands on the bottom margin with the
+// legend, so the two bottom plates share their bottom edge; the compass
+// stands on the scale bar.
 /** a plate's title in the map's sign voice: the one title treatment every
  * corner plate shares (the cartouche's is the large one) */
-export function plateTitle(m: Material, size = 15): CSSProperties {
-  return { fontFamily: m.signFont, fontWeight: 700, fontSize: size, lineHeight: 1, color: m.crisp ? m.border : m.ink };
+export function plateTitle(m: Material, size: number = TYPE.plateTitle): CSSProperties {
+  return { fontFamily: m.signFont, fontWeight: 700, fontSize: sign(m, size), lineHeight: 1, color: m.crisp ? m.border : m.ink };
 }
 
 /** A large sheet's ground (drawer, sheet, full diagram): the cardstock print on paper, flat elsewhere. */
-export const sheetGround = (m: Material) => (m.card ? `${m.card.grain}, ${m.plateHi}` : m.plateHi);
+export const sheetGround = (m: Material) => (m.card ? `${m.card.sheet}, ${m.plateHi}` : m.plateHi);
 
 export function Plate({ m, children, className = "", style, label, as: Tag = "section" }: {
   m: Material; children: ReactNode; className?: string; style?: CSSProperties; label?: string; as?: "section" | "div" | "nav" | "header" | "aside";
@@ -88,7 +80,7 @@ export function Btn({ m, children, onClick, disabled, pressed, label, className 
       className={`inline-flex items-center justify-center px-2 leading-none focus-visible:outline-2 focus-visible:outline-offset-2 disabled:opacity-40 ${className}`}
       style={{
         ...plateStyle(m, { loud: pressed, shadow: !pressed }),
-        fontFamily: m.bodyFont, fontSize: 16, minHeight: 28,
+        fontFamily: m.bodyFont, fontSize: TYPE.lead, minHeight: 28,
         transform: pressed ? "translate(var(--ap, 1px), var(--ap, 1px))" : undefined,
         ...style,
       }}>
@@ -155,7 +147,7 @@ export function Search({ m, names, onPick, compact = false, collapsed = false }:
         onFocus={() => setOpen(true)} onBlur={() => setTimeout(() => { setOpen(false); setUnfolded(false); }, 150)}
         onKeyDown={(e) => { if (e.key === "Enter" && hits[0]) pick(hits[0]); if (e.key === "Escape") { setQ(""); ref.current?.blur(); } }}
         className={`w-full ${collapsed ? "px-2 py-0.5" : "px-2.5 py-1.5"} outline-none focus-visible:ring-2`}
-        style={{ background: m.field, color: m.ink, fontFamily: m.bodyFont, fontSize: collapsed ? 15 : 16,
+        style={{ background: m.field, color: m.ink, fontFamily: m.bodyFont, fontSize: collapsed ? TYPE.body : TYPE.lead,
           border: `var(--ap, 2px) solid ${m.border}`, borderRadius: m.radius,
           boxShadow: m.crisp ? `inset var(--ap) var(--ap) 0 ${m.rule}` : `inset 0 1px 2px ${m.shadow}` }} />
       {open && hits.length > 0 && (
@@ -163,7 +155,7 @@ export function Search({ m, names, onPick, compact = false, collapsed = false }:
           {hits.map((n) => (
             <li key={n}>
               <button type="button" onMouseDown={(e) => e.preventDefault()} onClick={() => pick(n)}
-                className="block w-full px-2.5 py-1 text-left hover:brightness-95" style={{ color: m.ink, fontFamily: m.bodyFont, fontSize: 16 }}>
+                className="block w-full px-2.5 py-1 text-left hover:brightness-95" style={{ color: m.ink, fontFamily: m.bodyFont, fontSize: TYPE.lead }}>
                 {displayName(n)}
               </button>
             </li>
