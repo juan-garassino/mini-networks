@@ -1,18 +1,18 @@
 // The key, in two forms that render the same data (the layout's lines with
-// their two counts + METRO_LEGEND, so the key cannot drift from the marks):
+// their two counts + encoding.ts KEY, so the key cannot drift from the marks):
 //   Cartouche: inside the SVG, in the sheet's reserved "cartouche" rect (desktop).
 //   PhoneKey:  HTML above the map on a phone, folded into a disclosure so the
 //              map leads; the cartouche is a long swipe away there.
 // Two counts per line: "models" = the family's own models (what every other
 // design prints), "stops" = every station the line calls at (its models + the
 // models built on them), so a reader comparing designs never sees a clash.
-import { KEY_COLUMNS, METRO_LEGEND } from "./encoding";
+import { KEY, KEY_COLUMNS } from "./encoding";
 import { KeyGlyph } from "./marks";
 import type { SystemLayout } from "./system";
 import { GRID, INK, INK_DIM, LINE_FAINT, PAPER, SPACE, TYPE } from "./tokens";
 
 /** The legend rows this map needs: the spur row only when something was auto-placed. */
-const legendFor = (layout: SystemLayout) => METRO_LEGEND.filter((r) => r.mark !== "spur" || layout.auto.length > 0);
+const legendFor = (layout: SystemLayout) => KEY.rows.filter((r) => r.sample !== "spur" || layout.auto.length > 0);
 /** A line's own models: the stations whose first (own) line it is. */
 const ownModels = (layout: SystemLayout, line: string) => layout.stations.filter((s) => s.lines[0] === line).length;
 
@@ -48,7 +48,7 @@ export function Cartouche({ layout, title, note }: { layout: SystemLayout; title
           </g>
         );
       })}
-      {legend.map(({ mark, label }, i) => {
+      {legend.map(({ sample: mark, label }, i) => {
         const y = y0 + SPACE.keyTop + i * glyphRow;
         return (
           <g key={mark}>
@@ -87,7 +87,7 @@ export function PhoneKey({ layout }: { layout: SystemLayout }) {
         ))}
       </div>
       <div className="mt-2 grid grid-cols-1 pb-3">
-        {legendFor(layout).map(({ mark, label }) => (
+        {legendFor(layout).map(({ sample: mark, label }) => (
           <div key={mark} className="flex h-[22px] items-center gap-2">
             <svg width={34} height={22} viewBox="0 0 34 22" aria-hidden className="shrink-0">
               <KeyGlyph mark={mark} cx={17} cy={11} />
