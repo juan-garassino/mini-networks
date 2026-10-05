@@ -26,9 +26,10 @@
 // to a small inset, the compass and tabs smaller — so the map plate and the
 // drawer are the two things to read; they re-stamp in place (two frames) as
 // they change, and hold still under still=1 / reduced motion.
-// /lab contract: URL view → useWorld → camera → paint → data-lab-ready → window.__lab.
+// /lab contract: URL view → useLabData (data only: this map never reads the
+// lib/world layout useWorld builds) → camera → paint → data-lab-ready → window.__lab.
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties } from "react";
-import { useWorld } from "@/hooks/use-world";
+import { useLabData } from "@/hooks/use-lab-data";
 import { useLabView, type LabView } from "@/components/lab/shared/url-state";
 import { LabMotion } from "@/components/lab/shared/still";
 import { installLabHook, loadPhase, useLabReady } from "@/lib/lab-contract";
@@ -185,7 +186,7 @@ export function PaintedSkin() {
   const { view, update } = useLabView();
   const { opts, set } = useOpts();
   const still = view?.still ?? true;
-  const { taxonomy, evidence, runs, family, ready, online } = useWorld(view ? view.still : null);
+  const { taxonomy, evidence, runs, family, ready, online } = useLabData(view ? view.still : null);
 
   const mapId: MapId = opts?.map ?? "pixel";
   const render: Render = opts?.render ?? "true";

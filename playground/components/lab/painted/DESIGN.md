@@ -164,8 +164,9 @@ for the faces); the pixel art modules only for a pixel map.
    redraw, plates to re-letter, his chrome to paint out).
 3. Write a `Material`: inks, faces (+ a digits face if its figures misread,
    a `textFont` for sentences), plate construction (`crisp` / `card`), `marks`.
-4. Replace the data: `useWorld` feeds names, groups, evidence; the card reads
-   `cardModel`; `FAMILY_TITLE` / `PAPER_*` hold the group words.
+4. Replace the data: `useLabData` (hooks/use-lab-data.ts, no layout) feeds
+   names, groups, evidence; the card reads `cardModel`; `FAMILY_TITLE` /
+   `PAPER_*` hold the group words.
 5. Swap the plate's `MechanismDiagram` for yours (placement needs its size;
    `plateFits` in `painted-skin.tsx` lists what it may show, best first).
 6. Rewrite `encoding.ts`. Skins reusing the corners pass their own `Material`

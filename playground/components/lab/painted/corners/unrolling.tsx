@@ -21,7 +21,7 @@ import { SCALE_CELL } from "./scale-bar";
 /** The steps in the order they usually land; the status names the first not done. */
 export const LOAD_STEPS = ["Reading the zoo", "Unrolling the map", "Painting the lands", "Framing the view"] as const;
 const CELLS = 4;   // per step: a segment of the bar, as a land's segment on the scale bar
-/** offline: the API refused (useWorld retries); say how to start it */
+/** offline: the API refused (useLabData retries); say how to start it */
 const OFFLINE = "The zoo's API is not answering. Start it with python main.py serve";
 const GROUND_BLUR = 6;   // px: the low-res painting is a ground, not a picture
 
