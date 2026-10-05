@@ -73,8 +73,13 @@ playground/ (repo root)  Next.js 16 + React 19 + TS + Tailwind v4 + Recharts +
                      + paths authored on one grid in the painted maps'
                      geography, audited to 0 crossings/overlaps/label
                      collisions (data-* on the SVG; lib/world/metro.test.ts),
-                     ?specimen=1 = the knot crop; components/metro/
-                     {layout,encoding}.ts),
+                     ?specimen=1 = the knot crop; components/metro/: a
+                     liftable kit — system.ts = generic octilinear engine
+                     (SystemSpec in → geometry + audit; a station with no
+                     drafted cell is auto-placed on a dashed spur), layout.ts
+                     = this zoo's drafting, tokens.ts = every value (sheet
+                     colours painted on <html> by applySheet), map/station/
+                     train/marks/key/services.tsx, DESIGN.md),
                      blueprint/wall chart/terminal = three token skins of ONE
                      table (components/periodic/: skins/*.ts → CSS vars via
                      applySkin on <html>, periodic.css, encoding.ts; the

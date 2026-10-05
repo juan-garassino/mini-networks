@@ -64,17 +64,13 @@ footer { zoom: var(--skin-chrome-zoom, 1); }
 /* blueprint, wall chart and terminal are periodic-table skins: their tokens
    live in components/periodic/skins/*.ts, painted on <html> by applySkin() */
 
-/* 3 · metro map: one system map, pastel lines on a neutral porcelain sheet */
-[data-edition="metro"] {
-  --paper: #f3f4f1; --paper-deep: #e8eae5;
-  --ink: #1f2327; --ink-dim: #686d71;
-  --line: #1f2327; --line-faint: #d5d8d2;
-  --redline: #cf4f3e;
-}
+/* 3 · metro map: one system map, pastel lines on a neutral porcelain sheet.
+   Its colours are tokens (components/metro/tokens.ts SHEET_VARS, painted on
+   <html> by applySheet); only the font swap and interaction states live here. */
 [data-edition="metro"] body, body[data-edition="metro"] { background-image: none; }
 [data-edition="metro"] { --font-display: var(--font-jost); --font-draft: var(--font-jost); }
 [data-edition="metro"] body::after { opacity: 0.02; }
-[data-edition="metro"] .metro-stop .metro-label { transition: fill 0.12s ease; }
+[data-edition="metro"] .metro-stop .metro-label { transition: fill 120ms ease; }
 [data-edition="metro"] .metro-stop:hover .metro-label,
 [data-edition="metro"] .metro-stop:focus-visible .metro-label { fill: var(--redline); }
 [data-edition="metro"] .metro-stop:focus-visible { outline: none; }

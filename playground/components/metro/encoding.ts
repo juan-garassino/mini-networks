@@ -1,21 +1,11 @@
-// The Transit diagram (/?edition=metro, components/views/chart-metro.tsx):
+// The Transit diagram (/?edition=metro, components/metro/metro-chart.tsx):
 // every visual mark → the datum it encodes. The on-screen key renders
 // METRO_LEGEND, so the key cannot drift from the marks.
 
 /** Line order = the periodic table's family order (also the key's order). */
 export const LINE_ORDER = ["perception", "sequence", "generative", "representation", "structure", "decision"] as const;
 
-/** One line per family. Pastel signage: told apart at a glance, never loud on the
- * neutral sheet; each still holds a white letter on its origin bullet. */
-export const LINE_COLORS: Record<string, string> = {
-  perception: "#e2826d",
-  sequence: "#6b8fd0",
-  generative: "#5fae86",
-  representation: "#a28bd2",
-  structure: "#d9a95a",
-  decision: "#4fb0a9",
-};
-
+/** Line colours are tokens (tokens.ts LINE_COLORS): colour = family. */
 export const LINE_NAMES: Record<string, string> = {
   perception: "Perception",
   sequence: "Sequence",
@@ -29,6 +19,7 @@ export const METRO_ENCODING = {
   map: "one connected system: the whole zoo is a single network diagram, not one strip per family",
   line: "a family's service (colour = family): it calls at every model of the family and at every model built on one of them",
   "track geometry": "0°, 45° and 90° only, on one 20-px grid, one corner radius; the drawing is authored like the periodic table's placement (components/metro/layout.ts STATIONS + ROUTES)",
+  "dashed spur": "a station the drafting does not know yet, placed by the engine's fallback (system.ts placeAuto) on a straight spur off a station of its line: under construction until it is drafted",
   "station order": "every path starts at an origin (or at a station nearer one), so riding away from an origin follows the way models build on each other; a station's exact parents are in its spec sheet",
   district: "where each family's stations sit: the painted maps' geography (Perception west, Representation north, Structure a north-east island, Sequence centre, Decision east, Generative south); the quiet area name is the family",
   "origin bullet": "an atom (elementary model), lettered with its element symbol, in its line's colour",
@@ -41,7 +32,7 @@ export const METRO_ENCODING = {
   "line count": "in the key: how many stations the line calls at (its own models + the models built on them)",
 } as const;
 
-export type MetroMark = "origin" | "tick" | "terminus" | "interchange" | "train";
+export type MetroMark = "origin" | "tick" | "terminus" | "interchange" | "train" | "spur";
 
 /** The on-screen key, in reading order. */
 export const METRO_LEGEND: { mark: MetroMark; label: string }[] = [
@@ -50,4 +41,5 @@ export const METRO_LEGEND: { mark: MetroMark; label: string }[] = [
   { mark: "terminus", label: "End of a branch" },
   { mark: "interchange", label: "Interchange: two or more lines" },
   { mark: "train", label: "Train, outbound from an origin" },
+  { mark: "spur", label: "Not drafted yet: placed automatically" },
 ];

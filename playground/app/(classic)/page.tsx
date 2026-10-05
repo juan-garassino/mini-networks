@@ -9,7 +9,8 @@ import { TitleBlock, type EditionId, type SheetId } from "@/components/title-blo
 import { ElementSheet } from "@/components/element-sheet";
 import { PERIODIC_SKINS, applySkin, isPeriodicSkin } from "@/components/periodic/skins";
 import { PeriodicTable } from "@/components/periodic/periodic-table";
-import { ChartMetro } from "@/components/views/chart-metro";
+import { ChartMetro } from "@/components/metro/metro-chart";
+import { applySheet as applyMetroSheet } from "@/components/metro/tokens";
 import { ChartAtlas } from "@/components/views/chart-atlas";
 import { ChartPaper } from "@/components/views/chart-paper";
 import { Reactions } from "@/components/views/reactions";
@@ -56,9 +57,11 @@ export default function Page() {
     // the periodic-table skins are token sets painted on <html>; the other
     // editions keep their [data-edition] blocks in blueprint.css and borrow
     // only the blueprint's tile tokens for the drawer's element tile
-    return isPeriodicSkin(edition)
-      ? applySkin(document.documentElement, PERIODIC_SKINS[edition])
-      : applySkin(document.documentElement, PERIODIC_SKINS.blueprint, { tableOnly: true });
+    if (isPeriodicSkin(edition)) return applySkin(document.documentElement, PERIODIC_SKINS[edition]);
+    const undoTiles = applySkin(document.documentElement, PERIODIC_SKINS.blueprint, { tableOnly: true });
+    // the transit sheet's colours live in components/metro/tokens.ts
+    const undoSheet = edition === "metro" ? applyMetroSheet(document.documentElement) : () => {};
+    return () => { undoTiles(); undoSheet(); };
   }, [edition]);
 
   return (
