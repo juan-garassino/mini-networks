@@ -4,6 +4,7 @@ import {
   Martian_Mono, Patrick_Hand, VT323,
 } from "next/font/google";
 import "./globals.css";
+import { SITE } from "@/lib/copy";
 
 const display = Big_Shoulders({
   variable: "--font-display",
@@ -21,9 +22,12 @@ const jost = Jost({ variable: "--font-jost", subsets: ["latin"], weight: ["400",
 const cormorant = Cormorant_Garamond({ variable: "--font-cormorant", subsets: ["latin"], weight: ["400", "600", "700"] });
 const patrick = Patrick_Hand({ variable: "--font-patrick", subsets: ["latin"], weight: "400" });
 
+// Every route names itself: "<design> | mini_networks" (lib/copy.ts pageTitle
+// is the same rule for titles set on the client). A route without a title is
+// just the site name.
 export const metadata: Metadata = {
-  title: "mini_networks · the periodic table of neural networks",
-  description: "Atoms, molecules and reactions of the 44-model zoo — drafted as a blueprint.",
+  title: { template: `%s | ${SITE}`, default: SITE },
+  description: "The mini_networks zoo: small neural networks, their families and lineage, drawn many ways.",
 };
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {

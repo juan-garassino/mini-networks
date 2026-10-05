@@ -4,7 +4,7 @@ import localFont from "next/font/local";
 import { pixelDigits } from "@/lib/fonts";
 
 export const metadata: Metadata = {
-  title: "The Celestial Zoo | mini_networks",
+  title: "The Celestial Zoo",
   description: "The 44-model zoo after dark: families are nebulae, models are stars, lineage is the constellation lines.",
 };
 

@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { M_PLUS_Rounded_1c, Mochiy_Pop_One } from "next/font/google";
 
 export const metadata: Metadata = {
-  title: "Zoo flow | mini_networks",
+  title: "Kawaii flow",
   description: "The 44-model zoo as a data-flow sheet: family lanes, generation columns, every builds-on line routed without a crossing.",
 };
 
