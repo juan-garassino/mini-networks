@@ -3,6 +3,7 @@
 import { useRef } from "react";
 import type { TaxonomyResponse } from "@/lib/types";
 import { atomicNumbers } from "@/lib/blueprint";
+import { zooCounts } from "@/lib/copy";
 import { ChartKey } from "./chart-key";
 import { useLabReady, useStill } from "@/lib/lab-contract";
 import { entranceEnd } from "./entrance";
@@ -43,11 +44,7 @@ export function PeriodicTable({
     <div ref={ref} className="pt-sheet" data-lab-ready={ready}>
       <Masthead
         variant={skin.masthead}
-        counts={{
-          models: taxonomy.models.length,
-          atoms: taxonomy.models.filter((m) => m.level === "elementary").length,
-          reactions: taxonomy.compositions.length,
-        }}
+        counts={zooCounts(taxonomy)}
       />
       <TableGrid models={models} sampleNumber={sample} motion={motion} onSelect={onSelect} />
       <FamilyStack models={models} motion={motion} onSelect={onSelect} />

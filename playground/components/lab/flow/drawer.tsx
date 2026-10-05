@@ -20,7 +20,6 @@ import { Critter, EvidenceMark } from "./critter";
 import { COLOR, fam, MOTION, SHADOW, SPACE, STROKE } from "./tokens";
 import s from "./flow.module.css";
 
-const words = (k: string) => k.replace(/_/g, " ");
 /** The shared evidence copy in this sheet's voice: a colon, never a spaced em dash. */
 const evidenceLine = (st: CardModel["state"]) => EVIDENCE_COPY[st].replace(" — ", ": ");
 
@@ -64,7 +63,7 @@ function Evidence({ c }: { c: CardModel }) {
   const hi = Math.max(e.threshold_m, best ?? 0) * (e.higher_is_better ? 1.25 : 1.6) || 1;
   return (
     <div className={`space-y-1.5 ${s.tBody} leading-relaxed`}>
-      <p>Its bar: <b>{words(e.gate_metric)} {dir} {fmt(e.threshold_m)}</b>{e.provisional && <>, a provisional bar still being calibrated</>}.</p>
+      <p>Its bar: <b>{displayName(e.gate_metric)} {dir} {fmt(e.threshold_m)}</b>{e.provisional && <>, a provisional bar still being calibrated</>}.</p>
       {c.state === "champion" && <p>Champion checkpoint {version ?? ""} cleared it in the cloud gate.</p>}
       <p>
         {best != null
@@ -179,7 +178,7 @@ export function FlowDrawer({ c, address, lesson, mobile, still, evidence, family
               title={`${displayName(c.name)}, one forward pass`} />
           )}
           {c.introduces.map((m) => (
-            <p key={m.key} className={`mt-1 ${s.tProse} leading-snug`}><b>Adds {words(m.key)}</b>: {m.description}</p>
+            <p key={m.key} className={`mt-1 ${s.tProse} leading-snug`}><b>Adds {displayName(m.key)}</b>: {m.description}</p>
           ))}
         </Section>
 
@@ -207,9 +206,9 @@ export function FlowDrawer({ c, address, lesson, mobile, still, evidence, family
           <Evidence c={c} />
           {curve && curve.points.length > 1 && (
             <div className="mt-2">
-              <Sparkline points={curve.points} label={words(curve.key)} width={mobile ? 300 : SPACE.drawerW - 60} height={64} fontPx={13}
+              <Sparkline points={curve.points} label={displayName(curve.key)} width={mobile ? 300 : SPACE.drawerW - 60} height={64} fontPx={13}
                 palette={{ line: COLOR.ink, axis: COLOR.axis, text: COLOR.ink, fill: COLOR.accentWash, dot: COLOR.accent }}
-                title={`${words(curve.key)} over training`} />
+                title={`${displayName(curve.key)} over training`} />
               {lesson.curveRun && <p className={`${s.tSmall}`} style={{ color: COLOR.inkSoft }}>from run {lesson.curveRun.id}</p>}
             </div>
           )}

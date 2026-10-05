@@ -13,6 +13,7 @@
 // To map another graph, replace this file: build a SystemSpec (DESIGN.md).
 import type { TaxonomyResponse } from "../../lib/types.ts";
 import { ATOMS, familyOf as blueprintFamily, symbolFor } from "../../lib/blueprint.ts";
+import { displayName } from "../../lib/copy.ts";
 import { LINE_NAMES, LINE_ORDER } from "./encoding.ts";
 import { GRID, LINE_COLORS, SHEET } from "./tokens.ts";
 import { buildSystem, type PathEntry, type Side, type SpecStation, type SystemLayout, type SystemSpec } from "./system.ts";
@@ -122,7 +123,7 @@ export const ROUTES: Record<string, PathEntry[][]> = {
 /** The map's own cartouche (title + key), in the empty south-east (cells). */
 export const CARTOUCHE = { x: 46, y: 27.5, w: 22.5, h: 12 };
 
-export const labelOf = (name: string) => name.replace(/_/g, " ");
+export const labelOf = displayName;
 
 /** Family of any model: the blueprint placement, else its first parent's. */
 export function makeFamilyOf(tax: TaxonomyResponse) {

@@ -86,7 +86,6 @@ export function cardModel(
   };
 }
 
-// Model names are snake_case identifiers; learners read words.
-export function displayName(name: string): string {
-  return name.replace(/_/g, " ");
-}
+// Model names are snake_case identifiers; learners read words (the library's
+// one rule, lib/copy.ts; re-exported for the kits that import it from here).
+export { displayName } from "@/lib/copy";

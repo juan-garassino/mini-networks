@@ -22,6 +22,7 @@
 import { buildGraph, type Graph } from "./graph.ts";
 import type { FamilyMap, Pt } from "./types.ts";
 import { mulberry32 } from "./rng.ts";
+import { displayName as words } from "../copy.ts";
 
 /** Track grid pitch (px at the overview): the gap between parallel tracks and the box clearance. */
 export const DFD_G = 8;
@@ -213,7 +214,6 @@ const approxMeasure = (t: string, px: number) => {
   for (const ch of t) { const i = EM_GLYPHS.indexOf(ch); em += i >= 0 ? EM_WIDTHS[i] / 1000 : ch >= "A" && ch <= "Z" ? 0.65 : 0.6; }
   return em * px;
 };
-const words = (n: string) => n.replace(/_/g, " ");
 const up8 = (v: number) => Math.ceil(v / G) * G;
 const byAddress = (addr: Map<string, string>) => (a: string, b: string) => addr.get(a)!.localeCompare(addr.get(b)!, "en", { numeric: true });
 const depthCount = (g: Graph) => 1 + Math.max(0, ...g.names.map((n) => g.depth.get(n)!));

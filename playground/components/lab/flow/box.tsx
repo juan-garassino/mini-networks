@@ -9,11 +9,11 @@
 import { memo } from "react";
 import type { DfdBox } from "@/lib/world/dfd";
 import type { EvidenceState } from "@/components/lab/shared/card-model";
+import { displayName } from "@/lib/copy";
 import { Critter, EvidenceMark } from "./critter";
 import { BOX, COLOR, fam, OPACITY, STROKE, TYPE } from "./tokens";
 import s from "./flow.module.css";
 
-const words = (n: string) => n.replace(/_/g, " ");
 
 export interface BoxProps {
   b: DfdBox;
@@ -45,7 +45,7 @@ export const Box = memo(function Box({ b, state, dim, selected, order, delay, wa
   const stroke = selected || order > 0 ? COLOR.accent : COLOR.ink;
   const kind = b.chip ? "atom, nothing builds on it yet" : store ? "atom" : `generation ${b.depth}`;
   return (
-    <g role="button" tabIndex={0} aria-label={`${words(b.name)}, ${kind}, ${state}`}
+    <g role="button" tabIndex={0} aria-label={`${displayName(b.name)}, ${kind}, ${state}`}
       data-model={b.name} className={`${s.box} ${delay != null ? s.hop : ""}`} key={delay != null ? waveKey : undefined}
       style={{ opacity: dim ? OPACITY.dimBox : 1, ["--d" as string]: `${delay ?? 0}ms` }}
       onClick={() => onPick(b.name)} onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onPick(b.name); } }}

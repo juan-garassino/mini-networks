@@ -81,7 +81,7 @@ export function PixelLabel({ text, s = 2, label = text, style }: {
 }
 
 /** A model id as words for the pixel face: text_seq2seq → "text seq2seq". */
-export const displayName = (id: string) => id.replace(/_/g, " ");
+export { displayName } from "@/lib/copy"; // the library's one naming rule
 
 /**
  * An n×n map (values −1..1, row-major) as a thumbnail with `px` art pixels per

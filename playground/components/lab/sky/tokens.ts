@@ -6,6 +6,7 @@
 // darkened. Its dark end leans cold (violet/indigo, the night around it) and
 // its light end leans warm, which is what makes a dithered cloud read as
 // painted rather than as a tinted gradient.
+import { withDigits } from "../../../lib/numerals.ts";
 import type { Material } from "@/components/lab/painted/material";
 
 export type Rgb = [number, number, number];
@@ -106,11 +107,12 @@ const CHROME = {
 
 // ——— type ——————————————————————————————————————————————————————————————
 
-/** The text voice: Pixelify Sans for letters, with the painted pixel map's
- * digits-only family laid over it for 0-9 (VT323 regular, Jersey 15 bold),
- * because Pixelify's 5 reads as S and its 8 as B and numbers are data. Both
- * loaded in app/lab/sky/layout.tsx; unset vars fall back to Pixelify alone. */
-export const FONT = "var(--font-pixel-digits, var(--font-pixel)), var(--font-pixel), ui-monospace, monospace";
+/** The text voice: Pixelify Sans for letters, with the library's digit face
+ * laid over it for 0-9 (the numerals rule, lib/numerals.ts: VT323 regular,
+ * Jersey 15 bold), because Pixelify's 5 reads as S and its 8 as B and numbers
+ * are data. Both loaded in app/lab/sky/layout.tsx; unset vars fall back to
+ * Pixelify alone. */
+export const FONT = withDigits("var(--font-pixel), ui-monospace, monospace");
 /** The sign voice (cartouche title, tab and plate titles): Jersey 15, whose
  * capital C stays open and whose Z is square; Pixelify's bold C closes into
  * an O and its Z reads as 2. */

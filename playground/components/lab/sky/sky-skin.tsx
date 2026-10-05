@@ -29,6 +29,7 @@
 // → data-lab-ready → window.__lab.
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import { useWorld } from "@/hooks/use-world";
+import { zooCounts } from "@/lib/copy";
 import { installLabHook, LabMotion, useLabReady, useLabView, useStill } from "@/lib/lab-contract";
 import { useCamera, type CamBox } from "@/components/lab/shared/camera";
 import { cardModel, displayName, evidenceState, type EvidenceState } from "@/components/lab/shared/card-model";
@@ -156,10 +157,11 @@ export function SkySkin() {
   const famCount = useMemo(() => { const c: Record<string, number> = {}; for (const n of nodes) c[n.family] = (c[n.family] ?? 0) + 1; return c; }, [nodes]);
   const famProven = useMemo(() => { const c: Record<string, number> = {}; for (const n of nodes) if (states[n.name] === "champion") c[n.family] = (c[n.family] ?? 0) + 1; return c; }, [nodes, states]);
   const pipelines = useMemo(() => taxonomy?.compositions.map((c) => c.name) ?? [], [taxonomy]);
-  const counts = useMemo(() => ({
-    models: names.length, pipelines: pipelines.length,
-    champions: Object.values(states).filter((s) => s === "champion").length, lands: Object.keys(famCount).length,
-  }), [names, pipelines, states, famCount]);
+  // the corners' counts in the painted kit's words (champions, lands), from the library's one count
+  const counts = useMemo(() => {
+    const z = zooCounts(taxonomy, evidence, family);
+    return { models: z.models, pipelines: z.pipelines, champions: z.proven, lands: z.families };
+  }, [taxonomy, evidence, family]);
   // each family's hull (frame px) and its nebula's box
   const hulls = useMemo(() => {
     const out: Partial<Record<Family, Box>> = {};

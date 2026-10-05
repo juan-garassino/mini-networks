@@ -5,6 +5,7 @@
 import { useEffect, useState } from "react";
 import type { RealLossCurve } from "@/components/lab/shared/eggs";
 import { Sparkline } from "@/components/lab/shared/lesson/sparkline";
+import { displayName } from "@/lib/copy";
 import { COLOR, MOTION, RADIUS, SHADOW, SPACE, TYPE } from "./tokens";
 import s from "./flow.module.css";
 
@@ -25,9 +26,9 @@ export function KeeperTrains({ curve, still, onClose }: { curve: RealLossCurve; 
         <p className="font-extrabold" style={{ fontSize: TYPE.body }}>Fine, I&apos;ll train.</p>
         <button type="button" onClick={onClose} className={`${s.btn} font-bold underline`} style={{ fontSize: TYPE.ui }}>Close</button>
       </div>
-      <Sparkline points={curve.points} progress={p} label={curve.key.replace(/_/g, " ")} width={272} height={70}
+      <Sparkline points={curve.points} progress={p} label={displayName(curve.key)} width={272} height={70}
         palette={{ line: COLOR.accent, axis: COLOR.axis, text: COLOR.ink, fill: COLOR.accentWash }} title="a real loss curve" />
-      <p className="mt-1 font-bold" style={{ color: COLOR.inkSoft, fontSize: TYPE.ui }}>a real run: {curve.model.replace(/_/g, " ")}, {curve.runId}</p>
+      <p className="mt-1 font-bold" style={{ color: COLOR.inkSoft, fontSize: TYPE.ui }}>a real run: {displayName(curve.model)}, {curve.runId}</p>
     </div>
   );
 }

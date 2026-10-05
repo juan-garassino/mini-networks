@@ -5,6 +5,7 @@
 // lights a lineage. Geometry (track grid, box sizes, label/tag/name px) belongs to the router:
 // lib/world/dfd.ts, re-exported below so a renderer needs one import.
 import type { CSSProperties } from "react";
+import { displayName } from "@/lib/copy";
 import { DFD_ATOM_CELL, DFD_LABEL_PX, DFD_NAME_PX, DFD_PAD, DFD_SHELF_PX, DFD_STRIP, DFD_TAG_PX, critterPx } from "@/lib/world/dfd";
 
 export const COLOR = {
@@ -38,7 +39,7 @@ export const FAMILY: Record<string, FamilyTone> = {
   decision:       { strip: "#F6DCE7", body: "#EEB2CC", deep: "#C04F86", label: "Decision",       kind: "dice bots" },
 };
 export const UNKNOWN_FAMILY: FamilyTone = { strip: "#ECE9F2", body: "#D2CDE0", deep: "#7D7896", label: "Other", kind: "newcomers" };
-export const fam = (f: string): FamilyTone => FAMILY[f] ?? { ...UNKNOWN_FAMILY, label: f.replace(/_/g, " ") };
+export const fam = (f: string): FamilyTone => FAMILY[f] ?? { ...UNKNOWN_FAMILY, label: displayName(f) };
 
 /** Type: one family (M PLUS Rounded 1c, --flow-body) at 500/700/800; Mochiy Pop One
  * (--flow-display) for the page title only. Sizes in px. */
