@@ -127,7 +127,7 @@ class GANDiffusionComparison:
             fast_demo=config.effective_fast_demo,
             sample_limit=config.dataset_sample_limit,
         )
-        epochs = 1 if config.fast_demo else config.gan_epochs
+        epochs = 1 if config.effective_fast_demo else config.gan_epochs
         for epoch in range(epochs):
             G.train(); D.train()
             total_d = 0.0; total_g = 0.0
@@ -189,7 +189,7 @@ class GANDiffusionComparison:
             fast_demo=config.effective_fast_demo,
             sample_limit=config.dataset_sample_limit,
         )
-        epochs = 1 if config.fast_demo else config.diff_epochs
+        epochs = 1 if config.effective_fast_demo else config.diff_epochs
         for epoch in range(epochs):
             unet.train()
             total = 0.0

@@ -72,7 +72,7 @@ class ImageCaptioning:
             data_root=config.data_root,
             split="train",
             task="classification",
-            batch_size=min(config.batch_size, 16) if config.fast_demo else config.batch_size,
+            batch_size=config.effective_batch_size,
             fast_demo=config.effective_fast_demo,
             sample_limit=config.dataset_sample_limit,
         )
