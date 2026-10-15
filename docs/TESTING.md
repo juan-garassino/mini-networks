@@ -54,7 +54,20 @@ down (or `s_mode=finite` for adversarial / RL losses).
 
 ## Colab notebooks
 
-Optional GPU walkthroughs live in `colab/notebooks/` (open from a Colab kernel):
+Optional walkthroughs live in `colab/notebooks/`. Open one in Colab
+(File → Open notebook → GitHub → `juan-garassino/mini-networks`) or in a local
+Jupyter. The first code cell is the same in every notebook: on Colab it clones
+the repo into `/content/mini-networks` and `pip install -e`s it (honoring the
+torch/numpy pins in `pyproject.toml`); locally it walks up to the repo root.
+It then `chdir`s to the repo root and puts `src/` and `colab/notebooks/` on
+`sys.path`, so no kernel restart is needed. `01`–`04` train at S tier
+(`fast_demo=True`) and run on a CPU kernel; plotting needs matplotlib
+(preinstalled on Colab, not a project dependency). `00_sweep` picks tier M on
+a GPU kernel and S on CPU.
+
+`uv run pytest tests/test_colab_notebooks.py` checks, without executing them,
+that every cell compiles, every `mini_networks` import resolves, and every
+`run_model` / `run_composition` name is registered.
 
 | Notebook | Covers |
 |---|---|

@@ -867,6 +867,12 @@ def get_dataloader(
     sample_limit: int | None = None,
     **kwargs,
 ) -> DataLoader:
+    """DataLoader over `get_dataset(...)`, optionally truncated to `sample_limit`.
+
+    Pass `config.effective_batch_size`, `config.effective_fast_demo` and
+    `config.dataset_sample_limit` so the tier budget is honored. Shuffles only
+    the train split; `num_workers=0` keeps it CPU/Colab friendly.
+    """
     ds = get_dataset(name, data_root, split=split, task=task, fast_demo=fast_demo, **kwargs)
     if sample_limit is not None:
         ds = _Subset(ds, sample_limit)
