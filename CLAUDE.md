@@ -398,8 +398,9 @@ Writes `runs/sweep/<ts>/report.{md,json}`; non-zero exit on any non-pass.
   nerf, wgan (40-epoch M). Randomness is NOT parametrized: training is
   unseeded and changes are judged over several independent runs (a seeded
   gate was tried and reverted). gnn sits at ~0.65-0.74 vs its provisional
-  0.75 bar (needs an owner decision); kimi/deepseek/text_diffusion are too
-  slow/large to gate on CPU — the next cloud M sweep should cover them.
+  0.75 bar (needs an owner decision). deepseek passes M on CPU (0.83 vs 2.8);
+  text_diffusion now does too (2.79/2.56 vs 3.2, M sample_limit 16384); kimi
+  (~11 GB at batch 64, hours on CPU) still needs the next cloud M sweep.
 - Known instability fixes applied 2026-07-10: text_seq2seq causal mask +
   shifted teacher forcing + honest eval divisor; pixelcnn Bernoulli BCE +
   true raster-scan sampling; optional `BaseConfig.max_grad_norm` clipping.
