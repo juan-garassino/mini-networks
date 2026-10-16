@@ -64,7 +64,8 @@ class GANDiffusionConfig(BaseConfig):
     ``gan_epochs``. DDPM: ``timesteps`` (tier-capped via
     ``effective_timesteps``), ``schedule`` (``"linear"`` or ``"cosine"`` beta
     schedule), ``base_channels``, ``diff_lr``,
-    ``diff_epochs``. Under ``fast_demo`` both train for exactly one epoch."""
+    ``diff_epochs``. At tier S (``fast_demo`` or ``training_tier="S"``) both
+    train for exactly one epoch."""
 
     model_name: str = "gan_diffusion_comparison"
 
@@ -149,16 +150,15 @@ class GANDiffusionComparison:
             fast_demo=config.effective_fast_demo,
             sample_limit=config.dataset_sample_limit,
         )
-        epochs = 1 if config.fast_demo else config.gan_epochs
+        epochs = 1 if config.effective_fast_demo else config.gan_epochs  # tier S = 1 epoch
         for epoch in range(epochs):
             G.train(); D.train()
             total_d = 0.0; total_g = 0.0
             for real_images, _ in dl:
-                # NOTE: reals stay in the loader's [0,1] range here while G's
-                # Tanh output lives in [-1,1] (the other GAN compositions
-                # rescale reals with x*2-1); sample_gan maps G's output from
-                # [-1,1] to [0,1].
-                real_images = real_images.to(config.device)
+                # Loader gives [0,1]; G's Tanh emits [-1,1]. Put reals on G's
+                # scale (as models/gan does) so D can't win on range alone.
+                # sample_gan maps G's output back to [0,1].
+                real_images = real_images.to(config.device) * 2.0 - 1.0
                 B = real_images.shape[0]
 
                 # — Discriminator step —
@@ -218,7 +218,7 @@ class GANDiffusionComparison:
             fast_demo=config.effective_fast_demo,
             sample_limit=config.dataset_sample_limit,
         )
-        epochs = 1 if config.fast_demo else config.diff_epochs
+        epochs = 1 if config.effective_fast_demo else config.diff_epochs  # tier S = 1 epoch
         for epoch in range(epochs):
             unet.train()
             total = 0.0
