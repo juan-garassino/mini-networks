@@ -19,6 +19,7 @@ log = logging.getLogger(__name__)
 
 
 def _metric_value(run: RunSummary, metric: str) -> float | None:
+    """The run's last logged value of ``metric`` (bare or ``eval_``-prefixed), else None."""
     # evaluate() keys are logged either bare or eval_-prefixed depending on the trainer.
     for key in (metric, f"eval_{metric}"):
         if key in run.last_metrics:
@@ -27,6 +28,7 @@ def _metric_value(run: RunSummary, metric: str) -> float | None:
 
 
 def _champion_version(model: str, champions_root: Path) -> str | None:
+    """Registry version string from ``<root>/champions/<model>/VERSION``; None if absent or empty."""
     path = champions_root / CHAMPIONS_DIRNAME / model / "VERSION"
     try:
         return path.read_text().strip() or None
@@ -44,6 +46,24 @@ def build_evidence(
     champions_root: str | Path,
     tier_of: Callable[[RunSummary], str | None] = lambda run: None,
 ) -> list[ModelEvidence]:
+    """One ModelEvidence row per name in ``MODEL_NAMES`` (registry order).
+
+    Args:
+        runs: every run the active RunSource lists; grouped by ``run.model``.
+            ``run_count`` counts all of them, whatever their tier.
+        champions_root: the runs base that holds ``champions/<model>/artifacts``
+            (written by ``main.py pull-champions``); a champion exists when that
+            folder has a ``*.pt`` file.
+        tier_of: resolves a run's effective training tier. Only runs it maps to
+            M or L (``GATE_TIERS``) feed ``best_metric``; the default maps every
+            run to None, so ``best_metric`` stays None unless a resolver is given.
+
+    Returns:
+        Rows carrying the EvalSpec gate metric, its M threshold and direction,
+        the provisional flag, and the best gate value across M/L runs (max or
+        min by ``higher_is_better``). Models without an EvalSpec get neutral
+        defaults.
+    """
     root = Path(champions_root)
     by_model: dict[str, list[RunSummary]] = {}
     for run in runs:

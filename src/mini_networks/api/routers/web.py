@@ -1,7 +1,8 @@
 """Read-layer endpoints: the Observatory reads runs through these.
 
-Backed by a pluggable RunSource (local runs/ or MLflow) selected by env; the
-frontend never knows which. Run ids may contain ``/`` (local ids are
+Backed by a pluggable RunSource (local runs/ or MLflow) selected by
+``MN_RUN_SOURCE`` (``local`` default | ``mlflow``) and unioned with the
+in-memory job store; the frontend never knows which. Run ids may contain ``/`` (local ids are
 ``model/timestamp``), hence the ``:path`` converter.
 """
 from __future__ import annotations
@@ -33,11 +34,17 @@ router = APIRouter()
 
 @router.get("/runs", response_model=RunListResponse)
 async def list_runs(source: RunSource = Depends(get_run_source)):
+    """Every run of the active source, plus API jobs it does not list yet (``source="jobstore"``)."""
     return RunListResponse(runs=source.list_runs())
 
 
 @router.get("/runs/{run_id:path}/metrics", response_model=MetricsResponse)
 async def run_metrics(run_id: str, since: int | None = None, source: RunSource = Depends(get_run_source)):
+    """Per-key ``(step, value)`` series for a run; non-numeric values are dropped.
+
+    ``since`` returns only steps strictly greater than it (incremental polling
+    of live runs). ``run_id`` may contain ``/``. 404 when the run is unknown.
+    """
     try:
         return source.get_metrics(run_id, since)
     except RunNotFound:
@@ -46,6 +53,7 @@ async def run_metrics(run_id: str, since: int | None = None, source: RunSource =
 
 @router.get("/runs/{run_id:path}/config", response_model=ConfigResponse)
 async def run_config(run_id: str, source: RunSource = Depends(get_run_source)):
+    """The run's config: local ``config.yaml`` or MLflow params (string values). 404 when unknown."""
     try:
         return source.get_config(run_id)
     except RunNotFound:
@@ -54,6 +62,7 @@ async def run_config(run_id: str, source: RunSource = Depends(get_run_source)):
 
 @router.get("/runs/{run_id:path}/summary", response_model=SummaryResponse)
 async def run_summary(run_id: str, source: RunSource = Depends(get_run_source)):
+    """The run's summary: local ``summary.json``, MLflow tags, or ``{"status"}`` for a job. 404 when unknown."""
     try:
         return source.get_summary(run_id)
     except RunNotFound:
@@ -62,6 +71,11 @@ async def run_summary(run_id: str, source: RunSource = Depends(get_run_source)):
 
 @router.get("/runs/{run_id:path}/artifacts/{name}")
 async def run_artifact(run_id: str, name: str, source: RunSource = Depends(get_run_source)):
+    """Download one artifact file of a run (media type guessed from its name).
+
+    Local names are confined to the run's ``artifacts/`` folder. 404 when the
+    run or artifact is missing (job-store-only runs have no artifacts).
+    """
     try:
         path, media = source.open_artifact(run_id, name)
     except RunNotFound:
@@ -71,12 +85,19 @@ async def run_artifact(run_id: str, name: str, source: RunSource = Depends(get_r
 
 @router.get("/models", response_model=list[ModelInfo])
 async def models():
+    """Every registered model's config JSON schema and defaults (drives the Lab/Sandbox forms)."""
     return list_model_infos()
 
 
 @router.get("/evidence", response_model=EvidenceResponse)
 async def evidence(source: RunSource = Depends(get_run_source)):
-    """Champion / gate bar / provisional flag / run count per model."""
+    """Champion / gate bar / provisional flag / run count per model.
+
+    ``best_metric`` only counts runs whose effective tier is M or L, read from
+    each run's config (``fast_demo`` → S, else ``training_tier``); this costs
+    one config read per listed run. Champions are looked up under
+    ``$MINI_NETWORKS_RUNS/champions/`` whichever source lists the runs.
+    """
     # Champions live next to local runs (pull-champions writes <runs>/champions/)
     # whichever RunSource lists the runs.
     champions_root = os.environ.get("MINI_NETWORKS_RUNS", "runs")
@@ -94,7 +115,13 @@ async def evidence(source: RunSource = Depends(get_run_source)):
 
 @router.post("/feedback", response_model=FeedbackNote)
 async def post_feedback(payload: FeedbackIn):
-    """The owner's lab feedback (text + pictures) → playground/.lab-shots/feedback/."""
+    """The owner's lab feedback (text + pictures) → playground/.lab-shots/feedback/.
+
+    Stored under ``$MN_FEEDBACK_DIR`` when set. Returns the saved note.
+    Errors: 403 when ``MN_DISABLE_TRAIN=1``; 400 for an empty note, more than
+    8 pictures, or a picture that is not a png/jpeg/webp/gif base64 data URL
+    of at most 12 MB.
+    """
     # Public showcase deployments set MN_DISABLE_TRAIN=1: no anonymous writes.
     if os.environ.get("MN_DISABLE_TRAIN") == "1":
         raise HTTPException(status_code=403, detail="forbidden")
@@ -106,12 +133,19 @@ async def post_feedback(payload: FeedbackIn):
 
 @router.get("/feedback", response_model=FeedbackList)
 async def get_feedback():
+    """Every stored lab note, newest first, with the agent's status/reply when written."""
     return FeedbackList(notes=list_notes())
 
 
 @router.get("/taxonomy")
 async def taxonomy():
-    """Atoms/molecules DAG + compositions for the playground's chart view."""
+    """Atoms/molecules DAG + compositions for the playground's chart view.
+
+    Returns ``{mechanisms: {name: {description, home}}, models: [{name, level,
+    introduces, builds_on, note, description}], compositions: [{name,
+    composes, description}]}`` from ``core/taxonomy.py`` and
+    ``colab/catalog.py``.
+    """
     from mini_networks.colab.catalog import COMPOSITIONS, DESCRIPTIONS
     from mini_networks.core.taxonomy import (
         COMPOSITION_TAXONOMY,
@@ -145,11 +179,13 @@ async def taxonomy():
 
 @router.get("/lessons")
 async def lessons():
+    """Curriculum chapters ``[{id, num, title}]`` from ``docs/NN-*.md`` (or ``$MN_DOCS_DIR``)."""
     return list_lessons()
 
 
 @router.get("/lessons/{lesson_id}")
 async def lesson(lesson_id: str):
+    """``{id, markdown}`` for one chapter. 404 for an unknown id or a path outside the chapters."""
     try:
         return {"id": lesson_id, "markdown": read_lesson(lesson_id)}
     except FileNotFoundError:

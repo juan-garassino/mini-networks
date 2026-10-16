@@ -11,6 +11,11 @@ from pathlib import Path
 
 
 def read_jsonl(path: str | Path) -> list[dict]:
+    """Parse a JSONL file into dicts; a missing file gives ``[]``.
+
+    Blank and undecodable lines are skipped, so a live run's half-written last
+    line does not break polling.
+    """
     p = Path(path)
     if not p.exists():
         return []
@@ -28,6 +33,7 @@ def read_jsonl(path: str | Path) -> list[dict]:
 
 
 def _is_number(v) -> bool:
+    """True for int/float but not bool (bool is an int subclass)."""
     return isinstance(v, (int, float)) and not isinstance(v, bool)
 
 
@@ -49,6 +55,7 @@ def pivot_long_to_series(rows: list[dict], since: int | None = None) -> list[tup
 
 
 def latest_step(rows: list[dict]) -> int | None:
+    """Largest numeric ``step`` across rows, or None when there is none."""
     steps = [int(r["step"]) for r in rows if _is_number(r.get("step"))]
     return max(steps) if steps else None
 

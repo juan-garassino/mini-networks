@@ -1,4 +1,10 @@
-"""Training endpoints: POST /train/{model}, GET /runs/{job_id}/status, etc."""
+"""Training endpoints: POST /train/{model}, GET /train/, GET /train/{job_id}/{status,metrics}.
+
+``MN_TRAIN_BACKEND`` = ``local`` (default: train in a FastAPI background task,
+Logger output under ``$MINI_NETWORKS_RUNS``) | ``cloud`` (publish a JobSpec to
+Pub/Sub for the Cloud Run train job). ``MN_DISABLE_TRAIN=1`` refuses new jobs.
+Job state lives in the in-memory store of ``api.dependencies``.
+"""
 from __future__ import annotations
 
 import json
@@ -25,14 +31,20 @@ router = APIRouter()
 
 
 def _runs_base() -> str:
+    """``$MINI_NETWORKS_RUNS`` or ``runs`` — read per request, unlike the compositions router."""
     return os.environ.get("MINI_NETWORKS_RUNS", "runs")
 
 
 def _train_backend() -> str:
+    """``$MN_TRAIN_BACKEND``: ``local`` (default) or ``cloud``."""
     return os.environ.get("MN_TRAIN_BACKEND", "local")
 
 
 def _run_training(job_id: str, model_name: str, config, trainer, dataloader_fn, output_dir: str):
+    """Background task: train on the ``train`` split, then mark the job done (or failed + traceback).
+
+    Closes the Logger either way so an MLflow mirror run ends FINISHED/FAILED.
+    """
     logger = None
     try:
         update_job(job_id, status="running")
@@ -61,6 +73,17 @@ async def start_training(
     request: TrainRequest,
     background_tasks: BackgroundTasks,
 ):
+    """Start training ``model_name``; returns at once with the job id.
+
+    The request fields plus ``extra`` are validated through the model's config
+    class; an invalid override raises inside the handler (HTTP 500). With ``MN_TRAIN_BACKEND=local``
+    the run trains in a background task (status ``started``); with ``cloud`` a
+    JobSpec is published to Pub/Sub (status ``dispatched``) and progress is
+    only visible via ``/web`` (MLflow). The job's run dir is
+    ``<runs>/<model>/<job_id>``.
+
+    Errors: 403 when ``MN_DISABLE_TRAIN=1``; 404 for an unknown model.
+    """
     # Public showcase deployments set MN_DISABLE_TRAIN=1: anonymous visitors
     # must not dispatch GPU jobs or in-process trainings.
     if os.environ.get("MN_DISABLE_TRAIN") == "1":
@@ -115,11 +138,13 @@ async def start_training(
 
 @router.get("/", response_model=list[JobStatus])
 async def list_runs():
+    """Every job (training and composition) started since this server process began."""
     return list_jobs()
 
 
 @router.get("/{job_id}/status", response_model=JobStatus)
 async def get_run_status(job_id: str):
+    """The job's current in-memory status. 404 when the job id is unknown to this process."""
     job = get_job(job_id)
     if job is None:
         raise HTTPException(status_code=404, detail=f"Job not found: {job_id}")
@@ -128,6 +153,11 @@ async def get_run_status(job_id: str):
 
 @router.get("/{job_id}/metrics")
 async def get_run_metrics(job_id: str):
+    """``{"metrics": [...]}``: every LONG ``{step, key, value}`` row of the job's metrics.jsonl.
+
+    Empty list before the first log line (or for a cloud-dispatched job, whose
+    metrics are written elsewhere). 404 when the job id is unknown.
+    """
     job = get_job(job_id)
     if job is None:
         raise HTTPException(status_code=404, detail=f"Job not found: {job_id}")

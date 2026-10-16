@@ -13,11 +13,13 @@ _CHAPTER = re.compile(r"^\d\d-.+\.md$")
 
 
 def _docs_dir() -> Path:
+    """Chapter root: ``$MN_DOCS_DIR`` if set, else ``<repo>/docs``."""
     env = os.environ.get("MN_DOCS_DIR")
     return Path(env) if env else Path(__file__).resolve().parents[3] / "docs"
 
 
 def _title(p: Path) -> str:
+    """The file's first ``# `` heading, falling back to the file stem."""
     try:
         for line in p.read_text(errors="ignore").splitlines():
             if line.startswith("# "):
@@ -28,6 +30,10 @@ def _title(p: Path) -> str:
 
 
 def list_lessons() -> list[dict]:
+    """``[{"id": "NN-slug", "num": "NN", "title": ...}]`` for each ``docs/NN-*.md``, sorted by name.
+
+    Returns ``[]`` when the docs directory does not exist.
+    """
     d = _docs_dir()
     if not d.exists():
         return []
@@ -38,6 +44,12 @@ def list_lessons() -> list[dict]:
 
 
 def read_lesson(lesson_id: str) -> str:
+    """Raw markdown of chapter ``<lesson_id>.md``.
+
+    Raises FileNotFoundError unless the resolved path sits directly in the docs
+    directory, matches ``NN-*.md`` and exists — this rejects ``../`` traversal
+    and non-chapter files.
+    """
     d = _docs_dir()
     p = (d / f"{lesson_id}.md").resolve()
     if p.parent != d.resolve() or not _CHAPTER.match(p.name) or not p.exists():

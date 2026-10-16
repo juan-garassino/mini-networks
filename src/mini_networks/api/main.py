@@ -1,4 +1,10 @@
-"""FastAPI app factory for mini_networks."""
+"""FastAPI app factory for mini_networks.
+
+``create_app`` mounts the routers under /train, /infer, /compose and /web, a
+/health probe, dev CORS for localhost + private-network origins, and (when
+built) the static playground SPA at /. ``app`` is the module-level instance
+``python main.py serve`` runs.
+"""
 from __future__ import annotations
 
 from pathlib import Path
@@ -26,6 +32,7 @@ FRONTEND_DIR = next((d for d in (_REPO / "playground" / "out", _REPO / "frontend
 
 
 def create_app() -> FastAPI:
+    """Build the app: routers, CORS, /health and the playground static mount (if built)."""
     app = FastAPI(
         title="mini_networks",
         description=(
@@ -55,6 +62,7 @@ def create_app() -> FastAPI:
 
     @app.get("/health")
     async def health():
+        """Liveness probe: always ``{"status": "ok"}``."""
         return {"status": "ok"}
 
     # The Observatory SPA. Mounted LAST so every API route wins over the catch-all.

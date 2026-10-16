@@ -29,15 +29,25 @@ MAX_IMAGE_BYTES = 12 * 1024 * 1024
 
 
 def feedback_dir() -> Path:
+    """Inbox root: ``$MN_FEEDBACK_DIR`` if set, else ``<repo>/playground/.lab-shots/feedback``."""
     return Path(os.environ.get("MN_FEEDBACK_DIR", _REPO / "playground" / ".lab-shots" / "feedback"))
 
 
 def _slug(text: str) -> str:
+    """Lowercase ``[a-z0-9-]`` slug of ``text`` (≤24 chars, ``"note"`` if empty) for folder ids."""
     return re.sub(r"[^a-z0-9]+", "-", text.lower()).strip("-")[:24] or "note"
 
 
 def save_note(payload: FeedbackIn) -> FeedbackNote:
-    """Persist a note; raises ValueError on an empty note or a non-image payload."""
+    """Persist a note; raises ValueError on an empty note or a non-image payload.
+
+    Validates everything before touching disk: at most ``MAX_IMAGES`` pictures,
+    each a png/jpeg/webp/gif base64 data URL of at most ``MAX_IMAGE_BYTES``.
+    Writes ``<feedback_dir()>/<UTC YYYYmmdd-HHMMSS>-<skin slug>[-n]/`` with
+    ``img-N.<ext>`` files and ``note.json``, and returns the stored note
+    (status ``"new"``). The ValueError message is user-facing (the router
+    returns it as the 400 detail).
+    """
     if not payload.text.strip() and not payload.images:
         raise ValueError("empty note: write something or attach a picture")
     if len(payload.images) > MAX_IMAGES:
@@ -75,6 +85,12 @@ def save_note(payload: FeedbackIn) -> FeedbackNote:
 
 
 def list_notes() -> list[FeedbackNote]:
+    """Every readable note, newest first (folder names sort by timestamp).
+
+    ``status`` / ``reply`` are overlaid from the note's ``status.json`` when the
+    agent has written one. Unreadable notes are logged and skipped; a missing
+    inbox yields ``[]``.
+    """
     root = feedback_dir()
     if not root.exists():
         return []
