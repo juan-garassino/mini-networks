@@ -16,7 +16,7 @@ class ConvLSTMConfig(BaseConfig):
     canvas_size: int = 32
     seq_len: int = 10            # total frames per clip
     input_frames: int = 5        # frames given as context; predict the rest
-    hidden_dim: int = 32         # ConvLSTM hidden channels (16 plateaued at ~0.07 MSE)
+    hidden_dim: int = 64         # ConvLSTM hidden channels (16 plateaued at ~0.07 MSE)
     kernel_size: int = 3
     n_layers: int = 1
     # scheduled_sampling_prob: probability of feeding the model its OWN previous
@@ -28,7 +28,9 @@ class ConvLSTMConfig(BaseConfig):
     # 2048 clips at batch 16 (vs 512 at the M cap of 64 = 40 optimizer steps):
     # M eval_loss 0.078 -> 0.0397/0.0396 on the 2 runs used for tuning (bar
     # 0.05), but 0.0485/0.0502 on 2 held-out runs (old config: 0.0729/0.0738)
-    # — a real ~33% gain whose bar margin is thin out of sample.
+    # — a real ~33% gain whose bar margin is thin out of sample. Hidden 64
+    # (chosen before running, judged only on 2 fresh independent runs):
+    # 0.0434/0.0416, a clear margin; ~1.6x the CPU time of hidden 32.
     # Width alone at batch 64 stayed at 0.070, a 2nd layer or 5x5 kernel didn't
     # help — the model was starved of steps and capacity together.
     n_clips: int = 2048          # synthetic clips per split
