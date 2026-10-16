@@ -202,6 +202,8 @@ Provisioning + the env-var contract are documented in `infra/gcp/README.md`.
 Start at `docs/README.md` — an ordered curriculum (chapters 00–14: data,
 classifiers, autoencoders, GANs, diffusion, sequence models, LoRA, RAG, CLIP,
 RL/RLHF, compositions, generalization, foundation minis, the taxonomy).
+How-to guides: `docs/adding_models.md` (a model or composition) and
+`docs/adding_datasets.md`.
 Every `src/mini_networks/models/<name>/model.py` opens with a docstring on the
 key idea, tensor shapes, equations and deliberate simplifications.
 

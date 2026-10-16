@@ -23,6 +23,7 @@ fed from the latest quality-gate sweep (`uv run python scripts/render_results.py
 | 14 | [Atoms & molecules](14-atoms-and-molecules.md) | the zoo's family tree: `core/taxonomy.py`, `main.py list` |
 
 How-to guides:
+- [Adding a model or composition](adding_models.md) — package layout, the registries and sync tests, gating
 - [Adding a dataset](adding_datasets.md)
 
 The model source files themselves are annotated: every `models/<name>/model.py`
