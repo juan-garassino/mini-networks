@@ -30,6 +30,7 @@ COMPOSITIONS = [
     "mode_connect",
     "double_descent",
     "vlm",
+    "gan_ada",
 ]
 
 DESCRIPTIONS = {
@@ -77,6 +78,12 @@ DESCRIPTIONS = {
     "text_seq2seq":                  "Transformer encoder-decoder (seq2seq)",
     "text_token_classifier":         "Token classifier (vowel vs other)",
     "pixelcnn":                      "PixelCNN-lite autoregressive model",
+    "wgan":                          "WGAN: Wasserstein critic + weight clipping fixes GAN mode collapse",
+    "vqvae":                         "VQ-VAE: discrete codebook latent + straight-through estimator on MNIST",
+    "cyclegan":                      "CycleGAN: unpaired MNIST↔Fashion translation via cycle-consistency + PatchGAN + image pool",
+    "swin":                          "Swin Transformer: windowed + shifted-window attention hierarchy on MNIST",
+    "convlstm":                      "ConvLSTM: spatio-temporal next-frame prediction on Moving-MNIST",
+    "dcrnn":                         "DCRNN: graph diffusion convolution + GRU for sensor-graph time-series forecasting",
     "clip_guided_diffusion":         "CLIP + Diffusion — text-guided image generation",
     "transformer_clip_diffusion":    "Transformer + CLIP + Diffusion — LM steers generation",
     "gan_diffusion_comparison":      "GAN vs Diffusion — side-by-side educational comparison",
@@ -99,6 +106,7 @@ DESCRIPTIONS = {
     "mode_connect":                  "Loss-surface simplex between two classifiers + cheap simplex ensemble",
     "double_descent":                "Width sweep on label-noised MNIST: test error falls, rises, falls again",
     "vlm":                           "Mini VLM: vision patch prefix + causal LM — templated MNIST QA in words",
+    "gan_ada":                        "GAN + Adaptive Discriminator Augmentation: non-leaking aug at an adaptively tuned p (StyleGAN2-ADA)",
 }
 
 CATEGORY = {name: "Vision / Multimodal" for name in [
@@ -120,6 +128,12 @@ CATEGORY["rpp_classifier"] = "Vision / Multimodal"
 CATEGORY["gnn"] = "Graphs"
 CATEGORY["sam"] = "Vision / Multimodal"
 CATEGORY["nerf"] = "Vision / Multimodal"
+CATEGORY["wgan"] = "Vision / Multimodal"
+CATEGORY["vqvae"] = "Vision / Multimodal"
+CATEGORY["cyclegan"] = "Vision / Multimodal"
+CATEGORY["swin"] = "Vision / Multimodal"
+CATEGORY["convlstm"] = "Vision / Multimodal"
+CATEGORY["dcrnn"] = "Graphs"
 CATEGORY["alphazero"] = "RL / Alignment"
 CATEGORY["vision_embed"] = "Vision / Multimodal"
 CATEGORY["text_seq2seq"] = "Language"
@@ -144,3 +158,4 @@ CATEGORY["rag_conditioned_diffusion"] = "Composition"
 CATEGORY["image_captioning"] = "Composition"
 CATEGORY["multimodal_fusion_baseline"] = "Composition"
 CATEGORY["latent_diffusion"] = "Composition"
+CATEGORY["gan_ada"] = "Composition"

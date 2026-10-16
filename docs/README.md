@@ -25,6 +25,7 @@ fed from the latest quality-gate sweep (`uv run python scripts/render_results.py
 How-to guides:
 - [Adding a model or composition](adding_models.md) — package layout, the registries and sync tests, gating
 - [Adding a dataset](adding_datasets.md)
+- [Testing](TESTING.md) — running any mini, the smoke tests, the per-model gate table
 
 The model source files themselves are annotated: every `models/<name>/model.py`
 opens with a header docstring covering the key idea, this implementation's

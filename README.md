@@ -59,6 +59,7 @@ Vision:
 - `convnext` Tiny ConvNeXt-like CNN baseline.
 - `resnet` Mini ResNet baseline.
 - `vit` Mini ViT baseline.
+- `swin` Swin Transformer: windowed + shifted-window attention hierarchy on MNIST.
 - `segmentation` UNet binary or multiclass segmentation.
 - `detection` YOLO-style digit localization on 56×56 canvas.
 - `vision_embed` Contrastive vision embedding encoder.
@@ -69,10 +70,13 @@ Vision:
 - `nerf` Mini NeRF: a voxel-digit scene as a continuous field, novel-view PSNR.
 
 Generative vision:
-- `gan` MLP GAN baseline for MNIST.
+- `gan` small DCGAN baseline for MNIST.
+- `wgan` WGAN: Wasserstein critic + weight clipping fixes GAN mode collapse.
+- `cyclegan` CycleGAN: unpaired MNIST↔Fashion translation via cycle-consistency + PatchGAN + image pool.
 - `diffusion` DDPM denoising with EMA + curriculum options.
 - `pixelcnn` PixelCNN-lite autoregressive model.
 - `vae` Convolutional VAE reconstruction.
+- `vqvae` VQ-VAE: discrete codebook latent + straight-through estimator on MNIST.
 - `unet_ae` UNet autoencoder reconstruction.
 
 Audio:
@@ -89,6 +93,7 @@ Language:
 - `transformer` Character-level TransformerLM on Tiny Shakespeare.
 - `mamba` NanoMamba state-space model.
 - `rnn` RNN / LSTM / GRU language model.
+- `convlstm` ConvLSTM: spatio-temporal next-frame prediction on Moving-MNIST.
 - `text_seq2seq` Transformer encoder-decoder.
 - `text_token_classifier` Token classifier (vowel vs other).
 - `rag` TF‑IDF retrieval + TransformerLM generation.
@@ -112,6 +117,7 @@ Reinforcement learning:
 Studies & structure:
 - `grokking` Delayed generalization on modular division (a/b mod 97).
 - `gnn` Graph convolutional network: transductive node classification on an SBM.
+- `dcrnn` DCRNN: graph diffusion convolution + GRU for sensor-graph time-series forecasting.
 
 **Compositions**
 - `clip_guided_diffusion` CLIP similarity guides diffusion sampling.
@@ -133,6 +139,7 @@ Studies & structure:
 - `image_captioning` image captioning from MNIST digits.
 - `multimodal_fusion_baseline` image+text fusion baseline.
 - `latent_diffusion` latent diffusion (VAE + UNet).
+- `gan_ada` GAN + Adaptive Discriminator Augmentation: non-leaking aug at an adaptively tuned p (StyleGAN2-ADA).
 - `mode_connect` loss-surface simplex between two classifiers + cheap simplex ensemble.
 - `double_descent` width sweep on label-noised MNIST: test error falls, rises, falls again.
 - `vlm` mini VLM: vision patch prefix + causal LM answering templated MNIST questions.
@@ -206,6 +213,7 @@ How-to guides: `docs/adding_models.md` (a model or composition) and
 `docs/adding_datasets.md`.
 Every `src/mini_networks/models/<name>/model.py` opens with a docstring on the
 key idea, tensor shapes, equations and deliberate simplifications.
+Run any mini, the smoke tests and the per-model gate table: `docs/TESTING.md`.
 
 **Tests**
 ```

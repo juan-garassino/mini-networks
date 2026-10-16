@@ -2,7 +2,7 @@
 
 > **021-bootcamp dependency**: `mini-networks` is used as an editable uv dependency in `005-products/021-bootcamp/` (phases 3, 6). Weeks 6, 7, and 13 import directly from `mini_networks.ch0X` for lab exercises. Do not break the public API of existing chapter modules.
 
-Educational ML lab: 44 models and 22 cross-model compositions sharing one
+Educational ML lab: 50 models and 23 cross-model compositions sharing one
 runtime contract, one data registry, one logging format, and one quality gate.
 Owner-facing reference lab with a graphical **playground** (Observatory).
 Nano S-tier runs locally (CPU) for the gate/dev; **M/L training runs on GCP
@@ -317,7 +317,8 @@ Writes `runs/sweep/<ts>/report.{md,json}`; non-zero exit on any non-pass.
 - `uv sync` / `uv sync --dev` — install
 - `make test` — fast suite (slow marker deselected via addopts)
 - `make validate-s` — full S-tier check sweep (what CI runs)
-- `python main.py train --model <name> --fast_demo` — one nano training
+- `python main.py train --model <name> --fast_demo` — one nano training (run via `uv run python main.py …`)
+- **Testing / verification: `docs/TESTING.md`** — how to run one mini, all smoke tests, one mini's test, the Colab notebooks, and a per-model table (all 50 models: what it demonstrates · train command · gate metric to verify)
 - `python main.py sweep --check --fast_demo --models clip,gan --skip-compositions` — targeted gate
 - `python main.py serve` — FastAPI on :8000; playground at `/` (serves `playground/out`), API docs at `/docs`
 - `MN_MLFLOW_TRACKING_URI=<tracker> python main.py pull-champions [--models a,b]` — download every Production `mini-<model>` checkpoint to `runs/champions/`; `/infer/<model>` then serves them by default (needs the `cloud` extra + GCS read access)
@@ -376,7 +377,7 @@ Writes `runs/sweep/<ts>/report.{md,json}`; non-zero exit on any non-pass.
   on the 35-model era; thresholds carry evidence comments from the triage
   rounds; all era champions registered as `mini-<model>` Production and served
   locally via `pull-champions` + the `/infer` fallback.
-- Zoo since grown to **44 models + 22 compositions**: models 36–44 (kimi,
+- Zoo since grown to **50 models + 23 compositions**. Models 36–44 (kimi,
   deepseek, grokking, text_diffusion, rpp_classifier, gnn, sam, nerf,
   alphazero) and compositions 20–22 (mode_connect, double_descent, vlm) landed
   with S-tier gates only — their evalspec bars are marked PROVISIONAL until a
@@ -389,3 +390,33 @@ Writes `runs/sweep/<ts>/report.{md,json}`; non-zero exit on any non-pass.
   Cloud Run `mini-networks-app` (min-0, `MN_DISABLE_TRAIN=1` guards /train +
   /compose, champions pulled at container start).
 - Plan B (Sandbox, Lab-compare, Lessons) is future work.
+- Known instability fixes applied 2026-07-10: text_seq2seq causal mask +
+  shifted teacher forcing + honest eval divisor; pixelcnn Bernoulli BCE +
+  true raster-scan sampling; optional `BaseConfig.max_grad_norm` clipping.
+- Two teaching minis added (derived molecules): `wgan` (builds_on gan —
+  Wasserstein critic + weight clipping + n_critic + RMSProp, the minimal fix to
+  gan's on-purpose mode collapse; ports martinarjovsky/WassersteinGAN) and
+  `vqvae` (builds_on vae — discrete codebook + straight-through estimator;
+  ports the VQ/STE atom from nerdyrodent/VQGAN-CLIP). Both CPU-runnable via
+  `python main.py train --model {wgan,vqvae}`.
+- Four more teaching minis added (derived molecules, all CPU-smoke-runnable):
+  `cyclegan` (builds_on gan — unpaired MNIST↔Fashion translation: 2 resnet
+  generators + 2 PatchGANs + cycle/identity loss + image pool; ports junyanz
+  cycle_gan_model.py + image_pool.py), `swin` (builds_on vit, transformer —
+  windowed + shifted-window attention + patch-merging hierarchy; ports
+  microsoft/Swin-Transformer), `convlstm` (builds_on rnn, classifier —
+  LSTM gates as convs for Moving-MNIST next-frame prediction + Bernoulli
+  scheduled sampling; ports NVlabs/conv-tt-lstm ConvLSTMCell), and `dcrnn`
+  (builds_on gnn, rnn — diffusion-convolution GRU + inverse-sigmoid scheduled
+  sampling for sensor-graph forecasting; ports liyaguang/DCRNN dcrnn_cell.py).
+  Registry is now 50 models. See `docs/TESTING.md`.
+- Composition added (composes `gan`): `gan_ada` — Adaptive Discriminator
+  Augmentation (StyleGAN2-ADA, NeurIPS 2020; ports NVlabs/stylegan2-ada-pytorch).
+  A non-leaking augmentation pipeline (`AdaptiveAugment`: x-flip + integer
+  translation + 90° rotation + brightness, a minimal subset of the paper's 18
+  transforms) applied to reals AND fakes at probability p, plus the
+  E[sign(D_real)] heuristic controller (`ada_update_p`) that steers p toward a
+  target (~0.6) — the load-bearing "ADA" idea. p is tracked (`p_history`,
+  logged as `ada_p`) for tests/logging. S-tier gate only (finite-loss check);
+  EvalSpec bar is metric=None until a data-starved M sweep sets one.
+  CPU-runnable; compositions total is now 23. See `docs/TESTING.md`.

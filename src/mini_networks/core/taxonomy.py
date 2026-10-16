@@ -94,6 +94,12 @@ MECHANISMS: dict[str, Mechanism] = {
     "direct-preference-loss":    Mechanism("DPO: preference pairs without an explicit reward model", f"{SRC}/models/dpo/trainer.py"),
     "promptable-decoding":       Mechanism("clicks/boxes select WHICH mask to produce (SAM)", f"{SRC}/models/sam/model.py"),
     "two-way-attention":         Mechanism("prompt tokens and image tokens attend to each other", f"{SRC}/models/sam/model.py"),
+    "wasserstein-critic":        Mechanism("Wasserstein critic + weight clipping + n_critic schedule (WGAN)", f"{SRC}/models/wgan/model.py"),
+    "discrete-latent-quantization": Mechanism("codebook nearest-neighbour + straight-through estimator (VQ-VAE)", f"{SRC}/models/vqvae/model.py"),
+    "cycle-consistency":         Mechanism("unpaired translation via cycle loss + PatchGAN + image pool (CycleGAN)", f"{SRC}/models/cyclegan/model.py"),
+    "shifted-window-attention":  Mechanism("windowed + cyclically-shifted local attention hierarchy (Swin)", f"{SRC}/models/swin/model.py"),
+    "convolutional-recurrence":  Mechanism("LSTM gates as convolutions over a spatial state (ConvLSTM)", f"{SRC}/models/convlstm/model.py"),
+    "graph-diffusion-recurrence": Mechanism("GRU gates as dual random-walk graph diffusion convolutions (DCRNN)", f"{SRC}/models/dcrnn/model.py"),
 }
 
 
@@ -159,6 +165,12 @@ MODEL_TAXONOMY: dict[str, ModelTaxon] = {
     "dpo":                   _d(("rlhf",), ("direct-preference-loss",), "preferences without a reward model"),
     "sam":                   _d(("segmentation", "transformer"), ("promptable-decoding", "two-way-attention"),
                                 "the prompt chooses what to segment"),
+    "wgan":                  _d(("gan",), ("wasserstein-critic",), "Wasserstein distance + weight clipping fixes GAN mode collapse"),
+    "vqvae":                 _d(("vae",), ("discrete-latent-quantization",), "continuous latent replaced by a discrete codebook"),
+    "cyclegan":              _d(("gan",), ("cycle-consistency",), "two generators + cycle loss learn UNPAIRED translation"),
+    "swin":                  _d(("vit", "transformer"), ("shifted-window-attention",), "global attention made local + hierarchical"),
+    "convlstm":              _d(("rnn", "classifier"), ("convolutional-recurrence",), "recurrence over spatial maps for video prediction"),
+    "dcrnn":                 _d(("gnn", "rnn"), ("graph-diffusion-recurrence",), "message passing fused into recurrence for graph forecasting"),
 }
 
 # composition name -> models it composes (whole-model reuse, one level above molecules)
@@ -185,6 +197,7 @@ COMPOSITION_TAXONOMY: dict[str, tuple[str, ...]] = {
     "mode_connect":                 ("classifier",),
     "double_descent":               ("classifier",),
     "vlm":                          ("vit", "transformer"),
+    "gan_ada":                      ("gan",),
 }
 
 

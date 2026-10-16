@@ -95,6 +95,10 @@ from mini_networks.compositions.latent_diffusion import (
     LatentDiffusion,
     LatentDiffusionConfig,
 )
+from mini_networks.compositions.gan_ada import (
+    GANADA,
+    GANADAConfig,
+)
 
 router = APIRouter()
 # Read once at import (the /train router reads it per request).
@@ -245,6 +249,14 @@ def _composition_registry() -> dict[str, CompositionSpec]:
             "Builder": LatentDiffusion,
             "train": lambda pipeline, cfg, logger: pipeline.train(cfg, logger),
             "infer": lambda pipeline, cfg, inputs: {"status": "trained"},
+        },
+        "gan_ada": {
+            "Config": GANADAConfig,
+            "Builder": GANADA,
+            "train": lambda pipeline, cfg, logger: pipeline.train(cfg, logger),
+            "infer": lambda pipeline, cfg, inputs: pipeline.sample(
+                cfg, n=int(inputs.get("n_samples", 4))
+            ),
         },
     }
 
