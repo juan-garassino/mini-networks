@@ -32,9 +32,10 @@ MODEL_OVERRIDES: dict[str, dict[str, dict[str, int | None]]] = {
     # the 5-epoch default (500 critic batches) was ALL warm-up: ~25 G steps,
     # an EMA generator still ~97% at init, mostly one-class samples (judge
     # over five 5-epoch runs: 0.175/0.151/0.099/0.0998/0.0999 — the ~0.1 runs
-    # are single-digit collapse). Two independent runs each: 40 epochs
-    # 0.233/0.157, 80 epochs 0.202/0.147 (self-improve loop 2026-10-16) — 40 is
-    # as good at half the cost. One 40-epoch run sat near the 0.15 bar: thin.
+    # are single-digit collapse). 40 epochs over 4 independent runs:
+    # 0.233/0.157/0.253/0.173 (4/4 pass, mean 0.204); 80 epochs 0.202/0.147 —
+    # no better at twice the cost. EMA decay 0.99 instead of 0.999 was worse
+    # (0.074/0.178). Self-improve loop 2026-10-16.
     "wgan": {"M": {"epochs": 40}},
     # Guided-diffusion compositions match base diffusion's 10 epochs: at the
     # 5-epoch default their CFG UNets stay noisy and guide_weight=2 AMPLIFIES
