@@ -210,16 +210,17 @@ class VLM:
     def _loaders(self, config: VLMConfig):
         """Tokenizer + (train, held-out test) QA loaders.
 
-        PAD id = ``len(tok.stoi)``; train is capped by ``dataset_sample_limit``,
+        PAD id = ``tok.vocab_size``; train is capped by ``dataset_sample_limit``,
         test by ``eval_samples``, and the two use different question seeds.
 
-        NOTE: ``CharTokenizer.from_text`` numbers characters 1..N, so this PAD
-        id equals the id of the last sorted character ('z', from "zero"):
-        'z' is embedded as PAD and is outside the N-way output head, so an
-        answer-span target of 'z' is out of range for the cross-entropy.
+        ``CharTokenizer.from_text`` numbers characters 1..N (0 is its own
+        PAD), so the real ids span 0..N = ``vocab_size - 1``. Our PAD must sit
+        past that range: using ``len(tok.stoi)`` (= N) would alias the last
+        sorted character ('z', from "zero") and push its targets out of the
+        output head.
         """
         tok = build_tokenizer()
-        pad = len(tok.stoi)
+        pad = tok.vocab_size
         limit = config.dataset_sample_limit
         train_base = get_dataset(config.dataset, config.data_root, split="train")
         test_base = get_dataset(config.dataset, config.data_root, split="test")
@@ -245,7 +246,7 @@ class VLM:
         tok, (dl_train, dl_test) = self._loaders(config)
         self.tokenizer = tok
         model = VLMNet(
-            vocab_size=len(tok.stoi), d_model=config.d_model, n_heads=config.n_heads,
+            vocab_size=tok.vocab_size, d_model=config.d_model, n_heads=config.n_heads,
             n_layers=config.n_layers, patch_size=config.patch_size,
             max_text_len=config.max_text_len,
         ).to(config.device)
