@@ -26,7 +26,9 @@ class ConvLSTMConfig(BaseConfig):
     # open-loop (predictions fed back), so this only shapes the training signal.
     scheduled_sampling_prob: float = 0.5
     # 2048 clips at batch 16 (vs 512 at the M cap of 64 = 40 optimizer steps):
-    # M eval_loss 0.078 -> 0.0397/0.0396 (seeds 42/1, bar 0.05; with hidden 32).
+    # M eval_loss 0.078 -> 0.0397/0.0396 on the tuning seeds (42/1, bar 0.05),
+    # but 0.0485/0.0502 on held-out seeds 100/200 (old config: 0.0729/0.0738)
+    # — a real ~33% gain whose bar margin is thin out of sample.
     # Width alone at batch 64 stayed at 0.070, a 2nd layer or 5x5 kernel didn't
     # help — the model was starved of steps and capacity together.
     n_clips: int = 2048          # synthetic clips per split
