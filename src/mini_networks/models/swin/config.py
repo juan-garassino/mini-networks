@@ -22,3 +22,6 @@ class SwinConfig(BaseConfig):
     num_heads: int = 4
     mlp_ratio: float = 2.0
     dataset: str = "mnist"
+    # 5e-3, not the 1e-3 BaseConfig default: this one-stage, 32-wide mini
+    # underfits the M budget at 1e-3 (0.58 accuracy); see core/tiers.py.
+    learning_rate: float = 5e-3

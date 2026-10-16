@@ -87,6 +87,10 @@ MODEL_OVERRIDES: dict[str, dict[str, dict[str, int | None]]] = {
     # 0.71 accuracy @ 5 epochs: depthwise-separable blocks train slower than
     # plain convs; double the epochs.
     "mobilenet": {"M": {"epochs": 10}},
+    # swin was underfit at 5 epochs (loss still falling; accuracy 0.58, and
+    # 0.73-0.79 even at lr 5e-3); 10 epochs at lr 5e-3 reach 0.867/0.877
+    # (seeds 42/1, self-improve loop 2026-10-16). ~30 s/5 epochs on CPU.
+    "swin": {"M": {"epochs": 10}},
     # 0.55 accuracy @ 5 epochs on a tiny tabular set where epochs cost
     # milliseconds — let it actually converge.
     "tabular_classifier": {"M": {"epochs": 40}},
