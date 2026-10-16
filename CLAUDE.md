@@ -390,6 +390,16 @@ Writes `runs/sweep/<ts>/report.{md,json}`; non-zero exit on any non-pass.
   Cloud Run `mini-networks-app` (min-0, `MN_DISABLE_TRAIN=1` guards /train +
   /compose, champions pulled at container start).
 - Plan B (Sandbox, Lab-compare, Lessons) is future work.
+- Self-improve loop (2026-10-16, local CPU M runs, no cloud): sweeps used to
+  pass a fixed epochs/batch (cloud 10/64, local sweep 2/32) that silently
+  clipped every per-model M override above them; `None` now lets the tier
+  budget decide (`core.config.budget_kwargs`). Tuned + checked on held-out
+  independent runs: swin, alphazero, vqvae (dead-code restarts), convlstm,
+  nerf, wgan (40-epoch M). Randomness is NOT parametrized: training is
+  unseeded and changes are judged over several independent runs (a seeded
+  gate was tried and reverted). gnn sits at ~0.65-0.74 vs its provisional
+  0.75 bar (needs an owner decision); kimi/deepseek/text_diffusion are too
+  slow/large to gate on CPU — the next cloud M sweep should cover them.
 - Known instability fixes applied 2026-07-10: text_seq2seq causal mask +
   shifted teacher forcing + honest eval divisor; pixelcnn Bernoulli BCE +
   true raster-scan sampling; optional `BaseConfig.max_grad_norm` clipping.
