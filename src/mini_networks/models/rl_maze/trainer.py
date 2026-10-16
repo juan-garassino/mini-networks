@@ -224,7 +224,8 @@ class RLMazeTrainer(BaseTrainer):
             if q_path.exists():
                 with open(q_path) as f:
                     data = json.load(f)
-                agent.Q = {ast.literal_eval(k): v for k, v in data.items()}
+                # update() keeps Q a defaultdict(float): unseen states read 0, not KeyError
+                agent.Q.update({ast.literal_eval(k): v for k, v in data.items()})
         elif config.agent_type == "dqn":
             ckpt = path / "agent_dqn.pt"
             if ckpt.exists():

@@ -281,6 +281,21 @@ class TestRLMazeTrainer:
             keys = {m["key"] for m in metrics}
             assert "episode_reward" in keys
 
+    def test_q_checkpoint_reload_handles_unseen_states(self):
+        """A reloaded Q-table must stay a defaultdict: greedy act() on a state
+        never visited in training reads 0.0 instead of raising KeyError."""
+        import numpy as np
+
+        config = self._config("q")
+        with tempfile.TemporaryDirectory() as tmpdir:
+            logger = Logger(output_dir=tmpdir, run_name="test_q_reload")
+            RLMazeTrainer().train(config, make_rl_maze_dataloader(config), logger)
+            fresh = RLMazeTrainer()
+            fresh.load_checkpoint(config, logger.artifacts_dir)
+        fresh.agent.epsilon = 0.0  # force the greedy (table-lookup) path
+        unseen = np.full(27, 123.0, dtype=np.float32)
+        assert 0 <= fresh.agent.act(unseen) < fresh.agent.n_actions
+
     def test_evaluate_returns_dict(self):
         config = self._config("dqn")
         trainer = RLMazeTrainer()
