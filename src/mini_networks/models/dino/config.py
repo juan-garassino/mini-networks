@@ -1,9 +1,17 @@
+"""Config for mini DINO: label-free self-distillation on a tiny ViT (MNIST).
+
+Backbone sizes mirror the supervised `vit` model; the distillation knobs
+(teacher_temp 0.07, ema_decay 0.99) are deliberately softer/faster than the
+paper's — the comments below record why.
+"""
 from __future__ import annotations
 
 from mini_networks.core.config import BaseConfig
 
 
 class DINOConfig(BaseConfig):
+    """MiniDINO: student/teacher MiniViT pair + prototype heads + centering."""
+
     model_name: str = "dino"
     dataset: str = "mnist"
     # ViT backbone (matches MiniViT defaults so vit and dino stay comparable)
@@ -15,7 +23,7 @@ class DINOConfig(BaseConfig):
     # DINO head + self-distillation knobs (paper values, scaled down where noted)
     proj_hidden: int = 128   # paper: 2048
     out_dim: int = 64        # prototype count; paper: 65536
-    student_temp: float = 0.1
+    student_temp: float = 0.1   # paper value; must stay > teacher_temp (sharpening)
     # 0.07, not the paper's 0.04: targets at 0.04 are near-one-hot from a
     # random teacher, so the student locks onto arbitrary prototype
     # assignments (kNN 0.16-0.20 ~ chance, mixed-digit neighbor rows —
@@ -26,4 +34,4 @@ class DINOConfig(BaseConfig):
     # teacher ~13% initial random weights (0.996^500≈0.14) — the student
     # chases a half-random target (flat loss + kNN 0.20, 2026-07-11 audit).
     ema_decay: float = 0.99
-    center_momentum: float = 0.9
+    center_momentum: float = 0.9   # EMA momentum of the teacher-output center

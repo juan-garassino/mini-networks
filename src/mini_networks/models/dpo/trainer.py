@@ -23,6 +23,18 @@ log = logging.getLogger(__name__)
 
 
 class DPOTrainer(RLHFTrainer):
+    """Two-stage trainer: next-token pretraining, then DPO on self-labelled pairs.
+
+    Stage 1 (inherited `_pretrain`) fits the TransformerLM to the corpus; a
+    frozen deep copy becomes the reference. Stage 2 repeats: sample a pair
+    of continuations per prompt, label chosen/rejected with the heuristic
+    `shakespearean_score`, take one -log sigmoid(beta * margin) step per pair.
+    Logs `dpo_loss` and `n_pairs` per iteration (steps continue after the
+    pretraining epochs). Checkpoint: `model.pt` + `tokenizer.json`.
+    evaluate()/infer()/load_checkpoint() are RLHFTrainer's: {"eval_loss"}
+    and {"generated", "reward"}.
+    """
+
     def _collect_pairs(self, model, config: DPOConfig, prompts: list[list[int]]) -> list[dict]:
         """Sample TWO responses per prompt; the heuristic score labels
         chosen vs rejected (self-labelled preferences). Ties are skipped."""
@@ -47,12 +59,19 @@ class DPOTrainer(RLHFTrainer):
         return pairs
 
     def _dpo_update(self, model, ref_model, pairs: list[dict], config: DPOConfig) -> float:
+        """One AdamW step per pair (batch size 1); returns the mean DPO loss.
+
+        A fresh optimizer is built on every call, so Adam moments do not
+        carry across iterations.
+        """
         optimizer = optim.AdamW(model.parameters(), lr=config.rlhf_lr)
         total = 0.0
         model.train()
         for pb in pairs:
             # Sequence log-prob margins vs the frozen reference — the KL
             # anchor is implicit in these ref terms (no PPO machinery).
+            # Sums span prompt + response, but both sequences share the same
+            # prompt prefix, so its log-prob cancels inside the margin.
             lp_c = _log_probs_of_tokens(model, pb["chosen"]).sum()
             lp_r = _log_probs_of_tokens(model, pb["rejected"]).sum()
             with torch.no_grad():
@@ -68,6 +87,11 @@ class DPOTrainer(RLHFTrainer):
         return total / max(1, len(pairs))
 
     def train(self, config: BaseConfig, dataloader: DataLoader, logger: Logger) -> None:
+        """Pretrain, freeze a reference copy, then run the DPO iterations.
+
+        Prompts are consecutive non-overlapping slices of the tokenised
+        corpus, min(16, seq_len // 4) tokens each.
+        """
         assert isinstance(config, DPOConfig)
         ds = dataloader.dataset
         if hasattr(ds, "tokenizer"):
@@ -113,4 +137,8 @@ class DPOTrainer(RLHFTrainer):
 
 
 def make_dpo_dataloader(config: DPOConfig, split: str = "train") -> DataLoader:
+    """The rlhf char-level text loader: (x [B, seq_len], y = x shifted by one).
+
+    The dataset must expose `.text` (raw corpus) — DPO cuts its prompts from it.
+    """
     return make_rlhf_dataloader(config, split)

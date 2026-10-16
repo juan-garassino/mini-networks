@@ -14,6 +14,16 @@ from mini_networks.models.dino.model import MiniDINO
 
 
 class DINOTrainer(ContrastiveTrainer):
+    """Self-distillation on pairs of augmented views; labels are never used.
+
+    Reuses the ContrastiveTrainer loop with three overrides: only the
+    student is optimised (Adam), `_loss` is MiniDINO.dino_loss, and
+    `_post_step` does the EMA teacher update after every optimizer step.
+    Checkpoint: `model.pt` (student + teacher + center in one state dict).
+    evaluate() -> {"eval_loss"}; representation quality (kNN accuracy) is
+    measured by the gate's EvalSpec, not here.
+    """
+
     def __init__(self):
         self.model: MiniDINO | None = None
 
@@ -41,14 +51,18 @@ class DINOTrainer(ContrastiveTrainer):
         return model.forward_views(v1.to(config.device), v2.to(config.device))
 
     def _loss(self, emb_a: torch.Tensor, emb_b: torch.Tensor, temperature: float = 0.2) -> torch.Tensor:
-        # Temperatures live in the module (student 0.1 / teacher 0.04); the
-        # base-class `temperature` kwarg is ignored.
+        # Temperatures live in the module (DINOConfig: student 0.1 / teacher
+        # 0.07); the base-class `temperature` kwarg is ignored.
         return self.model.dino_loss(emb_a, emb_b)
 
     def _post_step(self, model: MiniDINO) -> None:
         model.update_teacher()
 
     def infer(self, config: BaseConfig, inputs: Any) -> Any:
+        """Images [B, 1, 28, 28] (bare or {"images": ...}) -> {"embeddings": [B, d_model]}.
+
+        Embeddings are the teacher backbone's LayerNormed CLS features.
+        """
         assert isinstance(config, DINOConfig)
         if self.model is None:
             raise RuntimeError("Model not loaded.")
@@ -61,6 +75,10 @@ class DINOTrainer(ContrastiveTrainer):
 
 
 def make_dino_dataloader(config: DINOConfig, split: str = "train") -> DataLoader:
+    """Two augmented views per digit: (view1 [B, 1, 28, 28], view2 [B, 1, 28, 28], labels [B]).
+
+    Views come from random resized crops + rotations (task="contrastive").
+    """
     return get_dataloader(
         name=config.dataset,
         data_root=config.data_root,

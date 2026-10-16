@@ -29,6 +29,8 @@ import torch.nn as nn
 
 
 class AudioCNN(nn.Module):
+    """1D CNN over the raw waveform: three stride-2 convs, global avg-pool, linear."""
+
     def __init__(self, n_classes: int = 10):
         super().__init__()
         self.net = nn.Sequential(
@@ -43,12 +45,13 @@ class AudioCNN(nn.Module):
         self.head = nn.Linear(128, n_classes)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Waveform [B, 1, T] -> class logits [B, n_classes]."""
         h = self.net(x).squeeze(-1)
         return self.head(h)
 
 
 class AudioSpecCNN(nn.Module):
-    """2D CNN for spectrograms."""
+    """2D CNN that treats a linear STFT magnitude spectrogram as a 1-channel image."""
 
     def __init__(self, n_classes: int = 10):
         super().__init__()
@@ -66,12 +69,13 @@ class AudioSpecCNN(nn.Module):
         self.head = nn.Linear(64, n_classes)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Spectrogram image [B, 1, freq, frames] -> class logits [B, n_classes]."""
         h = self.net(x).view(x.size(0), -1)
         return self.head(h)
 
 
 class AudioMelSpecCNN(nn.Module):
-    """2D CNN for mel-spectrograms."""
+    """2D CNN on a mel spectrogram — same layers as AudioSpecCNN, different input."""
 
     def __init__(self, n_classes: int = 10):
         super().__init__()
@@ -89,12 +93,17 @@ class AudioMelSpecCNN(nn.Module):
         self.head = nn.Linear(64, n_classes)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Spectrogram image [B, 1, freq, frames] -> class logits [B, n_classes]."""
         h = self.net(x).view(x.size(0), -1)
         return self.head(h)
 
 
 class AudioTransformer(nn.Module):
-    """Transformer encoder over spectrogram frames."""
+    """Transformer encoder over spectrogram frames (one token per STFT frame).
+
+    No positional encoding and mean pooling over time, so the classifier is
+    invariant to frame order — a deliberate simplification (see module doc).
+    """
 
     def __init__(self, input_dim: int, d_model: int = 64, n_heads: int = 4, n_layers: int = 2, n_classes: int = 10):
         super().__init__()
@@ -110,6 +119,7 @@ class AudioTransformer(nn.Module):
         self.cls = nn.Linear(d_model, n_classes)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Frames [B, T, input_dim] -> class logits [B, n_classes]."""
         # x: [B, T, D]
         h = self.encoder(self.proj(x))
         pooled = h.mean(dim=1)

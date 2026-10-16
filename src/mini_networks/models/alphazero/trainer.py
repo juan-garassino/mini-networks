@@ -27,6 +27,17 @@ log = logging.getLogger(__name__)
 
 
 class AlphaZeroTrainer(BaseTrainer):
+    """Self-play trainer for the tic-tac-toe policy/value net.
+
+    No dataset: each game is played by MCTS (with Dirichlet root noise) against
+    itself; every position is stored as (state, MCTS visit distribution,
+    outcome from that position's mover). Loss = policy cross-entropy against
+    the visit distribution + value MSE against the outcome.
+
+    Checkpoint: `model.pt` (PolicyValueNet state dict) in the artifacts dir.
+    evaluate() -> {"success_rate" (raw policy, gated), "search_success_rate"}.
+    """
+
     def __init__(self):
         self.model: PolicyValueNet | None = None
 
@@ -69,6 +80,11 @@ class AlphaZeroTrainer(BaseTrainer):
         return score / max(1, games)
 
     def train(self, config: BaseConfig, dataloader: DataLoader, logger: Logger) -> None:
+        """Alternate one self-play game with `train_steps_per_game` updates.
+
+        Logs loss / policy_loss / value_loss once per game (step = game index)
+        and saves `model.pt` at the end. The dataloader is ignored.
+        """
         assert isinstance(config, AlphaZeroConfig)
         del dataloader  # self-play generates its own experience (rl_maze idiom)
         model = self._build(config)
@@ -140,6 +156,13 @@ class AlphaZeroTrainer(BaseTrainer):
         return {"success_rate": raw, "search_success_rate": search}
 
     def infer(self, config: BaseConfig, inputs: Any) -> Any:
+        """Raw-policy move for a position (no search).
+
+        inputs: {"board": 9 ints in {-1, 0, 1}} (missing -> empty board). The
+        player to move is inferred from piece counts. Returns {"move",
+        "policy" (9 legality-masked probabilities), "value" (for the mover),
+        "player"}. Raises ValueError on a malformed or impossible board.
+        """
         assert isinstance(config, AlphaZeroConfig)
         if self.model is None:
             raise RuntimeError("Model not loaded.")
@@ -160,6 +183,7 @@ class AlphaZeroTrainer(BaseTrainer):
         }
 
     def load_checkpoint(self, config: BaseConfig, artifacts_dir) -> None:
+        """Load `model.pt` onto CPU (the net always runs on CPU, see _build)."""
         assert isinstance(config, AlphaZeroConfig)
         state = torch.load(Path(artifacts_dir) / "model.pt", map_location="cpu",
                            weights_only=True)
@@ -169,5 +193,6 @@ class AlphaZeroTrainer(BaseTrainer):
 
 
 def make_alphazero_dataloader(config: AlphaZeroConfig, split: str = "train") -> DataLoader:
+    """Placeholder one-item loader; AlphaZero ignores it (self-play is the data)."""
     # self-play generates its own data; dummy loader keeps the registry contract
     return DataLoader(TensorDataset(torch.zeros(1)), batch_size=1)

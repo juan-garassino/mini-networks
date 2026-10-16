@@ -31,5 +31,10 @@ from mini_networks.models.segmentation.unet import SegUNet
 
 
 class UNetAutoencoder(SegUNet):
+    """SegUNet with one input and one output channel, trained to reproduce its input.
+
+    forward: [B,1,28,28] -> [B,1,28,28]. SegUNet applies a sigmoid when
+    out_channels == 1, so outputs lie in (0, 1) like the MNIST pixels.
+    """
     def __init__(self, base_channels: int = 32):
         super().__init__(in_channels=1, out_channels=1, base_channels=base_channels)

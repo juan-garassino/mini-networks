@@ -137,6 +137,12 @@ class NanoMamba(nn.Module):
     def generate(
         self, prompt: torch.Tensor, max_new_tokens: int = 64, temperature: float = 1.0
     ) -> torch.Tensor:
+        """Sample ``max_new_tokens`` tokens autoregressively from ``prompt`` [B,T0].
+
+        Each step re-runs the whole model on the last ``seq_len`` tokens
+        (the recurrent state is not carried between steps, unlike the RNN's
+        generate). Returns [B, T0 + max_new_tokens] ids, prompt included.
+        """
         self.eval()
         x = prompt
         for _ in range(max_new_tokens):

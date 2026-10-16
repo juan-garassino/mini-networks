@@ -16,6 +16,8 @@ from dataclasses import dataclass, field
 
 @dataclass(frozen=True)
 class EvalSpec:
+    """Quality-gate contract for one model/composition (see colab/gate.py)."""
+
     metric: str | None                      # key in evaluate() dict; None = S-style checks only
     thresholds: dict[str, float] = field(default_factory=dict)  # {"M": x, "L": y}
     higher_is_better: bool = True
@@ -27,20 +29,24 @@ class EvalSpec:
 
 
 def _acc(m: float, l: float, **kw) -> EvalSpec:
+    """Spec gated on ``accuracy`` >= m (M) / l (L)."""
     return EvalSpec(metric="accuracy", thresholds={"M": m, "L": l}, **kw)
 
 
 def _loss(m: float, l: float, **kw) -> EvalSpec:
+    """Spec gated on ``eval_loss`` <= m (M) / l (L) (lower is better by default)."""
     kw.setdefault("higher_is_better", False)
     return EvalSpec(metric="eval_loss", thresholds={"M": m, "L": l}, **kw)
 
 
 def _judge(m: float, l: float, **kw) -> EvalSpec:
+    """Generative-model spec scored by the MNIST judge classifier (``judge_samples``)."""
     return EvalSpec(metric="judge_score", thresholds={"M": m, "L": l},
                     score_fn="judge_samples", **kw)
 
 
 def _composition(metric: str | None = None, **kw) -> EvalSpec:
+    """Composition spec: like EvalSpec but without a checkpoint round-trip by default."""
     kw.setdefault("roundtrip", False)
     return EvalSpec(metric=metric, **kw)
 
@@ -207,6 +213,7 @@ EVAL_SPECS: dict[str, EvalSpec] = {
 
 
 def get_eval_spec(name: str) -> EvalSpec:
+    """Return the EvalSpec for a model/composition; KeyError (with a fix hint) if missing."""
     try:
         return EVAL_SPECS[name]
     except KeyError:
@@ -217,4 +224,5 @@ def get_eval_spec(name: str) -> EvalSpec:
 
 
 def passes_threshold(value: float, threshold: float, higher_is_better: bool) -> bool:
+    """True when ``value`` meets ``threshold`` (inclusive) in the given direction."""
     return value >= threshold if higher_is_better else value <= threshold

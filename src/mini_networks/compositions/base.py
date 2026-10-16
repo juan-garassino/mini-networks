@@ -1,4 +1,30 @@
-"""Shared composition bases for multimodal pipelines."""
+"""Shared composition bases for the contrastive multimodal pipelines.
+
+A *composition* wires zoo models into a pipeline that no single model can do
+alone. Most compositions are bespoke classes with their own ``train`` /
+``sample`` / ``compare`` methods; this module holds the two bases shared by
+the four "pair text with another modality" compositions
+(audio_text_contrastive, audio_text_dual_encoder, tabular_text_cross_attention,
+tabular_text_dual_encoder).
+
+ContrastiveCompositionBase is a template-method trainer. Subclasses decide
+*what* to encode; the base owns the CLIP-style InfoNCE loop:
+
+    tokens  = label_to_tokens(label)            # a random templated caption of the label
+    emb_a, emb_b = _encode_pair(primary, tokens) # [B,D] each, L2-normalised
+    logits  = emb_a @ emb_b.T / temperature     # [B,B] similarity matrix
+    loss    = cross_entropy(logits, arange(B))  # row i must pick column i
+
+When a subclass returns ONE fused embedding (the cross-attention variants),
+the logits are its self-similarity ``emb @ emb.T``: the diagonal is trivially
+the max, so the loss mainly pushes different pairs apart (an instance-
+discrimination / uniformity objective) rather than aligning two towers.
+
+Deliberately simplified vs CLIP: the "text" is a templated caption derived
+from the class label (so captions are not unique per item), a one-directional
+loss (no symmetric image->text + text->image average), a fixed rather than
+learned temperature, and in-batch negatives only.
+"""
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
@@ -22,15 +48,25 @@ class CompositionBase(ABC):
         """Run inference. Inputs must be a dict."""
 
     def _as_tensor(self, inputs: dict[str, Any], key: str, dtype=torch.float32) -> torch.Tensor:
+        """Fetch ``inputs[key]`` as a tensor of ``dtype``; KeyError if absent."""
         if key not in inputs:
             raise KeyError(f"Missing required input key: {key}")
         return torch.as_tensor(inputs[key], dtype=dtype)
 
 
 class ContrastiveCompositionBase(CompositionBase):
-    """Base class for contrastive dual-modality compositions."""
+    """Template trainer for contrastive (modality, caption) compositions.
+
+    Subclasses implement four hooks — ``_build_modules``, ``_get_dataloader``
+    (yielding ``(primary, label)`` batches), ``_encode_pair`` and
+    ``_infer_embeddings``; ``train`` / ``infer`` here do the rest. Config
+    knobs read by the base: ``temperature`` (default 0.2; lower = sharper
+    softmax over the batch), ``text_seq_len`` and ``vocab_size`` (caption
+    tokenisation), ``learning_rate`` and the tier-aware ``effective_epochs``.
+    """
 
     def __init__(self):
+        """Start untrained; ``self.modules`` is filled by ``train``."""
         self.modules: dict[str, nn.Module] = {}
 
     @abstractmethod
@@ -56,6 +92,11 @@ class ContrastiveCompositionBase(CompositionBase):
         """Return embeddings for inference."""
 
     def _prepare_tokens(self, labels: torch.Tensor, config: BaseConfig) -> torch.Tensor:
+        """Turn class labels [B] into caption token ids [B, text_seq_len].
+
+        Each label draws a random caption from DIGIT_CAPTIONS, character-tokenised (``ord(c) % vocab_size``)
+        and padded/truncated to ``text_seq_len``.
+        """
         seq_len = getattr(config, "text_seq_len", 32)
         vocab_size = getattr(config, "vocab_size", 256)
         return torch.stack(
@@ -68,17 +109,31 @@ class ContrastiveCompositionBase(CompositionBase):
         emb_b: torch.Tensor | None,
         temperature: float,
     ) -> torch.Tensor:
+        """Pairwise similarity logits [B, B] scaled by 1/temperature.
+
+        With ``emb_b`` None this is the self-similarity of a single fused
+        embedding (see the module docstring for what that objective does).
+        """
         if emb_b is None:
             return (emb_a @ emb_a.T) / temperature
         return (emb_a @ emb_b.T) / temperature
 
     def _optimizer(self, modules: dict[str, nn.Module], config: BaseConfig):
+        """One Adam over the parameters of every module (towers train jointly)."""
         params = []
         for module in modules.values():
             params.extend(list(module.parameters()))
         return torch.optim.Adam(params, lr=config.learning_rate)
 
     def train(self, config: BaseConfig, logger: Logger) -> None:
+        """Train the modules with in-batch InfoNCE and save their weights.
+
+        Logs the mean ``loss`` per epoch. Afterwards, best-effort, logs
+        ``label_match_at_1`` / ``label_match_chance`` / ``retrieval_at_1`` and
+        writes an ``alignment.png`` similarity heatmap (two-tower variants
+        only). Checkpoints: ``model.pt`` for a single ``"model"`` module,
+        otherwise one ``<name>.pt`` per module (e.g. ``audio.pt`` + ``text.pt``).
+        """
         modules = self._build_modules(config)
         self.modules = modules
         opt = self._optimizer(modules, config)
@@ -162,6 +217,10 @@ class ContrastiveCompositionBase(CompositionBase):
         save_image(heat.cpu(), str(logger.artifact_path("alignment.png")))
 
     def infer(self, config: BaseConfig, inputs: dict[str, Any]) -> dict[str, Any]:
+        """Embed ``inputs`` with the trained modules -> ``{"embeddings": [B, D]}`` (CPU).
+
+        Raises RuntimeError if called before ``train``.
+        """
         if not self.modules:
             raise RuntimeError("Train first.")
         emb = self._infer_embeddings(config, inputs)

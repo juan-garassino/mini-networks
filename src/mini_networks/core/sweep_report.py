@@ -13,6 +13,8 @@ from pathlib import Path
 
 @dataclass
 class CheckResult:
+    """One gate verdict for a model or composition (one row of report.{md,json})."""
+
     item_type: str                      # "model" | "composition"
     name: str
     status: str                         # "pass" | "fail" | "error"
@@ -31,12 +33,16 @@ class CheckResult:
 
 
 def _fmt(value: float | None) -> str:
+    """Format a metric value to 4 decimals, or "n/a" for None."""
     if value is None:
         return "n/a"
     return f"{value:.4f}"
 
 
 def render_markdown(results: list[CheckResult], meta: dict) -> str:
+    """Render report.md: meta bullets, pass/fail/error counts, a results table,
+    then Registry (registered versions) and Failures (s_check + traceback)
+    sections when non-empty."""
     lines = ["# Sweep Check Report", ""]
     for key in sorted(meta):
         lines.append(f"- **{key}**: {meta[key]}")

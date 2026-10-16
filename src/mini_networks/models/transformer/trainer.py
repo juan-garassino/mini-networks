@@ -22,6 +22,12 @@ log = logging.getLogger(__name__)
 
 
 class TransformerTrainer(BaseTrainer):
+    """Train :class:`TransformerLM` as a next-token predictor on a text file.
+
+    Loss: cross-entropy plus the summed FFN aux loss (MoE load balancing;
+    zero otherwise). Checkpoint: ``model.pt`` + ``tokenizer.json`` (char or
+    BPE, detected on load by the presence of ``merges``).
+    """
     def __init__(self):
         self.model: TransformerLM | None = None
         self.tokenizer: CharTokenizer | None = None
@@ -57,6 +63,12 @@ class TransformerTrainer(BaseTrainer):
         ).to(config.device)
 
     def train(self, config: BaseConfig, dataloader: DataLoader, logger: Logger) -> None:
+        """Fit a fresh model with AdamW + grad-clip 1.0 on next-token cross-entropy + MoE aux loss.
+
+        The vocab size is taken from the dataset when it exposes a tokenizer
+        (real text), overriding ``config.vocab_size``. Saves ``model.pt`` and,
+        when a tokenizer exists, ``tokenizer.json``.
+        """
         assert isinstance(config, TransformerConfig)
 
         # Pick up tokenizer + actual vocab_size from the dataset if available
@@ -96,6 +108,10 @@ class TransformerTrainer(BaseTrainer):
             self.tokenizer.save(str(logger.artifact_path("tokenizer.json")))
 
     def evaluate(self, config: BaseConfig, dataloader: DataLoader, logger: Logger) -> dict:
+        """Return ``{"eval_loss"}``: mean next-token cross-entropy (nats per token) over the loader.
+
+        The MoE aux loss is not included.
+        """
         assert isinstance(config, TransformerConfig)
         ds = dataloader.dataset
         actual_vocab_size = ds.vocab_size if hasattr(ds, "vocab_size") else config.vocab_size
@@ -114,6 +130,13 @@ class TransformerTrainer(BaseTrainer):
         return {"eval_loss": total_loss / max(1, len(dataloader))}
 
     def infer(self, config: BaseConfig, inputs: Any) -> Any:
+        """Generate text from a prompt.
+
+        ``inputs``: ``{"prompt": str, "max_new_tokens": int (64),
+        "temperature": float (1.0)}``. Returns ``{"generated": str}`` (prompt
+        included) when a tokenizer is loaded, else ``{"tokens": [[ids]]}``
+        sampled from a single token-0 start.
+        """
         assert isinstance(config, TransformerConfig)
         if self.model is None:
             raise RuntimeError("Model not loaded.")
@@ -161,6 +184,13 @@ class TransformerTrainer(BaseTrainer):
 def make_transformer_dataloader(
     config: TransformerConfig, split: str = "train"
 ) -> DataLoader:
+    """Text loader (``text_file`` / ``tiny_shakespeare``): batches of (x [B,seq_len], y [B,seq_len]) long ids.
+
+    y is x shifted left by one token (next-token targets). The dataset also
+    exposes ``tokenizer`` and ``vocab_size``, which the trainer reads.
+
+    ``tokenizer_type="bpe"`` trains a byte-level BPE tokenizer on the file first.
+    """
     return get_dataloader(
         name=config.dataset,
         data_root=config.data_root,

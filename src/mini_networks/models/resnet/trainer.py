@@ -8,6 +8,12 @@ from mini_networks.models.resnet.model import MiniResNet
 
 
 class ResNetTrainer(SupervisedTrainer):
+    """Cross-entropy classifier training for :class:`MiniResNet`.
+
+    Only ``_build`` lives here; the loops come from ``SupervisedTrainer``
+    (evaluate returns ``eval_loss`` + ``accuracy``; infer returns
+    ``predictions`` + ``logits``). Checkpoint: ``model.pt``.
+    """
     def __init__(self):
         self.model: MiniResNet | None = None
 

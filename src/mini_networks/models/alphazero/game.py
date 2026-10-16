@@ -17,10 +17,16 @@ WIN_LINES = (
 
 
 def legal_moves(board: tuple) -> list[int]:
+    """Indices 0..8 of the empty squares (row-major), in ascending order."""
     return [i for i, v in enumerate(board) if v == 0]
 
 
 def apply_move(board: tuple, move: int, player: int) -> tuple:
+    """Return a NEW board with `player` (+1/-1) placed on `move`.
+
+    Boards are immutable tuples so MCTS can branch without copying state.
+    Asserts the square is empty.
+    """
     assert board[move] == 0
     b = list(board)
     b[move] = player

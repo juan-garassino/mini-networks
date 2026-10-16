@@ -1,6 +1,6 @@
-"""CLIP-guided diffusion composition.
+"""CLIP-guided diffusion: text query -> CLIP routing -> class-conditional DDPM.
 
-Connects three already-trained models:
+Trains (in this composition, from scratch) and then connects:
 
   CLIPModel       — encodes text queries and digit images into a shared embedding space
   ConditionedUNet — denoises images conditioned on class label + timestep (CFG)
@@ -27,6 +27,22 @@ The rotation trick (dual_oscillation):
     - Toggle the conditioning class between class_a and class_b
   Effect: the diffusion trajectory oscillates between two classes
   while spatial structure is preserved through the rotation symmetry.
+  rotation_carousel generalises this to any class cycle and rot90 step.
+
+What it demonstrates: a contrastive text encoder can turn free text into a
+condition a generator understands, and classifier-free guidance (Ho &
+Salimans, 2022) sharpens that condition at sampling time:
+
+    eps = (1 + w) * eps(x_t, t, class) - w * eps(x_t, t, no class)
+
+Deliberately simplified: CLIP is used only as a *router* — the query is
+snapped to the nearest of 10 cached class-text embeddings and the UNet is
+conditioned on that class id. True CLIP-guided diffusion (e.g. GLIDE's CLIP
+guidance) instead follows grad_x of CLIP(image, text) during sampling and
+can express anything the text encoder can; here the vocabulary is
+"which digit". Text is character-tokenised (``ord(c) % vocab_size``), and
+with ``use_vae`` the VAE is pretrained separately and frozen (no joint
+LDM training).
 """
 from __future__ import annotations
 
@@ -54,6 +70,13 @@ log = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 
 class CLIPGuidedDiffusionConfig(BaseConfig):
+    """Knobs by stage. CLIP: ``embed_dim``, ``text_*`` sizes,
+    ``clip_temperature``. Diffusion: ``timesteps`` (tier-capped through
+    ``effective_timesteps`` for both training and sampling), ``drop_prob``
+    (CFG label dropout), ``guide_weight`` w. Latent mode: ``use_vae`` +
+    ``vae_latent_channels`` (latents are [C,7,7]). Rotation trick:
+    ``flip_every`` (denoising steps between rotations/class switches)."""
+
     model_name: str = "clip_guided_diffusion"
 
     # CLIP
@@ -97,6 +120,7 @@ class CLIPGuidedDiffusion:
     """
 
     def __init__(self):
+        """Start empty; ``train_all`` (or the per-phase trainers) fill the parts."""
         self.clip: CLIPModel | None = None
         self.unet: ConditionedUNet | None = None
         self.scheduler: NoiseScheduler | None = None
@@ -109,6 +133,7 @@ class CLIPGuidedDiffusion:
     # ------------------------------------------------------------------
 
     def _build_clip(self, config: CLIPGuidedDiffusionConfig) -> CLIPModel:
+        """Image + text towers projecting into a shared ``embed_dim`` space."""
         return CLIPModel(
             embed_dim=config.embed_dim,
             vocab_size=config.vocab_size,
@@ -120,6 +145,7 @@ class CLIPGuidedDiffusion:
         ).to(config.device)
 
     def _build_unet(self, config: CLIPGuidedDiffusionConfig) -> ConditionedUNet:
+        """Class+time conditioned UNet; 1 input channel in pixel mode, C in latent mode."""
         in_ch = config.vae_latent_channels if config.use_vae else 1
         return ConditionedUNet(
             in_channels=in_ch,
@@ -130,6 +156,7 @@ class CLIPGuidedDiffusion:
         ).to(config.device)
 
     def _build_scheduler(self, config: CLIPGuidedDiffusionConfig) -> NoiseScheduler:
+        """Linear-beta DDPM schedule over the tier's ``effective_timesteps``."""
         return NoiseScheduler(
             timesteps=config.effective_timesteps,
             beta_start=config.beta_start,
@@ -137,6 +164,7 @@ class CLIPGuidedDiffusion:
         ).to(torch.device(config.device))
 
     def _build_vae(self, config: CLIPGuidedDiffusionConfig) -> VAE:
+        """Conv VAE: [B,1,28,28] in [-1,1] <-> latent [B,C,7,7]."""
         return VAE(latent_channels=config.vae_latent_channels).to(config.device)
 
     # ------------------------------------------------------------------
@@ -148,7 +176,11 @@ class CLIPGuidedDiffusion:
         config: CLIPGuidedDiffusionConfig,
         logger: Logger,
     ) -> None:
-        """Train CLIP on MNIST image-text pairs, then cache class embeddings."""
+        """Train CLIP on MNIST image-caption pairs, then cache class embeddings.
+
+        Symmetric contrastive loss per batch; logs ``clip_loss`` per epoch and
+        saves ``clip.pt``. Always uses MNIST regardless of ``config.dataset``.
+        """
         clip = self._build_clip(config)
         opt = torch.optim.AdamW(clip.parameters(), lr=config.learning_rate)
         dl = get_dataloader(
@@ -203,7 +235,11 @@ class CLIPGuidedDiffusion:
         config: CLIPGuidedDiffusionConfig,
         logger: Logger,
     ) -> None:
-        """Pre-train the VAE on MNIST reconstructions."""
+        """Pre-train the VAE on reconstruction + ``vae_kl_weight`` * KL.
+
+        Epochs are tier-scaled from ``vae_pretrain_epochs`` (M caps at 2).
+        Logs ``vae_loss``; saves ``vae.pt``. Only called when ``use_vae``.
+        """
         vae = self._build_vae(config)
         opt = torch.optim.Adam(vae.parameters(), lr=config.learning_rate)
         dl = get_dataloader(
@@ -238,7 +274,13 @@ class CLIPGuidedDiffusion:
         config: CLIPGuidedDiffusionConfig,
         logger: Logger,
     ) -> None:
-        """Train the class-conditioned UNet with classifier-free guidance."""
+        """Train the class-conditioned UNet for classifier-free guidance.
+
+        Standard eps-prediction MSE on pixels (or on frozen-VAE latents when
+        ``use_vae``), with each label dropped with probability ``drop_prob``
+        so the same network also learns the unconditional eps. Logs
+        ``diffusion_loss``; saves ``unet.pt``.
+        """
         unet = self._build_unet(config)
         scheduler = self._build_scheduler(config)
         self.unet = unet
@@ -277,7 +319,8 @@ class CLIPGuidedDiffusion:
                 noise = torch.randn_like(x0)
                 xt = scheduler.add_noise(x0, noise, t)
 
-                # Randomly drop class labels for CFG training
+                # Randomly drop class labels for CFG training (mask 1 = drop:
+                # the UNet then sees "no class" and learns eps_uncond too)
                 context_mask = torch.bernoulli(
                     torch.full((B,), config.drop_prob, device=config.device)
                 ).long()
@@ -302,6 +345,11 @@ class CLIPGuidedDiffusion:
         config: CLIPGuidedDiffusionConfig,
         logger: Logger,
     ) -> None:
+        """Run every phase: CLIP, then (if ``use_vae``) the VAE, then the UNet.
+
+        Artifacts: ``clip.pt``, optional ``vae.pt``, ``unet.pt``; the config is
+        logged first.
+        """
         logger.log_config(config.model_dump())
         self.train_clip(config, logger)
         if config.use_vae:
@@ -317,7 +365,12 @@ class CLIPGuidedDiffusion:
         text_query: str,
         config: CLIPGuidedDiffusionConfig,
     ) -> int:
-        """Return the digit class (0-9) whose text embedding best matches the query."""
+        """Return the digit class (0-9) whose text embedding best matches the query.
+
+        The query is character-tokenised like the training captions, embedded
+        by the CLIP text tower, and compared by dot product (both unit norm,
+        so cosine) with the cached per-class mean embeddings.
+        """
         assert self.clip is not None, "Train or load CLIP first."
         assert self._class_text_embeds, "Call _cache_class_embeddings() first."
         self.clip.eval()
@@ -343,9 +396,15 @@ class CLIPGuidedDiffusion:
         n_samples: int,
         config: CLIPGuidedDiffusionConfig,
     ) -> torch.Tensor:
-        """
-        Classifier-free guidance sampling.
-        eps = (1 + w) * eps_cond  -  w * eps_uncond
+        """Classifier-free guidance sampling for one class.
+
+            eps = (1 + w) * eps_cond  -  w * eps_uncond,   w = config.guide_weight
+
+        w = 0 is plain conditional sampling; larger w exaggerates the class
+        direction (crisper, less diverse). Two UNet passes per step.
+
+        Returns:
+            [n_samples, 1, 28, 28] images in [0, 1] (VAE-decoded in latent mode).
         """
         assert self.unet is not None and self.scheduler is not None
         unet, scheduler = self.unet, self.scheduler
@@ -404,6 +463,9 @@ class CLIPGuidedDiffusion:
         `classes` (cyclic). 1 class = pure rotation-equivariance test,
         2 classes = the classic 180° duel (6↔9), 4 classes = a quarter-turn
         carousel with one class per orientation.
+
+        Returns the final [1, 1, 28, 28] image in [0, 1] (CPU), plus ~16
+        evenly spaced intermediate frames when ``return_frames``.
         """
         assert self.unet is not None and self.scheduler is not None
         assert classes, "need at least one class"
@@ -429,6 +491,7 @@ class CLIPGuidedDiffusion:
         state = {"idx": 0}
 
         def predict_noise(x, t_batch, t, state):
+            """CFG eps for the class currently at the head of the cycle."""
             label = torch.tensor([classes[state["idx"] % len(classes)]],
                                  dtype=torch.long, device=dev)
             eps_cond = unet(x, t_batch, label, cond_mask)
@@ -436,6 +499,7 @@ class CLIPGuidedDiffusion:
             return (1 + config.guide_weight) * eps_cond - config.guide_weight * eps_uncond
 
         def step_cb(x, t, step, state):
+            """Every ``every`` steps rotate x and advance the class; maybe grab a frame."""
             if every > 0 and step > 0 and step % every == 0:
                 x = torch.rot90(x, k=k, dims=(-2, -1))
                 state["idx"] += 1
@@ -511,12 +575,14 @@ class CLIPGuidedDiffusion:
         state = {"current_class": current_class}
 
         def predict_noise(x, t_batch, t, state):
+            """CFG eps for whichever of class_a / class_b is current."""
             label = torch.tensor([state["current_class"]], dtype=torch.long, device=dev)
             eps_cond = unet(x, t_batch, label, cond_mask)
             eps_uncond = unet(x, t_batch, label, uncond_mask)
             return (1 + config.guide_weight) * eps_cond - config.guide_weight * eps_uncond
 
         def step_cb(x, t, step, state):
+            """Every ``every`` steps rotate x by 180° and swap class; maybe grab a frame."""
             if every > 0 and step > 0 and step % every == 0:
                 x = torch.rot90(x, k=2, dims=(-2, -1))
                 state["current_class"] = class_b if state["current_class"] == class_a else class_a

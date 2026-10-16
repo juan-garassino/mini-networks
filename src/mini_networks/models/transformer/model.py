@@ -47,6 +47,7 @@ class StandardFFN(nn.Module):
         )
 
     def forward(self, x: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
+        """Map [B,T,C] to (output [B,T,C], aux_loss=0.0)."""
         return self.net(x), torch.tensor(0.0, device=x.device)
 
 
@@ -261,6 +262,12 @@ def _make_ffn(block_type: str, d_model: int, d_ff: int, dropout: float, **kwargs
 # ---------------------------------------------------------------------------
 
 class TransformerBlock(nn.Module):
+    """Post-LN decoder block: causal multi-head self-attention, then the chosen FFN.
+
+    x = LN(x + Drop(Attn(x))); x = LN(x + Drop(FFN(x))). Note MambaFFN
+    already returns its input plus the update, so with ``block_type="mamba"``
+    the input is added twice on the FFN residual.
+    """
     def __init__(
         self,
         d_model: int,
@@ -330,6 +337,12 @@ class TransformerLM(nn.Module):
     def generate(
         self, prompt: torch.Tensor, max_new_tokens: int = 64, temperature: float = 1.0
     ) -> torch.Tensor:
+        """Sample ``max_new_tokens`` tokens autoregressively from ``prompt`` [B,T0].
+
+        Each step re-runs the model on the last ``seq_len`` tokens (no KV
+        cache) and samples from softmax(logits / temperature). Returns
+        [B, T0 + max_new_tokens] token ids, prompt included.
+        """
         self.eval()
         x = prompt
         for _ in range(max_new_tokens):

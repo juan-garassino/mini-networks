@@ -74,11 +74,13 @@ class LoRALinear(nn.Module):
             self.bias_param.requires_grad_(False)
 
     def unfreeze_base(self) -> None:
+        """Make W (and bias) trainable again, e.g. for full pretraining."""
         self.weight.requires_grad_(True)
         if self.bias_param is not None:
             self.bias_param.requires_grad_(True)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Map x [..., in_features] to W x + b + (alpha / rank) * B A x, shape [..., out_features]."""
         out = F.linear(x, self.weight, self.bias_param)
         if self._lora_enabled:
             out = out + (x @ self.lora_A.T @ self.lora_B.T) * self.scale
@@ -111,6 +113,7 @@ class LoRACNN(nn.Module):
         self.fc2 = LoRALinear(hidden_dim, num_classes, rank=rank, alpha=alpha)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Map images [B,1,28,28] to class logits [B,num_classes]."""
         x = self.pool(F.relu(self.conv1(x)))   # [B, 16, 14, 14]
         x = self.pool(F.relu(self.conv2(x)))   # [B, 32,  7,  7]
         x = x.view(x.size(0), -1)              # [B, 1568]
@@ -132,10 +135,12 @@ class LoRACNN(nn.Module):
         self.fc2.freeze_base()
 
     def unfreeze_all(self) -> None:
+        """Make every parameter trainable (stage 1: full pretraining)."""
         for p in self.parameters():
             p.requires_grad_(True)
         self.fc1.unfreeze_base()
         self.fc2.unfreeze_base()
 
     def trainable_params(self) -> list[nn.Parameter]:
+        """Parameters with ``requires_grad``; after ``freeze_for_finetune`` these are just the LoRA A/B matrices (plus convs if not frozen)."""
         return [p for p in self.parameters() if p.requires_grad]

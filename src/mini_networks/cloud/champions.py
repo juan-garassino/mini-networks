@@ -29,10 +29,12 @@ CHAMPIONS_DIRNAME = "champions"
 
 
 def champion_artifacts_dir(model_name: str, checkpoint_root: str | Path) -> Path:
+    """``<checkpoint_root>/champions/<model_name>/artifacts`` (may not exist)."""
     return Path(checkpoint_root) / CHAMPIONS_DIRNAME / model_name / "artifacts"
 
 
 def has_champion(model_name: str, checkpoint_root: str | Path) -> bool:
+    """True when a pulled champion checkpoint (``*.pt``) exists locally for the model."""
     d = champion_artifacts_dir(model_name, checkpoint_root)
     return d.is_dir() and any(d.glob("*.pt"))
 

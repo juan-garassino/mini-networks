@@ -28,6 +28,7 @@ import torch.nn.functional as F
 
 
 class TabularDenoiser(nn.Module):
+    """Three-layer MLP that predicts the noise added to a row (time-unconditional; see module docstring)."""
     def __init__(self, n_features: int = 4, hidden_dim: int = 128):
         super().__init__()
         self.net = nn.Sequential(
@@ -39,5 +40,6 @@ class TabularDenoiser(nn.Module):
         )
 
     def forward(self, x: torch.Tensor, t: torch.Tensor) -> torch.Tensor:
+        """Map noisy rows x_t [B,n_features] (and ignored timesteps t [B]) to predicted noise [B,n_features]."""
         # t is ignored in this minimal model (can be added via embedding later)
         return self.net(x)

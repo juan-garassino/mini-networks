@@ -30,6 +30,7 @@ DEFAULT_PREFIX = "mini-networks"
 
 
 def default_items() -> list[str]:
+    """Canonical sweep order: every catalog model, then every composition."""
     from mini_networks.colab.catalog import COMPOSITIONS, MODELS
 
     return list(MODELS) + list(COMPOSITIONS)
@@ -49,10 +50,12 @@ def resolve_items(raw: str | None) -> list[str]:
 
 
 def _shards_prefix(prefix: str, sweep_id: str) -> str:
+    """GCS object prefix holding one sweep's shards: ``<prefix>/sweeps/<id>/shards``."""
     return f"{prefix}/sweeps/{sweep_id}/shards"
 
 
 def _upload(bucket_name: str, blob_path: str, local: Path) -> None:
+    """Upload ``local`` to ``gs://<bucket_name>/<blob_path>`` (ADC credentials)."""
     from google.cloud import storage
 
     storage.Client().bucket(bucket_name).blob(blob_path).upload_from_filename(str(local))

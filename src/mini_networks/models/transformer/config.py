@@ -1,9 +1,19 @@
+"""Config for TransformerLM: stack size, FFN block type (standard / MoE / Mamba) and tokenizer."""
 from __future__ import annotations
 from typing import Literal
 from mini_networks.core.config import BaseConfig
 
 
 class TransformerConfig(BaseConfig):
+    """Hyperparameters for :class:`TransformerLM` and its text pipeline.
+
+    ``seq_len`` is both the training window and the size of the learned
+    position table (generation keeps only the last ``seq_len`` tokens).
+    ``vocab_size`` is a fallback: on real text the trainer replaces it with
+    the dataset tokenizer's size. ``moe_*`` / ``mamba_*`` fields only matter
+    for the matching ``block_type``; ``text_file`` empty means download
+    Tiny Shakespeare.
+    """
     model_name: str = "transformer"
     n_layers: int = 4
     n_heads: int = 4

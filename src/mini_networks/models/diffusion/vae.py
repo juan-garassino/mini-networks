@@ -65,6 +65,7 @@ class VAE(nn.Module):
         return mu, logvar
 
     def reparameterise(self, mu: torch.Tensor, logvar: torch.Tensor) -> torch.Tensor:
+        """z = mu + exp(0.5 logvar) * eps in training mode; just mu in eval mode."""
         if self.training:
             std = torch.exp(0.5 * logvar)
             return mu + std * torch.randn_like(std)

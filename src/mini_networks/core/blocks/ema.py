@@ -33,6 +33,11 @@ class EMA:
 
     @torch.no_grad()
     def update(self, model: torch.nn.Module) -> None:
+        """Blend ``model``'s parameters into the shadow copy (call once per step).
+
+        ``shadow = decay * shadow + (1 - decay) * live`` for parameters; buffers
+        are copied verbatim (see below).
+        """
         for shadow_p, model_p in zip(self.shadow.parameters(), model.parameters()):
             shadow_p.copy_(self.decay * shadow_p + (1.0 - self.decay) * model_p)
         # Buffers too (BatchNorm running stats): parameters-only EMA left the
@@ -44,4 +49,5 @@ class EMA:
             shadow_b.copy_(model_b)
 
     def state_dict(self) -> dict:
+        """Return the shadow model's state dict (loadable into a fresh model)."""
         return self.shadow.state_dict()

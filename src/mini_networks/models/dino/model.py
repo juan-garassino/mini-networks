@@ -23,7 +23,8 @@ This implementation:
     [B,1,28,28] x 2 views (contrastive MNIST augmentations)
       student:  MiniViT features (d=64) -> MLP head 64->128->64 -> K=64 logits
       teacher:  same architecture, EMA of the student, no_grad
-      loss:     CE( softmax((t − center)/0.04), log_softmax(s/0.1) ), cross-view
+      loss:     CE( softmax((t − center)/T_t), log_softmax(s/0.1) ), cross-view
+                (T_t = teacher_temp: 0.07 via DINOConfig; the paper uses 0.04)
 
 Deliberately simplified vs the paper: two global views only (no multi-crop),
 K = 64 prototypes instead of 65536, a plain linear prototype layer instead of
@@ -53,6 +54,7 @@ class DINOHead(nn.Module):
         self.prototypes = nn.Linear(in_dim, out_dim, bias=False)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Backbone features [N, in_dim] -> prototype logits [N, out_dim]."""
         x = self.mlp(x)
         x = F.normalize(x, dim=-1)
         return self.prototypes(x)
@@ -70,6 +72,13 @@ def _make_branch(
 
 
 class MiniDINO(nn.Module):
+    """Student + EMA teacher (each a MiniViT backbone + DINOHead) and the center buffer.
+
+    The constructor defaults are the paper's temperatures/decay; the zoo
+    passes DINOConfig's (softer) values via the trainer. Only student
+    parameters get gradients — the teacher changes only via update_teacher().
+    """
+
     def __init__(
         self,
         patch_size: int = 4,
@@ -123,6 +132,12 @@ class MiniDINO(nn.Module):
         return torch.cat([s1, s2], dim=0), torch.cat([t2, t1], dim=0)
 
     def dino_loss(self, student_logits: torch.Tensor, teacher_logits: torch.Tensor) -> torch.Tensor:
+        """Cross-entropy H(teacher target, student) over aligned rows [2B, K] -> scalar.
+
+        Teacher target = softmax((t - center) / teacher_temp), detached
+        (centering + sharpening = the anti-collapse pair). In training mode
+        the call also updates the center from this batch's teacher logits.
+        """
         targets = F.softmax((teacher_logits - self.center) / self.teacher_temp, dim=-1).detach()
         log_probs = F.log_softmax(student_logits / self.student_temp, dim=-1)
         loss = -(targets * log_probs).sum(dim=-1).mean()
@@ -137,6 +152,7 @@ class MiniDINO(nn.Module):
 
     @torch.no_grad()
     def update_teacher(self) -> None:
+        """EMA step: teacher <- ema_decay * teacher + (1 - ema_decay) * student."""
         for ps, pt in zip(self._student_params(), self._teacher_params()):
             pt.mul_(self.ema_decay).add_(ps.detach(), alpha=1 - self.ema_decay)
 
@@ -146,4 +162,5 @@ class MiniDINO(nn.Module):
         return self.teacher_backbone.forward_features(x)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Images [B, 1, 28, 28] -> teacher CLS embeddings [B, d_model] (no grad)."""
         return self.embed(x)

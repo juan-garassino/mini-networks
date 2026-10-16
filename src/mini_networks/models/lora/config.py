@@ -1,8 +1,14 @@
+"""Config for the LoRA demo: CNN head width, adapter rank/alpha, and the two-stage epoch budget."""
 from __future__ import annotations
 from mini_networks.core.config import BaseConfig
 
 
 class LoRAConfig(BaseConfig):
+    """Hyperparameters for :class:`LoRACNN` and the two-stage LoRA schedule.
+
+    The stage epoch counts are tier-scaled by ``config.tier_epochs`` (S: 1,
+    M: at most 2, L: as set); the generic ``epochs`` field is not used.
+    """
     model_name: str = "lora"
 
     # CNN backbone

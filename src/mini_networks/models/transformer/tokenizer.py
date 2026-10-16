@@ -68,6 +68,7 @@ class BPETokenizer:
     # ------------------------------------------------------------------
 
     def encode(self, text: str) -> list[int]:
+        """Encode text to ids: UTF-8 bytes, then apply the learned merges in training order."""
         ids = list(text.encode("utf-8"))
         for (a, b), merged in self.merges:
             new_ids: list[int] = []
@@ -83,11 +84,13 @@ class BPETokenizer:
         return ids
 
     def decode(self, ids: list[int]) -> str:
+        """Concatenate the byte strings of ``ids`` (skipping PAD = 0) and decode as UTF-8, replacing invalid sequences."""
         raw = b"".join(self.vocab.get(i, b"") for i in ids if i != self.PAD)
         return raw.decode("utf-8", errors="replace")
 
     @property
     def vocab_size(self) -> int:
+        """256 byte ids plus one id per learned merge."""
         return 256 + len(self.merges)
 
     # ------------------------------------------------------------------
@@ -95,6 +98,7 @@ class BPETokenizer:
     # ------------------------------------------------------------------
 
     def save(self, path: str) -> None:
+        """Write the merge list as JSON ``{"merges": [[[a, b], id], ...]}``; the vocab is rebuilt from it on load."""
         data = {
             "merges": [[[a, b], merged_id] for (a, b), merged_id in self.merges],
         }
@@ -103,6 +107,7 @@ class BPETokenizer:
 
     @classmethod
     def load(cls, path: str) -> "BPETokenizer":
+        """Rebuild a tokenizer from a JSON file written by :meth:`save`."""
         tok = cls()
         with open(path) as f:
             data = json.load(f)
@@ -114,6 +119,13 @@ class BPETokenizer:
 
 
 class CharTokenizer:
+    """Character-level tokenizer: one id per distinct character.
+
+    ``from_text`` reserves id 0 for PAD and numbers characters from 1. When
+    built from ``TextFileDataset``'s vocabulary (ids from 0), id 0 is a real
+    character, so ``encode`` cannot tell it from an unknown char and
+    ``decode`` drops it.
+    """
     PAD = 0
 
     def __init__(self, vocab: Optional[dict[str, int]] = None):
@@ -122,6 +134,7 @@ class CharTokenizer:
 
     @classmethod
     def from_text(cls, text: str) -> "CharTokenizer":
+        """Build a vocabulary from the sorted set of characters in ``text`` (ids 1..N, 0 = PAD)."""
         chars = sorted(set(text))
         stoi = {c: i + 1 for i, c in enumerate(chars)}  # 0 reserved for PAD
         tok = cls(stoi)
@@ -131,20 +144,25 @@ class CharTokenizer:
 
     @property
     def vocab_size(self) -> int:
+        """Number of characters plus one for PAD."""
         return len(self.stoi) + 1  # +1 for PAD
 
     def encode(self, text: str) -> list[int]:
+        """Map each character to its id; unknown characters become PAD (0)."""
         return [self.stoi.get(c, self.PAD) for c in text]
 
     def decode(self, ids: list[int]) -> str:
+        """Join the characters for ``ids``, skipping PAD (0) and unknown ids."""
         return "".join(self.itos.get(i, "") for i in ids if i != self.PAD)
 
     def save(self, path: str) -> None:
+        """Write the char -> id mapping (``stoi``) as JSON."""
         with open(path, "w") as f:
             json.dump(self.stoi, f)
 
     @classmethod
     def load(cls, path: str) -> "CharTokenizer":
+        """Rebuild a tokenizer from a JSON ``stoi`` file written by :meth:`save`."""
         with open(path) as f:
             stoi = json.load(f)
         return cls(stoi)

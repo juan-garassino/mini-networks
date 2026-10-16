@@ -47,12 +47,27 @@ def _sort_batch_by_complexity(images: torch.Tensor, labels: torch.Tensor, descen
 # ---------------------------------------------------------------------------
 
 class DDPMTrainer(BaseTrainer):
+    """Train the unconditional UNet to predict the noise added at a random step.
+
+    Per batch: scale images to [-1, 1], draw t ~ U{0..T-1} and eps ~ N(0, I),
+    form x_t with `scheduler.add_noise`, minimise MSE(UNet(x_t, t), eps).
+    Labels are only used by the optional curriculum sort.
+
+    Checkpoints: `model.pt` (live weights) and, when ema_decay > 0,
+    `model_ema.pt` (EMA shadow; preferred by load_checkpoint).
+    evaluate() -> {"eval_loss"} (noise-prediction MSE on held-out images; the
+    sample-quality gate is scored separately by gate.judge_samples).
+    infer({"n_samples"}) -> {"samples": [n, C, H, W] in [0, 1]}.
+    """
+
     def __init__(self):
         self.model: UNet | None = None
         self.scheduler: NoiseScheduler | None = None
         self.ema: EMA | None = None
 
     def _build(self, config: DiffusionConfig):
+        # Returns (model, scheduler); both sized by effective_timesteps so the
+        # training chain and the sampling chain are the same chain.
         model = UNet(
             in_channels=config.in_channels,
             base_channels=config.base_channels,
@@ -66,6 +81,7 @@ class DDPMTrainer(BaseTrainer):
         return model, scheduler
 
     def train(self, config: BaseConfig, dataloader: DataLoader, logger: Logger) -> None:
+        """Epoch loop over the full dataloader; logs mean `loss` per epoch, saves weights."""
         assert isinstance(config, DiffusionConfig)
         model, scheduler = self._build(config)
         self.model = model
@@ -132,6 +148,7 @@ class DDPMTrainer(BaseTrainer):
             torch.save(ema.state_dict(), logger.artifact_path("model_ema.pt"))
 
     def evaluate(self, config: BaseConfig, dataloader: DataLoader, logger: Logger) -> dict:
+        """Mean noise-prediction MSE at random timesteps -> {"eval_loss"}."""
         assert isinstance(config, DiffusionConfig)
         if self.model is None:
             self.model, self.scheduler = self._build(config)
@@ -152,6 +169,12 @@ class DDPMTrainer(BaseTrainer):
         return {"eval_loss": total_loss / max(1, len(dataloader))}
 
     def infer(self, config: BaseConfig, inputs: Any) -> Any:
+        """Ancestral sampling from pure noise over the full effective_timesteps chain.
+
+        inputs: {"n_samples": int} (default 4). Uses the EMA shadow when one
+        is live in memory. Returns {"samples": [n, in_channels, image_size,
+        image_size] in [0, 1]} on CPU.
+        """
         assert isinstance(config, DiffusionConfig)
         if self.model is None or self.scheduler is None:
             self.model, self.scheduler = self._build(config)
@@ -190,6 +213,7 @@ class DDPMTrainer(BaseTrainer):
 
 
 def make_diffusion_dataloader(config: DiffusionConfig, split: str = "train") -> DataLoader:
+    """Plain classification loader: (images [B, 1, 28, 28] in [0, 1], labels [B])."""
     return get_dataloader(
         name=config.dataset,
         data_root=config.data_root,

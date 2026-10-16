@@ -23,6 +23,7 @@ def install_deps() -> None:
 
 
 def _make_models_table(items: list[str], title: str) -> Table:
+    """Rich table of ``items`` with their catalog category and description."""
     tbl = Table(title=title, box=box.SIMPLE_HEAD, show_lines=False, highlight=True)
     tbl.add_column("#", style="bold cyan", justify="right", width=4)
     tbl.add_column("Name", style="bold white", width=30)
@@ -35,10 +36,12 @@ def _make_models_table(items: list[str], title: str) -> Table:
 
 
 def list_models() -> None:
+    """Print the catalog's models as a rich table."""
     console.print(_make_models_table(MODELS, "Available Models"))
 
 
 def list_compositions() -> None:
+    """Print the catalog's compositions as a rich table."""
     console.print(_make_models_table(COMPOSITIONS, "Available Compositions"))
 
 
@@ -109,6 +112,12 @@ def interactive_menu() -> None:
 
 
 def main() -> None:
+    """CLI for ``python -m mini_networks.colab.launcher``.
+
+    ``--list`` prints the catalog; ``--model`` / ``--composition`` run one item;
+    no selection (or ``--interactive``) opens the menu. Runs default to the
+    nano S tier: pass ``--no_fast`` to use ``--training_tier`` instead.
+    """
     import argparse
 
     parser = argparse.ArgumentParser(

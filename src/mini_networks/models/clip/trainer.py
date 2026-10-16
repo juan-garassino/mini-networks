@@ -1,4 +1,4 @@
-"""CLIP trainer implementing BaseTrainer contract."""
+"""CLIP trainer: ContrastiveTrainer loop with CLIP's own symmetric InfoNCE."""
 from __future__ import annotations
 
 from typing import Any
@@ -14,6 +14,14 @@ from mini_networks.models.clip.model import CLIPModel
 
 
 class CLIPTrainer(ContrastiveTrainer):
+    """Train CLIPModel on (image, caption tokens, label) MNIST batches.
+
+    The ContrastiveTrainer loop is reused with AdamW and `_loss` delegated to
+    `CLIPModel.contrastive_loss` (learned temperature; the base class's fixed
+    `temperature` argument is ignored). The label is unused in training.
+    Checkpoint: `model.pt`. evaluate() -> {"eval_loss"} (mean InfoNCE).
+    """
+
     def __init__(self):
         self.model: CLIPModel | None = None
 
@@ -43,6 +51,13 @@ class CLIPTrainer(ContrastiveTrainer):
         return self.model.contrastive_loss(emb_a, emb_b)
 
     def infer(self, config: BaseConfig, inputs: Any) -> Any:
+        """Embed ONE modality per call.
+
+        inputs {"images": [B, 1, 28, 28]} -> {"image_embeds": [B, D]}, or
+        {"tokens": [B, seq_len]} -> {"text_embeds": [B, D]} (unit-norm, CPU).
+        Images win if both are given; anything else returns {}. Zero-shot
+        classification = argmax of image_embeds @ text_embeds.T.
+        """
         assert isinstance(config, CLIPConfig)
         if self.model is None:
             raise RuntimeError("Model not loaded. Call train() first or load a checkpoint.")
@@ -59,6 +74,11 @@ class CLIPTrainer(ContrastiveTrainer):
 
 
 def make_clip_dataloader(config: CLIPConfig, split: str = "train") -> DataLoader:
+    """MNIST image-text pairs: (images [B, 1, 28, 28], tokens [B, seq_len], labels [B]).
+
+    Each item draws a random caption for its digit, so the same image gets
+    different text across epochs.
+    """
     return get_dataloader(
         name="mnist",
         data_root=config.data_root,

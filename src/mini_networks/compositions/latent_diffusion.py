@@ -1,4 +1,24 @@
-"""Latent diffusion composition: VAE + UNet on latents."""
+"""Latent diffusion: a VAE compresses images, a DDPM learns the latents.
+
+The Stable Diffusion recipe (Rombach et al., 2022) at MNIST scale, built
+from two zoo parts trained in sequence:
+
+    1. VAE  [B,1,28,28] in [-1,1] -> latent [B,4,7,7] -> reconstruction
+       trained on MSE + 1e-3 * KL (vae_loss default weight)
+    2. VAE frozen (eval: encode returns the posterior mean), UNet trained on
+       the DDPM objective MSE(eps_theta(z_t, t), eps) over those latents
+    sample: z_T ~ N(0,I) [n,4,7,7] -> reverse chain -> VAE.decode -> image
+
+Why: 4x7x7 = 196 numbers instead of 784 pixels — the diffusion model spends
+its capacity on content while the VAE handles pixel detail, which is what
+makes high-resolution diffusion affordable.
+
+Deliberately simplified: no latent scale factor (SD rescales latents to unit
+variance; here a small KL weight leaves their scale to chance), no
+perceptual/adversarial VAE loss, an unconditional UNet, and the VAE is
+trained for the same epoch budget as the UNet rather than pretrained to
+convergence.
+"""
 from __future__ import annotations
 
 import torch
@@ -14,6 +34,10 @@ from mini_networks.core.diffusion.sampling import sample_loop
 
 
 class LatentDiffusionConfig(BaseConfig):
+    """Knobs: ``latent_channels`` (C of the [C,7,7] latent; capacity of the
+    compression), ``timesteps``/``beta_*`` (linear DDPM schedule over latents,
+    tier-capped via ``effective_timesteps``)."""
+
     model_name: str = "latent_diffusion"
     latent_channels: int = 4
     timesteps: int = 200
@@ -23,12 +47,19 @@ class LatentDiffusionConfig(BaseConfig):
 
 
 class LatentDiffusion:
+    """VAE then latent-space UNet, with a sampler that decodes back to pixels."""
+
     def __init__(self):
         self.vae: VAE | None = None
         self.unet: UNet | None = None
         self.scheduler: NoiseScheduler | None = None
 
     def train(self, config: LatentDiffusionConfig, logger: Logger) -> None:
+        """Train the VAE, freeze it, then train the UNet on its latents.
+
+        Logs ``vae_loss`` then ``latent_loss`` per epoch; saves ``vae.pt`` and
+        ``unet.pt``.
+        """
         dl = get_dataloader(
             name=config.dataset,
             data_root=config.data_root,
@@ -92,6 +123,10 @@ class LatentDiffusion:
 
     @torch.no_grad()
     def sample(self, config: LatentDiffusionConfig, n: int = 4):
+        """Denoise ``n`` latents [n,C,7,7] and decode -> [n,1,28,28] in [0,1].
+
+        The VAE decoder ends in Tanh, so ``(x + 1) / 2`` lands in [0,1].
+        """
         if self.vae is None or self.unet is None or self.scheduler is None:
             raise RuntimeError("Train first.")
         self.vae.eval()

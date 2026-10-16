@@ -8,6 +8,12 @@ from mini_networks.models.vit.model import MiniViT
 
 
 class ViTTrainer(SupervisedTrainer):
+    """Cross-entropy classifier training for :class:`MiniViT`.
+
+    Only ``_build`` lives here; the loops come from ``SupervisedTrainer``
+    (evaluate returns ``eval_loss`` + ``accuracy``; infer returns
+    ``predictions`` + ``logits``). Checkpoint: ``model.pt``.
+    """
     def __init__(self):
         self.model: MiniViT | None = None
 

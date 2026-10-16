@@ -16,6 +16,11 @@ from mini_networks.models.tabular.model import TabularMLP, TabularLinear, Tabula
 
 
 class TabularClassifierTrainer(SupervisedTrainer):
+    """Cross-entropy training for the model selected by ``config.model_type``.
+
+    The epoch loop, ``evaluate`` (``eval_loss`` + ``accuracy``) and the
+    ``model.pt`` checkpoint come from ``SupervisedTrainer``.
+    """
     def __init__(self):
         self.model: TabularMLP | None = None
 
@@ -42,6 +47,11 @@ class TabularClassifierTrainer(SupervisedTrainer):
         return model(x.to(config.device)), y
 
     def infer(self, config: BaseConfig, inputs: Any) -> Any:
+        """Classify rows given as a tensor, nested list, or ``{"features": ...}`` [B,n_features].
+
+        Rows must be standardized the same way as the training data. Returns
+        ``{"predictions": [B], "logits": [B,n_classes]}`` as Python lists.
+        """
         assert isinstance(config, TabularClassifierConfig)
         if self.model is None:
             raise RuntimeError("Model not loaded.")
@@ -56,6 +66,7 @@ class TabularClassifierTrainer(SupervisedTrainer):
 
 
 def make_tabular_dataloader(config: TabularClassifierConfig, split: str = "train") -> DataLoader:
+    """Tabular loader for ``config.dataset`` (Iris by default): batches of (features [B,n_features] float, labels [B])."""
     return get_dataloader(
         name=config.dataset,
         data_root=config.data_root,

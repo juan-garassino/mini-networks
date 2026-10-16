@@ -33,7 +33,11 @@ import torch.nn.functional as F
 
 
 def get_time_embedding(timesteps: torch.Tensor, dim: int) -> torch.Tensor:
-    """Sinusoidal time embedding."""
+    """Sinusoidal time embedding: timesteps [B] -> [B, dim] (cos half, then sin half).
+
+    Same idea as Transformer positional encodings: geometric frequencies let
+    the network read both coarse and fine differences in t.
+    """
     half = dim // 2
     freqs = torch.exp(
         -math.log(10000) * torch.arange(half, device=timesteps.device).float() / (half - 1)
@@ -43,6 +47,12 @@ def get_time_embedding(timesteps: torch.Tensor, dim: int) -> torch.Tensor:
 
 
 class ResBlock(nn.Module):
+    """GroupNorm-SiLU-Conv x2 residual block with the time embedding added in between.
+
+    The time vector is projected to out_ch and broadcast as a per-channel
+    bias, so every block knows how noisy its input is.
+    """
+
     def __init__(self, in_ch: int, out_ch: int, time_dim: int):
         super().__init__()
         self.norm1 = nn.GroupNorm(min(8, in_ch), in_ch)
@@ -53,6 +63,7 @@ class ResBlock(nn.Module):
         self.skip = nn.Conv2d(in_ch, out_ch, 1) if in_ch != out_ch else nn.Identity()
 
     def forward(self, x: torch.Tensor, t_emb: torch.Tensor) -> torch.Tensor:
+        """x [B, in_ch, H, W], t_emb [B, time_dim] -> [B, out_ch, H, W]."""
         h = F.silu(self.norm1(x))
         h = self.conv1(h)
         h = h + self.time_proj(F.silu(t_emb))[:, :, None, None]
@@ -62,12 +73,15 @@ class ResBlock(nn.Module):
 
 
 class SelfAttention(nn.Module):
+    """Residual multi-head self-attention over the H*W spatial positions."""
+
     def __init__(self, channels: int, n_heads: int = 4):
         super().__init__()
         self.norm = nn.GroupNorm(min(8, channels), channels)
         self.attn = nn.MultiheadAttention(channels, n_heads, batch_first=True)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """[B, C, H, W] -> [B, C, H, W] (each pixel attends to every other)."""
         B, C, H, W = x.shape
         h = self.norm(x).view(B, C, H * W).transpose(1, 2)
         h, _ = self.attn(h, h, h)
@@ -75,7 +89,11 @@ class SelfAttention(nn.Module):
 
 
 class UNet(nn.Module):
-    """Lightweight UNet for DDPM on 28x28 images."""
+    """Lightweight UNet for DDPM on 28x28 images: predicts the noise eps in x_t.
+
+    Encoder 28 -> 14 -> 7 (widths c, 2c, 4c), bottleneck ResBlock + attention
+    + ResBlock, decoder back up with channel-concatenated skips.
+    """
 
     def __init__(
         self,
@@ -111,6 +129,7 @@ class UNet(nn.Module):
         self.out_conv = nn.Conv2d(c, in_channels, 1)
 
     def forward(self, x: torch.Tensor, t: torch.Tensor) -> torch.Tensor:
+        """Noisy images x_t [B, C, H, W] + timesteps [B] -> predicted noise [B, C, H, W]."""
         t_emb = get_time_embedding(t, 128)
         t_emb = self.time_mlp(t_emb)
 
@@ -152,10 +171,13 @@ class EmbedFC(nn.Module):
         )
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Any [B, ...] with input_dim values per row -> [B, emb_dim]."""
         return self.net(x.view(-1, self.input_dim))
 
 
 class _DownBlock(nn.Module):
+    """Stride-2 Conv3x3 + GroupNorm + GELU: halves H and W."""
+
     def __init__(self, in_ch: int, out_ch: int):
         super().__init__()
         self.block = nn.Sequential(
@@ -165,6 +187,7 @@ class _DownBlock(nn.Module):
         )
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """[B, in_ch, H, W] -> [B, out_ch, ceil(H/2), ceil(W/2)]."""
         return self.block(x)
 
 
@@ -182,6 +205,7 @@ class _UpBlock(nn.Module):
         )
 
     def forward(self, x: torch.Tensor, skip: torch.Tensor) -> torch.Tensor:
+        """x [B, x_ch, h, w] + skip [B, skip_ch, H, W] -> [B, out_ch, H, W]."""
         x = self.up(x)
         x = F.interpolate(x, size=skip.shape[-2:])
         x = torch.cat([x, skip], dim=1)   # concatenate along channel dim
@@ -265,6 +289,9 @@ class ConditionedUNet(nn.Module):
             t:            integer timestep [B] (will be normalised to [0,1] internally)
             c:            class labels [B] (long) — None means unconditional
             context_mask: bool/long [B] — 1 = drop this label (force unconditional)
+
+        Returns the predicted noise, [B, C, H, W]. The 7x7 `up0` deconv
+        assumes a 28x28 input (H/4 = 7).
         """
         B = x.shape[0]
         # Normalize by the CHAIN LENGTH, never the batch max: sampling calls

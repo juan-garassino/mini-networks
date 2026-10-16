@@ -40,6 +40,12 @@ log = logging.getLogger(__name__)
 
 
 class DoubleDescentConfig(BaseConfig):
+    """Knobs that place the hump: ``n_train`` (smaller -> interpolation
+    threshold at a smaller width), ``label_noise`` (taller hump), ``widths``
+    (the capacity sweep; should straddle the threshold) and
+    ``epochs_per_width`` (training must run long enough to interpolate;
+    tier-capped to 1 at S, 40 at M)."""
+
     model_name: str = "double_descent"
     dataset: str = "mnist"
     n_train: int = 1024        # small train set pushes the interpolation threshold left
@@ -53,6 +59,11 @@ class _LabelNoise(Dataset):
     """Seeded, deterministic label flips on a fixed subset — train split only."""
 
     def __init__(self, base: Dataset, n_take: int, noise: float, num_classes: int, seed: int = 7):
+        """Take ``n_take`` random items of ``base`` and relabel a ``noise`` fraction.
+
+        A flipped label is drawn uniformly from all classes, so ~1/num_classes
+        of "flips" land back on the true label. Items are materialised once.
+        """
         g = torch.Generator().manual_seed(seed)
         take = torch.randperm(len(base), generator=g)[:n_take]
         self._items = []
@@ -64,13 +75,22 @@ class _LabelNoise(Dataset):
         self.n_flipped = int(flip.sum())
 
     def __len__(self) -> int:
+        """Number of kept training items (``n_take``)."""
         return len(self._items)
 
     def __getitem__(self, idx: int):
+        """``(image [1,28,28], possibly-noisy label int)``."""
         return self._items[idx]
 
 
 class _WidthMLP(nn.Module):
+    """One-hidden-layer MLP whose hidden width is the capacity knob.
+
+    Parameters = 785*width + (width+1)*num_classes, so the sweep spans
+    roughly 1.6k (width 2) to 407k (width 512) parameters against 1024 noisy
+    training points.
+    """
+
     def __init__(self, width: int, num_classes: int = 10):
         super().__init__()
         self.net = nn.Sequential(
@@ -81,6 +101,7 @@ class _WidthMLP(nn.Module):
         )
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """[B,1,28,28] -> [B,num_classes] logits."""
         return self.net(x)
 
 
@@ -108,12 +129,27 @@ def _render_curve(widths: list[int], errors: list[float], path, height: int = 12
 
 
 class DoubleDescent:
+    """Sweep MLP width on noisy MNIST and draw the test-error vs width curve."""
+
     def _widths(self, config: DoubleDescentConfig) -> list[int]:
+        """Widths to sweep: the first two at S tier, all of them otherwise."""
         if config.effective_tier == "S":
             return list(config.widths[:2])  # smoke: just prove the sweep runs
         return list(config.widths)
 
     def train_all(self, config: DoubleDescentConfig, logger: Logger) -> dict:
+        """Train one fresh MLP per width and record train/test accuracy.
+
+        Each width trains from the same seed on the same label-noised subset
+        (256 items under fast_demo) and is scored on up to 2048 clean test
+        images (falls back to the train split if the test split is missing).
+        Logs one metrics row per width (``loss``, ``width``,
+        ``train_accuracy``, ``test_accuracy``) and writes
+        ``double_descent.png`` (test error vs log-width).
+
+        Returns:
+            dict with ``widths``, ``test_errors``, ``n_flipped`` and ``run_dir``.
+        """
         device = config.device
         base_train = get_dataset(config.dataset, config.data_root, split="train")
         try:
@@ -151,6 +187,11 @@ class DoubleDescent:
 
             @torch.no_grad()
             def _acc(dl):
+                """Top-1 accuracy of the current width's model on ``dl``.
+
+                On the train loader this is accuracy against the NOISY labels —
+                reaching ~1.0 means the model has interpolated (memorised) them.
+                """
                 model.eval()
                 correct = total_n = 0
                 for x, y in dl:

@@ -19,4 +19,5 @@ class RMSNorm(nn.Module):
         self.eps = eps
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Normalise over the last dimension; shape-preserving."""
         return self.weight * x * torch.rsqrt(x.pow(2).mean(-1, keepdim=True) + self.eps)

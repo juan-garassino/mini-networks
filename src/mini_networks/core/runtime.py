@@ -1,4 +1,11 @@
-"""Runtime protocol: defines the train/evaluate/infer contract."""
+"""Runtime protocol: defines the train/evaluate/infer contract.
+
+``BaseTrainer`` is the ABC every model trainer implements; the gate, API and
+CLI only ever call ``train`` / ``evaluate`` / ``infer`` / ``load_checkpoint``.
+The concrete bases below (supervised, contrastive, segmentation, detection)
+supply complete tier-aware loops so a model only has to implement ``_build``
+(and ``_forward`` where the batch layout is model-specific).
+"""
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
@@ -17,15 +24,28 @@ class BaseTrainer(ABC):
 
     @abstractmethod
     def train(self, config: BaseConfig, dataloader: DataLoader, logger: Logger) -> None:
-        """Run training loop."""
+        """Train a model, writing metrics/state/checkpoints through ``logger``.
+
+        Must honour the tier budget via ``config.effective_*`` / ``max_*``
+        properties and leave the weights where ``load_checkpoint`` can find
+        them (by default ``<run_dir>/artifacts/model.pt``).
+        """
 
     @abstractmethod
     def evaluate(self, config: BaseConfig, dataloader: DataLoader, logger: Logger) -> dict:
-        """Run evaluation and return metrics dict."""
+        """Evaluate the current weights and return a flat ``{metric: float}`` dict.
+
+        Keys are what ``EvalSpec.metric`` names (e.g. ``accuracy``, ``eval_loss``);
+        should stop after ``config.max_eval_batches`` batches.
+        """
 
     @abstractmethod
     def infer(self, config: BaseConfig, inputs: Any) -> Any:
-        """Run inference on inputs, return outputs."""
+        """Run inference on ``inputs`` with loaded weights; return JSON-friendly outputs.
+
+        Input and output shapes are model-specific (see each trainer and
+        ``colab/probes.py``); raise if no model is loaded.
+        """
 
     def load_checkpoint(self, config: BaseConfig, artifacts_dir: str | Path) -> None:
         """Load model weights from a checkpoint directory.
@@ -45,7 +65,7 @@ class BaseTrainer(ABC):
         self.model.eval()
 
     def load_training_state(self, config: BaseConfig, logger: Logger) -> dict[str, Any] | None:
-        """Load resumable training state when available."""
+        """Return the run's saved ``training_state.pt`` dict, or None if there is none."""
         return logger.load_training_state()
 
     def _clip_grads(self, model, config: BaseConfig) -> None:
@@ -54,6 +74,7 @@ class BaseTrainer(ABC):
             torch.nn.utils.clip_grad_norm_(model.parameters(), config.max_grad_norm)
 
     def _iter_train_batches(self, dataloader: DataLoader, config: BaseConfig):
+        """Yield training batches, stopping after the tier's ``max_train_batches``."""
         limit = config.max_train_batches
         for batch_idx, batch in enumerate(dataloader):
             if limit is not None and batch_idx >= limit:
@@ -61,6 +82,7 @@ class BaseTrainer(ABC):
             yield batch
 
     def _iter_eval_batches(self, dataloader: DataLoader, config: BaseConfig):
+        """Yield evaluation batches, stopping after the tier's ``max_eval_batches``."""
         limit = config.max_eval_batches
         for batch_idx, batch in enumerate(dataloader):
             if limit is not None and batch_idx >= limit:
@@ -69,16 +91,23 @@ class BaseTrainer(ABC):
 
 
 class SupervisedTrainer(BaseTrainer):
-    """Base class with common supervised loops (classification/regression)."""
+    """Base class with common supervised loops (classification/regression).
+
+    Subclasses implement ``_build``; batches are ``(x, y)`` by default and the
+    loss is cross-entropy. Used by classifier/resnet/vit/mobilenet/convnext.
+    """
 
     def _build(self, config: BaseConfig):
+        """Return a freshly initialised ``nn.Module`` on ``config.device``."""
         raise NotImplementedError
 
     def _loss(self, logits: torch.Tensor, targets: torch.Tensor) -> torch.Tensor:
+        """Cross-entropy; override for other supervised objectives."""
         import torch.nn.functional as F
         return F.cross_entropy(logits, targets)
 
     def _forward(self, model, batch, config: BaseConfig):
+        """Unpack ``(x, y)``, run the model on ``x``; returns ``(logits, targets)``."""
         x, y = batch
         return model(x.to(config.device)), y
 
@@ -99,6 +128,15 @@ class SupervisedTrainer(BaseTrainer):
         return {"predictions": preds.cpu().tolist(), "logits": logits.cpu().tolist()}
 
     def train(self, config: BaseConfig, dataloader: DataLoader, logger: Logger) -> None:
+        """Adam + cross-entropy supervised loop.
+
+        Builds a fresh model via ``_build``, resumes from ``training_state.pt``
+        when ``config.resume`` and the saved state is not ``completed``, then
+        runs ``config.effective_epochs`` epochs of at most
+        ``config.max_train_batches`` batches each. Per epoch it logs ``loss`` and train ``accuracy`` and
+        ``epoch`` and rewrites the resume state; at the end it writes
+        ``artifacts/model.pt``, a ``completed`` training state and summary.json.
+        """
         model = self._build(config)
         self.model = model
         optimizer = torch.optim.Adam(model.parameters(), lr=config.learning_rate)
@@ -129,6 +167,9 @@ class SupervisedTrainer(BaseTrainer):
                 preds = logits.argmax(dim=-1)
                 correct += (preds == targets).sum().item()
                 total += targets.size(0)
+            # NB: the mean divides by the full loader length, not the number of
+            # (tier-capped) batches actually run, so S/M "loss" reads low in
+            # absolute terms; its trend is still what the S-check uses.
             logger.log_metrics(epoch, {
                 "loss": total_loss / max(1, len(dataloader)),
                 "accuracy": correct / max(1, total),
@@ -151,6 +192,10 @@ class SupervisedTrainer(BaseTrainer):
         logger.log_summary({"status": "completed", "epochs": config.effective_epochs})
 
     def evaluate(self, config: BaseConfig, dataloader: DataLoader, logger: Logger) -> dict:
+        """Return ``{"eval_loss", "accuracy"}`` over at most ``max_eval_batches`` batches.
+
+        Builds an untrained model if none is loaded. ``logger`` is unused.
+        """
         if self.model is None:
             self.model = self._build(config)
         model = self.model
@@ -173,21 +218,33 @@ class SupervisedTrainer(BaseTrainer):
 
 
 class ContrastiveTrainer(BaseTrainer):
-    """Base class for contrastive embedding training."""
+    """Base class for contrastive embedding training.
+
+    Subclasses implement ``_build`` and ``_forward`` (returning two aligned
+    embedding batches); ``config.temperature`` is used when present, else 0.2.
+    """
 
     def _build(self, config: BaseConfig):
+        """Return a freshly initialised embedding ``nn.Module``."""
         raise NotImplementedError
 
     def _loss(self, emb_a: torch.Tensor, emb_b: torch.Tensor, temperature: float = 0.2) -> torch.Tensor:
+        """One-directional InfoNCE: row i of ``emb_a`` should match row i of ``emb_b``.
+
+        Assumes the caller has already L2-normalised the embeddings if cosine
+        similarity is intended.
+        """
         import torch.nn.functional as F
         logits = (emb_a @ emb_b.T) / temperature
         targets = torch.arange(logits.size(0), device=logits.device)
         return F.cross_entropy(logits, targets)
 
     def _forward(self, model, batch, config: BaseConfig):
+        """Return ``(emb_a, emb_b)``, each ``(B, D)``, for the two views in ``batch``."""
         raise NotImplementedError
 
     def _optimizer(self, model, config: BaseConfig):
+        """Adam at ``config.learning_rate``; override to e.g. exclude EMA-teacher params."""
         return torch.optim.Adam(model.parameters(), lr=config.learning_rate)
 
     def _post_step(self, model) -> None:
@@ -195,6 +252,15 @@ class ContrastiveTrainer(BaseTrainer):
         return None
 
     def train(self, config: BaseConfig, dataloader: DataLoader, logger: Logger) -> None:
+        """Contrastive loop; calls ``_post_step`` after every optimizer step.
+
+        Builds a fresh model via ``_build``, resumes from ``training_state.pt``
+        when ``config.resume`` and the saved state is not ``completed``, then
+        runs ``config.effective_epochs`` epochs of at most
+        ``config.max_train_batches`` batches each. Per epoch it logs ``loss`` and
+        ``epoch`` and rewrites the resume state; at the end it writes
+        ``artifacts/model.pt``, a ``completed`` training state and summary.json.
+        """
         model = self._build(config)
         self.model = model
         optimizer = self._optimizer(model, config)
@@ -238,6 +304,7 @@ class ContrastiveTrainer(BaseTrainer):
         logger.log_summary({"status": "completed", "epochs": config.effective_epochs})
 
     def evaluate(self, config: BaseConfig, dataloader: DataLoader, logger: Logger) -> dict:
+        """Return ``{"eval_loss"}`` (InfoNCE) over at most ``max_eval_batches`` batches."""
         if self.model is None:
             self.model = self._build(config)
         model = self.model
@@ -251,19 +318,31 @@ class ContrastiveTrainer(BaseTrainer):
 
 
 class SegmentationTrainerBase(BaseTrainer):
-    """Base class for segmentation training."""
+    """Base class for segmentation training (per-pixel classification)."""
 
     def _build(self, config: BaseConfig):
+        """Return a freshly initialised segmentation ``nn.Module``."""
         raise NotImplementedError
 
     def _forward(self, model, batch, config: BaseConfig):
+        """Return ``(preds, targets)``: logits ``(B, C, H, W)`` and masks ``(B, H, W)``."""
         raise NotImplementedError
 
     def _loss(self, preds: torch.Tensor, targets: torch.Tensor, config: BaseConfig) -> torch.Tensor:
+        """Pixel-wise cross-entropy; subclasses may add e.g. a dice term."""
         import torch.nn.functional as F
         return F.cross_entropy(preds, targets)
 
     def train(self, config: BaseConfig, dataloader: DataLoader, logger: Logger) -> None:
+        """Adam segmentation loop.
+
+        Builds a fresh model via ``_build``, resumes from ``training_state.pt``
+        when ``config.resume`` and the saved state is not ``completed``, then
+        runs ``config.effective_epochs`` epochs of at most
+        ``config.max_train_batches`` batches each. Per epoch it logs ``loss`` and
+        ``epoch`` and rewrites the resume state; at the end it writes
+        ``artifacts/model.pt``, a ``completed`` training state and summary.json.
+        """
         model = self._build(config)
         self.model = model
         optimizer = torch.optim.Adam(model.parameters(), lr=config.learning_rate)
@@ -306,6 +385,7 @@ class SegmentationTrainerBase(BaseTrainer):
         logger.log_summary({"status": "completed", "epochs": config.effective_epochs})
 
     def evaluate(self, config: BaseConfig, dataloader: DataLoader, logger: Logger) -> dict:
+        """Return ``{"eval_loss"}`` over at most ``max_eval_batches`` batches."""
         if self.model is None:
             self.model = self._build(config)
         model = self.model
@@ -322,9 +402,11 @@ class DetectionTrainerBase(BaseTrainer):
     """Base class for detection training (single bbox)."""
 
     def _build(self, config: BaseConfig):
+        """Return a freshly initialised detector ``nn.Module``."""
         raise NotImplementedError
 
     def _forward(self, model, batch, config: BaseConfig):
+        """Return ``(class_logits, bbox_pred, labels, target_bbox)`` for ``batch``."""
         raise NotImplementedError
 
     def _loss(
@@ -335,12 +417,22 @@ class DetectionTrainerBase(BaseTrainer):
         target_bbox: torch.Tensor,
         config: BaseConfig,
     ) -> torch.Tensor:
+        """Unweighted sum of class cross-entropy and bbox MSE."""
         import torch.nn.functional as F
         cls_loss = F.cross_entropy(class_logits, labels)
         bbox_loss = F.mse_loss(bbox_pred, target_bbox)
         return cls_loss + bbox_loss
 
     def train(self, config: BaseConfig, dataloader: DataLoader, logger: Logger) -> None:
+        """Adam detection loop (classification + bbox regression).
+
+        Builds a fresh model via ``_build``, resumes from ``training_state.pt``
+        when ``config.resume`` and the saved state is not ``completed``, then
+        runs ``config.effective_epochs`` epochs of at most
+        ``config.max_train_batches`` batches each. Per epoch it logs ``loss`` and
+        ``epoch`` and rewrites the resume state; at the end it writes
+        ``artifacts/model.pt``, a ``completed`` training state and summary.json.
+        """
         model = self._build(config)
         self.model = model
         optimizer = torch.optim.Adam(model.parameters(), lr=config.learning_rate)
@@ -383,6 +475,7 @@ class DetectionTrainerBase(BaseTrainer):
         logger.log_summary({"status": "completed", "epochs": config.effective_epochs})
 
     def evaluate(self, config: BaseConfig, dataloader: DataLoader, logger: Logger) -> dict:
+        """Return ``{"eval_loss"}`` (cls CE + bbox MSE) over at most ``max_eval_batches`` batches."""
         if self.model is None:
             self.model = self._build(config)
         model = self.model

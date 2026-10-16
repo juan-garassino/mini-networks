@@ -32,6 +32,7 @@ import torch.nn as nn
 
 
 class MiniViT(nn.Module):
+    """Patch embedding + [CLS] token + learned positions + TransformerEncoder + linear head on CLS."""
     def __init__(
         self,
         patch_size: int = 4,
@@ -72,4 +73,5 @@ class MiniViT(nn.Module):
         return self.norm(x[:, 0])
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Map images [B,1,28,28] to class logits [B,num_classes] (head applied to the CLS embedding)."""
         return self.head(self.forward_features(x))

@@ -34,6 +34,7 @@ import torch.nn.functional as F
 
 
 class ConvBlock(nn.Module):
+    """Conv3x3 (padding 1) -> BatchNorm -> ReLU -> Dropout2d; keeps spatial size."""
     def __init__(self, in_ch: int, out_ch: int, dropout: float = 0.1):
         super().__init__()
         self.block = nn.Sequential(
@@ -44,6 +45,7 @@ class ConvBlock(nn.Module):
         )
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Map [B,in_ch,H,W] to [B,out_ch,H,W]."""
         return self.block(x)
 
 
@@ -73,6 +75,11 @@ class SegUNet(nn.Module):
         self.out_channels = out_channels
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Map images [B,in_channels,28,28] to per-pixel predictions [B,out_channels,28,28].
+
+        Binary (out_channels == 1): sigmoid probabilities. Multiclass: raw
+        logits; softmax happens inside the loss.
+        """
         e1 = self.enc1(x)
         e2 = self.enc2(self.pool1(e1))
         b = self.bottleneck(self.pool2(e2))

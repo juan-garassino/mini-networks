@@ -14,6 +14,12 @@ from mini_networks.models.simclr.model import SimCLREncoder, info_nce_loss
 
 
 class SimCLRTrainer(ContrastiveTrainer):
+    """Self-supervised SimCLR training with the full 2B-way InfoNCE loss.
+
+    Each batch carries two random augmentations of the same digits; the
+    epoch loop, Adam optimizer, resume support and ``model.pt`` checkpoint
+    come from ``ContrastiveTrainer`` (evaluate returns ``eval_loss``).
+    """
     def __init__(self):
         self.model: SimCLREncoder | None = None
 
@@ -31,6 +37,7 @@ class SimCLRTrainer(ContrastiveTrainer):
         return info_nce_loss(emb_a, emb_b, temperature=temperature)
 
     def infer(self, config: BaseConfig, inputs: Any) -> Any:
+        """Embed an image tensor (or ``{"images": tensor}``) [B,1,28,28]; returns ``{"embeddings": [B,proj_dim]}`` (unit norm, CPU)."""
         assert isinstance(config, SimCLRConfig)
         if self.model is None:
             raise RuntimeError("Model not loaded.")
@@ -44,6 +51,11 @@ class SimCLRTrainer(ContrastiveTrainer):
 
 
 def make_simclr_dataloader(config: SimCLRConfig, split: str = "train") -> DataLoader:
+    """Contrastive loader: batches of (view1, view2, label).
+
+    Both views are [B,1,28,28] random resized crops (scale 0.8-1.0) plus
+    rotations of up to 20 degrees of the same digit; the label is unused.
+    """
     return get_dataloader(
         name=config.dataset,
         data_root=config.data_root,

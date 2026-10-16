@@ -16,6 +16,11 @@ from mini_networks.models.unet_ae.model import UNetAutoencoder
 
 
 class UNetAETrainer(BaseTrainer):
+    """Train :class:`UNetAutoencoder` to reconstruct its input with MSE loss (Adam).
+
+    Logs ``loss`` per epoch. Checkpoint: ``model.pt`` (state dict), loaded by
+    the default ``BaseTrainer.load_checkpoint``.
+    """
     def __init__(self):
         self.model: UNetAutoencoder | None = None
 
@@ -23,6 +28,7 @@ class UNetAETrainer(BaseTrainer):
         return UNetAutoencoder(base_channels=config.base_channels).to(config.device)
 
     def train(self, config: BaseConfig, dataloader: DataLoader, logger: Logger) -> None:
+        """Fit a fresh model on (image, label) batches (labels ignored; target = input) and save ``model.pt``."""
         assert isinstance(config, UNetAEConfig)
         model = self._build(config)
         self.model = model
@@ -48,6 +54,7 @@ class UNetAETrainer(BaseTrainer):
         torch.save(model.state_dict(), logger.artifact_path("model.pt"))
 
     def evaluate(self, config: BaseConfig, dataloader: DataLoader, logger: Logger) -> dict:
+        """Return ``{"eval_loss"}``: mean per-batch reconstruction MSE."""
         assert isinstance(config, UNetAEConfig)
         if self.model is None:
             self.model = self._build(config)
@@ -62,6 +69,7 @@ class UNetAETrainer(BaseTrainer):
         return {"eval_loss": total_loss / max(1, len(dataloader))}
 
     def infer(self, config: BaseConfig, inputs: Any) -> Any:
+        """Reconstruct an image tensor (or ``{"images": tensor}``) [B,1,28,28]; returns ``{"recon": [B,1,28,28]}`` on CPU."""
         assert isinstance(config, UNetAEConfig)
         if self.model is None:
             raise RuntimeError("Model not loaded.")
@@ -75,6 +83,7 @@ class UNetAETrainer(BaseTrainer):
 
 
 def make_unet_ae_dataloader(config: UNetAEConfig, split: str = "train") -> DataLoader:
+    """Image-classification loader for ``config.dataset``: batches of (images [B,1,28,28] in [0,1], labels [B]); labels are unused."""
     return get_dataloader(
         name=config.dataset,
         data_root=config.data_root,

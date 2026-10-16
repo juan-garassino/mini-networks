@@ -36,6 +36,7 @@ import torch.nn.functional as F
 
 
 class SimCLREncoder(nn.Module):
+    """Two-conv encoder (h, 128-d) followed by an MLP projection head that outputs L2-normalised z."""
     def __init__(self, proj_dim: int = 64):
         super().__init__()
         self.encoder = nn.Sequential(
@@ -56,6 +57,7 @@ class SimCLREncoder(nn.Module):
         )
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Map images [B,1,28,28] to unit-norm projections z [B,proj_dim]."""
         h = self.encoder(x)
         z = self.proj(h)
         return F.normalize(z, dim=-1)

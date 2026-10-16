@@ -30,6 +30,7 @@ import torch.nn as nn
 
 
 class BasicBlock(nn.Module):
+    """Two 3x3 conv+BN layers plus a shortcut: out = ReLU(F(x) + shortcut(x))."""
     def __init__(self, in_ch: int, out_ch: int, stride: int = 1):
         super().__init__()
         self.conv1 = nn.Conv2d(in_ch, out_ch, 3, stride=stride, padding=1, bias=False)
@@ -44,6 +45,7 @@ class BasicBlock(nn.Module):
             )
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Map [B,in_ch,H,W] to [B,out_ch,H/stride,W/stride]."""
         out = self.bn1(self.conv1(x))
         out = torch.relu(out)
         out = self.bn2(self.conv2(out))
@@ -52,6 +54,7 @@ class BasicBlock(nn.Module):
 
 
 class MiniResNet(nn.Module):
+    """Stem + three residual blocks (28x28 -> 14x14 -> 7x7) + global pool + linear head."""
     def __init__(self, base_channels: int = 32, num_classes: int = 10):
         super().__init__()
         self.stem = nn.Sequential(
@@ -66,6 +69,7 @@ class MiniResNet(nn.Module):
         self.fc = nn.Linear(base_channels * 4, num_classes)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Map images [B,1,28,28] to class logits [B,num_classes]."""
         x = self.stem(x)
         x = self.layer1(x)
         x = self.layer2(x)

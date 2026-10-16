@@ -94,6 +94,11 @@ MODEL_OVERRIDES: dict[str, dict[str, dict[str, int | None]]] = {
 
 
 def budget(model_name: str, tier: str, key: str) -> int | None:
+    """Return the ``key`` budget for ``model_name`` at ``tier`` (None = uncapped).
+
+    A per-model entry in MODEL_OVERRIDES wins (it may explicitly be None to
+    lift a cap); otherwise the tier's DEFAULTS value is used.
+    """
     override = MODEL_OVERRIDES.get(model_name, {}).get(tier, {})
     if key in override:
         return override[key]

@@ -75,6 +75,12 @@ class TokenCompressor(nn.Module):
         self.pos_bias = nn.Parameter(torch.zeros(m, c))
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Hidden states [B, T, d_model] -> compressed entries [B, T // m, c].
+
+        Each entry is a per-channel softmax-weighted sum of its block's m
+        tokens. A trailing partial block (T % m tokens) is dropped — those
+        tokens are still visible through the sliding-window branch.
+        """
         B, T, _ = x.shape
         nb = T // self.m
         if nb == 0:
@@ -121,6 +127,13 @@ class CompressedAttention(nn.Module):
         self.w_o = nn.Linear(n_heads * c, d_model)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Causal attention [B, T, d_model] -> [B, T, d_model].
+
+        One joint softmax per (head, query) over three groups of logits:
+        compressed entries from strictly earlier blocks (CSA: only the
+        indexer's top-k survive), raw window entries for the last n_win
+        tokens (including t itself), and the learned sink logit.
+        """
         B, T, _ = x.shape
         H, c = self.n_heads, self.c
         t_pos = torch.arange(T, device=x.device)
@@ -170,6 +183,8 @@ class CompressedAttention(nn.Module):
 
 
 class _SwiGLU(nn.Module):
+    """Gated FFN: W_d(SiLU(W_g x) * W_u x)."""
+
     def __init__(self, dim: int, hidden: int):
         super().__init__()
         self.w_g = nn.Linear(dim, hidden)
@@ -177,6 +192,7 @@ class _SwiGLU(nn.Module):
         self.w_d = nn.Linear(hidden, dim)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """[..., dim] -> [..., dim]."""
         return self.w_d(F.silu(self.w_g(x)) * self.w_u(x))
 
 
@@ -212,6 +228,13 @@ class DeepSeekMoEFFN(nn.Module):
     def forward(
         self, x: torch.Tensor, token_ids: torch.Tensor | None = None
     ) -> tuple[torch.Tensor, torch.Tensor]:
+        """[B, T, d_model] (+ token_ids [B, T] when hash-routed) -> (y [B, T, d_model], aux scalar).
+
+        y = sum of shared experts + gate-weighted routed experts. In training
+        mode the call also nudges `route_bias` (a buffer, not a gradient) and
+        returns the sequence-wise balance loss as aux; otherwise aux is 0.
+        Every expert runs on every token (dense loop) — clear, not efficient.
+        """
         B, T, C = x.shape
         xf = x.reshape(B * T, C)
         aux = x.new_tensor(0.0)
@@ -229,6 +252,8 @@ class DeepSeekMoEFFN(nn.Module):
 
             if self.training:
                 with torch.no_grad():
+                    # aux-loss-free balancing: raise the bias of under-loaded
+                    # experts, lower over-loaded ones (selection only, not weights)
                     load = mask.sum(dim=0)
                     self.route_bias += self.gamma * torch.sign(load.mean() - load)
                 # sequence-wise balance: E[f_e * P_e] per sequence (V3-style)
@@ -266,10 +291,17 @@ class MHCMixer(nn.Module):
         self.s_post = nn.Parameter(torch.zeros(n))
 
     def forward(self, X: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+        """Widened stream X [B, T, n, d] -> (A [B, T, n], B [B, T, n, n], C [B, T, n]).
+
+        A in (0, 1) reads the sublayer input from the n streams, B (Sinkhorn,
+        doubly stochastic) mixes the residual streams, C in (0, 2) writes the
+        sublayer output back into each stream.
+        """
         B_, T, n, d = X.shape
         xh = self.norm(X.reshape(B_, T, n * d))
         A = torch.sigmoid(self.a_pre * self.w_pre(xh) + self.s_pre)          # [B, T, n]
         raw = (self.a_res * self.w_res(xh)).view(B_, T, n, n) + self.s_res
+        # clamp before exp keeps Sinkhorn's inputs finite
         Bm = sinkhorn(torch.exp(raw.clamp(max=10.0)), self.iters)            # [B, T, n, n]
         C = 2.0 * torch.sigmoid(self.a_post * self.w_post(xh) + self.s_post)  # [B, T, n]
         return A, Bm, C
@@ -289,6 +321,7 @@ class _Branch(nn.Module):
     def forward(
         self, h: torch.Tensor, token_ids: torch.Tensor
     ) -> tuple[torch.Tensor, torch.Tensor]:
+        """h [B, T, d_model] -> (branch output [B, T, d_model], aux scalar; 0 for attention)."""
         if self.is_ffn:
             out, aux = self.inner(self.norm(h), token_ids)
             return self.drop(out), aux
@@ -313,6 +346,10 @@ class MTPModule(nn.Module):
         self.norm2 = nn.LayerNorm(d_model)
 
     def forward(self, h: torch.Tensor, next_emb: torch.Tensor) -> torch.Tensor:
+        """h [B, T', d] (backbone states) + next_emb [B, T', d] (emb of t+1) -> [B, T', d].
+
+        The output goes through the shared LM head to give t+2 logits.
+        """
         x = self.proj(torch.cat([self.norm_h(h), self.norm_e(next_emb)], dim=-1))
         T = x.shape[1]
         mask = nn.Transformer.generate_square_subsequent_mask(T, device=x.device)
@@ -322,7 +359,13 @@ class MTPModule(nn.Module):
 
 
 class DeepseekLM(nn.Module):
-    """Mini DeepSeek V4 language model."""
+    """Mini DeepSeek V4 language model (see module docstring for the pieces).
+
+    n_layers attention+FFN pairs (every hca_every-th attention is HCA, the
+    rest CSA; layer 0's FFN is hash-routed), optionally on an mHC-widened
+    residual stream, plus a training-only MTP head. Same (logits, aux)
+    forward contract as the zoo's other LMs, so TransformerTrainer drives it.
+    """
 
     def __init__(
         self,
@@ -382,7 +425,12 @@ class DeepseekLM(nn.Module):
         self.lm_head = nn.Linear(d_model, vocab_size)
 
     def forward(self, tokens: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
-        """Returns (logits [B, T, V], total_aux_loss scalar)."""
+        """tokens [B, T] -> (logits [B, T, V], total_aux_loss scalar).
+
+        aux = sum of MoE sequence-balance losses + (training only, T > 2)
+        mtp_weight * the MTP t+2 cross-entropy; the trainer adds it to the
+        next-token CE. With mHC the n_hc streams are averaged before the head.
+        """
         B, T = tokens.shape
         emb = self.token_embed(tokens)
         total_aux = emb.new_tensor(0.0)
@@ -421,6 +469,12 @@ class DeepseekLM(nn.Module):
     def generate(
         self, prompt: torch.Tensor, max_new_tokens: int = 64, temperature: float = 1.0
     ) -> torch.Tensor:
+        """Autoregressive sampling: prompt [B, T0] -> [B, T0 + max_new_tokens].
+
+        Re-runs the full forward on the last seq_len tokens each step (no KV
+        cache) and samples from softmax(logits / temperature). Leaves the
+        model in eval mode.
+        """
         self.eval()
         x = prompt
         for _ in range(max_new_tokens):

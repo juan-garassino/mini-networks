@@ -18,10 +18,12 @@ console = Console()
 
 
 def _ts() -> str:
+    """UTC timestamp ``YYYYmmdd-HHMMSS`` used as a run directory name."""
     return datetime.datetime.utcnow().strftime("%Y%m%d-%H%M%S")
 
 
 def _run_base(checkpoint_root: str, name: str) -> str:
+    """Directory holding every run of ``name``: ``<checkpoint_root>/<name>``."""
     return os.path.join(checkpoint_root, name)
 
 
@@ -44,6 +46,14 @@ def run_model(
 
     Extra kwargs become config-field overrides (flavor axis: dataset=,
     num_classes=, …) — validated by the model's Config class.
+
+    The run lands in ``<checkpoint_root>/<model>/<run_name or UTC timestamp>/``;
+    with ``resume=True`` the latest run that has a ``training_state.pt`` is
+    reused instead (its trainer decides whether to continue). The returned
+    Logger is already closed (MLflow run ended); its ``run_dir`` /
+    ``artifacts_dir`` / ``read_metrics()`` remain usable. On a training
+    exception the MLflow run is marked FAILED and the exception re-raised.
+    ``validate_inference`` additionally runs the gate's inference probe.
     """
     from mini_networks.core.registry import get_model_registry
     from mini_networks.core.checkpoints import find_resumable_run
@@ -115,6 +125,7 @@ def run_model(
 
 
 def _print_metrics_summary(metrics: list[dict]) -> None:
+    """Print the last 10 metrics.jsonl entries as a rich table."""
     if not metrics:
         return
     tbl = Table(title="Recent Metrics", box=box.SIMPLE, show_header=True)
@@ -132,6 +143,12 @@ def _print_metrics_summary(metrics: list[dict]) -> None:
 
 # ---------------------------------------------------------------------------
 # Composition runners
+#
+# Each _run_<composition>(fast_demo, training_tier, data_root, device,
+# checkpoint_root) builds the composition's config, opens a Logger under
+# <checkpoint_root>/<composition>/<ts>/, trains/runs the pipeline and returns a
+# dict of outputs. Include "run_dir" in that dict: the gate reads the run's
+# metrics.jsonl from it for the S-checks and the EvalSpec metric.
 # ---------------------------------------------------------------------------
 
 def run_composition(
@@ -143,7 +160,12 @@ def run_composition(
     checkpoint_root: str = "runs",
     validate_inference: bool = False,
 ) -> dict:
-    """Run a cross-model composition pipeline."""
+    """Run a cross-model composition pipeline and return its output dict.
+
+    Dispatches through ``COMPOSITION_RUNNERS``; the tier shown is S when
+    ``fast_demo`` is set. ``validate_inference`` runs the probe validation on
+    the returned dict. Raises ValueError for an unknown composition.
+    """
     runner = COMPOSITION_RUNNERS.get(composition)
     if runner is None:
         raise ValueError(f"Unknown composition: {composition!r}. Available: {COMPOSITIONS}")
@@ -173,6 +195,7 @@ def run_composition(
 
 
 def _make_composition_logger(composition: str, checkpoint_root: str):
+    """New Logger at ``<checkpoint_root>/<composition>/<UTC timestamp>/`` (compositions never resume)."""
     from mini_networks.core.logging.logger import Logger
 
     ts = _ts()
