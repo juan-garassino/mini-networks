@@ -55,6 +55,10 @@ def test_models_endpoint(client):
     assert names == set(MODEL_NAMES)
     sample = client.get("/web/models").json()[0]
     assert "config_schema" in sample and "defaults" in sample
+    # Taxonomy fields must survive response_model filtering (playground reads them).
+    by_name = {m["name"]: m for m in client.get("/web/models").json()}
+    assert by_name["classifier"]["level"] == "elementary"
+    assert by_name["resnet"]["level"] == "derived" and by_name["resnet"]["builds_on"]
 
 
 def test_evidence_endpoint(client, runs_dir):

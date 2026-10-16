@@ -63,14 +63,14 @@ class SummaryResponse(BaseModel):
 
 
 class ModelInfo(BaseModel):
-    """One registry model in ``GET /web/models``: its config JSON schema and default values.
-
-    The endpoint also returns taxonomy fields (level/introduces/builds_on) that
-    this schema does not declare, so response filtering drops them.
-    """
+    """One registry model in ``GET /web/models``: taxonomy placement plus its
+    config JSON schema and default values (see ``web.model_catalog``)."""
 
     name: str
     family: str | None = None
+    level: Literal["elementary", "derived"] | None = None   # core/taxonomy.py
+    introduces: list[str] = Field(default_factory=list)     # mechanisms it adds
+    builds_on: list[str] = Field(default_factory=list)      # parent models in the DAG
     config_schema: dict[str, Any] = Field(default_factory=dict)
     defaults: dict[str, Any] = Field(default_factory=dict)
 
