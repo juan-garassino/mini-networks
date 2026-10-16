@@ -1,4 +1,4 @@
-"""VAE trainer."""
+"""VAE trainer: MSE reconstruction + beta-weighted KL, prior sampling at inference."""
 from __future__ import annotations
 
 from typing import Any
@@ -15,6 +15,11 @@ from mini_networks.models.vae.model import ConvVAE, vae_loss
 
 
 class VAETrainer(BaseTrainer):
+    """Train :class:`ConvVAE` with Adam on ``vae_loss`` (MSE recon + beta * KL).
+
+    Logs ``loss`` / ``recon`` / ``kl`` per epoch. Checkpoint: ``model.pt``
+    (state dict), loaded by the default ``BaseTrainer.load_checkpoint``.
+    """
     def __init__(self):
         self.model: ConvVAE | None = None
 
@@ -22,6 +27,7 @@ class VAETrainer(BaseTrainer):
         return ConvVAE(latent_dim=config.latent_dim, hidden_dim=config.hidden_dim).to(config.device)
 
     def train(self, config: BaseConfig, dataloader: DataLoader, logger: Logger) -> None:
+        """Fit a fresh ConvVAE on (image, label) batches (labels ignored) and save ``model.pt``."""
         assert isinstance(config, VAEConfig)
         model = self._build(config)
         self.model = model
@@ -54,6 +60,7 @@ class VAETrainer(BaseTrainer):
         torch.save(model.state_dict(), logger.artifact_path("model.pt"))
 
     def evaluate(self, config: BaseConfig, dataloader: DataLoader, logger: Logger) -> dict:
+        """Return ``{"eval_loss"}``: mean total VAE loss (recon + beta * KL) over the loader."""
         assert isinstance(config, VAEConfig)
         if self.model is None:
             self.model = self._build(config)
@@ -69,6 +76,13 @@ class VAETrainer(BaseTrainer):
         return {"eval_loss": total / max(1, len(dataloader))}
 
     def infer(self, config: BaseConfig, inputs: Any) -> Any:
+        """Reconstruct images or sample new ones.
+
+        ``{"sample": n}`` decodes n draws from the N(0, I) prior and returns
+        ``{"samples": [n,1,28,28]}``. Otherwise ``inputs`` is an image tensor
+        (or ``{"images": tensor}``) [B,1,28,28] and the result is
+        ``{"recon": [B,1,28,28]}``. Tensors come back on CPU.
+        """
         assert isinstance(config, VAEConfig)
         if self.model is None:
             raise RuntimeError("Model not loaded.")
@@ -87,6 +101,9 @@ class VAETrainer(BaseTrainer):
 
 
 def make_vae_dataloader(config: VAEConfig, split: str = "train") -> DataLoader:
+    """Image-classification loader for ``config.dataset``: batches of (images [B,1,28,28]
+    in [0,1], labels [B]).
+    """
     return get_dataloader(
         name=config.dataset,
         data_root=config.data_root,

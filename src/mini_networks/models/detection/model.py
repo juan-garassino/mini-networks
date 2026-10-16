@@ -33,9 +33,10 @@ import torch.nn.functional as F
 
 
 class DigitDetector(nn.Module):
-    """
-    Dual-head CNN on 56x56 grayscale canvas.
-    Outputs: (class_logits [B, 10], bbox_pred [B, 4]) where bbox is normalized [0,1].
+    """Dual-head CNN on a 56x56 grayscale canvas.
+
+    Outputs (class_logits [B, num_classes], bbox_pred [B, 4]); the box is
+    (x1, y1, x2, y2) normalised to [0, 1] by the canvas size.
     """
 
     def __init__(self, num_classes: int = 10, in_channels: int = 1):
@@ -60,6 +61,10 @@ class DigitDetector(nn.Module):
         )
 
     def forward(self, x: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
+        """Canvases [B, 1, H, W] -> (class logits [B, num_classes], box [B, 4] in [0, 1]).
+
+        AdaptiveAvgPool2d(4) makes the head input 2048-d for any H, W >= 4.
+        """
         features = self.backbone(x)
         cls_logits = self.cls_head(features)
         bbox_pred = self.bbox_head(features)
@@ -73,6 +78,10 @@ def detection_loss(
     bboxes: torch.Tensor,
     bbox_weight: float = 1.0,
 ) -> torch.Tensor:
+    """Joint loss: CE(cls_logits, labels) + bbox_weight * MSE(bbox_pred, bboxes).
+
+    Boxes are [B, 4] normalised (x1, y1, x2, y2); returns a scalar.
+    """
     cls_loss = F.cross_entropy(cls_logits, labels)
     bbox_loss = F.mse_loss(bbox_pred, bboxes)
     return cls_loss + bbox_weight * bbox_loss

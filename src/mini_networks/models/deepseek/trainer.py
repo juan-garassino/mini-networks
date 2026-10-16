@@ -8,11 +8,18 @@ from mini_networks.models.transformer.trainer import (
     make_transformer_dataloader,
 )
 
+# Same char/BPE text loader as transformer: (x [B, seq_len], y = x shifted by one).
 make_deepseek_dataloader = make_transformer_dataloader
 
 
 class DeepseekTrainer(TransformerTrainer):
-    """Inherits train/evaluate/infer/load_checkpoint — only the model differs."""
+    """Inherits train/evaluate/infer/load_checkpoint — only the model differs.
+
+    Loss = next-token CE + DeepseekLM's aux (MoE balance + weighted MTP CE).
+    Checkpoint: `model.pt` + `tokenizer.json`. evaluate() -> {"eval_loss"}
+    (pure next-token CE, aux excluded); infer({"prompt", "max_new_tokens",
+    "temperature"}) -> {"generated": text} ({"tokens"} if no tokenizer).
+    """
 
     def _build(self, config: DeepseekConfig) -> DeepseekLM:  # type: ignore[override]
         return DeepseekLM(

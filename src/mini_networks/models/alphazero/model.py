@@ -44,6 +44,12 @@ from mini_networks.models.alphazero.game import (
 
 
 class PolicyValueNet(nn.Module):
+    """Two-headed MLP: one shared trunk, a 9-way policy head and a tanh value head.
+
+    The input is the 18-dim two-plane encoding from `game.encode` (always from
+    the player-to-move's perspective), so a single net plays both X and O.
+    """
+
     def __init__(self, hidden_dim: int = 64):
         super().__init__()
         self.trunk = nn.Sequential(
@@ -54,6 +60,11 @@ class PolicyValueNet(nn.Module):
         self.value_head = nn.Linear(hidden_dim, 1)
 
     def forward(self, x: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
+        """[B, 18] encoded boards -> (policy logits [B, 9], value [B] in [-1, 1]).
+
+        Logits are UNMASKED — callers add -inf on occupied squares before the
+        softmax. Value is the expected outcome for the player to move.
+        """
         h = self.trunk(x)
         return self.policy_head(h), torch.tanh(self.value_head(h)).squeeze(-1)
 
@@ -79,6 +90,7 @@ class _Node:
 
     @property
     def q(self) -> float:
+        """Mean backed-up value W/N (0 for an unvisited node), mover's view."""
         return self.value_sum / self.visits if self.visits else 0.0
 
 

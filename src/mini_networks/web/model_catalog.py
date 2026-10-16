@@ -8,7 +8,14 @@ from mini_networks.core.taxonomy import MODEL_TAXONOMY
 
 
 def build_model_info(name: str) -> dict[str, Any]:
-    """Config JSON-schema + defaults for one model (drives Lab/Sandbox forms)."""
+    """Config JSON-schema + defaults for one model (drives Lab/Sandbox forms).
+
+    Returns ``{name, family, level, introduces, builds_on, config_schema,
+    defaults}``: taxonomy fields come from ``core/taxonomy.py::MODEL_TAXONOMY``
+    (None / ``[]`` for a model without an entry), ``family`` is always None
+    here, and ``defaults`` is a default-constructed config dumped to a dict.
+    Raises KeyError for a name not in the model registry.
+    """
     registry = get_model_registry()
     ConfigClass, _, _ = registry[name]
     taxon = MODEL_TAXONOMY.get(name)
@@ -24,5 +31,6 @@ def build_model_info(name: str) -> dict[str, Any]:
 
 
 def list_model_infos() -> list[dict[str, Any]]:
+    """``build_model_info`` for every ``MODEL_NAMES`` entry present in the registry, in that order."""
     registry = get_model_registry()
     return [build_model_info(n) for n in MODEL_NAMES if n in registry]

@@ -1,4 +1,4 @@
-"""PixelCNN trainer."""
+"""PixelCNN trainer: per-pixel BCE on binarised MNIST, raster-scan sampling."""
 from __future__ import annotations
 
 from typing import Any
@@ -16,6 +16,12 @@ from mini_networks.models.pixelcnn.model import PixelCNN
 
 
 class PixelCNNTrainer(BaseTrainer):
+    """Train :class:`PixelCNN` as an autoregressive Bernoulli model of binarised MNIST.
+
+    Loss: per-pixel BCE-with-logits against the input itself (pixels > 0.5
+    count as 1). Checkpoint: ``model.pt`` (state dict), loaded by the
+    default ``BaseTrainer.load_checkpoint``.
+    """
     def __init__(self):
         self.model: PixelCNN | None = None
 
@@ -23,6 +29,7 @@ class PixelCNNTrainer(BaseTrainer):
         return PixelCNN(n_filters=config.n_filters, n_layers=config.n_layers).to(config.device)
 
     def train(self, config: BaseConfig, dataloader: DataLoader, logger: Logger) -> None:
+        """Fit a fresh PixelCNN (labels ignored) and save ``model.pt``."""
         assert isinstance(config, PixelCNNConfig)
         model = self._build(config)
         self.model = model
@@ -48,6 +55,7 @@ class PixelCNNTrainer(BaseTrainer):
         torch.save(model.state_dict(), logger.artifact_path("model.pt"))
 
     def evaluate(self, config: BaseConfig, dataloader: DataLoader, logger: Logger) -> dict:
+        """Return ``{"eval_loss"}``: mean per-pixel BCE (nats) on binarised images."""
         assert isinstance(config, PixelCNNConfig)
         if self.model is None:
             self.model = self._build(config)
@@ -62,6 +70,12 @@ class PixelCNNTrainer(BaseTrainer):
         return {"eval_loss": total / max(1, len(dataloader))}
 
     def infer(self, config: BaseConfig, inputs: Any) -> Any:
+        """Sample images pixel by pixel in raster order.
+
+        ``inputs``: ``{"n_samples": n (default 4), "seed": optional int}``.
+        Returns ``{"samples": [n,1,28,28]}`` of 0/1 values on CPU. Costs 784
+        forward passes.
+        """
         assert isinstance(config, PixelCNNConfig)
         if self.model is None:
             raise RuntimeError("Model not loaded.")
@@ -84,6 +98,9 @@ class PixelCNNTrainer(BaseTrainer):
 
 
 def make_pixelcnn_dataloader(config: PixelCNNConfig, split: str = "train") -> DataLoader:
+    """Image-classification loader for ``config.dataset``: (images [B,1,28,28] in [0,1],
+    labels [B]); the trainer binarises and ignores labels.
+    """
     return get_dataloader(
         name=config.dataset,
         data_root=config.data_root,

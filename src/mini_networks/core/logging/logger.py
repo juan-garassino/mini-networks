@@ -22,10 +22,17 @@ from mini_networks.core.logging.mlflow_sink import MLflowSink, is_mlflow_enabled
 
 
 class Logger:
-    """One run directory: `metrics.jsonl`, `config.yaml`, `summary.json`, `artifacts/`.
+    """Per-run writer for the run contract read by the gate and the /web layer.
 
-    `output_dir/run_name` is used as-is when its last component already equals
-    `run_name`; otherwise a timestamped subdirectory is created.
+    Layout under ``run_dir``: ``metrics.jsonl`` (one ``{"step","key","value"}``
+    object per line, append-only), ``config.yaml``, ``summary.json``,
+    ``training_state.pt`` (resume state) and ``artifacts/`` (checkpoints,
+    samples). ``run_dir`` is ``output_dir/<run_name or UTC timestamp>``, or
+    ``output_dir`` itself when its basename already equals ``run_name``.
+
+    When ``MN_MLFLOW_TRACKING_URI`` is set an ``MLflowSink`` mirrors every
+    write; ``close()`` ends that run (also registered with ``atexit``). Usable
+    as a context manager: an exception marks the MLflow run FAILED.
     """
 
     def __init__(self, output_dir: str, run_name: str | None = None):
@@ -49,14 +56,17 @@ class Logger:
             atexit.register(self.close)
 
     def log_config(self, config_dict: dict) -> None:
-        """Write the run config to `config.yaml` (overwrites)."""
+        """Overwrite ``config.yaml`` with ``config_dict`` (and log it as MLflow params)."""
         with open(self._config_path, "w") as f:
             yaml.dump(config_dict, f, default_flow_style=False)
         if self._mlflow is not None:
             self._mlflow.log_params(config_dict)
 
     def log_metric(self, step: int, key: str, value: Any) -> None:
-        """Append one `{step, key, value}` line to `metrics.jsonl`."""
+        """Append one ``{"step", "key", "value"}`` line to ``metrics.jsonl``.
+
+        ``value`` must be JSON-serialisable; only finite numbers reach MLflow.
+        """
         entry = {"step": step, "key": key, "value": value}
         with open(self._metrics_path, "a") as f:
             f.write(json.dumps(entry) + "\n")
@@ -64,12 +74,12 @@ class Logger:
             self._mlflow.log_metric(step, key, value)
 
     def log_metrics(self, step: int, metrics: dict) -> None:
-        """`log_metric` for every item of `metrics` at the same step."""
+        """Log every ``key: value`` in ``metrics`` at the same ``step``."""
         for key, value in metrics.items():
             self.log_metric(step, key, value)
 
     def artifact_path(self, name: str) -> Path:
-        """Path for an artifact file inside this run's `artifacts/`."""
+        """Path for an artifact file named ``name`` under ``run_dir/artifacts/`` (not created)."""
         return self.artifacts_dir / name
 
     @property
@@ -79,11 +89,11 @@ class Logger:
 
     @property
     def state_path(self) -> Path:
-        """Location of the resumable `training_state.pt`."""
+        """Path of this run's ``training_state.pt`` (resume checkpoint)."""
         return self._state_path
 
     def log_summary(self, summary: dict[str, Any]) -> None:
-        """Write final run metrics to `summary.json` (overwrites)."""
+        """Write ``summary.json`` (overwrites); mirrors entries to MLflow as tags + ``final_*`` metrics."""
         with open(self._summary_path, "w") as f:
             json.dump(summary, f, indent=2, sort_keys=True)
         if self._mlflow is not None:
@@ -105,17 +115,17 @@ class Logger:
         self.close("FAILED" if exc_type is not None else "FINISHED")
 
     def save_training_state(self, state: dict[str, Any]) -> None:
-        """Persist resumable state (weights/optimizer/epoch) to `training_state.pt`."""
+        """``torch.save`` ``state`` to ``training_state.pt`` (enables resume via core.checkpoints)."""
         torch.save(state, self._state_path)
 
     def load_training_state(self) -> dict[str, Any] | None:
-        """Load `training_state.pt` (weights_only) or None if absent."""
+        """Load ``training_state.pt`` onto CPU (``weights_only=True``), or None if absent."""
         if not self._state_path.exists():
             return None
         return torch.load(self._state_path, map_location="cpu", weights_only=True)
 
     def read_metrics(self) -> list[dict]:
-        """All `metrics.jsonl` entries in write order."""
+        """Parse ``metrics.jsonl`` into a list of entry dicts (empty if no metrics yet)."""
         if not self._metrics_path.exists():
             return []
         lines = []
@@ -127,6 +137,6 @@ class Logger:
         return lines
 
     def latest_metrics(self, n: int = 10) -> list[dict]:
-        """The last `n` metrics entries."""
+        """Return the last ``n`` metric entries (re-reads the whole file)."""
         all_metrics = self.read_metrics()
         return all_metrics[-n:]

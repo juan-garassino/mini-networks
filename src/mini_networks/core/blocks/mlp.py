@@ -6,6 +6,12 @@ import torch.nn as nn
 
 
 class MLP(nn.Module):
+    """Plain feed-forward stack: ``layers`` Linear layers with ReLU between them.
+
+    ``layers=2`` gives in_dim -> hidden -> out_dim; no activation after the
+    final Linear (logits/regression output).
+    """
+
     def __init__(self, in_dim: int, hidden: int, out_dim: int, layers: int = 2):
         super().__init__()
         net = []
@@ -17,4 +23,5 @@ class MLP(nn.Module):
         self.net = nn.Sequential(*net)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Map ``(..., in_dim)`` to ``(..., out_dim)``."""
         return self.net(x)

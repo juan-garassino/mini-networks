@@ -25,12 +25,16 @@ from dataclasses import dataclass, field
 
 @dataclass(frozen=True)
 class Mechanism:
+    """An atomic mechanism: a one-line description plus the file that implements it."""
+
     description: str
     home: str  # repo-relative path to the file that implements it
 
 
 @dataclass(frozen=True)
 class ModelTaxon:
+    """A model's place in the DAG: its level, introduced mechanisms and parent models."""
+
     level: str                                  # "elementary" | "derived"
     introduces: tuple[str, ...] = ()            # mechanism names (may be empty for derived)
     builds_on: tuple[str, ...] = ()             # parent model names (empty iff elementary)
@@ -100,10 +104,12 @@ MECHANISMS: dict[str, Mechanism] = {
 
 
 def _e(introduces: tuple[str, ...], note: str = "") -> ModelTaxon:
+    """Shorthand for an elementary (atom) taxon."""
     return ModelTaxon(level="elementary", introduces=introduces, note=note)
 
 
 def _d(builds_on: tuple[str, ...], introduces: tuple[str, ...] = (), note: str = "") -> ModelTaxon:
+    """Shorthand for a derived (molecule) taxon built on ``builds_on`` parents."""
     return ModelTaxon(level="derived", introduces=introduces, builds_on=builds_on, note=note)
 
 
@@ -196,10 +202,12 @@ COMPOSITION_TAXONOMY: dict[str, tuple[str, ...]] = {
 
 
 def atoms() -> list[str]:
+    """Names of elementary models (level "elementary"), in MODEL_TAXONOMY order."""
     return [n for n, t in MODEL_TAXONOMY.items() if t.level == "elementary"]
 
 
 def molecules() -> list[str]:
+    """Names of derived models (level "derived"), in MODEL_TAXONOMY order."""
     return [n for n, t in MODEL_TAXONOMY.items() if t.level == "derived"]
 
 

@@ -21,6 +21,15 @@ log = logging.getLogger(__name__)
 
 
 class GrokkingTrainer(BaseTrainer):
+    """Step-based AdamW training (wd = config.weight_decay, betas 0.9/0.98) on a / b mod p.
+
+    Every `log_every` steps logs loss, train_accuracy (current batch) and
+    val_accuracy (full held-out pass) — together they draw the grokking
+    curve. Budget: n_train_steps, capped at S 50 / M 20k steps.
+    Checkpoint: `model.pt`. evaluate() -> {"accuracy", "val_accuracy"}
+    (the same held-out number under both keys).
+    """
+
     def __init__(self):
         self.model: GrokkingTransformer | None = None
 
@@ -35,6 +44,7 @@ class GrokkingTrainer(BaseTrainer):
 
     @torch.no_grad()
     def _accuracy(self, model: GrokkingTransformer, dl: DataLoader, device) -> float:
+        # Leaves the model in train mode afterwards — it is called mid-training.
         model.eval()
         correct = total = 0
         for x, y in dl:
@@ -45,6 +55,7 @@ class GrokkingTrainer(BaseTrainer):
         return correct / max(1, total)
 
     def train(self, config: BaseConfig, dataloader: DataLoader, logger: Logger) -> None:
+        """Cycle the train loader until the step budget is spent; save `model.pt`."""
         assert isinstance(config, GrokkingConfig)
         model = self._build(config)
         self.model = model
@@ -86,6 +97,7 @@ class GrokkingTrainer(BaseTrainer):
         torch.save(model.state_dict(), logger.artifact_path("model.pt"))
 
     def evaluate(self, config: BaseConfig, dataloader: DataLoader, logger: Logger) -> dict:
+        """Accuracy on the held-out ("val") pairs; the passed dataloader is not used."""
         assert isinstance(config, GrokkingConfig)
         if self.model is None:
             self.model = self._build(config)
@@ -94,6 +106,12 @@ class GrokkingTrainer(BaseTrainer):
         return {"accuracy": acc, "val_accuracy": acc}
 
     def infer(self, config: BaseConfig, inputs: Any) -> Any:
+        """Predict a / b (mod p) for one pair.
+
+        inputs: {"a": int, "b": int} (defaults 12, 5; reduced mod p, b = 0
+        becomes 1). Returns {"a", "b", "prediction", "expected"} where
+        expected is the exact answer a * b^(p-2) mod p.
+        """
         assert isinstance(config, GrokkingConfig)
         if self.model is None:
             raise RuntimeError("Model not loaded.")
@@ -110,6 +128,7 @@ class GrokkingTrainer(BaseTrainer):
         return {"a": a, "b": b, "prediction": pred, "expected": expected}
 
     def load_checkpoint(self, config: BaseConfig, artifacts_dir) -> None:
+        """Load `model.pt` into a freshly built GrokkingTransformer."""
         assert isinstance(config, GrokkingConfig)
         state = torch.load(
             Path(artifacts_dir) / "model.pt", map_location=config.device, weights_only=True
@@ -120,6 +139,11 @@ class GrokkingTrainer(BaseTrainer):
 
 
 def make_grokking_dataloader(config: GrokkingConfig, split: str = "train") -> DataLoader:
+    """Modular division pairs: (tokens [B, 4] = [a, op, b, =], answers [B] in 0..p-1).
+
+    All p*(p-1) pairs (b != 0) are shuffled with a fixed seed and split
+    train_frac / rest, so "val" pairs never appear in training.
+    """
     return get_dataloader(
         name=config.dataset,
         data_root=config.data_root,

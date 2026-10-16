@@ -22,6 +22,17 @@ log = logging.getLogger(__name__)
 
 
 class GRPOTrainer(RLHFTrainer):
+    """Two-stage trainer: next-token pretraining, then group-relative policy updates.
+
+    Stage 1 (inherited `_pretrain`) fits the TransformerLM; a frozen deep copy
+    becomes the reference. Stage 2, per iteration: sample a group of
+    responses to one prompt, score each with `shakespearean_score`,
+    z-normalise the rewards within the group, and take one clipped-ratio +
+    KL step per response. Logs `grpo_loss` and `avg_reward` per iteration.
+    Checkpoint: `model.pt` + `tokenizer.json`. evaluate()/infer() are
+    RLHFTrainer's: {"eval_loss"} and {"generated", "reward"}.
+    """
+
     def _collect_group(self, model, config: GRPOConfig, prompt_ids: list[int]) -> list[dict]:
         """G sampled responses for ONE prompt — the group is the baseline."""
         group = []
@@ -42,7 +53,10 @@ class GRPOTrainer(RLHFTrainer):
 
     def _grpo_update(self, model, ref_model, group: list[dict], config: GRPOConfig) -> float:
         """Clipped-ratio update with the GROUP as the baseline (no value net):
-        A_i = (r_i - mean_group) / (std_group + eps)."""
+        A_i = (r_i - mean_group) / (std_group + eps).
+
+        Returns the mean loss over the group. A fresh AdamW is built per call.
+        """
         rewards = torch.tensor([g["reward"] for g in group], dtype=torch.float32,
                                device=config.device)
         advantages = (rewards - rewards.mean()) / (rewards.std() + 1e-6)
@@ -58,6 +72,8 @@ class GRPOTrainer(RLHFTrainer):
             with torch.no_grad():
                 log_probs_ref = _log_probs_of_tokens(ref_model, tokens)
             kl = (log_probs_ref - log_probs_cur).mean()
+            # Simplification: the ratio is taken against the frozen reference,
+            # not the rollout-time policy (identical only on the first update).
             ratio = torch.exp(log_probs_cur - log_probs_ref.detach())
             clipped = torch.clamp(ratio, 1 - config.ppo_clip, 1 + config.ppo_clip)
             policy_loss = -torch.min(ratio * adv, clipped * adv).mean()
@@ -70,6 +86,11 @@ class GRPOTrainer(RLHFTrainer):
         return total / max(1, len(group))
 
     def train(self, config: BaseConfig, dataloader: DataLoader, logger: Logger) -> None:
+        """Pretrain, freeze a reference copy, then run the GRPO iterations.
+
+        Prompts are consecutive min(16, seq_len // 4)-token slices of the
+        corpus; iteration i uses prompt i (mod the prompt count).
+        """
         assert isinstance(config, GRPOConfig)
         ds = dataloader.dataset
         if hasattr(ds, "tokenizer"):
@@ -114,4 +135,8 @@ class GRPOTrainer(RLHFTrainer):
 
 
 def make_grpo_dataloader(config: GRPOConfig, split: str = "train") -> DataLoader:
+    """The rlhf char-level text loader: (x [B, seq_len], y = x shifted by one).
+
+    The dataset must expose `.text` (raw corpus) — GRPO cuts its prompts from it.
+    """
     return make_rlhf_dataloader(config, split=split)

@@ -31,6 +31,11 @@ TEXT_LMS = {"transformer", "moe", "mamba", "kimi", "deepseek", "text_diffusion",
 
 
 def _save_grid(tensor, path: Path) -> bool:
+    """Save up to 16 images as a normalised 4-wide PNG grid if ``tensor`` looks like images.
+
+    Accepts ``[B,H,W]`` or ``[B,C,H,W]`` with C in (1, 3) and H, W >= 8;
+    returns False (writing nothing) for anything else.
+    """
     import torch
     from torchvision.utils import save_image
 
@@ -276,6 +281,7 @@ def _knn1_accuracy(trainer, config, dataloader_fn, max_samples: int = 512) -> st
 
 
 def _pred_vs_true(out: Any, targets, lines: list[str]) -> None:
+    """Append predicted vs true labels and their batch accuracy to ``lines`` (needs ``out["predictions"]``)."""
     import torch
 
     preds = out.get("predictions") if isinstance(out, dict) else None
@@ -290,6 +296,13 @@ def _pred_vs_true(out: Any, targets, lines: list[str]) -> None:
 
 
 def save_model_showcase(name: str, trainer, config, dataloader_fn, dest: str | Path) -> Path:
+    """Write a model's showcase into ``dest`` and return it.
+
+    Picks a section by model family (sampler grids, embedder 1-NN accuracy +
+    neighbour grids, classifier pred-vs-true, LM generations, ...) using one
+    batch from the test split (train as fallback). Always writes
+    ``summary.txt``; errors are recorded in it rather than raised.
+    """
     import torch
 
     dest = Path(dest)
@@ -456,6 +469,12 @@ def save_model_showcase(name: str, trainer, config, dataloader_fn, dest: str | P
 
 
 def save_composition_showcase(name: str, output: Any, run_dir: str | None, dest: str | Path) -> Path:
+    """Write a composition's showcase into ``dest`` and return it.
+
+    Dumps the runner's output dict (image-like tensors as PNG grids, the rest
+    as summary lines) and copies up to 20 image/.txt files from
+    ``<run_dir>/artifacts``. Always writes ``summary.txt``.
+    """
     dest = Path(dest)
     dest.mkdir(parents=True, exist_ok=True)
     lines: list[str] = [f"item: {name}"]

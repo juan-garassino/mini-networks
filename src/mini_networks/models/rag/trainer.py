@@ -23,6 +23,12 @@ log = logging.getLogger(__name__)
 
 
 class RAGTrainer(BaseTrainer):
+    """Train the generator LM on a text corpus and index that corpus for retrieval.
+
+    The LM is a standard-FFN :class:`TransformerLM` trained on next-token
+    cross-entropy. Checkpoint: ``model.pt`` + ``tokenizer.json``; the TF-IDF
+    index is derived data, rebuilt from the corpus on load.
+    """
     def __init__(self):
         self.model: TransformerLM | None = None
         self.tokenizer: CharTokenizer | None = None
@@ -40,6 +46,12 @@ class RAGTrainer(BaseTrainer):
         ).to(config.device)
 
     def train(self, config: BaseConfig, dataloader: DataLoader, logger: Logger) -> None:
+        """Fit the LM, save ``model.pt``/``tokenizer.json``, then index the corpus.
+
+        The LM uses AdamW with grad-norm clipping at 1.0.
+        The raw corpus comes from the dataset's ``text`` attribute and is cut
+        into ``chunk_size``-character chunks.
+        """
         assert isinstance(config, RAGConfig)
 
         ds = dataloader.dataset
@@ -85,6 +97,9 @@ class RAGTrainer(BaseTrainer):
         self.rag.add_documents([corpus])
 
     def evaluate(self, config: BaseConfig, dataloader: DataLoader, logger: Logger) -> dict:
+        """Return ``{"eval_loss"}``: the LM's mean next-token cross-entropy; retrieval is
+        not scored.
+        """
         assert isinstance(config, RAGConfig)
         ds = dataloader.dataset
         vocab_size = ds.vocab_size if hasattr(ds, "vocab_size") else config.vocab_size
@@ -101,6 +116,13 @@ class RAGTrainer(BaseTrainer):
         return {"eval_loss": total_loss / max(1, len(dataloader))}
 
     def infer(self, config: BaseConfig, inputs: Any) -> Any:
+        """Answer a query with retrieval-augmented generation.
+
+        ``inputs``: ``{"query": str, "max_new_tokens": int (64),
+        "temperature": float (1.0)}`` or a bare string. Returns
+        ``{"generated": str, "retrieved": [chunk, ...]}``; ``generated`` is
+        the decoded "[Context: ...] query" prompt plus the continuation.
+        """
         assert isinstance(config, RAGConfig)
         if self.model is None:
             raise RuntimeError("Model not loaded.")
@@ -145,6 +167,13 @@ class RAGTrainer(BaseTrainer):
 
 
 def make_rag_dataloader(config: RAGConfig, split: str = "train") -> DataLoader:
+    """Text loader for ``config.dataset`` of next-token windows.
+
+    Batches are (x [B,seq_len], y [B,seq_len]) long ids.
+
+    The dataset also exposes ``text`` (raw corpus, used for indexing),
+    ``tokenizer`` and ``vocab_size``.
+    """
     return get_dataloader(
         name=config.dataset,
         data_root=config.data_root,

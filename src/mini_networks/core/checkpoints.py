@@ -5,7 +5,11 @@ from pathlib import Path
 
 
 def latest_run_dir(base_dir: str | Path) -> Path | None:
-    """Newest run directory under `base_dir` (timestamp names sort chronologically)."""
+    """Return the newest subdirectory of ``base_dir``, or None if there is none.
+
+    "Newest" is the lexicographically last name, which is the latest run
+    because run directories are named by sortable timestamp.
+    """
     root = Path(base_dir)
     if not root.exists():
         return None
@@ -16,7 +20,11 @@ def latest_run_dir(base_dir: str | Path) -> Path | None:
 
 
 def find_resumable_run(base_dir: str | Path) -> Path | None:
-    """Latest run if it holds a `training_state.pt` to resume from, else None."""
+    """Return the latest run dir if it holds a ``training_state.pt``, else None.
+
+    Only the newest run is considered; an older run with saved state is not
+    resumed if a newer run without one exists.
+    """
     run_dir = latest_run_dir(base_dir)
     if run_dir is None:
         return None

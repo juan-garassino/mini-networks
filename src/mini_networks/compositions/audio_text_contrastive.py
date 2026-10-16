@@ -1,4 +1,24 @@
-"""Audio-text contrastive composition using cross-attention embeddings."""
+"""Audio-text contrastive composition with ONE cross-attention encoder.
+
+Pairs spoken digits (FSDD waveforms) with templated captions of their label
+and trains a single fused encoder, the zoo's multimodal CrossModalEncoder in
+its ``modality="audio", fusion="cross_attention"`` setting:
+
+    wave  [B,1,4000] -> AudioConvEncoder (2x Conv1d s=2) -> audio tokens [B,1000,D]
+    caption [B,32]   -> TextEncoder (Transformer)         -> text tokens  [B,32,D]
+    text tokens attend to audio tokens -> mean pool -> L2-normalise -> [B,D]
+
+Contrast with audio_text_dual_encoder, which keeps two separate towers. Here
+the two modalities are fused *before* the loss, so there is no second
+embedding to align against: ContrastiveCompositionBase falls back to the
+self-similarity logits ``emb @ emb.T / tau`` (see compositions/base.py) —
+an instance-discrimination objective that spreads distinct (audio, caption)
+pairs apart. It demonstrates early fusion; it is not a retrieval model (no
+alignment evidence is produced for single-embedding compositions).
+
+Deliberately simplified: captions are derived from the label, waveforms are
+raw (no spectrogram), and fusion is one cross-attention block.
+"""
 from __future__ import annotations
 
 from typing import Any
@@ -13,6 +33,10 @@ from mini_networks.compositions.base import ContrastiveCompositionBase
 
 
 class AudioTextContrastiveConfig(BaseConfig):
+    """Knobs: ``d_model`` (fused width), ``temperature`` (InfoNCE sharpness),
+    ``sample_len`` (waveform samples kept per clip; 4000 = 0.5 s at 8 kHz),
+    ``text_seq_len`` / ``vocab_size`` (caption tokenisation)."""
+
     model_name: str = "audio_text_contrastive"
     d_model: int = 64
     vocab_size: int = 256
@@ -24,10 +48,13 @@ class AudioTextContrastiveConfig(BaseConfig):
 
 
 class AudioTextContrastive(ContrastiveCompositionBase):
+    """Early-fusion audio+caption encoder trained with self-similarity InfoNCE."""
+
     def __init__(self):
         super().__init__()
 
     def _build(self, config: AudioTextContrastiveConfig) -> CrossModalEncoder:
+        """The fused encoder: text queries cross-attend to audio-frame tokens."""
         return CrossModalEncoder(
             modality="audio",
             d_model=config.d_model,
@@ -36,9 +63,11 @@ class AudioTextContrastive(ContrastiveCompositionBase):
         ).to(config.device)
 
     def _build_modules(self, config: AudioTextContrastiveConfig) -> dict[str, torch.nn.Module]:
+        """A single ``"model"`` module, so the base saves it as ``model.pt``."""
         return {"model": self._build(config)}
 
     def _get_dataloader(self, config: AudioTextContrastiveConfig):
+        """Train split of ``config.dataset`` yielding ``(wave [B,1,T], label [B])``."""
         return get_dataloader(
             name=config.dataset,
             data_root=config.data_root,
@@ -51,11 +80,16 @@ class AudioTextContrastive(ContrastiveCompositionBase):
         )
 
     def _encode_pair(self, modules, primary, tokens, config: AudioTextContrastiveConfig):
+        """(wave [B,1,T], tokens [B,L]) -> one fused unit embedding [B,D]."""
         model = modules["model"]
         emb = model(primary, tokens)
         return F.normalize(emb, dim=-1)
 
     def _infer_embeddings(self, config: AudioTextContrastiveConfig, inputs: dict[str, Any]) -> torch.Tensor:
+        """Fused embedding [B,D] for ``inputs["waves"]`` + captions of ``inputs["labels"]``.
+
+        Note: returned un-normalised (training normalises before the loss).
+        """
         model = self.modules["model"]
         model.eval()
         waves = self._as_tensor(inputs, "waves").to(config.device)

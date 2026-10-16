@@ -25,6 +25,13 @@ def _make_env(config: ReinforceConfig) -> MazeEnv:
 
 
 class ReinforceTrainer(BaseTrainer):
+    """Monte Carlo policy-gradient (REINFORCE) on a fixed, seeded MazeEnv.
+
+    Ignores the dataloader: experience comes from rolling out the policy.
+    Logs ``episode_reward`` and ``success`` (reward > 0) per episode.
+    Checkpoint: ``model.pt`` (PolicyNet state dict); the maze is rebuilt
+    from ``config.seed`` on load.
+    """
     def __init__(self):
         self.policy: PolicyNet | None = None
         self.env: MazeEnv | None = None
@@ -33,6 +40,11 @@ class ReinforceTrainer(BaseTrainer):
         return PolicyNet(state_size=state_size, hidden_dim=config.hidden_dim).to(config.device)
 
     def train(self, config: BaseConfig, dataloader: DataLoader, logger: Logger) -> None:
+        """Play episodes with the stochastic policy and take one Adam step per episode.
+
+        loss = -sum_t log pi(a_t|s_t) * G_t with returns normalised within
+        the episode. Saves ``model.pt``.
+        """
         assert isinstance(config, ReinforceConfig)
         env = _make_env(config)
         self.env = env
@@ -85,6 +97,7 @@ class ReinforceTrainer(BaseTrainer):
         torch.save(policy.state_dict(), logger.artifact_path("model.pt"))
 
     def load_checkpoint(self, config: BaseConfig, artifacts_dir) -> None:
+        """Rebuild the seeded maze, then load the policy from ``model.pt``."""
         from pathlib import Path
         assert isinstance(config, ReinforceConfig)
         env = _make_env(config)
@@ -97,6 +110,10 @@ class ReinforceTrainer(BaseTrainer):
         self.policy.eval()
 
     def evaluate(self, config: BaseConfig, dataloader: DataLoader, logger: Logger) -> dict:
+        """Return ``{"eval_reward", "success_rate"}`` over greedy (argmax) episodes.
+
+        An episode counts as a success when its total reward is positive.
+        """
         assert isinstance(config, ReinforceConfig)
         if self.policy is None or self.env is None:
             env = _make_env(config)
@@ -132,6 +149,11 @@ class ReinforceTrainer(BaseTrainer):
         }
 
     def infer(self, config: BaseConfig, inputs: Any) -> Any:
+        """Run one greedy episode; ``inputs`` is ignored.
+
+        Returns ``{"actions": [int], "total_reward": float, "success": bool,
+        "steps": int}`` (actions: 0 up, 1 down, 2 left, 3 right).
+        """
         assert isinstance(config, ReinforceConfig)
         if self.policy is None or self.env is None:
             raise RuntimeError("Train the agent first.")

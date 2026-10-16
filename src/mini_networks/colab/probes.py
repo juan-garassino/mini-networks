@@ -5,6 +5,7 @@ from typing import Any
 
 
 def _probe_preview(value: Any) -> str:
+    """Short human-readable summary of an output value (shape, length or truncated text)."""
     import torch
 
     if isinstance(value, torch.Tensor):
@@ -19,6 +20,12 @@ def _probe_preview(value: Any) -> str:
 
 
 def _validate_probe_output(output: Any) -> str:
+    """Raise RuntimeError if an infer()/composition output is empty; else return a preview string.
+
+    For dicts the ``config`` / ``run_dir`` metadata keys are ignored, and every
+    remaining tensor, collection or string must be non-empty. The returned
+    string becomes ``CheckResult.infer_summary``.
+    """
     import torch
 
     if output is None:
@@ -51,6 +58,12 @@ def _validate_probe_output(output: Any) -> str:
 
 
 def _run_model_inference_probe(model: str, trainer: Any, config: Any, dataloader: Any) -> str:
+    """Call ``trainer.infer`` with a minimal model-specific input and validate the result.
+
+    Models in ``batch_models`` take one real item from the first ``dataloader``
+    batch; generative/text/RL models get a fixed synthetic request. Adding a
+    model to the zoo means adding a branch here, else this raises RuntimeError.
+    """
     batch = None
     batch_models = {
         "clip",

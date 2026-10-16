@@ -1,0 +1,363 @@
+// Public types of the world contract (docs/superpowers/specs/2026-09-28-
+// playground-bakeoff-design.md § "The world contract"). Pure data — skins only
+// paint these; no renderer invents a position.
+//
+// Units: anything named `foot`, `setPiece`, `bbox`, `seed`, `tiles` or `tile`
+// is in TILE coordinates (1 tile = World.tile px). Everything else that is a
+// Pt/Box (`center`, `points`, `Label.box`, `seaSlots`, `camera`) is in PIXELS.
+
+export type Pt = { x: number; y: number };
+export type Box = Pt & { w: number; h: number };
+/** model name → family name (see familyMapFromBlueprint). */
+export type FamilyMap = Record<string, string>;
+
+/** Terrain codes stored in World.terrain (erasable-syntax friendly: no enum). */
+export const T = {
+  SEA: 0,
+  LAND: 1,
+  COAST: 2,
+  RIVER: 3,
+  ROAD: 4,
+  BRIDGE: 5,
+  FOOT: 6,
+  SETPIECE: 7,
+} as const;
+export type Terrain = (typeof T)[keyof typeof T];
+
+export interface Region {
+  family: string;
+  /**
+   * v3: part of the region lies UNDERWATER (Decision's sunken city on the
+   * bay's seabed). Seabed tiles are T.SEA with regionOf = id (footprints,
+   * roads and set-pieces on them keep their own codes); skins paint them as
+   * shallow water over ruins, never as land.
+   */
+  underwater: boolean;
+  /** v3: the region is a separate FLOATING island (islet families: Structure). Its tiles are ordinary land. */
+  floating: boolean;
+  /** index into World.regions; also the value stored in World.regionOf. */
+  id: number;
+  /** data-derived: the family has zero cross-family edges. */
+  islet: boolean;
+  tiles: number;
+  targetTiles: number;
+  /** growth seed, tile coords (v3: first skeleton tile). */
+  seed: Pt;
+  /** v3: the authored spine the region grew from (tile coords; a single point for reefs). */
+  skeleton: Pt[];
+  /** signature set-piece footprint, tile coords (null if none fit). */
+  setPiece: Box | null;
+  /** tile-coord bounding box of the region's tiles. */
+  bbox: Box;
+}
+
+export interface WorldNode {
+  name: string;
+  family: string;
+  /** 0 for atoms; 1 + max(parent depth) otherwise. */
+  depth: number;
+  atom: boolean;
+  /** same-family parent, else deepest, else first listed; null for roots. */
+  primary: string | null;
+  /** every builds_on parent that exists in the taxonomy, as listed. */
+  parents: string[];
+  /** footprint in tiles (4×4 atoms, 2×2 derived). */
+  foot: Box;
+  /** footprint centre in px. */
+  center: Pt;
+  /** v3: the biome sub-zone (of its own family) under the node's centre, else null (always set by buildWorld; optional so hand-made nodes still type-check). */
+  zone?: ZoneKind | null;
+}
+
+export type RoadKind = "primary" | "secondary" | "bridge";
+
+export interface Road {
+  /** `${from}->${to}` */
+  id: string;
+  /** parent (builds_on target) */
+  from: string;
+  /** child */
+  to: string;
+  /** "bridge" = cross-family edge; else "primary" (child's primary parent) or "secondary". */
+  kind: RoadKind;
+  /** true when `from` is the child's primary parent (independent of kind). */
+  primary: boolean;
+  /** tile indices, parent side → child side, consecutive 8-neighbours. Empty if unroutable. */
+  tiles: number[];
+  /** px polyline: footprint-edge stub, then tile centres at direction changes, then stub. */
+  points: Pt[];
+  /** px length of `points`. */
+  length: number;
+  /**
+   * v2: parallel-lane index. Roads sharing tiles get distinct lanes; lane k is
+   * drawn k·LANE_GAP px to the LEFT of the direction of travel (parent → child).
+   */
+  lane: number;
+  /** v2: `points` offset by the lane (px, mitred). Draw this; `points` stays the centreline. */
+  lanePoints: Pt[];
+  /** v2: direction cues along `lanePoints`, parent → child; angle in radians (atan2, y down). */
+  chevrons: Chevron[];
+}
+
+/** px position + heading (radians, atan2 with y growing downward). */
+export interface Chevron {
+  x: number;
+  y: number;
+  angle: number;
+}
+
+export interface Bridge {
+  roadId: string;
+  /** consecutive RIVER tiles crossed straight-through. */
+  tiles: number[];
+  /** direction of travel over the bridge. */
+  axis: "h" | "v";
+  /** families on the two banks, in travel order. */
+  regions: [string, string];
+}
+
+export type Anchor = "S" | "N" | "E" | "W" | "SE" | "NE" | "SW" | "NW";
+
+export interface Label {
+  node: string;
+  text: string;
+  font: 13 | 15;
+  /** px box. */
+  box: Box;
+  anchor: Anchor;
+  /**
+   * v2 static rank for screen-space labels (higher = placed first): atoms,
+   * then hubs by descendant count, then the rest by depth, then name. Unique.
+   */
+  priority: number;
+  /** v2: px point on the footprint edge this label attaches to (nearest edge point to the box). */
+  anchorPt: Pt;
+  /** v2: all 8 sides, best first (`anchor` first, then by roads/footprints on that side at world scale). */
+  preferred: Anchor[];
+}
+
+/** placeScreenLabels output: a label box in SCREEN px (top-left x, y). */
+export interface ScreenLabel {
+  node: string;
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+  font: number;
+  anchor: Anchor;
+}
+
+export interface Decor {
+  tile: number;
+  region: string;
+  variant: number;
+  scale: number;
+}
+
+export interface CameraAnchors {
+  world: Box;
+  /** v2: world ∪ the two secret islands (which lie OUTSIDE `world`), padded. */
+  all: Box;
+  regions: Record<string, Box>;
+  nodes: Record<string, { focus: Pt; box: Box }>;
+}
+
+/** R2-E: a harbour on a region's coast; `boats` = compositions touching the family. */
+export interface Harbour {
+  family: string;
+  /** coast tile index. */
+  tile: number;
+  /** px: centre of the dock (the open-sea side of the coast tile). */
+  pt: Pt;
+  /** boats docked here (a family's boats are split across its harbours; sum = compositions touching it). */
+  boats: number;
+}
+
+/** R2-E: an atom's city — px block footprints on free land around it. */
+export interface City {
+  node: string;
+  /** direct children of the atom (drives the block count). */
+  children: number;
+  capital: boolean;
+  /** px boxes (each inside one free land tile). */
+  blocks: Box[];
+}
+
+/** R2-E: an island outside camera.world; slots[i] is the px spot for names[i]. */
+export interface SecretIsland {
+  /** px box (entirely outside camera.world). */
+  box: Box;
+  names: string[];
+  slots: Pt[];
+  /** px: open sea just beyond the island ("here be dragons"). */
+  dragons: Pt;
+}
+
+/** v2: everything on a model's lineage. */
+export interface Lineage {
+  /** roads INTO the model (one per builds_on parent), primary first. */
+  parents: Road[];
+  /** roads OUT of the model. */
+  children: Road[];
+  /** every ancestor, nearest generation first, then by name. */
+  ancestors: string[];
+  /** every descendant, nearest generation first, then by name. */
+  descendants: string[];
+}
+
+/** v3: how two neighbouring families are separated. */
+export type BorderKind = "range" | "river" | "strait";
+
+/**
+ * v3: one natural border between two adjacent families. Underneath, every
+ * border is a 1-tile band of T.RIVER tiles (2 tiles for a strait) so roads can
+ * only cross on a Bridge; `kind` says how to PAINT it: a mountain range (the
+ * bridge is a pass, `World.mountains` holds its peaks), a river, or a strait
+ * (a sea channel running coast to coast).
+ */
+export interface Border {
+  /** families, a < b. */
+  a: string;
+  b: string;
+  kind: BorderKind;
+  /** px polyline along the border (tile centres of its longest run, one end to the other). */
+  path: Pt[];
+  /** every T.RIVER/T.BRIDGE tile of this border. */
+  tiles: number[];
+}
+
+export type IsletKind = "rock" | "lighthouse" | "dome" | "floating";
+/** v3: a decorative islet (px polygon); its tiles stay T.SEA — skins draw it from the polygon. */
+export interface Islet {
+  kind: IsletKind;
+  poly: Pt[];
+}
+
+export type ZoneKind =
+  | "forest" | "town" | "wildwest" | "snow" | "cathedral" | "ruins" | "desert" | "forge" | "village" | "underwater" | "cyber"
+  | "meadow" | "sky";
+/** v3: a biome sub-zone of a family (px polygon, authored from the reference map) — where its look and set-pieces go. */
+export interface Zone {
+  family: string;
+  zone: ZoneKind;
+  poly: Pt[];
+}
+
+/** v3: a family's traced outline (px, simplified; outer ring of its land tiles — seabed excluded). */
+export interface Shape {
+  family: string;
+  poly: Pt[];
+}
+
+export interface World {
+  /** v3: the layout generation (WORLD_VERSION). */
+  version: number;
+  /** v3: the geography preset this world was built with. */
+  preset: "pixel" | "paper";
+  cols: number;
+  rows: number;
+  tile: 16;
+  /** one T.* code per tile, row-major (i = y * cols + x). */
+  terrain: Uint8Array;
+  /** region id per tile, -1 = sea. RIVER/ROAD/FOOT tiles keep their region. */
+  regionOf: Int8Array;
+  regions: Region[];
+  nodes: WorldNode[];
+  roads: Road[];
+  bridges: Bridge[];
+  labels: Label[];
+  decor: Decor[];
+  /** px boxes: the 3 largest empty sea squares (for furniture). */
+  seaSlots: Box[];
+  camera: CameraAnchors;
+  /** R2-E flavour (all data-derived, deterministic). */
+  harbours: Harbour[];
+  cities: City[];
+  /** px polylines along inter-family borders where no road/bridge crosses. */
+  mountains: Pt[][];
+  hiddenIsland: SecretIsland;
+  ruinsIsland: SecretIsland;
+  /** v3: natural borders between adjacent families (sorted by a, b). */
+  borders: Border[];
+  /**
+   * v3: the authored continent coast, smoothed, in PX — before the coast
+   * noise (the tiles are the truth; these are the artists' guides).
+   */
+  outline: Pt[];
+  /** v3: the south-east bay polygon (px) whose seabed holds the sunken city. */
+  bay: Pt[];
+  /** v3: decorative islets (their tiles stay T.SEA). */
+  islets: Islet[];
+  /** v3: biome sub-zones per family (authored from the reference). */
+  zones: Zone[];
+  /** v3: each family's traced land outline. */
+  shapes: Shape[];
+  warnings: string[];
+}
+
+export interface WorldOptions {
+  /** v3 geography preset: "pixel" (default; refs/map-reference.png) or "paper" (refs/paper-map-reference.png). */
+  preset?: "pixel" | "paper";
+  /** label size override (px); default w = 0.6·font·chars + 8, h = 1.35·font + 4. */
+  measure?: (text: string, font: 13 | 15) => { w: number; h: number };
+  /** debug hook: called after every layout attempt with its hard failures (empty = accepted). */
+  onAttempt?: (attempt: number, failures: string[]) => void;
+  /** names for the hidden "?" island's silhouettes (default: vq_vae, flow_matching, gated_pixelcnn). */
+  hidden?: string[];
+  /** names for the ruins islet (retired legacy models; default none). */
+  ruins?: string[];
+}
+
+export interface PathResult {
+  /** node names walked, from the start node to its root atom. */
+  nodes: string[];
+  /** px polyline (continuous: node centre → road → next centre …). */
+  points: Pt[];
+  length: number;
+}
+
+export interface FerryRoute {
+  /** member names actually visited (unknown names skipped). */
+  visits: string[];
+  /** px polyline; points[i] is at sea when sea[i]. */
+  points: Pt[];
+  sea: boolean[];
+  length: number;
+}
+
+export interface FlowNode {
+  name: string;
+  family: string;
+  depth: number;
+  /** lane index (into FlowLayout.lanes). */
+  lane: number;
+  /** column index = depth. */
+  col: number;
+  /** order within its (lane, col) cell, top → bottom. */
+  order: number;
+  box: Box;
+}
+
+export interface FlowPipe {
+  from: string;
+  to: string;
+  /** axis-aligned px polyline from the parent's out-port to the child's in-port. */
+  points: Pt[];
+  length: number;
+  crossLane: boolean;
+  /** v2: direction cues along `points`, parent → child. */
+  chevrons: Chevron[];
+}
+
+export interface FlowLayout {
+  width: number;
+  height: number;
+  lanes: { family: string; y: number; h: number }[];
+  columns: { depth: number; x: number }[];
+  nodes: FlowNode[];
+  pipes: FlowPipe[];
+  /** straight-segment crossings of the chosen order. */
+  crossings: number;
+  /** straight-segment crossings of the seed (PLACEMENT) order, for comparison. */
+  seedCrossings: number;
+}

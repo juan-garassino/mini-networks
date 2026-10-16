@@ -1,9 +1,16 @@
+"""Config for the recurrent LM: cell type (rnn / lstm / gru) and stack size."""
 from __future__ import annotations
 from typing import Literal
 from mini_networks.core.config import BaseConfig
 
 
 class RNNConfig(BaseConfig):
+    """Hyperparameters for :class:`RNNLanguageModel`.
+
+    ``hidden_dim`` is both the embedding size and the recurrent state size.
+    ``seq_len`` is the training window (BPTT length). ``vocab_size`` is a
+    fallback replaced by the dataset tokenizer's size on real text.
+    """
     model_name: str = "rnn"
     cell_type: Literal["rnn", "lstm", "gru"] = "lstm"
     hidden_dim: int = 256

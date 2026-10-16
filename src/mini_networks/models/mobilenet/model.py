@@ -31,6 +31,9 @@ from mini_networks.core.blocks.cnn import DepthwiseSeparable
 
 
 class TinyMobileNet(nn.Module):
+    """Stem conv + two stride-2 depthwise-separable blocks + global pool + linear head
+    (layout in the module docstring).
+    """
     def __init__(self, num_classes: int = 10, width_mult: float = 1.0):
         super().__init__()
         c = int(32 * width_mult)
@@ -45,6 +48,7 @@ class TinyMobileNet(nn.Module):
         self.fc = nn.Linear(c * 4, num_classes)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Map images [B,1,28,28] to class logits [B,num_classes]."""
         x = self.stem(x)
         x = self.block1(x)
         x = self.block2(x)

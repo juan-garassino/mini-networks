@@ -30,6 +30,12 @@ import torch.nn.functional as F
 
 
 class GCN(nn.Module):
+    """Two-layer GCN: logits = Â · drop(ReLU(Â X W1)) · W2 (bias-free linear maps).
+
+    The graph enters only through the precomputed normalized adjacency Â
+    passed to forward(); the module itself owns just W1 and W2.
+    """
+
     def __init__(
         self,
         n_features: int = 8,
@@ -43,7 +49,11 @@ class GCN(nn.Module):
         self.drop = nn.Dropout(dropout)
 
     def forward(self, x: torch.Tensor, a_norm: torch.Tensor) -> torch.Tensor:
-        """x [N, F], a_norm [N, N] -> logits [N, C]."""
+        """Node features x [N, F] + normalized adjacency a_norm [N, N] -> logits [N, C].
+
+        Each `a_norm @` is one hop of message passing (degree-weighted
+        neighbour average incl. self), so the output sees 2-hop neighbourhoods.
+        """
         h = F.relu(a_norm @ self.w1(x))
         h = self.drop(h)
         return a_norm @ self.w2(h)

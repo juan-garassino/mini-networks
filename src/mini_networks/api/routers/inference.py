@@ -1,4 +1,8 @@
-"""Inference endpoints: POST /infer/{model}, GET /infer/{model}/info."""
+"""Inference endpoints: POST /infer/{model}, GET /infer/{model}/info.
+
+Trainers are built with the model config at ``fast_demo=True`` and cached per
+``(model, checkpoint)`` for the life of the process.
+"""
 from __future__ import annotations
 
 import torch  # noqa: F401 (used for tensor serialization below)
@@ -16,6 +20,7 @@ _loaded_trainers: dict[str, tuple] = {}
 
 @router.get("/{model_name}/info")
 async def model_info(model_name: str):
+    """``{model, config_schema, defaults}`` for a registered model. 404 for an unknown model."""
     registry = get_model_registry()
     if model_name not in registry:
         raise HTTPException(status_code=404, detail=f"Unknown model: {model_name}")
@@ -25,6 +30,17 @@ async def model_info(model_name: str):
 
 @router.post("/{model_name}", response_model=InferResponse)
 async def run_inference(model_name: str, request: InferRequest):
+    """Run the model's ``infer`` on ``request.inputs`` and return its outputs as JSON.
+
+    Weights, in order: ``checkpoint``; else ``run_id`` → that local run's
+    ``artifacts/`` under ``$MINI_NETWORKS_RUNS``; else, with neither given, the
+    pulled champion under ``./runs/champions/<model>/artifacts`` (see
+    ``main.py pull-champions``); else an untrained model. Available on the
+    public showcase (not guarded by ``MN_DISABLE_TRAIN``).
+
+    Errors: 404 for an unknown model or ``run_id``; 400 when the checkpoint
+    fails to load or ``infer`` raises a RuntimeError.
+    """
     registry = get_model_registry()
     if model_name not in registry:
         raise HTTPException(status_code=404, detail=f"Unknown model: {model_name}")

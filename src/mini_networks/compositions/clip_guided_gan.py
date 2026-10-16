@@ -1,4 +1,25 @@
-"""CLIP-guided GAN composition: add CLIP similarity to generator loss."""
+"""CLIP-guided GAN: add a CLIP image-text similarity term to the generator loss.
+
+Composes the zoo's GAN (mini-DCGAN Generator z [B,100] -> [B,1,28,28] Tanh,
+plus Discriminator) with a small CLIPModel, all trained together, one step
+each per batch:
+
+    1. CLIP: symmetric InfoNCE on (real image, caption of its label)
+    2. D:    standard BCE GAN loss, real vs G(z)
+    3. G:    gan_g_loss + clip_weight * (1 - cos(CLIP_img(G(z)), CLIP_txt(caption)))
+
+The idea (cf. VQGAN+CLIP, StyleCLIP): a jointly-embedding text model is a
+differentiable "does this image match these words?" critic, so text can
+steer a generator through its loss with no paired generator labels.
+
+Deliberately simplified: CLIP is trained from scratch alongside the GAN
+(so the critic is moving while it guides), and the generator is
+UNCONDITIONAL while its caption targets come from the real batch's labels —
+z carries no text, so G cannot satisfy a per-sample caption and the term
+acts as a "look like a captioned digit" pressure rather than true
+text-to-image control. The CLIP forward on fakes in step 3 also backprops
+into CLIP, but those gradients are cleared before CLIP's own next update.
+"""
 from __future__ import annotations
 
 import torch
@@ -13,6 +34,10 @@ from mini_networks.models.gan.model import Generator, Discriminator, gan_d_loss,
 
 
 class CLIPGuidedGANConfig(BaseConfig):
+    """Knobs: ``clip_weight`` (strength of the CLIP term; 0 = plain GAN),
+    ``latent_dim``, and the CLIP sizes (``embed_dim``, ``text_*``,
+    ``clip_temperature``) — deliberately smaller than standalone CLIP."""
+
     model_name: str = "clip_guided_gan"
 
     # GAN
@@ -32,12 +57,15 @@ class CLIPGuidedGANConfig(BaseConfig):
 
 
 class CLIPGuidedGAN:
+    """Generator, discriminator and CLIP trained jointly per batch."""
+
     def __init__(self):
         self.G: Generator | None = None
         self.D: Discriminator | None = None
         self.clip: CLIPModel | None = None
 
     def _build_clip(self, config: CLIPGuidedGANConfig) -> CLIPModel:
+        """CLIP critic: images in [0,1] + caption tokens -> unit embeddings [B,embed_dim]."""
         return CLIPModel(
             embed_dim=config.embed_dim,
             vocab_size=config.vocab_size,
@@ -49,6 +77,11 @@ class CLIPGuidedGAN:
         ).to(config.device)
 
     def train(self, config: CLIPGuidedGANConfig, logger: Logger) -> None:
+        """Alternate CLIP, D, G updates every batch.
+
+        Logs ``g_loss`` (adversarial part only), ``d_loss`` and ``clip_loss``
+        per epoch; saves ``generator.pt``, ``discriminator.pt``, ``clip.pt``.
+        """
         dl = get_dataloader(
             name=config.dataset,
             data_root=config.data_root,
@@ -126,6 +159,7 @@ class CLIPGuidedGAN:
 
     @torch.no_grad()
     def sample(self, config: CLIPGuidedGANConfig, n: int = 4) -> torch.Tensor:
+        """Generate ``n`` images from random z -> [n,1,28,28] in [0,1] (no text input)."""
         if self.G is None:
             raise RuntimeError("Train the model first.")
         z = torch.randn(n, config.latent_dim, device=config.device)

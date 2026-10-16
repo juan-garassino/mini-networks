@@ -36,6 +36,8 @@ from mini_networks.core.blocks.cnn import ConvBNReLU
 
 
 class ConvNeXtBlock(nn.Module):
+    """Residual block: depthwise 3x3 -> LayerNorm -> 1x1 expand 4x -> GELU -> 1x1 project."""
+
     def __init__(self, dim: int):
         super().__init__()
         self.dw = nn.Conv2d(dim, dim, kernel_size=3, padding=1, groups=dim)
@@ -45,6 +47,7 @@ class ConvNeXtBlock(nn.Module):
         self.norm = nn.LayerNorm(dim)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """[B, dim, H, W] -> [B, dim, H, W] (shape-preserving residual)."""
         out = self.dw(x)
         # LayerNorm expects channels-last
         out = out.permute(0, 2, 3, 1)
@@ -55,6 +58,8 @@ class ConvNeXtBlock(nn.Module):
 
 
 class TinyConvNeXt(nn.Module):
+    """Stem + three one-block stages with 2x2/stride-2 downsamples, avg-pool head."""
+
     def __init__(self, base_channels: int = 32, num_classes: int = 10):
         super().__init__()
         c = base_channels
@@ -68,6 +73,7 @@ class TinyConvNeXt(nn.Module):
         self.fc = nn.Linear(c * 4, num_classes)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Images [B, 1, 28, 28] -> class logits [B, num_classes]."""
         x = self.stem(x)
         x = self.stage1(x)
         x = self.down1(x)

@@ -21,6 +21,12 @@ log = logging.getLogger(__name__)
 
 
 class NerfTrainer(BaseTrainer):
+    """Fit :class:`MiniNeRF` to the training views by photometric MSE through volume rendering.
+
+    All training views are flattened into one ray pool and shuffled each
+    epoch into ``rays_per_batch`` minibatches; samples per ray =
+    ``config.effective_timesteps``. Checkpoint: ``model.pt``.
+    """
     def __init__(self):
         self.model: MiniNeRF | None = None
 
@@ -32,6 +38,9 @@ class NerfTrainer(BaseTrainer):
         ).to(config.device)
 
     def train(self, config: BaseConfig, dataloader: DataLoader, logger: Logger) -> None:
+        """Build the ray pool from the loader, train with Adam on stratified samples, and
+        save ``model.pt``.
+        """
         assert isinstance(config, NerfConfig)
         model = self._build(config)
         self.model = model
@@ -50,6 +59,7 @@ class NerfTrainer(BaseTrainer):
             model.train()
             perm = torch.randperm(pool.shape[0], generator=g).to(config.device)
             total, n_batches = 0.0, 0
+            # tier cap on minibatches per epoch; uncapped (L) = one full pass over the pool
             max_batches = config.max_train_batches or (pool.shape[0] // config.rays_per_batch + 1)
             for i in range(0, pool.shape[0], config.rays_per_batch):
                 if n_batches >= max_batches:
@@ -92,6 +102,12 @@ class NerfTrainer(BaseTrainer):
 
     @torch.no_grad()
     def infer(self, config: BaseConfig, inputs: Any) -> Any:
+        """Render a novel view.
+
+        ``inputs``: ``{"azimuth": degrees (default 30.0)}`` at the config's
+        fixed elevation. Returns ``{"image": [3,image_size,image_size] in
+        [0,1], "azimuth": float}``.
+        """
         assert isinstance(config, NerfConfig)
         if self.model is None:
             raise RuntimeError("Model not loaded.")
@@ -106,6 +122,7 @@ class NerfTrainer(BaseTrainer):
         return {"image": img, "azimuth": azimuth}
 
     def load_checkpoint(self, config: BaseConfig, artifacts_dir) -> None:
+        """Build a fresh MiniNeRF from the config and load ``model.pt``."""
         assert isinstance(config, NerfConfig)
         state = torch.load(
             Path(artifacts_dir) / "model.pt", map_location=config.device, weights_only=True

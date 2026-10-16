@@ -22,6 +22,16 @@ log = logging.getLogger(__name__)
 
 
 class GANTrainer(BaseTrainer):
+    """Alternating D/G updates on real MNIST images (labels ignored).
+
+    Per batch: one Adam step on the discriminator (reals vs a detached fake
+    batch), then one on the generator against a fresh fake batch, then the
+    generator EMA update. Logs per-epoch mean `d_loss` / `g_loss`.
+    Checkpoints: `generator.pt` (EMA weights when g_ema_decay > 0) and
+    `discriminator.pt`. evaluate() -> {"mean_real_score"}; the quality gate
+    judges samples separately. infer -> {"samples": [n, 1, 28, 28] in [0, 1]}.
+    """
+
     def __init__(self):
         self.generator: Generator | None = None
         self.discriminator: Discriminator | None = None
@@ -40,6 +50,7 @@ class GANTrainer(BaseTrainer):
         return G, D
 
     def train(self, config: BaseConfig, dataloader: DataLoader, logger: Logger) -> None:
+        """Run effective_epochs of adversarial training (capped at max_train_batches)."""
         assert isinstance(config, GANConfig)
         G, D = self._build(config)
         self.generator = G
@@ -155,6 +166,10 @@ class GANTrainer(BaseTrainer):
 
 
 def make_gan_dataloader(config: GANConfig, split: str = "train") -> DataLoader:
+    """Classification loader: (images [B, 1, 28, 28] in [0, 1], labels [B]).
+
+    The trainer uses the images only (rescaled to [-1, 1] to match G's Tanh).
+    """
     return get_dataloader(
         name=config.dataset,
         data_root=config.data_root,

@@ -1,4 +1,11 @@
-"""Audio classifier trainer."""
+"""Trainers + dataloaders for the four audio classifiers.
+
+Every trainer is a SupervisedTrainer (cross-entropy, accuracy, `model.pt`
+checkpoint, evaluate -> {"eval_loss", "accuracy"}); they differ only in the
+feature transform `_forward` applies to the raw waves on the fly:
+none (AudioCNN), STFT magnitude, mel spectrogram, or STFT frames as tokens.
+All four dataloaders yield the same batches: (waves [B, 1, sample_len], labels [B]).
+"""
 from __future__ import annotations
 
 from typing import Any
@@ -21,6 +28,8 @@ from mini_networks.core.data.audio import stft_mag, mel_spec, spec_frames
 
 
 class AudioClassifierTrainer(SupervisedTrainer):
+    """Raw-waveform AudioCNN: the waves go straight into the 1D convs."""
+
     def __init__(self):
         self.model: AudioCNN | None = None
 
@@ -33,6 +42,12 @@ class AudioClassifierTrainer(SupervisedTrainer):
         return model(waves), labels
 
     def infer(self, config: BaseConfig, inputs: Any) -> Any:
+        """Classify raw waveforms.
+
+        inputs: waves [B, 1, sample_len] (tensor or nested list), bare or as
+        {"waves": ...}; the same feature transform as training is applied.
+        Returns {"predictions": [B] ints, "logits": [B, n_classes]}.
+        """
         assert isinstance(config, AudioClassifierConfig)
         if self.model is None:
             raise RuntimeError("Model not loaded.")
@@ -47,6 +62,11 @@ class AudioClassifierTrainer(SupervisedTrainer):
 
 
 def make_audio_dataloader(config: AudioClassifierConfig, split: str = "train") -> DataLoader:
+    """FSDD spoken digits: (waves [B, 1, sample_len], labels [B] in 0..9).
+
+    Disjoint split by file index (every 5th file is test); features are
+    computed in the trainer, not here.
+    """
     return get_dataloader(
         name=config.dataset,
         data_root=config.data_root,
@@ -60,6 +80,8 @@ def make_audio_dataloader(config: AudioClassifierConfig, split: str = "train") -
 
 
 class AudioSpecClassifierTrainer(SupervisedTrainer):
+    """AudioSpecCNN on STFT magnitudes [B, 1, n_fft//2+1, frames], computed per batch."""
+
     def __init__(self):
         self.model: AudioSpecCNN | None = None
 
@@ -78,6 +100,12 @@ class AudioSpecClassifierTrainer(SupervisedTrainer):
         return model(spec), labels
 
     def infer(self, config: BaseConfig, inputs: Any) -> Any:
+        """Classify raw waveforms.
+
+        inputs: waves [B, 1, sample_len] (tensor or nested list), bare or as
+        {"waves": ...}; the same feature transform as training is applied.
+        Returns {"predictions": [B] ints, "logits": [B, n_classes]}.
+        """
         assert isinstance(config, AudioSpecClassifierConfig)
         if self.model is None:
             raise RuntimeError("Model not loaded.")
@@ -93,6 +121,11 @@ class AudioSpecClassifierTrainer(SupervisedTrainer):
 
 
 def make_audio_spec_dataloader(config: AudioSpecClassifierConfig, split: str = "train") -> DataLoader:
+    """FSDD spoken digits: (waves [B, 1, sample_len], labels [B] in 0..9).
+
+    Disjoint split by file index (every 5th file is test); features are
+    computed in the trainer, not here.
+    """
     return get_dataloader(
         name=config.dataset,
         data_root=config.data_root,
@@ -106,6 +139,8 @@ def make_audio_spec_dataloader(config: AudioSpecClassifierConfig, split: str = "
 
 
 class AudioTransformerTrainer(SupervisedTrainer):
+    """AudioTransformer on STFT frames [B, frames, n_fft//2+1] (each frame a token)."""
+
     def __init__(self):
         self.model: AudioTransformer | None = None
 
@@ -129,6 +164,12 @@ class AudioTransformerTrainer(SupervisedTrainer):
         return model(frames), labels
 
     def infer(self, config: BaseConfig, inputs: Any) -> Any:
+        """Classify raw waveforms.
+
+        inputs: waves [B, 1, sample_len] (tensor or nested list), bare or as
+        {"waves": ...}; the same feature transform as training is applied.
+        Returns {"predictions": [B] ints, "logits": [B, n_classes]}.
+        """
         assert isinstance(config, AudioTransformerConfig)
         if self.model is None:
             raise RuntimeError("Model not loaded.")
@@ -144,6 +185,11 @@ class AudioTransformerTrainer(SupervisedTrainer):
 
 
 def make_audio_transformer_dataloader(config: AudioTransformerConfig, split: str = "train") -> DataLoader:
+    """FSDD spoken digits: (waves [B, 1, sample_len], labels [B] in 0..9).
+
+    Disjoint split by file index (every 5th file is test); features are
+    computed in the trainer, not here.
+    """
     return get_dataloader(
         name=config.dataset,
         data_root=config.data_root,
@@ -157,6 +203,8 @@ def make_audio_transformer_dataloader(config: AudioTransformerConfig, split: str
 
 
 class AudioMelSpecClassifierTrainer(SupervisedTrainer):
+    """AudioMelSpecCNN on mel spectrograms [B, 1, n_mels, frames], computed per batch."""
+
     def __init__(self):
         self.model: AudioMelSpecCNN | None = None
 
@@ -178,6 +226,12 @@ class AudioMelSpecClassifierTrainer(SupervisedTrainer):
         return model(mel), labels
 
     def infer(self, config: BaseConfig, inputs: Any) -> Any:
+        """Classify raw waveforms.
+
+        inputs: waves [B, 1, sample_len] (tensor or nested list), bare or as
+        {"waves": ...}; the same feature transform as training is applied.
+        Returns {"predictions": [B] ints, "logits": [B, n_classes]}.
+        """
         assert isinstance(config, AudioMelSpecClassifierConfig)
         if self.model is None:
             raise RuntimeError("Model not loaded.")
@@ -193,6 +247,11 @@ class AudioMelSpecClassifierTrainer(SupervisedTrainer):
 
 
 def make_audio_melspec_dataloader(config: AudioMelSpecClassifierConfig, split: str = "train") -> DataLoader:
+    """FSDD spoken digits: (waves [B, 1, sample_len], labels [B] in 0..9).
+
+    Disjoint split by file index (every 5th file is test); features are
+    computed in the trainer, not here.
+    """
     return get_dataloader(
         name=config.dataset,
         data_root=config.data_root,

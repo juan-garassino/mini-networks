@@ -1,0 +1,887 @@
+{
+    "mechanisms": {
+        "convolution": {
+            "description": "weight-shared local filters + pooling",
+            "home": "src/mini_networks/models/classifier/model.py"
+        },
+        "mlp": {
+            "description": "fully-connected feature learning",
+            "home": "src/mini_networks/models/tabular/model.py"
+        },
+        "recurrence": {
+            "description": "sequential hidden-state carry (RNN/LSTM/GRU)",
+            "home": "src/mini_networks/models/rnn/model.py"
+        },
+        "self-attention": {
+            "description": "content-based token mixing with a causal mask",
+            "home": "src/mini_networks/models/transformer/model.py"
+        },
+        "selective-scan": {
+            "description": "gated exponential-decay state-space scan",
+            "home": "src/mini_networks/models/mamba/model.py"
+        },
+        "message-passing": {
+            "description": "neighborhood aggregation A_hat X W on a graph",
+            "home": "src/mini_networks/models/gnn/model.py"
+        },
+        "variational-latent": {
+            "description": "stochastic bottleneck trained on the ELBO",
+            "home": "src/mini_networks/models/vae/model.py"
+        },
+        "adversarial-game": {
+            "description": "generator vs discriminator minimax training",
+            "home": "src/mini_networks/models/gan/model.py"
+        },
+        "iterative-denoising": {
+            "description": "forward noising + learned reverse chain (DDPM)",
+            "home": "src/mini_networks/models/diffusion/model.py"
+        },
+        "autoregressive-factorization": {
+            "description": "pixel-by-pixel chain rule with masked convs",
+            "home": "src/mini_networks/models/pixelcnn/model.py"
+        },
+        "skip-encoder-decoder": {
+            "description": "U-shaped encoder-decoder with skip connections",
+            "home": "src/mini_networks/models/segmentation/unet.py"
+        },
+        "contrastive-infonce": {
+            "description": "pull augmented views together, push others apart",
+            "home": "src/mini_networks/models/simclr/model.py"
+        },
+        "policy-gradient": {
+            "description": "REINFORCE: reward-weighted log-prob ascent",
+            "home": "src/mini_networks/models/reinforce/trainer.py"
+        },
+        "value-based-rl": {
+            "description": "Q-learning / DQN with an environment loop",
+            "home": "src/mini_networks/models/rl_maze/agents.py"
+        },
+        "neural-field-rendering": {
+            "description": "coordinate MLP + differentiable volume rendering",
+            "home": "src/mini_networks/models/nerf/model.py"
+        },
+        "tree-search-self-play": {
+            "description": "PUCT MCTS distilled into a policy/value net",
+            "home": "src/mini_networks/models/alphazero/model.py"
+        },
+        "residual-connection": {
+            "description": "identity shortcut around a block",
+            "home": "src/mini_networks/models/resnet/model.py"
+        },
+        "patch-embedding": {
+            "description": "image as a sequence of patch tokens",
+            "home": "src/mini_networks/models/vit/model.py"
+        },
+        "depthwise-separable-conv": {
+            "description": "per-channel conv + 1x1 pointwise mix",
+            "home": "src/mini_networks/core/blocks/cnn.py"
+        },
+        "modern-conv-recipe": {
+            "description": "large-kernel depthwise + inverted bottleneck + LN",
+            "home": "src/mini_networks/models/convnext/model.py"
+        },
+        "soft-pathway-priors": {
+            "description": "constrained+free pathways with per-path L2 priors",
+            "home": "src/mini_networks/models/rpp_classifier/model.py"
+        },
+        "metric-embedding": {
+            "description": "L2-normalized embedding space for retrieval",
+            "home": "src/mini_networks/models/vision_embed/model.py"
+        },
+        "ema-self-distillation": {
+            "description": "EMA teacher + centering/sharpening (DINO)",
+            "home": "src/mini_networks/models/dino/model.py"
+        },
+        "cross-modal-contrastive": {
+            "description": "image and text encoders aligned by InfoNCE (CLIP)",
+            "home": "src/mini_networks/models/clip/model.py"
+        },
+        "low-rank-adaptation": {
+            "description": "frozen base + trainable A@B deltas (LoRA)",
+            "home": "src/mini_networks/models/lora/model.py"
+        },
+        "bbox-regression": {
+            "description": "classification + box-coordinate regression heads",
+            "home": "src/mini_networks/models/detection/model.py"
+        },
+        "reconstruction-objective": {
+            "description": "autoencoding: reproduce the input through a bottleneck",
+            "home": "src/mini_networks/models/unet_ae/model.py"
+        },
+        "waveform-conv": {
+            "description": "1D convolution directly on raw audio",
+            "home": "src/mini_networks/models/audio/model.py"
+        },
+        "spectrogram-frontend": {
+            "description": "STFT magnitude image as a 2D conv input",
+            "home": "src/mini_networks/models/audio/model.py"
+        },
+        "mel-frontend": {
+            "description": "perceptual mel-scaled spectrogram front-end",
+            "home": "src/mini_networks/models/audio/model.py"
+        },
+        "masked-text-denoising": {
+            "description": "mask-ratio diffusion + iterative unmasking (LLaDA)",
+            "home": "src/mini_networks/models/text_diffusion/model.py"
+        },
+        "encoder-decoder-cross-attention": {
+            "description": "decoder attends over a separately encoded source",
+            "home": "src/mini_networks/models/text_seq2seq/model.py"
+        },
+        "bidirectional-encoding": {
+            "description": "attention without a causal mask (BERT-style)",
+            "home": "src/mini_networks/models/text_token_classifier/model.py"
+        },
+        "expert-routing": {
+            "description": "top-k router dispatching tokens to expert FFNs",
+            "home": "src/mini_networks/models/transformer/model.py"
+        },
+        "delta-rule-attention": {
+            "description": "linear-time delta-rule recurrence with bounded decay (KDA)",
+            "home": "src/mini_networks/models/kimi/model.py"
+        },
+        "attention-residuals": {
+            "description": "attention over depth: layers read previous block outputs",
+            "home": "src/mini_networks/models/kimi/model.py"
+        },
+        "latent-moe": {
+            "description": "routed experts operating in a compressed latent space",
+            "home": "src/mini_networks/models/kimi/model.py"
+        },
+        "softcapped-glu": {
+            "description": "SiTU-GLU: both GLU factors tanh-softcapped",
+            "home": "src/mini_networks/models/kimi/model.py"
+        },
+        "kv-compression-attention": {
+            "description": "pool m tokens into one KV entry; sparse/dense hybrid (CSA/HCA)",
+            "home": "src/mini_networks/models/deepseek/model.py"
+        },
+        "hyper-connections": {
+            "description": "widened residual stream mixed by doubly-stochastic maps (mHC)",
+            "home": "src/mini_networks/models/deepseek/model.py"
+        },
+        "multi-token-prediction": {
+            "description": "auxiliary head predicting token t+2 (MTP)",
+            "home": "src/mini_networks/models/deepseek/model.py"
+        },
+        "delayed-generalization": {
+            "description": "grokking: val accuracy jumps long after memorization",
+            "home": "src/mini_networks/models/grokking/model.py"
+        },
+        "retrieval-augmentation": {
+            "description": "retriever prepends evidence to the generator's context",
+            "home": "src/mini_networks/models/rag/model.py"
+        },
+        "reward-model-ppo": {
+            "description": "learned reward + PPO fine-tuning of an LM",
+            "home": "src/mini_networks/models/rlhf/model.py"
+        },
+        "group-relative-advantage": {
+            "description": "GRPO: advantages normalized within a sample group",
+            "home": "src/mini_networks/models/grpo/trainer.py"
+        },
+        "direct-preference-loss": {
+            "description": "DPO: preference pairs without an explicit reward model",
+            "home": "src/mini_networks/models/dpo/trainer.py"
+        },
+        "promptable-decoding": {
+            "description": "clicks/boxes select WHICH mask to produce (SAM)",
+            "home": "src/mini_networks/models/sam/model.py"
+        },
+        "two-way-attention": {
+            "description": "prompt tokens and image tokens attend to each other",
+            "home": "src/mini_networks/models/sam/model.py"
+        }
+    },
+    "models": [
+        {
+            "name": "classifier",
+            "level": "elementary",
+            "introduces": [
+                "convolution"
+            ],
+            "builds_on": [],
+            "note": "",
+            "description": "Small CNN classifier baseline on MNIST/Fashion"
+        },
+        {
+            "name": "tabular_classifier",
+            "level": "elementary",
+            "introduces": [
+                "mlp"
+            ],
+            "builds_on": [],
+            "note": "",
+            "description": "MLP classifier on Iris (tabular)"
+        },
+        {
+            "name": "rnn",
+            "level": "elementary",
+            "introduces": [
+                "recurrence"
+            ],
+            "builds_on": [],
+            "note": "",
+            "description": "RNN / LSTM / GRU recurrent language model"
+        },
+        {
+            "name": "transformer",
+            "level": "elementary",
+            "introduces": [
+                "self-attention"
+            ],
+            "builds_on": [],
+            "note": "",
+            "description": "Character-level TransformerLM on Shakespeare"
+        },
+        {
+            "name": "mamba",
+            "level": "elementary",
+            "introduces": [
+                "selective-scan"
+            ],
+            "builds_on": [],
+            "note": "",
+            "description": "NanoMamba state-space sequence model"
+        },
+        {
+            "name": "gnn",
+            "level": "elementary",
+            "introduces": [
+                "message-passing"
+            ],
+            "builds_on": [],
+            "note": "",
+            "description": "Graph convolutional network: transductive node classification on an SBM"
+        },
+        {
+            "name": "vae",
+            "level": "elementary",
+            "introduces": [
+                "variational-latent"
+            ],
+            "builds_on": [],
+            "note": "",
+            "description": "Conv VAE reconstruction on MNIST/Fashion"
+        },
+        {
+            "name": "gan",
+            "level": "elementary",
+            "introduces": [
+                "adversarial-game"
+            ],
+            "builds_on": [],
+            "note": "",
+            "description": "Generator + Discriminator trained on MNIST"
+        },
+        {
+            "name": "diffusion",
+            "level": "elementary",
+            "introduces": [
+                "iterative-denoising"
+            ],
+            "builds_on": [],
+            "note": "",
+            "description": "DDPM denoising with EMA + curriculum learning"
+        },
+        {
+            "name": "pixelcnn",
+            "level": "elementary",
+            "introduces": [
+                "autoregressive-factorization"
+            ],
+            "builds_on": [],
+            "note": "",
+            "description": "PixelCNN-lite autoregressive model"
+        },
+        {
+            "name": "segmentation",
+            "level": "elementary",
+            "introduces": [
+                "skip-encoder-decoder"
+            ],
+            "builds_on": [],
+            "note": "",
+            "description": "UNet binary / multiclass segmentation on MNIST"
+        },
+        {
+            "name": "simclr",
+            "level": "elementary",
+            "introduces": [
+                "contrastive-infonce"
+            ],
+            "builds_on": [],
+            "note": "",
+            "description": "SimCLR-lite contrastive vision pretraining"
+        },
+        {
+            "name": "reinforce",
+            "level": "elementary",
+            "introduces": [
+                "policy-gradient"
+            ],
+            "builds_on": [],
+            "note": "",
+            "description": "REINFORCE policy gradient on a procedural maze"
+        },
+        {
+            "name": "rl_maze",
+            "level": "elementary",
+            "introduces": [
+                "value-based-rl"
+            ],
+            "builds_on": [],
+            "note": "",
+            "description": "Q / DQN / PPO agents on a procedural maze"
+        },
+        {
+            "name": "nerf",
+            "level": "elementary",
+            "introduces": [
+                "neural-field-rendering"
+            ],
+            "builds_on": [],
+            "note": "",
+            "description": "Mini NeRF: a voxel-digit scene as a continuous field, novel-view PSNR"
+        },
+        {
+            "name": "alphazero",
+            "level": "elementary",
+            "introduces": [
+                "tree-search-self-play"
+            ],
+            "builds_on": [],
+            "note": "",
+            "description": "Mini AlphaZero: MCTS self-play on tic-tac-toe distilled into a policy net"
+        },
+        {
+            "name": "resnet",
+            "level": "derived",
+            "introduces": [
+                "residual-connection"
+            ],
+            "builds_on": [
+                "classifier"
+            ],
+            "note": "deeper via identity shortcuts",
+            "description": "Mini ResNet baseline on MNIST/Fashion"
+        },
+        {
+            "name": "vit",
+            "level": "derived",
+            "introduces": [
+                "patch-embedding"
+            ],
+            "builds_on": [
+                "transformer",
+                "classifier"
+            ],
+            "note": "attention applied to image patches",
+            "description": "Mini ViT baseline on MNIST/Fashion"
+        },
+        {
+            "name": "mobilenet",
+            "level": "derived",
+            "introduces": [
+                "depthwise-separable-conv"
+            ],
+            "builds_on": [
+                "classifier"
+            ],
+            "note": "conv factorized for efficiency",
+            "description": "Tiny MobileNet-like CNN baseline"
+        },
+        {
+            "name": "convnext",
+            "level": "derived",
+            "introduces": [
+                "modern-conv-recipe"
+            ],
+            "builds_on": [
+                "classifier",
+                "resnet"
+            ],
+            "note": "convs modernized with transformer-era recipes",
+            "description": "Tiny ConvNeXt-like CNN baseline"
+        },
+        {
+            "name": "rpp_classifier",
+            "level": "derived",
+            "introduces": [
+                "soft-pathway-priors"
+            ],
+            "builds_on": [
+                "classifier",
+                "tabular_classifier"
+            ],
+            "note": "equivariance as a prior, not a constraint",
+            "description": "Residual Pathway Priors: conv + free pathways, equivariance as a soft prior"
+        },
+        {
+            "name": "vision_embed",
+            "level": "derived",
+            "introduces": [
+                "metric-embedding"
+            ],
+            "builds_on": [
+                "simclr"
+            ],
+            "note": "contrastive encoder as a retrieval embedding",
+            "description": "Vision embedding encoder (contrastive)"
+        },
+        {
+            "name": "dino",
+            "level": "derived",
+            "introduces": [
+                "ema-self-distillation"
+            ],
+            "builds_on": [
+                "vit",
+                "simclr"
+            ],
+            "note": "labels replaced by an EMA teacher",
+            "description": "DINO self-distillation ViT (EMA teacher, no labels)"
+        },
+        {
+            "name": "clip",
+            "level": "derived",
+            "introduces": [
+                "cross-modal-contrastive"
+            ],
+            "builds_on": [
+                "simclr",
+                "transformer"
+            ],
+            "note": "two modalities, one embedding space",
+            "description": "Contrastive image\u2013text matching on MNIST"
+        },
+        {
+            "name": "lora",
+            "level": "derived",
+            "introduces": [
+                "low-rank-adaptation"
+            ],
+            "builds_on": [
+                "classifier"
+            ],
+            "note": "adapt a frozen base with tiny deltas",
+            "description": "Low-rank fine-tuning: MNIST \u2192 FashionMNIST"
+        },
+        {
+            "name": "detection",
+            "level": "derived",
+            "introduces": [
+                "bbox-regression"
+            ],
+            "builds_on": [
+                "classifier"
+            ],
+            "note": "conv features + localization heads",
+            "description": "YOLO-style digit localisation on 56\u00d756 canvas"
+        },
+        {
+            "name": "unet_ae",
+            "level": "derived",
+            "introduces": [
+                "reconstruction-objective"
+            ],
+            "builds_on": [
+                "segmentation"
+            ],
+            "note": "SegUNet reused as an autoencoder",
+            "description": "UNet autoencoder reconstruction"
+        },
+        {
+            "name": "audio_classifier",
+            "level": "derived",
+            "introduces": [
+                "waveform-conv"
+            ],
+            "builds_on": [
+                "classifier"
+            ],
+            "note": "convolution moved to 1D waveforms",
+            "description": "1D CNN classifier on speech digits"
+        },
+        {
+            "name": "audio_spectrogram",
+            "level": "derived",
+            "introduces": [
+                "spectrogram-frontend"
+            ],
+            "builds_on": [
+                "audio_classifier"
+            ],
+            "note": "sound as an image",
+            "description": "2D CNN on audio spectrograms"
+        },
+        {
+            "name": "audio_melspectrogram",
+            "level": "derived",
+            "introduces": [
+                "mel-frontend"
+            ],
+            "builds_on": [
+                "audio_spectrogram"
+            ],
+            "note": "perceptual frequency scaling",
+            "description": "2D CNN on mel-spectrograms"
+        },
+        {
+            "name": "audio_transformer",
+            "level": "derived",
+            "introduces": [],
+            "builds_on": [
+                "transformer",
+                "audio_spectrogram"
+            ],
+            "note": "attention over spectrogram frames",
+            "description": "Transformer over spectrogram frames"
+        },
+        {
+            "name": "tabular_diffusion",
+            "level": "derived",
+            "introduces": [],
+            "builds_on": [
+                "diffusion",
+                "tabular_classifier"
+            ],
+            "note": "denoising chain on feature rows",
+            "description": "Diffusion for tabular data synthesis"
+        },
+        {
+            "name": "text_diffusion",
+            "level": "derived",
+            "introduces": [
+                "masked-text-denoising"
+            ],
+            "builds_on": [
+                "transformer",
+                "diffusion"
+            ],
+            "note": "same transformer, two generation orders",
+            "description": "LLaDA-mini: masked-diffusion char-LM, generation by iterative unmasking"
+        },
+        {
+            "name": "text_seq2seq",
+            "level": "derived",
+            "introduces": [
+                "encoder-decoder-cross-attention"
+            ],
+            "builds_on": [
+                "transformer"
+            ],
+            "note": "translate, don't just continue",
+            "description": "Transformer encoder-decoder (seq2seq)"
+        },
+        {
+            "name": "text_token_classifier",
+            "level": "derived",
+            "introduces": [
+                "bidirectional-encoding"
+            ],
+            "builds_on": [
+                "transformer"
+            ],
+            "note": "per-token labels, no causal mask",
+            "description": "Token classifier (vowel vs other)"
+        },
+        {
+            "name": "moe",
+            "level": "derived",
+            "introduces": [
+                "expert-routing"
+            ],
+            "builds_on": [
+                "transformer"
+            ],
+            "note": "sparse capacity via a router",
+            "description": "Mixture-of-Experts LM: router + top-1 experts + balance loss"
+        },
+        {
+            "name": "kimi",
+            "level": "derived",
+            "introduces": [
+                "delta-rule-attention",
+                "attention-residuals",
+                "latent-moe",
+                "softcapped-glu"
+            ],
+            "builds_on": [
+                "transformer",
+                "moe",
+                "mamba"
+            ],
+            "note": "mini Kimi K3: hybrid linear/global attention frontier LM",
+            "description": "Mini Kimi K3: KDA linear-attention hybrid + AttnRes + LatentMoE (SiTU-GLU)"
+        },
+        {
+            "name": "deepseek",
+            "level": "derived",
+            "introduces": [
+                "kv-compression-attention",
+                "hyper-connections",
+                "multi-token-prediction"
+            ],
+            "builds_on": [
+                "transformer",
+                "moe"
+            ],
+            "note": "mini DeepSeek V4: compressed-KV frontier LM",
+            "description": "Mini DeepSeek V4: CSA/HCA compressed attention + mHC + DeepSeekMoE + MTP"
+        },
+        {
+            "name": "grokking",
+            "level": "derived",
+            "introduces": [
+                "delayed-generalization"
+            ],
+            "builds_on": [
+                "transformer"
+            ],
+            "note": "the phenomenon, not a new architecture",
+            "description": "Grokking study: delayed generalization on modular division (a/b mod 97)"
+        },
+        {
+            "name": "rag",
+            "level": "derived",
+            "introduces": [
+                "retrieval-augmentation"
+            ],
+            "builds_on": [
+                "transformer"
+            ],
+            "note": "retrieve, then generate",
+            "description": "TF-IDF retrieval + TransformerLM generation"
+        },
+        {
+            "name": "rlhf",
+            "level": "derived",
+            "introduces": [
+                "reward-model-ppo"
+            ],
+            "builds_on": [
+                "transformer",
+                "reinforce"
+            ],
+            "note": "align an LM with learned reward",
+            "description": "PPO fine-tuning with Shakespearean reward"
+        },
+        {
+            "name": "grpo",
+            "level": "derived",
+            "introduces": [
+                "group-relative-advantage"
+            ],
+            "builds_on": [
+                "rlhf"
+            ],
+            "note": "critic-free group advantages",
+            "description": "GRPO: group-relative advantages, no value net (DeepSeek)"
+        },
+        {
+            "name": "dpo",
+            "level": "derived",
+            "introduces": [
+                "direct-preference-loss"
+            ],
+            "builds_on": [
+                "rlhf"
+            ],
+            "note": "preferences without a reward model",
+            "description": "DPO: preference pairs, no RL \u2014 implicit KL via reference"
+        },
+        {
+            "name": "sam",
+            "level": "derived",
+            "introduces": [
+                "promptable-decoding",
+                "two-way-attention"
+            ],
+            "builds_on": [
+                "segmentation",
+                "transformer"
+            ],
+            "note": "the prompt chooses what to segment",
+            "description": "Mini SAM: promptable segmentation \u2014 clicks choose which digit to mask"
+        }
+    ],
+    "compositions": [
+        {
+            "name": "clip_guided_diffusion",
+            "composes": [
+                "clip",
+                "diffusion",
+                "vae"
+            ],
+            "description": "CLIP + Diffusion \u2014 text-guided image generation"
+        },
+        {
+            "name": "transformer_clip_diffusion",
+            "composes": [
+                "transformer",
+                "clip",
+                "diffusion"
+            ],
+            "description": "Transformer + CLIP + Diffusion \u2014 LM steers generation"
+        },
+        {
+            "name": "gan_diffusion_comparison",
+            "composes": [
+                "gan",
+                "diffusion"
+            ],
+            "description": "GAN vs Diffusion \u2014 side-by-side educational comparison"
+        },
+        {
+            "name": "clip_guided_gan",
+            "composes": [
+                "clip",
+                "gan"
+            ],
+            "description": "GAN guided by CLIP similarity"
+        },
+        {
+            "name": "classifier_guided_diffusion",
+            "composes": [
+                "classifier",
+                "diffusion"
+            ],
+            "description": "Classifier-guided diffusion sampling"
+        },
+        {
+            "name": "rag_guided_generation",
+            "composes": [
+                "rag",
+                "transformer"
+            ],
+            "description": "Retrieve context then generate (RAG-guided)"
+        },
+        {
+            "name": "lora_lm",
+            "composes": [
+                "transformer",
+                "lora"
+            ],
+            "description": "LoRA adapter fine-tuning for TransformerLM"
+        },
+        {
+            "name": "segment_then_detect",
+            "composes": [
+                "segmentation",
+                "detection"
+            ],
+            "description": "Segmentation then bbox detection"
+        },
+        {
+            "name": "multitask_vision",
+            "composes": [
+                "classifier",
+                "segmentation",
+                "detection"
+            ],
+            "description": "Shared encoder with cls + seg + det heads"
+        },
+        {
+            "name": "diffusion_distillation",
+            "composes": [
+                "diffusion"
+            ],
+            "description": "Distill diffusion teacher into small denoiser"
+        },
+        {
+            "name": "audio_text_contrastive",
+            "composes": [
+                "audio_classifier",
+                "transformer"
+            ],
+            "description": "Audio-text contrastive alignment (speech digits)"
+        },
+        {
+            "name": "tabular_text_cross_attention",
+            "composes": [
+                "tabular_classifier",
+                "transformer"
+            ],
+            "description": "Tabular-text cross-attention alignment (Iris)"
+        },
+        {
+            "name": "audio_text_dual_encoder",
+            "composes": [
+                "audio_classifier",
+                "transformer"
+            ],
+            "description": "Audio-text dual-encoder contrastive"
+        },
+        {
+            "name": "tabular_text_dual_encoder",
+            "composes": [
+                "tabular_classifier",
+                "transformer"
+            ],
+            "description": "Tabular-text dual-encoder contrastive"
+        },
+        {
+            "name": "classifier_guided_gan",
+            "composes": [
+                "classifier",
+                "gan"
+            ],
+            "description": "Classifier-guided GAN"
+        },
+        {
+            "name": "rag_conditioned_diffusion",
+            "composes": [
+                "rag",
+                "diffusion"
+            ],
+            "description": "RAG-conditioned diffusion"
+        },
+        {
+            "name": "image_captioning",
+            "composes": [
+                "clip",
+                "transformer"
+            ],
+            "description": "Image captioning (MNIST)"
+        },
+        {
+            "name": "multimodal_fusion_baseline",
+            "composes": [
+                "clip",
+                "classifier"
+            ],
+            "description": "Image+text fusion classifier"
+        },
+        {
+            "name": "latent_diffusion",
+            "composes": [
+                "vae",
+                "diffusion"
+            ],
+            "description": "Latent diffusion (VAE + UNet)"
+        },
+        {
+            "name": "mode_connect",
+            "composes": [
+                "classifier"
+            ],
+            "description": "Loss-surface simplex between two classifiers + cheap simplex ensemble"
+        },
+        {
+            "name": "double_descent",
+            "composes": [
+                "classifier"
+            ],
+            "description": "Width sweep on label-noised MNIST: test error falls, rises, falls again"
+        },
+        {
+            "name": "vlm",
+            "composes": [
+                "vit",
+                "transformer"
+            ],
+            "description": "Mini VLM: vision patch prefix + causal LM \u2014 templated MNIST QA in words"
+        }
+    ]
+}

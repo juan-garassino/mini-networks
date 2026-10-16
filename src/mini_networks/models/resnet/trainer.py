@@ -1,4 +1,4 @@
-"""Resnet trainer."""
+"""ResNet trainer: MiniResNet on the shared image-classification loader."""
 from __future__ import annotations
 
 from mini_networks.core.data.registry import make_classification_dataloader
@@ -8,6 +8,12 @@ from mini_networks.models.resnet.model import MiniResNet
 
 
 class ResNetTrainer(SupervisedTrainer):
+    """Cross-entropy classifier training for :class:`MiniResNet`.
+
+    Only ``_build`` lives here; the loops come from ``SupervisedTrainer``
+    (evaluate returns ``eval_loss`` + ``accuracy``; infer returns
+    ``predictions`` + ``logits``). Checkpoint: ``model.pt``.
+    """
     def __init__(self):
         self.model: MiniResNet | None = None
 

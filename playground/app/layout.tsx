@@ -1,8 +1,10 @@
 import type { Metadata } from "next";
 import {
-  Big_Shoulders, Cormorant_Garamond, Instrument_Serif, Jost, Martian_Mono, VT323,
+  Big_Shoulders, Cormorant_Garamond, Instrument_Serif, Jost,
+  Martian_Mono, Patrick_Hand, VT323,
 } from "next/font/google";
 import "./globals.css";
+import { SITE } from "@/lib/copy";
 
 const display = Big_Shoulders({
   variable: "--font-display",
@@ -18,22 +20,22 @@ const instrument = Instrument_Serif({ variable: "--font-instrument", subsets: ["
 const vt = VT323({ variable: "--font-vt", subsets: ["latin"], weight: "400" });
 const jost = Jost({ variable: "--font-jost", subsets: ["latin"], weight: ["400", "600", "700"] });
 const cormorant = Cormorant_Garamond({ variable: "--font-cormorant", subsets: ["latin"], weight: ["400", "600", "700"] });
+const patrick = Patrick_Hand({ variable: "--font-patrick", subsets: ["latin"], weight: "400" });
 
+// Every route names itself: "<design> | mini_networks" (lib/copy.ts pageTitle
+// is the same rule for titles set on the client). A route without a title is
+// just the site name.
 export const metadata: Metadata = {
-  title: "mini_networks · the periodic table of neural networks",
-  description: "Atoms, molecules and reactions of the 44-model zoo — drafted as a blueprint.",
+  title: { template: `%s | ${SITE}`, default: SITE },
+  description: "The mini_networks zoo: small neural networks, their families and lineage, drawn many ways.",
 };
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   return (
-    <html lang="en" className={`${display.variable} ${draft.variable} ${instrument.variable} ${vt.variable} ${jost.variable} ${cormorant.variable} h-full antialiased`}>
-      <body className="h-full overflow-hidden">
-        <div className="relative z-10 h-full p-3 sm:p-5">
-          <div className="bp-frame relative grid h-full grid-rows-[1fr_auto] overflow-hidden">
-            {children}
-          </div>
-        </div>
-      </body>
+    // suppressHydrationWarning: the classic editions' boot script paints the chosen
+    // edition's tokens (style, data-*) on <html> before React hydrates (lib/editions.ts)
+    <html lang="en" suppressHydrationWarning className={`${display.variable} ${draft.variable} ${instrument.variable} ${vt.variable} ${jost.variable} ${cormorant.variable} ${patrick.variable} h-full antialiased`}>
+      <body className="h-full overflow-hidden">{children}</body>
     </html>
   );
 }

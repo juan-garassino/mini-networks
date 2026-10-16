@@ -76,6 +76,11 @@ class TwoWayBlock(nn.Module):
         )
 
     def forward(self, tokens: torch.Tensor, image: torch.Tensor):
+        """One decoder round: tokens attend to the image, then the image attends back.
+
+        tokens [B,N,C], image tokens [B,HW,C].
+        Returns the updated (tokens, image) pair with unchanged shapes.
+        """
         a, _ = self.t2i(tokens, image, image)
         tokens = self.norm_t1(tokens + a)
         tokens = self.norm_t2(tokens + self.mlp(tokens))
@@ -85,6 +90,12 @@ class TwoWayBlock(nn.Module):
 
 
 class MiniSAM(nn.Module):
+    """Conv image encoder + Fourier prompt encoder + two-way-attention mask decoder.
+
+    Learned output tokens (``n_masks`` mask tokens + 1 IoU token) are
+    prepended to the prompt tokens; each mask token becomes a 16-d vector
+    dotted with the upsampled image features to give one 56x56 logit map.
+    """
     def __init__(
         self,
         embed_dim: int = 64,

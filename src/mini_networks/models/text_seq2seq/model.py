@@ -28,6 +28,9 @@ import torch.nn as nn
 
 
 class Seq2SeqTransformer(nn.Module):
+    """Source/target embeddings + shared learned positions around ``nn.Transformer`` + a
+    vocab head.
+    """
     def __init__(self, vocab_size: int, d_model: int, n_heads: int, n_layers: int, d_ff: int, seq_len: int):
         super().__init__()
         self.src_embed = nn.Embedding(vocab_size, d_model)
@@ -45,6 +48,11 @@ class Seq2SeqTransformer(nn.Module):
         self.seq_len = seq_len
 
     def forward(self, src: torch.Tensor, tgt: torch.Tensor) -> torch.Tensor:
+        """Map source ids [B,S] and decoder input ids [B,T] to next-token logits [B,T,vocab].
+
+        The decoder input is causally masked; the source is attended
+        bidirectionally (no padding masks).
+        """
         B, S = src.shape
         _, T = tgt.shape
         src_pos = torch.arange(S, device=src.device).unsqueeze(0)

@@ -21,11 +21,17 @@ Pipeline
 --------
   1. `train_gan(config, logger)`  — trains Generator + Discriminator
   2. `train_diffusion(config, logger)` — trains DDPM UNet
-  3. `compare(config, n_samples)` — generates from both, returns side-by-side dict
-  4. `sample_diversity(images)` — pixel-variance diversity metric
+  3. `compare(config, n_samples)` — generates from both (same seed), returns
+     the samples plus a pixel-variance "diversity" proxy and mean brightness
 
 Both models use the same `config.data_root`, `config.fast_demo`, and
-`config.effective_batch_size` so comparisons are fair.
+`config.effective_batch_size` so comparisons are fair. Each model keeps its
+customary optimiser settings (GAN: Adam lr 2e-4, betas (0.5, 0.999); DDPM:
+Adam lr 1e-3), so "identical conditions" means same data and budget, not
+same hyper-parameters.
+
+Deliberately simplified: no FID/IS — the comparison is visual plus two
+cheap scalar proxies; and both models are unconditional.
 """
 from __future__ import annotations
 
@@ -54,6 +60,13 @@ log = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 
 class GANDiffusionConfig(BaseConfig):
+    """Knobs per family. GAN: ``latent_dim``, ``disc_dropout``, ``gan_lr``,
+    ``gan_epochs``. DDPM: ``timesteps`` (tier-capped via
+    ``effective_timesteps``), ``schedule`` (``"linear"`` or ``"cosine"`` beta
+    schedule), ``base_channels``, ``diff_lr``,
+    ``diff_epochs``. At tier S (``fast_demo`` or ``training_tier="S"``) both
+    train for exactly one epoch."""
+
     model_name: str = "gan_diffusion_comparison"
 
     # Shared
@@ -82,7 +95,12 @@ class GANDiffusionConfig(BaseConfig):
 # ---------------------------------------------------------------------------
 
 def _pixel_variance(images: torch.Tensor) -> float:
-    """Mean per-image pixel variance — proxy for sample diversity."""
+    """Mean per-image pixel variance — a crude proxy for sample diversity.
+
+    Note it measures contrast WITHIN each image (ink vs background), not how
+    different the samples are from each other; a mode-collapsed GAN emitting
+    one crisp digit would still score high.
+    """
     return images.view(images.shape[0], -1).var(dim=1).mean().item()
 
 
@@ -94,6 +112,7 @@ class GANDiffusionComparison:
     """Trains GAN and DDPM on the same dataset and exposes comparison utilities."""
 
     def __init__(self):
+        """Start untrained; ``train_gan`` / ``train_diffusion`` fill the parts."""
         self.generator: Generator | None = None
         self.discriminator: Discriminator | None = None
         self.unet: UNet | None = None
@@ -104,7 +123,11 @@ class GANDiffusionComparison:
     # ------------------------------------------------------------------
 
     def train_gan(self, config: GANDiffusionConfig, logger: Logger) -> None:
-        """Alternating D/G update loop — logs d_loss and g_loss per epoch."""
+        """Train the mini-DCGAN: one D step then one G step per batch.
+
+        Logs ``gan_d_loss`` / ``gan_g_loss`` per epoch; saves
+        ``gan_generator.pt`` and ``gan_discriminator.pt``.
+        """
         G = Generator(
             latent_dim=config.latent_dim,
             image_size=config.image_size,
@@ -127,12 +150,15 @@ class GANDiffusionComparison:
             fast_demo=config.effective_fast_demo,
             sample_limit=config.dataset_sample_limit,
         )
-        epochs = 1 if config.effective_fast_demo else config.gan_epochs
+        epochs = 1 if config.effective_fast_demo else config.gan_epochs  # tier S = 1 epoch
         for epoch in range(epochs):
             G.train(); D.train()
             total_d = 0.0; total_g = 0.0
             for real_images, _ in dl:
-                real_images = real_images.to(config.device)
+                # Loader gives [0,1]; G's Tanh emits [-1,1]. Put reals on G's
+                # scale (as models/gan does) so D can't win on range alone.
+                # sample_gan maps G's output back to [0,1].
+                real_images = real_images.to(config.device) * 2.0 - 1.0
                 B = real_images.shape[0]
 
                 # — Discriminator step —
@@ -165,7 +191,10 @@ class GANDiffusionComparison:
     # ------------------------------------------------------------------
 
     def train_diffusion(self, config: GANDiffusionConfig, logger: Logger) -> None:
-        """Standard DDPM training — logs mse loss per epoch."""
+        """Standard DDPM training: MSE(eps_theta(x_t, t), eps), images in [-1,1].
+
+        Logs ``diff_loss`` per epoch; saves ``diffusion.pt``.
+        """
         from mini_networks.models.diffusion.scheduler import NoiseScheduler as NS
 
         unet = UNet(
@@ -189,7 +218,7 @@ class GANDiffusionComparison:
             fast_demo=config.effective_fast_demo,
             sample_limit=config.dataset_sample_limit,
         )
-        epochs = 1 if config.effective_fast_demo else config.diff_epochs
+        epochs = 1 if config.effective_fast_demo else config.diff_epochs  # tier S = 1 epoch
         for epoch in range(epochs):
             unet.train()
             total = 0.0
@@ -214,6 +243,7 @@ class GANDiffusionComparison:
     # ------------------------------------------------------------------
 
     def train_all(self, config: GANDiffusionConfig, logger: Logger) -> None:
+        """Log the config, then train the GAN and the DDPM (artifacts as above)."""
         logger.log_config(config.model_dump())
         self.train_gan(config, logger)
         self.train_diffusion(config, logger)

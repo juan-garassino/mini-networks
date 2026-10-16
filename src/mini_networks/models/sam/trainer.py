@@ -47,6 +47,13 @@ def _bbox_corners(mask: torch.Tensor) -> torch.Tensor:
 
 
 class SAMTrainer(BaseTrainer):
+    """Train :class:`MiniSAM` with prompts sampled on the fly for a randomly chosen digit.
+
+    Loss: per-sample minimum over the mask heads of BCE + Dice, plus MSE
+    between the winning head's IoU prediction and its actual IoU. Logs
+    ``loss`` and ``head{h}_wins`` (how often each head was best).
+    Checkpoint: ``model.pt``.
+    """
     def __init__(self):
         self.model: MiniSAM | None = None
 
@@ -72,6 +79,13 @@ class SAMTrainer(BaseTrainer):
         return torch.stack(coords), torch.tensor(types)
 
     def train(self, config: BaseConfig, dataloader: DataLoader, logger: Logger) -> None:
+        """Fit a fresh MiniSAM on (image, mask_a, mask_b) batches and save ``model.pt``.
+
+        Per sample: pick digit a or b as the target, then prompt it with a
+        box (``box_prompt_prob``) or a positive click, optionally plus a
+        negative click on the other digit (``neg_prompt_prob``). Prompt
+        sampling uses a generator seeded from ``config.seed``.
+        """
         assert isinstance(config, SAMConfig)
         model = self._build(config)
         self.model = model
@@ -94,6 +108,8 @@ class SAMTrainer(BaseTrainer):
                     coords_list.append(c)
                     types_list.append(ty)
                     targets.append(t)
+                # Pad prompt lists to a common length P. There is no prompt mask:
+                # padded slots are type-0 (positive) points at (0, 0).
                 P = max(c.shape[0] for c in coords_list)
                 coords = torch.zeros(B, P, 2)
                 types = torch.zeros(B, P, dtype=torch.long)
@@ -172,6 +188,14 @@ class SAMTrainer(BaseTrainer):
         }
 
     def infer(self, config: BaseConfig, inputs: Any) -> Any:
+        """Segment from point prompts.
+
+        ``inputs``: ``{"images": [B,1,56,56], "points": [[y, x], ...] in
+        pixels (default [[28, 28]]), "labels": [1 positive / 0 negative per
+        point] (default [1])}``; the same points apply to every image.
+        Returns ``{"masks": [B,n_masks,56,56] probabilities, "iou_pred":
+        [B][n_masks]}``.
+        """
         assert isinstance(config, SAMConfig)
         if self.model is None:
             raise RuntimeError("Model not loaded.")
@@ -192,6 +216,9 @@ class SAMTrainer(BaseTrainer):
         }
 
     def load_checkpoint(self, config: BaseConfig, artifacts_dir) -> None:
+        """Build a fresh MiniSAM from the config and load ``model.pt`` (incl. the frozen
+        Fourier frequencies buffer).
+        """
         assert isinstance(config, SAMConfig)
         state = torch.load(
             Path(artifacts_dir) / "model.pt", map_location=config.device, weights_only=True
@@ -202,6 +229,13 @@ class SAMTrainer(BaseTrainer):
 
 
 def make_sam_dataloader(config: SAMConfig, split: str = "train") -> DataLoader:
+    """Two-digit loader (``sam_two_digit``) for promptable segmentation.
+
+    Batches are (image [B,1,56,56], mask_a [B,56,56], mask_b [B,56,56]).
+
+    Digit placement is seeded per index from ``config.seed``, so items are
+    deterministic.
+    """
     return get_dataloader(
         name=config.dataset,
         data_root=config.data_root,

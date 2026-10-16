@@ -1,1 +1,3 @@
-"""Vision embedding model package."""
+"""Vision embedding package: VisionEmbedCNN (unit-norm image embeddings) and its
+contrastive trainer.
+"""

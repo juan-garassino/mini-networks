@@ -3,6 +3,10 @@ normalized to the same schemas, plus a Composite that unions the in-memory job
 store (for freshly-dispatched cloud jobs) with the persistent source.
 
 Selected by env: ``MN_RUN_SOURCE`` = ``local`` (default) | ``mlflow``.
+``LocalRunsSource`` reads ``$MINI_NETWORKS_RUNS`` (default ``runs``) laid out by
+the Logger as ``<model>/<ts>/{metrics.jsonl,config.yaml,artifacts/}`` (plus an
+optional ``summary.json``);
+``MLflowSource`` reads ``$MN_MLFLOW_TRACKING_URI`` / ``$MN_MLFLOW_EXPERIMENT``.
 All MLflow imports are lazy so the base package imports without it.
 """
 from __future__ import annotations
@@ -38,22 +42,28 @@ class RunSource:
     """Interface implemented by every source. Methods raise RunNotFound on miss."""
 
     def list_runs(self) -> list[RunSummary]:  # pragma: no cover - interface
+        """Every run this source can see, as normalized RunSummary rows."""
         raise NotImplementedError
 
     def get_metrics(self, run_id: str, since: int | None = None) -> MetricsResponse:  # pragma: no cover
+        """Per-key metric series for a run; ``since`` keeps only steps > since."""
         raise NotImplementedError
 
     def get_config(self, run_id: str) -> ConfigResponse:  # pragma: no cover
+        """The run's training config as a flat-ish dict."""
         raise NotImplementedError
 
     def get_summary(self, run_id: str) -> SummaryResponse:  # pragma: no cover
+        """The run's end-of-run summary (status and any extra fields the source has)."""
         raise NotImplementedError
 
     def open_artifact(self, run_id: str, name: str) -> tuple[Path, str]:  # pragma: no cover
+        """A local filesystem path to artifact ``name`` plus its guessed media type."""
         raise NotImplementedError
 
 
 def _series_response(run_id: str, rows: list[dict], since: int | None) -> MetricsResponse:
+    """Pivot LONG metric rows into a MetricsResponse; ``latest_step`` = max last step over all series."""
     pivoted = pivot_long_to_series(rows, since)
     series = [MetricSeries(key=k, points=pts) for k, pts in pivoted]
     last = max((pts[-1][0] for _, pts in pivoted if pts), default=None)
@@ -64,14 +74,22 @@ def _series_response(run_id: str, rows: list[dict], since: int | None) -> Metric
 # Local runs/ directory
 # --------------------------------------------------------------------------- #
 def _looks_like_run(d: Path) -> bool:
+    """A directory holding at least one of ``_RUN_MARKERS`` (metrics/config/summary/training state)."""
     return d.is_dir() and any((d / m).exists() for m in _RUN_MARKERS)
 
 
 class LocalRunsSource(RunSource):
+    """Runs on disk under ``runs_base``, else ``$MINI_NETWORKS_RUNS``, else ``./runs``.
+
+    Run ids are paths relative to that base, normally ``<model>/<timestamp>``
+    (one more level when a run was nested under a second timestamp dir).
+    """
+
     def __init__(self, runs_base: str | None = None):
         self.base = Path(runs_base or os.environ.get("MINI_NETWORKS_RUNS", "runs"))
 
     def _iter_run_dirs(self):
+        """Yield run directories two levels deep (``<model>/<ts>``), or three when nested."""
         if not self.base.exists():
             return
         for model_dir in sorted(self.base.iterdir()):
@@ -88,6 +106,7 @@ class LocalRunsSource(RunSource):
                             yield child
 
     def _resolve(self, run_id: str) -> Path:
+        """``base / run_id`` when it looks like a run, else RunNotFound."""
         d = self.base / run_id
         if _looks_like_run(d):
             return d
@@ -100,6 +119,9 @@ class LocalRunsSource(RunSource):
     _LIVE_WINDOW_S = 120
 
     def _status(self, d: Path) -> str:
+        """``done``/``failed`` from summary.json; else ``running`` if metrics.jsonl
+        changed within ``_LIVE_WINDOW_S`` seconds, ``done`` if older, ``unknown``
+        when neither file exists."""
         summary_path = d / "summary.json"
         if summary_path.exists():
             try:
@@ -118,6 +140,9 @@ class LocalRunsSource(RunSource):
         return "unknown"
 
     def _summary_for(self, d: Path) -> RunSummary:
+        """Build a RunSummary from the run dir: model = first id segment, created_at =
+        dir mtime (UTC), last step/metrics from the tail of metrics.jsonl, artifact
+        names from ``artifacts/``."""
         rid = str(d.relative_to(self.base))
         rows = read_jsonl(d / "metrics.jsonl")
         last_step, last_metrics = tail_latest(rows)
@@ -137,20 +162,24 @@ class LocalRunsSource(RunSource):
         )
 
     def list_runs(self) -> list[RunSummary]:
+        """Every run directory under the base, sorted by model then timestamp."""
         return [self._summary_for(d) for d in self._iter_run_dirs()]
 
     def get_metrics(self, run_id: str, since: int | None = None) -> MetricsResponse:
         d = self._resolve(run_id)
+        # Reads <run>/metrics.jsonl; a missing file yields empty series.
         return _series_response(run_id, read_jsonl(d / "metrics.jsonl"), since)
 
     def get_config(self, run_id: str) -> ConfigResponse:
         d = self._resolve(run_id)
+        # <run>/config.yaml as written by Logger; {} when absent or empty.
         cfg_path = d / "config.yaml"
         config = yaml.safe_load(cfg_path.read_text()) if cfg_path.exists() else {}
         return ConfigResponse(run_id=run_id, config=config or {})
 
     def get_summary(self, run_id: str) -> SummaryResponse:
         d = self._resolve(run_id)
+        # <run>/summary.json; {} when the trainer never wrote one.
         import json
 
         s_path = d / "summary.json"
@@ -159,6 +188,8 @@ class LocalRunsSource(RunSource):
 
     def open_artifact(self, run_id: str, name: str) -> tuple[Path, str]:
         d = self._resolve(run_id)
+        # Resolve and require the result to stay inside <run>/artifacts/, so a
+        # name like "../config.yaml" cannot escape the artifacts folder.
         path = (d / "artifacts" / name).resolve()
         artifacts_root = (d / "artifacts").resolve()
         if artifacts_root not in path.parents or not path.exists():
@@ -168,7 +199,8 @@ class LocalRunsSource(RunSource):
 
 
 # --------------------------------------------------------------------------- #
-# MLflow (Neon + GCS), read server-lessly via MlflowClient on the DB URI
+# MLflow, read via MlflowClient on MN_MLFLOW_TRACKING_URI (the global tracker's
+# HTTP URL in the cloud contract, or a local sqlite:/// URI in dev)
 # --------------------------------------------------------------------------- #
 _MLFLOW_STATUS = {
     "RUNNING": "running",
@@ -180,6 +212,14 @@ _MLFLOW_STATUS = {
 
 
 class MLflowSource(RunSource):
+    """Runs of one MLflow experiment, read through ``MlflowClient``.
+
+    Tracker: ``tracking_uri`` or ``$MN_MLFLOW_TRACKING_URI``; experiment:
+    ``experiment`` or ``$MN_MLFLOW_EXPERIMENT`` (default ``mini-networks``).
+    mlflow is imported on construction, so it needs the ``cloud`` extra only
+    when selected. Run ids are MLflow run ids.
+    """
+
     def __init__(self, tracking_uri: str | None = None, experiment: str | None = None):
         from mlflow.tracking import MlflowClient
 
@@ -187,16 +227,22 @@ class MLflowSource(RunSource):
         self._experiment = experiment or os.environ.get("MN_MLFLOW_EXPERIMENT", "mini-networks")
 
     def _exp_id(self) -> str | None:
+        """Experiment id for the configured name, or None if it does not exist yet."""
         exp = self._client.get_experiment_by_name(self._experiment)
         return exp.experiment_id if exp else None
 
     def _get_run(self, run_id: str):
+        """``MlflowClient.get_run``, with any client error mapped to RunNotFound."""
         try:
             return self._client.get_run(run_id)
         except Exception:
             raise RunNotFound(run_id)
 
     def _summary_for(self, run) -> RunSummary:
+        """Normalize an MLflow run. The model comes from the parent dir of the
+        ``run_dir`` tag the Logger sets, else the run-name prefix before ``-``.
+        ``last_metrics`` = MLflow's latest value per key; ``last_step`` is not
+        tracked (None); artifact names are the top-level artifact paths."""
         tags = run.data.tags or {}
         run_dir = tags.get("run_dir", "")
         model = Path(run_dir).parent.name if run_dir else (run.info.run_name or "").split("-")[0]
@@ -218,6 +264,7 @@ class MLflowSource(RunSource):
         )
 
     def list_runs(self) -> list[RunSummary]:
+        """All runs in the configured experiment; ``[]`` when it does not exist."""
         exp_id = self._exp_id()
         if exp_id is None:
             return []
@@ -225,6 +272,8 @@ class MLflowSource(RunSource):
 
     def get_metrics(self, run_id: str, since: int | None = None) -> MetricsResponse:
         run = self._get_run(run_id)
+        # One get_metric_history call per logged key, flattened back to the LONG
+        # row format so the local and MLflow paths share the same pivot.
         rows: list[dict] = []
         for key in (run.data.metrics or {}):
             for m in self._client.get_metric_history(run_id, key):
@@ -233,15 +282,18 @@ class MLflowSource(RunSource):
 
     def get_config(self, run_id: str) -> ConfigResponse:
         run = self._get_run(run_id)
+        # MLflow params are strings, so config values here are str, not typed.
         return ConfigResponse(run_id=run_id, config=dict(run.data.params or {}))
 
     def get_summary(self, run_id: str) -> SummaryResponse:
         run = self._get_run(run_id)
+        # The run's tags minus MLflow's own ``mlflow.*`` system tags.
         tags = {k: v for k, v in (run.data.tags or {}).items() if not k.startswith("mlflow.")}
         return SummaryResponse(run_id=run_id, summary=tags)
 
     def open_artifact(self, run_id: str, name: str) -> tuple[Path, str]:
         self._get_run(run_id)
+        # MLflow downloads the artifact to a local temp dir; that path is served.
         try:
             local = self._client.download_artifacts(run_id, name)
         except Exception:
@@ -253,11 +305,21 @@ class MLflowSource(RunSource):
 # --------------------------------------------------------------------------- #
 # Composite: persistent source ∪ in-memory job store (cloud dispatched stubs)
 # --------------------------------------------------------------------------- #
+# JobStatus.status values already match RunStatus; anything else maps to "unknown".
 _JOBSTATUS = {"pending": "pending", "running": "running", "done": "done",
               "failed": "failed", "dispatched": "dispatched"}
 
 
 class CompositeSource(RunSource):
+    """``persistent`` (local or MLflow) plus in-memory API jobs it does not know yet.
+
+    Lets a freshly ``POST /train``-ed (or cloud-``dispatched``) job appear in
+    the run list before the persistent store has a record of it; such jobs
+    report ``source="jobstore"``, empty metrics/config and a ``{"status"}``
+    summary. Every read tries the persistent source first. Artifacts are only
+    ever served from the persistent source.
+    """
+
     def __init__(self, persistent: RunSource):
         self._persistent = persistent
 
@@ -265,6 +327,8 @@ class CompositeSource(RunSource):
         from mini_networks.api.dependencies import list_jobs
 
         runs = self._persistent.list_runs()
+        # A job is skipped once its id matches a persistent run's id or run_name
+        # (cloud runs are dispatched with run_name = job id).
         known = {r.run_name for r in runs if r.run_name} | {r.id for r in runs}
         for job in list_jobs():
             if job.job_id in known:
@@ -303,6 +367,7 @@ class CompositeSource(RunSource):
         return self._persistent.open_artifact(run_id, name)
 
     def _require_job(self, run_id: str):
+        """The in-memory JobStatus for ``run_id``, else RunNotFound."""
         from mini_networks.api.dependencies import get_job
 
         job = get_job(run_id)
@@ -312,6 +377,11 @@ class CompositeSource(RunSource):
 
 
 def get_run_source() -> RunSource:
+    """FastAPI dependency: a CompositeSource over MLflowSource when
+    ``MN_RUN_SOURCE=mlflow``, else over LocalRunsSource (the default).
+
+    Built per request, so env changes take effect without a restart.
+    """
     kind = os.environ.get("MN_RUN_SOURCE", "local")
     persistent: RunSource = MLflowSource() if kind == "mlflow" else LocalRunsSource()
     return CompositeSource(persistent)

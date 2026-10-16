@@ -36,6 +36,12 @@ import torch.nn.functional as F
 
 
 class ConvVAE(nn.Module):
+    """Conv encoder -> Gaussian posterior (mu, logvar) -> sampled z -> conv decoder.
+
+    Shapes are drawn in the module docstring. ``hidden_dim`` is accepted for
+    config compatibility but unused: the encoder/decoder widths are fixed at
+    32/64 channels.
+    """
     def __init__(self, latent_dim: int = 32, hidden_dim: int = 128):
         super().__init__()
         self.encoder = nn.Sequential(
@@ -57,19 +63,27 @@ class ConvVAE(nn.Module):
         )
 
     def encode(self, x: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
+        """Map images [B,1,28,28] to the posterior parameters (mu, logvar), each [B,latent_dim]."""
         h = self.encoder(x).view(x.size(0), -1)
         return self.fc_mu(h), self.fc_logvar(h)
 
     def reparameterize(self, mu: torch.Tensor, logvar: torch.Tensor) -> torch.Tensor:
+        """Draw z = mu + sigma * eps with eps ~ N(0, I).
+
+        Sampling is rewritten as a deterministic function of (mu, logvar) plus
+        external noise, so gradients flow back into the encoder.
+        """
         std = torch.exp(0.5 * logvar)
         eps = torch.randn_like(std)
         return mu + eps * std
 
     def decode(self, z: torch.Tensor) -> torch.Tensor:
+        """Map latents z [B,latent_dim] to images [B,1,28,28] in (0, 1) (sigmoid output)."""
         h = self.fc_dec(z).view(z.size(0), 64, 7, 7)
         return self.decoder(h)
 
     def forward(self, x: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+        """Encode, sample and decode x [B,1,28,28]; return (recon [B,1,28,28], mu, logvar)."""
         mu, logvar = self.encode(x)
         z = self.reparameterize(mu, logvar)
         recon = self.decode(z)
@@ -77,6 +91,12 @@ class ConvVAE(nn.Module):
 
 
 def vae_loss(recon: torch.Tensor, x: torch.Tensor, mu: torch.Tensor, logvar: torch.Tensor, beta: float = 1.0):
+    """Return (total, recon, kl) for a VAE batch.
+
+    recon is the mean-squared error over all pixels, kl the closed-form
+    KL(N(mu, sigma^2) || N(0, I)) averaged over batch and latent dims, and
+    total = recon + beta * kl. All three are scalar tensors.
+    """
     recon_loss = F.mse_loss(recon, x, reduction="mean")
     kl = -0.5 * torch.mean(1 + logvar - mu.pow(2) - logvar.exp())
     return recon_loss + beta * kl, recon_loss, kl

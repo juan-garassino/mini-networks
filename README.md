@@ -65,26 +65,26 @@ Vision:
 - `convnext` Tiny ConvNeXt-like CNN baseline.
 - `resnet` Mini ResNet baseline.
 - `vit` Mini ViT baseline.
+- `swin` Swin Transformer: windowed + shifted-window attention hierarchy on MNIST.
 - `segmentation` UNet binary or multiclass segmentation.
 - `detection` YOLO-style digit localization on 56×56 canvas.
 - `vision_embed` Contrastive vision embedding encoder.
 - `simclr` SimCLR-lite self-supervised pretraining.
 - `dino` DINO self-distillation ViT (EMA teacher, no labels).
-- `swin` Swin Transformer: windowed + shifted-window attention hierarchy.
-- `rpp_classifier` Residual Pathway Priors: equivariance as a soft prior.
-- `sam` Mini SAM: promptable segmentation (clicks choose which digit).
-- `nerf` Mini NeRF: voxel-digit scene as a continuous field, novel-view PSNR.
+- `rpp_classifier` Residual Pathway Priors: conv + free pathways, equivariance as a soft prior.
+- `sam` Mini SAM: promptable segmentation — clicks choose which digit to mask.
+- `nerf` Mini NeRF: a voxel-digit scene as a continuous field, novel-view PSNR.
 - `convlstm` ConvLSTM next-frame prediction on Moving-MNIST.
 
 Generative vision:
-- `gan` MLP GAN baseline for MNIST.
+- `gan` small DCGAN baseline for MNIST.
+- `wgan` WGAN: Wasserstein critic + weight clipping fixes GAN mode collapse.
+- `cyclegan` CycleGAN: unpaired MNIST↔Fashion translation via cycle-consistency + PatchGAN + image pool.
 - `diffusion` DDPM denoising with EMA + curriculum options.
 - `pixelcnn` PixelCNN-lite autoregressive model.
 - `vae` Convolutional VAE reconstruction.
+- `vqvae` VQ-VAE: discrete codebook latent + straight-through estimator on MNIST.
 - `unet_ae` UNet autoencoder reconstruction.
-- `vqvae` VQ-VAE: discrete codebook + straight-through estimator.
-- `wgan` WGAN: Wasserstein critic + weight clipping.
-- `cyclegan` Unpaired MNIST↔Fashion translation (cycle-consistency + PatchGAN).
 
 Audio:
 - `audio_classifier` 1D CNN classifier on speech digits.
@@ -108,9 +108,9 @@ Language:
 - `text_token_classifier` Token classifier (vowel vs other).
 - `rag` TF‑IDF retrieval + TransformerLM generation.
 - `rlhf` PPO fine‑tuning with heuristic Shakespearean reward.
-- `grpo` GRPO: group-relative advantages, no value net.
-- `dpo` DPO: preference pairs, implicit KL via a reference model.
 - `lora` LoRA adapter fine‑tuning (MNIST → FashionMNIST).
+- `grpo` GRPO: group-relative advantages, no value net.
+- `dpo` DPO: preference pairs, no RL — implicit KL via a reference model.
 
 Multimodal:
 - `clip` Contrastive image–text matching on MNIST.
@@ -118,12 +118,12 @@ Multimodal:
 Reinforcement learning:
 - `rl_maze` Q / DQN / PPO agents on a procedural maze.
 - `reinforce` REINFORCE policy gradient on a procedural maze.
-- `alphazero` Mini AlphaZero: MCTS self-play on tic-tac-toe.
+- `alphazero` Mini AlphaZero: MCTS self-play on tic-tac-toe distilled into a policy net.
 
-Graphs and studies:
-- `gnn` Graph convolutional network: node classification on an SBM.
-- `dcrnn` Diffusion-convolution GRU for sensor-graph forecasting.
+Studies & structure:
 - `grokking` Delayed generalization on modular division (a/b mod 97).
+- `gnn` Graph convolutional network: transductive node classification on an SBM.
+- `dcrnn` DCRNN: graph diffusion convolution + GRU for sensor-graph time-series forecasting.
 
 **Compositions**
 - `clip_guided_diffusion` CLIP similarity guides diffusion sampling.
@@ -145,16 +145,21 @@ Graphs and studies:
 - `image_captioning` image captioning from MNIST digits.
 - `multimodal_fusion_baseline` image+text fusion baseline.
 - `latent_diffusion` latent diffusion (VAE + UNet).
-- `mode_connect` loss-surface simplex between two classifiers + simplex ensemble.
-- `double_descent` width sweep on label-noised MNIST.
-- `vlm` vision patch prefix + causal LM answering templated MNIST questions.
-- `gan_ada` GAN + Adaptive Discriminator Augmentation (StyleGAN2-ADA controller).
+- `gan_ada` GAN + Adaptive Discriminator Augmentation: non-leaking aug at an adaptively tuned p (StyleGAN2-ADA).
+- `mode_connect` loss-surface simplex between two classifiers + cheap simplex ensemble.
+- `double_descent` width sweep on label-noised MNIST: test error falls, rises, falls again.
+- `vlm` mini VLM: vision patch prefix + causal LM answering templated MNIST questions.
+
+`python main.py list` prints the full zoo grouped as atoms → molecules →
+compositions (the taxonomy DAG in `core/taxonomy.py`, see docs chapter 14).
 
 **Data Registry**
 The shared registry lives in `src/mini_networks/core/data/registry.py`.
-- Vision datasets: `mnist`, `fashion_mnist`.
+- Vision datasets: `mnist`, `fashion_mnist`, `kmnist`, `tri_mnist` (all three, 30 classes).
 - Vision task modes: `classification`, `binary_segmentation`, `multiclass_segmentation`, `detection`, `clip`, `contrastive`.
 - Text datasets: `text_file`, `tiny_shakespeare`.
+- Audio / tabular: `speech_digits`, `synthetic_audio_digits`, `iris`, `synthetic_tabular`.
+- How to add one: `docs/adding_datasets.md`.
 
 **Logging and Outputs**
 Every run writes to:
@@ -173,10 +178,12 @@ interactive_menu()
 ```
 python main.py serve --host 0.0.0.0 --port 8000
 ```
-- **Playground** at `/` — a Next.js static export (`playground/`, build it
-  with `make playground`; `playground/out` is gitignored) that reads the run
-  contract via `/web`: models/taxonomy, runs, loss curves, artifacts. It's a
-  pure reader; training is unchanged.
+- **Playground** at `/` — a Next.js app (`playground/`, built to
+  `playground/out` with `make playground`) presenting the zoo as a "Periodic
+  Table of Neural Networks" plus map editions and per-model "how it works"
+  diagrams. It is a pure reader of the run contract (`/web`, `/train`,
+  `/infer`); training code is unchanged. For UI work: `make playground-dev`
+  and read `playground/AGENTS.md` first.
 - API docs at `/docs`. Read-layer endpoints under `/web` (`/web/runs`,
   `/web/runs/{id}/metrics`, `/web/models`, …).
 
@@ -205,17 +212,20 @@ make -C infra/gcp dry-run-sweep  # one sweep-task shard, local only
 Provisioning + the env-var contract are documented in `infra/gcp/README.md`.
 
 **Docs**
-Start here:
-- `docs/README.md` — the ordered curriculum index
-- `docs/01-data.md` — dataset registry, task modes, text/audio/tabular sets
-- `docs/09-clip-multimodal.md` — contrastive dual encoders + fusion blocks
-- `docs/11-compositions.md` — multi-model pipelines and the runner contract
-- `docs/TESTING.md` — how to run any mini, the smoke tests, and the per-model gate table
+Start at `docs/README.md` — an ordered curriculum (chapters 00–14: data,
+classifiers, autoencoders, GANs, diffusion, sequence models, LoRA, RAG, CLIP,
+RL/RLHF, compositions, generalization, foundation minis, the taxonomy).
+How-to guides: `docs/adding_models.md` (a model or composition) and
+`docs/adding_datasets.md`.
+Every `src/mini_networks/models/<name>/model.py` opens with a docstring on the
+key idea, tensor shapes, equations and deliberate simplifications.
+Run any mini, the smoke tests and the per-model gate table: `docs/TESTING.md`.
 
 **Tests**
 ```
-make test                    # fast suite (slow marker deselected)
-make validate-s DEVICE=cpu   # full S-tier quality gate, what CI runs
+make test                  # fast suite (slow marker deselected)
+uv run pytest tests/ -m slow   # full trainings through the API
+make validate-s DEVICE=cpu     # full S-tier gate sweep (what CI runs)
 ```
 Smoke tests are in `tests/test_smoke_models.py` and `tests/test_smoke_registry.py`;
 `tests/test_colab_notebooks.py` statically checks the Colab notebooks against

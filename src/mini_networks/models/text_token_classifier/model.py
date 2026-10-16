@@ -30,6 +30,7 @@ import torch.nn as nn
 
 
 class TokenClassifier(nn.Module):
+    """Bidirectional Transformer encoder with a 2-way (vowel / other) head at every position."""
     def __init__(self, vocab_size: int, d_model: int, n_heads: int, n_layers: int, seq_len: int):
         super().__init__()
         self.token = nn.Embedding(vocab_size, d_model)
@@ -45,6 +46,7 @@ class TokenClassifier(nn.Module):
         self.head = nn.Linear(d_model, 2)  # vowel vs other
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Map char ids [B,T] (T <= seq_len) to per-token label logits [B,T,2]."""
         B, T = x.shape
         pos = torch.arange(T, device=x.device).unsqueeze(0)
         h = self.token(x) + self.pos(pos)

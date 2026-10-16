@@ -1,9 +1,19 @@
+"""Config for the RL maze: maze shape, which agent (q / dqn / ppo) and each agent's
+hyperparameters.
+"""
 from __future__ import annotations
 from typing import Literal
 from mini_networks.core.config import BaseConfig
 
 
 class RLMazeConfig(BaseConfig):
+    """Hyperparameters for :class:`RLMazeTrainer`.
+
+    ``agent_type`` picks the agent; only that agent's ``dqn_*`` / ``ppo_*``
+    fields are used. The epsilon fields apply to Q and DQN only. Budgets are
+    tier-capped in the trainer: S uses a 5x5 maze, <= 12 steps/episode and
+    2 episodes; M caps at 100 steps/episode and 300 episodes.
+    """
     model_name: str = "rl_maze"
 
     # Maze
@@ -17,10 +27,10 @@ class RLMazeConfig(BaseConfig):
 
     # Shared RL hyperparameters
     gamma: float = 0.99           # discount factor
-    epsilon: float = 1.0          # initial exploration rate
+    epsilon: float = 1.0          # initial exploration rate (Q/DQN; decayed every update step)
     epsilon_decay: float = 0.995
     epsilon_min: float = 0.01
-    rl_lr: float = 1e-3           # learning rate for neural agents
+    rl_lr: float = 1e-3           # Adam lr for DQN/PPO; also the Q-table step size (agent "q")
 
     # DQN
     dqn_hidden: int = 64

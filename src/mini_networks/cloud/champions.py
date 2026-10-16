@@ -29,10 +29,12 @@ CHAMPIONS_DIRNAME = "champions"
 
 
 def champion_artifacts_dir(model_name: str, checkpoint_root: str | Path) -> Path:
+    """``<checkpoint_root>/champions/<model_name>/artifacts`` (may not exist)."""
     return Path(checkpoint_root) / CHAMPIONS_DIRNAME / model_name / "artifacts"
 
 
 def has_champion(model_name: str, checkpoint_root: str | Path) -> bool:
+    """True when a pulled champion checkpoint (``*.pt``) exists locally for the model."""
     d = champion_artifacts_dir(model_name, checkpoint_root)
     return d.is_dir() and any(d.glob("*.pt"))
 
@@ -46,7 +48,13 @@ def _make_client():
 
 def pull_champions(models: list[str] | None = None, checkpoint_root: str | Path = "runs") -> dict[str, str]:
     """Download each model's Production champion. Returns {model: status} where
-    status is 'vN' (pulled), 'no champion', or 'error: …' — never raises."""
+    status is 'vN' (pulled), 'no champion', or 'error: …' — never raises.
+
+    ``models=None`` means every registry model. For each champion the run's
+    ``model/*.pt`` artifacts are copied into ``champion_artifacts_dir`` and a
+    ``VERSION`` file (``mini-<model> vN run <run_id>``) is written beside it.
+    Reads ``MN_MLFLOW_TRACKING_URI``.
+    """
     from mini_networks.core.registry import MODEL_NAMES
 
     if not os.environ.get(TRACKING_URI_ENV):

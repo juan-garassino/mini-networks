@@ -17,6 +17,9 @@
 /.next/
 /out/
 
+# lab bake-off screenshots
+/.lab-shots/
+
 # production
 /build
 
@@ -39,3 +42,6 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# owner-supplied painted map references — local only, never committed
+/public/local/

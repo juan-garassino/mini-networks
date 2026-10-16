@@ -13,7 +13,8 @@ Mask "A" (first layer) also hides the centre pixel itself — otherwise the
 model could copy its input; mask "B" (later layers) allows the centre,
 because by then that position holds features of preceding pixels only.
 
-This implementation (n_filters=32, n_layers=4):
+This implementation (class defaults n_filters=32, n_layers=4; PixelCNNConfig
+trains 64 filters x 8 layers for a larger receptive field):
 
     [B,1,28,28] -> MaskedConv "A" 3x3 (1->32) -> ReLU
                 -> 3 x [MaskedConv "B" 3x3 (32->32) -> ReLU]
@@ -37,6 +38,11 @@ import torch.nn.functional as F
 
 
 class MaskedConv2d(nn.Conv2d):
+    """Conv2d whose kernel is masked so each output only sees pixels above/left of it.
+
+    ``mask_type="A"`` also hides the centre pixel (first layer only);
+    ``"B"`` keeps it.
+    """
     def __init__(self, mask_type: str, *args, **kwargs):
         super().__init__(*args, **kwargs)
         assert mask_type in ("A", "B")
@@ -46,11 +52,17 @@ class MaskedConv2d(nn.Conv2d):
         self.mask[:, :, h // 2 + 1 :, :] = 0
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Apply the convolution with the causal mask enforced.
+
+        The mask is multiplied into ``weight.data`` in place on every call,
+        so masked weights stay zero even after optimizer updates.
+        """
         self.weight.data *= self.mask
         return super().forward(x)
 
 
 class PixelCNN(nn.Module):
+    """Stack of one mask-A and (n_layers - 1) mask-B 3x3 convs plus a 1x1 output conv."""
     def __init__(self, n_filters: int = 32, n_layers: int = 4):
         super().__init__()
         layers = [
@@ -66,4 +78,7 @@ class PixelCNN(nn.Module):
         self.net = nn.Sequential(*layers)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Map binarised images [B,1,28,28] to per-pixel Bernoulli logits [B,1,28,28],
+        logit i conditioned only on pixels before i.
+        """
         return self.net(x)

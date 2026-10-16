@@ -15,6 +15,14 @@ from mini_networks.models.vision_embed.model import VisionEmbedCNN
 
 
 class VisionEmbedTrainer(ContrastiveTrainer):
+    """Contrastive training for :class:`VisionEmbedCNN` on pairs of augmented views.
+
+    Loss: one-directional B-way cross-entropy over (view1 @ view2^T) /
+    temperature, where the matching view is the positive. Unlike SimCLR's
+    2B-way InfoNCE, other view1 images are not used as negatives. The loop
+    and the ``model.pt`` checkpoint come from ``ContrastiveTrainer``
+    (evaluate returns ``eval_loss``).
+    """
     def __init__(self):
         self.model: VisionEmbedCNN | None = None
 
@@ -34,6 +42,9 @@ class VisionEmbedTrainer(ContrastiveTrainer):
         return F.cross_entropy(logits, targets)
 
     def infer(self, config: BaseConfig, inputs: Any) -> Any:
+        """Embed an image tensor (or ``{"images": tensor}``) [B,1,28,28]; returns
+        ``{"embeddings": [B,embed_dim]}`` (unit norm, CPU).
+        """
         assert isinstance(config, VisionEmbedConfig)
         if self.model is None:
             raise RuntimeError("Model not loaded.")
@@ -47,6 +58,9 @@ class VisionEmbedTrainer(ContrastiveTrainer):
 
 
 def make_vision_embed_dataloader(config: VisionEmbedConfig, split: str = "train") -> DataLoader:
+    """Contrastive loader: batches of (view1 [B,1,28,28], view2 [B,1,28,28], label); the
+    two views are augmentations of the same digit.
+    """
     return get_dataloader(
         name=config.dataset,
         data_root=config.data_root,

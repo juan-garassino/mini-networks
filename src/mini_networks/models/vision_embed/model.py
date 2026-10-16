@@ -34,6 +34,7 @@ from mini_networks.core.blocks.cnn import ConvBNReLU
 
 
 class VisionEmbedCNN(nn.Module):
+    """Two ConvBNReLU+pool stages and a linear projection to an L2-normalised embedding."""
     def __init__(self, embed_dim: int = 64):
         super().__init__()
         self.features = nn.Sequential(
@@ -45,6 +46,7 @@ class VisionEmbedCNN(nn.Module):
         self.proj = nn.Linear(64 * 7 * 7, embed_dim)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Map images [B,1,28,28] to unit-norm embeddings [B,embed_dim]."""
         h = self.features(x).flatten(1)
         z = self.proj(h)
         return F.normalize(z, dim=-1)

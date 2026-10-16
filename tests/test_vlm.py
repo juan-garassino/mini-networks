@@ -28,7 +28,7 @@ class _FakeMNIST:
 def _dataset(**kwargs):
     tok = build_tokenizer()
     defaults = dict(base=_FakeMNIST(), tokenizer=tok, max_len=40,
-                    pad_id=len(tok.stoi))
+                    pad_id=tok.vocab_size)
     defaults.update(kwargs)
     return tok, _QADataset(**defaults)
 
@@ -62,17 +62,37 @@ class TestQAEncoding:
                 assert ids  # no chars missing from the corpus-built vocab
 
 
+    def test_loader_pad_does_not_alias_a_char(self, monkeypatch):
+        """Regression: VLM._loaders once used PAD = len(stoi), the id of 'z'
+        (from "zero"), so 'z' targets fell outside the head and training on a
+        zero digit raised IndexError. Every target must fit the head and PAD
+        must never be a real character id."""
+        import mini_networks.compositions.vlm as vlm_mod
+
+        monkeypatch.setattr(vlm_mod, "get_dataset", lambda *a, **k: _FakeMNIST())
+        tok, (dl_train, _) = VLM()._loaders(VLMConfig(fast_demo=True, device="cpu"))
+        ds = dl_train.dataset
+        assert ds._pad not in tok.stoi.values()
+        targets = set()
+        for q, a_fn in QA_TEMPLATES:
+            for y in range(10):
+                _, labels = ds.encode_qa(q, a_fn(y))
+                targets.update(labels[labels != -1].tolist())
+        assert tok.stoi["z"] in targets          # "zero" is supervised
+        assert max(targets) < tok.vocab_size     # every target fits the head
+
+
 class TestVLMNet:
     def _model(self):
         tok = build_tokenizer()
         torch.manual_seed(0)
-        return tok, VLMNet(vocab_size=len(tok.stoi), d_model=32, n_heads=2,
+        return tok, VLMNet(vocab_size=tok.vocab_size, d_model=32, n_heads=2,
                            n_layers=2, max_text_len=40)
 
     def test_forward_shape(self):
         tok, model = self._model()
         logits = model(torch.randn(2, 1, 28, 28), torch.zeros(2, 40, dtype=torch.long))
-        assert logits.shape == (2, 40, len(tok.stoi))
+        assert logits.shape == (2, 40, tok.vocab_size)
 
     def test_image_changes_output(self):
         """The prefix path is wired: different images, different text logits."""

@@ -22,6 +22,13 @@ log = logging.getLogger(__name__)
 
 
 class LoRATrainer(BaseTrainer):
+    """Two-stage LoRA demo: full MNIST pretraining, then adapter-only FashionMNIST tuning.
+
+    ``train`` ignores the dataloader it is given and builds both loaders
+    itself. Logs ``pretrain_loss`` (stage 1) and ``finetune_loss`` (stage 2,
+    epochs offset after stage 1). Checkpoint: ``model.pt`` (state dict incl.
+    the A/B matrices), loaded by the default ``BaseTrainer.load_checkpoint``.
+    """
     def __init__(self):
         self.model: LoRACNN | None = None
 
@@ -53,6 +60,12 @@ class LoRATrainer(BaseTrainer):
         return total_loss / max(1, len(dataloader))
 
     def train(self, config: BaseConfig, dataloader: DataLoader, logger: Logger) -> None:
+        """Run both stages and save ``model.pt``.
+
+        Stage 1 trains all weights with Adam on MNIST. Stage 2 freezes W (and
+        the convs when ``freeze_conv``) and trains only the LoRA matrices
+        with a fresh Adam on FashionMNIST.
+        """
         assert isinstance(config, LoRAConfig)
         model = self._build(config)
         self.model = model
@@ -84,6 +97,11 @@ class LoRATrainer(BaseTrainer):
         torch.save(model.state_dict(), logger.artifact_path("model.pt"))
 
     def evaluate(self, config: BaseConfig, dataloader: DataLoader, logger: Logger) -> dict:
+        """Return ``{"eval_loss", "accuracy"}`` (cross-entropy, top-1) on the given loader.
+
+        Scores whatever loader is passed; the registry's default loader
+        (``make_lora_dataloader`` without ``dataset``) is MNIST.
+        """
         assert isinstance(config, LoRAConfig)
         if self.model is None:
             self.model = self._build(config)
@@ -106,6 +124,10 @@ class LoRATrainer(BaseTrainer):
         }
 
     def infer(self, config: BaseConfig, inputs: Any) -> Any:
+        """Classify ``{"image": [1,1,28,28]}``, ``{"images": [B,1,28,28]}`` or a raw tensor/array.
+
+        Returns ``{"predictions": [B], "logits": [B,num_classes]}`` as Python lists.
+        """
         assert isinstance(config, LoRAConfig)
         if self.model is None:
             raise RuntimeError("Model not loaded.")
@@ -128,6 +150,9 @@ def make_lora_dataloader(
     dataset: str = "mnist",
     split: str = "train",
 ) -> DataLoader:
+    """Image-classification loader for ``dataset`` (default ``mnist``): batches of (images
+    [B,1,28,28] in [0,1], labels [B]).
+    """
     return get_dataloader(
         name=dataset,
         data_root=config.data_root,

@@ -45,3 +45,30 @@ export interface TaxonomyResponse {
   models: TaxonModel[];
   compositions: TaxonComposition[];
 }
+
+// /web/evidence — proof-it-works signals per model (web/evidence.py)
+export interface ModelEvidence {
+  name: string;
+  champion: boolean;
+  champion_version: string | null;
+  gate_metric: string | null;
+  threshold_m: number | null;
+  higher_is_better: boolean;
+  provisional: boolean;
+  run_count: number;
+  best_metric: number | null;
+}
+export interface EvidenceResponse { models: ModelEvidence[]; }
+
+// /web/feedback — the owner's lab notes (web/feedback.py)
+export interface FeedbackNote {
+  id: string;
+  created_at: string;
+  skin: string;
+  url: string;
+  text: string;
+  viewport: [number, number] | null;
+  images: string[];
+  status: "new" | "relayed" | "addressed" | string;
+  reply: string | null;
+}

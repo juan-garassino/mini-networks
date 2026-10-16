@@ -24,6 +24,9 @@ class VisionCNNEncoder(nn.Module):
         self.proj = nn.Linear(64 * 7 * 7, out_dim)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Map images [B,1,28,28] to embeddings [B,out_dim] (two conv+pool stages, linear
+        projection).
+        """
         h = self.features(x).flatten(1)
         return self.proj(h)
 
@@ -41,6 +44,9 @@ class VisionPatchEncoder(nn.Module):
         nn.init.normal_(self.pos, std=0.02)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Map images [B,1,H,W] to patch tokens [B,(H/p)*(W/p),d_model] with learned
+        positions added.
+        """
         x = self.proj(x)  # [B, D, H', W']
         x = x.flatten(2).transpose(1, 2)  # [B, N, D]
         return x + self.pos
@@ -71,12 +77,14 @@ class TextEncoder(nn.Module):
         self.encoder = nn.TransformerEncoder(encoder_layer, num_layers=n_layers)
 
     def forward(self, tokens: torch.Tensor) -> torch.Tensor:
+        """Map token ids [B,T] (T <= max_len) to contextual embeddings [B,T,d_model]."""
         x = self.token(tokens)
         x = x + self.pos[:, : x.size(1), :]
         return self.encoder(x)
 
 
 def pool_sequence(x: torch.Tensor, mode: str = "mean") -> torch.Tensor:
+    """Reduce tokens [B,T,D] to [B,D] by mean (``"mean"``) or first token (``"cls"``)."""
     if mode == "mean":
         return x.mean(dim=1)
     if mode == "cls":
@@ -97,6 +105,7 @@ class AudioConvEncoder(nn.Module):
         )
 
     def forward(self, wave: torch.Tensor) -> torch.Tensor:
+        """Map waveforms [B,1,L] to frame tokens [B,ceil(L/4),d_model] (two stride-2 convs)."""
         # wave: [B, 1, T] -> tokens [B, T', D]
         x = self.conv(wave)
         return x.transpose(1, 2)
@@ -111,6 +120,9 @@ class TabularFeatureEncoder(nn.Module):
         self.n_features = n_features
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Map features [B,F] to one token per feature [B,F,d_model] via a shared Linear(1,
+        d_model).
+        """
         # x: [B, F] -> tokens [B, F, D]
         x = x.unsqueeze(-1)
         return self.proj(x)

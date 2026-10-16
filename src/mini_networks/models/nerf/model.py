@@ -36,6 +36,12 @@ import torch.nn as nn
 
 
 class MiniNeRF(nn.Module):
+    """Positional encoding + ReLU MLP trunk + linear head to (sigma, rgb).
+
+    No view-direction input: the voxel scene is Lambertian. Input width is
+    3 coords x 2 (sin, cos) x ``pe_freqs``; ``n_layers`` counts the trunk's
+    linear layers plus the head.
+    """
     def __init__(self, pe_freqs: int = 6, hidden_dim: int = 128, n_layers: int = 5):
         super().__init__()
         self.pe_freqs = pe_freqs
@@ -47,6 +53,9 @@ class MiniNeRF(nn.Module):
         self.head = nn.Linear(hidden_dim, 4)  # sigma + rgb
 
     def encode(self, pts: torch.Tensor) -> torch.Tensor:
+        """Positional encoding: points [..., 3] -> [..., 3 * 2 * pe_freqs] of sin/cos(2^k *
+        pi * p), k = 0..pe_freqs-1.
+        """
         freqs = 2.0 ** torch.arange(self.pe_freqs, device=pts.device) * torch.pi
         ang = pts.unsqueeze(-1) * freqs                     # [..., 3, L]
         return torch.cat([ang.sin(), ang.cos()], dim=-1).flatten(-2)

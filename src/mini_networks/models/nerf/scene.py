@@ -132,5 +132,11 @@ class NerfViewDataset(Dataset):
 
 
 def make_nerf_dataloader(config, split: str = "train") -> DataLoader:
+    """One-view-per-item loader (batch_size 1, unshuffled) over the train or held-out azimuths.
+
+    Each item is (rays_o, rays_d, colors), each [1, image_size^2, 3] after
+    batching; colors are the exact ground-truth render. ``split`` other than
+    ``"train"`` selects the held-out views.
+    """
     # one item per view; the trainer flattens views into a ray pool itself
     return DataLoader(NerfViewDataset(config, split), batch_size=1, shuffle=False)

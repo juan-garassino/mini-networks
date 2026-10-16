@@ -29,6 +29,8 @@ from mini_networks.core.blocks.cnn import ConvBNReLU
 
 
 class SmallCNN(nn.Module):
+    """Two ConvBNReLU+MaxPool stages and a 2-layer MLP head (see module docstring)."""
+
     def __init__(self, hidden_dim: int = 64, num_classes: int = 10):
         super().__init__()
         self.features = nn.Sequential(
@@ -45,5 +47,6 @@ class SmallCNN(nn.Module):
         )
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Images [B, 1, 28, 28] -> class logits [B, num_classes]."""
         x = self.features(x)
         return self.classifier(x)

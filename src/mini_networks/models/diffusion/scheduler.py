@@ -32,6 +32,11 @@ import torch.nn.functional as F
 
 
 class NoiseScheduler:
+    """Precomputed DDPM schedule tensors ([T] each) + forward jump + reverse step.
+
+    A plain object, not an nn.Module: call `.to(device)` to move its tensors.
+    """
+
     def __init__(
         self,
         timesteps: int = 1000,
@@ -77,7 +82,11 @@ class NoiseScheduler:
     def add_noise(
         self, x0: torch.Tensor, noise: torch.Tensor, t: torch.Tensor
     ) -> torch.Tensor:
-        """q(x_t | x_0): forward diffusion process."""
+        """q(x_t | x_0): jump straight to step t in closed form.
+
+        x0, noise: [B, C, H, W]; t: [B] long timesteps in [0, T). Returns x_t
+        = sqrt(a_bar_t) x0 + sqrt(1 - a_bar_t) noise, same shape as x0.
+        """
         sqrt_alpha_bar = self.sqrt_alphas_cumprod[t].view(-1, 1, 1, 1).to(x0.device)
         sqrt_one_minus = self.sqrt_one_minus_alphas_cumprod[t].view(-1, 1, 1, 1).to(x0.device)
         return sqrt_alpha_bar * x0 + sqrt_one_minus * noise
@@ -86,7 +95,11 @@ class NoiseScheduler:
     def step(
         self, model_output: torch.Tensor, t: int, x_t: torch.Tensor
     ) -> torch.Tensor:
-        """One DDPM reverse step: p(x_{t-1} | x_t)."""
+        """One DDPM reverse step: sample x_{t-1} ~ p(x_{t-1} | x_t).
+
+        model_output is eps_theta(x_t, t) [B, C, H, W]; t is a single int shared
+        by the whole batch. At t == 0 the posterior mean is returned without noise.
+        """
         betas_t = self.betas[t].to(x_t.device)
         sqrt_one_minus = self.sqrt_one_minus_alphas_cumprod[t].to(x_t.device)
         sqrt_recip_alpha = (1.0 / self.alphas[t].sqrt()).to(x_t.device)
@@ -99,6 +112,7 @@ class NoiseScheduler:
         return mean + posterior_var.sqrt() * noise
 
     def to(self, device: torch.device) -> "NoiseScheduler":
+        """Move every schedule tensor to `device` in place; returns self."""
         for attr in [
             "betas", "alphas", "alphas_cumprod", "alphas_cumprod_prev",
             "sqrt_alphas_cumprod", "sqrt_one_minus_alphas_cumprod", "posterior_variance"

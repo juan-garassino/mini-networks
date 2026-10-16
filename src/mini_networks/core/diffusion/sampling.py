@@ -27,6 +27,24 @@ def sample_loop(
     logger: Any | None = None,
     log_every: int = 0,
 ) -> torch.Tensor:
+    """Run the reverse diffusion chain from pure noise and return ``x_0``.
+
+    Starts at ``x_T ~ N(0, I)`` with ``shape`` and walks ``t = timesteps-1 .. 0``.
+    Pass ``config.effective_timesteps`` as ``timesteps`` so the chain matches
+    the one the scheduler was built (and trained) with.
+
+    Args:
+        scheduler: object with ``step(eps, t, x) -> x_{t-1}``.
+        predict_noise: ``(x, t_batch, t, state) -> eps``.
+        guidance_fn: optional ``(x, t_batch, t, eps, state) -> eps`` hook
+            (e.g. classifier / CFG guidance) applied before each step.
+        step_callback: optional ``(x, t, step_idx, state)``; a non-None return
+            replaces ``x`` (e.g. inpainting re-projection).
+        state: free-form dict threaded through every hook.
+        seed: if set, reseeds the global torch RNG before drawing ``x_T``.
+        logger / log_every: when both set, log ``sample_t`` every
+            ``log_every`` steps via ``logger.log_metrics``.
+    """
     if seed is not None:
         torch.manual_seed(seed)
     x = torch.randn(shape, device=device)

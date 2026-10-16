@@ -31,20 +31,26 @@ from mini_networks.core.blocks.mlp import MLP
 
 
 class TabularMLP(nn.Module):
+    """Three-layer MLP classifier (n_features -> hidden -> hidden -> n_classes) from the
+    shared core MLP block.
+    """
     def __init__(self, n_features: int = 4, n_classes: int = 3, hidden: int = 64):
         super().__init__()
         self.net = MLP(n_features, hidden, n_classes, layers=3)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Map features [B,n_features] to class logits [B,n_classes]."""
         return self.net(x)
 
 
 class TabularLinear(nn.Module):
+    """Multinomial logistic regression: a single Linear(n_features -> n_classes)."""
     def __init__(self, n_features: int = 4, n_classes: int = 3):
         super().__init__()
         self.linear = nn.Linear(n_features, n_classes)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Map features [B,n_features] to class logits [B,n_classes]."""
         return self.linear(x)
 
 
@@ -65,6 +71,9 @@ class TabularTransformer(nn.Module):
         self.cls = nn.Linear(d_model, n_classes)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Map features [B,F] to class logits [B,n_classes]: one token per column,
+        attention across columns, mean pool.
+        """
         # x: [B, F] -> [B, F, 1] -> [B, F, D]
         x = self.proj(x.unsqueeze(-1))
         x = self.encoder(x)

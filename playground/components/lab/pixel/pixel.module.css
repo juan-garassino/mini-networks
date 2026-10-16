@@ -1,0 +1,379 @@
+/* Pixel skin — local styles only (no globals). Colours are Sweetie-16. */
+
+.root {
+  position: relative;
+  height: 100%;
+  overflow: hidden;
+  background: #2a2f6c;
+  color: #fff6e0;
+  font-family: var(--font-pixel), system-ui, sans-serif;
+}
+
+.stage {
+  position: absolute;
+  inset: 0;
+  touch-action: none;
+  cursor: grab;
+}
+.stage:active { cursor: grabbing; }
+
+.canvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  image-rendering: pixelated;
+}
+
+/* 9-slice window (border-image set inline by PixelWindow) */
+/* contemporary panel: hue-shifted indigo, lit top edge, soft layered depth */
+/* flat deep-indigo panel with a thin hue-shifted rim (round 3 critique) */
+.win {
+  padding: 14px 16px;
+  color: #fff6e0;
+  background: #22265c;
+  border: 1px solid #62dcf2;
+  outline: 2px solid #1e1f4e;
+  box-shadow: 0 6px 18px rgba(20, 18, 50, 0.4);
+}
+
+/* map name labels: outlined pixel text, no plate */
+.label {
+  position: absolute;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  white-space: nowrap;
+  line-height: 1;
+  color: #fff6e0;
+  cursor: pointer;
+  text-shadow:
+    1px 0 0 #1e1f4e, -1px 0 0 #1e1f4e, 0 1px 0 #1e1f4e, 0 -1px 0 #1e1f4e,
+    1px 1px 0 #1e1f4e, -1px 1px 0 #1e1f4e, 1px -1px 0 #1e1f4e, -1px -1px 0 #1e1f4e,
+    0 2px 0 #1e1f4e;
+}
+.labelAtom { color: #f5c24a; font-weight: 700; }
+.labelFocus { z-index: 2; }
+
+
+.sign {
+  position: absolute;
+  white-space: nowrap;
+  padding: 3px 10px 4px;
+  background: linear-gradient(180deg, #e2a562 0, #c98552 100%);
+  color: #3a1d33;
+  border: 2px solid #56283a;
+  box-shadow: inset 0 2px 0 #efc27c, inset 0 -2px 0 #a4644e, 0 3px 0 rgba(58, 29, 51, 0.5);
+  font-weight: 700;
+  line-height: 1.1;
+  text-align: center;
+  pointer-events: none;
+}
+
+.chip {
+  position: absolute;
+  font: inherit;
+  font-size: 13px;
+  line-height: 1;
+  white-space: nowrap;
+  color: #f5c24a;
+  background: #1e1f4e;
+  border: 1px solid #f5c24a;
+  padding: 0 4px;
+  cursor: pointer;
+}
+.chip:focus-visible { outline: 2px solid #62dcf2; outline-offset: 1px; }
+
+.hit {
+  position: absolute;
+  background: transparent;
+  border: 0;
+  padding: 0;
+  cursor: pointer;
+  outline: none;
+}
+.hit:focus-visible {
+  box-shadow: 0 0 0 2px #1e1f4e, 0 0 0 4px #62dcf2, 0 0 0 6px #1e1f4e;
+}
+
+.btn {
+  font: inherit;
+  color: #fff6e0;
+  background: #4a60b6;
+  border: 2px solid #1e1f4e;
+  box-shadow: inset 0 -2px 0 #2a2f6c, inset 0 2px 0 #62dcf2;
+  padding: 2px 10px 4px;
+  cursor: pointer;
+  line-height: 1.2;
+}
+.btn:hover { background: #62dcf2; color: #1e1f4e; }
+.btn:focus-visible { outline: 2px solid #62dcf2; outline-offset: 2px; }
+
+.row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  text-align: left;
+  font: inherit;
+  color: inherit;
+  background: transparent;
+  border: 0;
+  padding: 3px 4px 3px 0;
+  cursor: pointer;
+}
+.row .cursor { visibility: hidden; }
+.row:hover .cursor, .row:focus-visible .cursor { visibility: visible; }
+.row:hover, .row:focus-visible { color: #f5c24a; outline: none; }
+
+.input {
+  font: inherit;
+  width: 100%;
+  color: #fff6e0;
+  background: #1e1f4e;
+  border: 2px solid #4a60b6;
+  padding: 4px 8px;
+  outline: none;
+}
+.input:focus { border-color: #62dcf2; }
+.input::placeholder { color: #bccbe8; }
+
+.meter {
+  position: relative;
+  display: flex;
+  gap: 2px;
+  padding: 2px;
+  background: #1e1f4e;
+  border: 2px solid #4a60b6;
+}
+.cell { flex: 1; height: 12px; background: #343f8a; }
+.cellHollow { flex: 1; height: 12px; background: transparent; box-shadow: inset 0 0 0 1px #4a60b6; }
+
+.tick {
+  position: absolute;
+  top: -6px;
+  bottom: -6px;
+  width: 4px;
+  background: #f5c24a;
+  border: 1px solid #1e1f4e;
+  transform: translateX(-50%);
+}
+
+.scroll {
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: #4a60b6 #1e1f4e;
+}
+
+.muted { color: #bccbe8; }
+.gold { color: #f5c24a; }
+.cyan { color: #62dcf2; }
+.good { color: #cbea5e; }
+.warn { color: #ff8f2e; }
+
+
+/* status-screen pages */
+.tab, .tabOn {
+  font: inherit;
+  font-size: 14px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  padding: 3px 2px 4px;
+  border: 1px solid #343f8a;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.tab { background: #343f8a; color: #bccbe8; }
+.tab:hover { color: #fff6e0; }
+.tabOn { background: #f5c24a; color: #1e1f4e; font-weight: 700; }
+.tab:focus-visible, .tabOn:focus-visible { outline: 2px solid #62dcf2; outline-offset: 1px; }
+.rowOn { color: #f5c24a; box-shadow: inset 3px 0 0 #f5c24a; padding-left: 8px; }
+
+/* map name-plates (screen-space, constant size) */
+.plate {
+  position: absolute;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
+  line-height: 1;
+  padding: 0 6px;
+  color: #fff6e0;
+  background: #1e1f4e;
+  box-shadow: inset 0 0 0 1px #4a60b6, 0 2px 0 #1e1f4e;
+  cursor: pointer;
+}
+.plateAtom { color: #f5c24a; font-weight: 700; box-shadow: inset 0 0 0 1px #f5c24a, 0 2px 0 #1e1f4e; }
+.plateFocus { color: #1e1f4e; background: #f5c24a; font-weight: 700; box-shadow: 0 0 0 2px #1e1f4e, 0 4px 0 #1e1f4e; z-index: 3; }
+.plateKin { box-shadow: inset 0 0 0 1px #62dcf2, 0 2px 0 #1e1f4e; }
+.plateDim { opacity: 0.72; }
+.station { color: #62dcf2; }
+.plateFocus .station { color: #2a2f6c; }
+
+.bubble {
+  position: absolute;
+  max-width: 300px;
+  z-index: 4;
+}
+
+.dragons {
+  position: absolute;
+  font-size: 16px;
+  letter-spacing: 0.04em;
+  color: #ff8f2e;
+  white-space: nowrap;
+  pointer-events: none;
+  text-shadow: 1px 0 0 #1e1f4e, -1px 0 0 #1e1f4e, 0 1px 0 #1e1f4e, 0 -1px 0 #1e1f4e, 0 2px 0 #1e1f4e;
+}
+
+.pierTag {
+  position: absolute;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  height: 20px;
+  font-size: 13px;
+  color: #62dcf2;
+  background: #1e1f4e;
+  border: 1px solid #4a60b6;
+  pointer-events: none;
+}
+
+@keyframes slideIn {
+  0% { transform: translateX(28px); opacity: 0; }
+  100% { transform: translateX(0); opacity: 1; }
+}
+.slideIn { animation: slideIn 160ms steps(4, end) both; }
+
+/* pixel cartouche: the map sheet's own furniture (title, key, lands) — gold
+   corner studs + a double rim, drawn with CSS gradients only */
+.cartouche {
+  border: 2px solid #f5c24a;
+  outline: 2px solid #1e1f4e;
+  box-shadow: inset 0 0 0 2px #1e1f4e, inset 0 0 0 3px #a4602b, 0 6px 18px rgba(20, 18, 50, 0.45);
+  background-image:
+    linear-gradient(#f5c24a, #f5c24a), linear-gradient(#f5c24a, #f5c24a),
+    linear-gradient(#f5c24a, #f5c24a), linear-gradient(#f5c24a, #f5c24a);
+  background-size: 6px 6px;
+  background-position: 3px 3px, calc(100% - 3px) 3px, 3px calc(100% - 3px), calc(100% - 3px) calc(100% - 3px);
+  background-repeat: no-repeat;
+  background-color: #22265c;
+}
+.landBtn {
+  width: 100%;
+  text-align: left;
+  font: inherit;
+  color: #fff6e0;
+  background: #2a2f6c;
+  border: 1px solid #4a60b6;
+  padding: 6px 8px;
+  cursor: pointer;
+}
+.landBtn:hover, .landBtn:focus-visible { border-color: #f5c24a; outline: none; }
+
+/* ————— parchment edition (default): paper + ONE maroon ink ————— */
+.parchment { background: #eee0bd; color: #3b140e; }
+.parchment .win,
+.parchment .cartouche {
+  color: #3b140e;
+  background-color: #f3e7c6;
+  border: 2px solid #5a1a14;
+  outline: 1px solid #a64a34;
+  outline-offset: 2px;
+  box-shadow: inset 0 0 0 3px #f3e7c6, inset 0 0 0 4px #a64a34, 0 3px 0 rgba(90, 26, 20, 0.22);
+  background-image:
+    linear-gradient(#5a1a14, #5a1a14), linear-gradient(#5a1a14, #5a1a14),
+    linear-gradient(#5a1a14, #5a1a14), linear-gradient(#5a1a14, #5a1a14);
+  background-size: 6px 6px;
+  background-position: 3px 3px, calc(100% - 3px) 3px, 3px calc(100% - 3px), calc(100% - 3px) calc(100% - 3px);
+  background-repeat: no-repeat;
+}
+.parchment .win :is(h1, h2, h3, p, span, dd, dt, li, label, div, pre) { color: #3b140e; }
+.parchment .win [class*="text-[#f5c24a]"], .parchment .gold { color: #9a3f2a; }
+.parchment .win [class*="text-[#bccbe8]"], .parchment .muted { color: #7a5040; }
+.parchment .win [class*="text-[#62dcf2]"], .parchment .cyan { color: #4f7a4c; }
+.parchment .good { color: #4f7a4c; }
+.parchment .warn { color: #a3462c; }
+.parchment .win h1, .parchment .win h2 { color: #5a1a14; }
+
+.parchment .plate {
+  color: #5a1a14;
+  background: transparent;
+  box-shadow: none;
+  text-shadow: 1px 0 0 #eee0bd, -1px 0 0 #eee0bd, 0 1px 0 #eee0bd, 0 -1px 0 #eee0bd, 1px 1px 0 #eee0bd, -1px -1px 0 #eee0bd;
+}
+.parchment .plateAtom { color: #5a1a14; font-weight: 700; box-shadow: none; }
+.parchment .plateFocus { color: #5a1a14; background: #f6ecd2; box-shadow: 0 0 0 2px #5a1a14; text-shadow: none; }
+.parchment .plateDim { opacity: 0.6; }
+.parchment .sign {
+  color: #5a1a14;
+  background: transparent;
+  border: 0;
+  box-shadow: none;
+  letter-spacing: 0.03em;
+  text-shadow: 1px 0 0 #eee0bd, -1px 0 0 #eee0bd, 0 1px 0 #eee0bd, 0 -1px 0 #eee0bd, 0 2px 0 #d4bd8c;
+}
+.parchment .btn { color: #5a1a14; background: #f6ecd2; border: 2px solid #5a1a14; box-shadow: inset 0 -2px 0 #d4bd8c; }
+.parchment .btn:hover { background: #5a1a14; color: #f6ecd2; }
+.parchment .tab { background: #e2cfa3; color: #5a1a14; border-color: #a64a34; }
+.parchment .tabOn { background: #5a1a14; color: #f6ecd2; border-color: #5a1a14; }
+.parchment .tabOn * { color: #f6ecd2 !important; }
+.parchment .input { color: #3b140e; background: #f6ecd2; border-color: #7e2e22; }
+.parchment .input::placeholder { color: #9a6a50; }
+.parchment .meter { background: #e2cfa3; border-color: #7e2e22; }
+.parchment .cell { background: #d4bd8c; }
+.parchment .cellHollow { box-shadow: inset 0 0 0 1px #a64a34; }
+.parchment .tick { background: #5a1a14; border-color: #f6ecd2; }
+.parchment .pierTag { color: #5a1a14; background: #f3e7c6; border-color: #5a1a14; }
+.parchment .landBtn { color: #3b140e; background: #f6ecd2; border-color: #a64a34; }
+.parchment .landBtn:hover { border-color: #5a1a14; }
+.parchment .dragons { color: #5a1a14; text-shadow: 1px 0 0 #eee0bd, -1px 0 0 #eee0bd, 0 1px 0 #eee0bd, 0 -1px 0 #eee0bd; }
+.parchment .row:hover, .parchment .row:focus-visible { color: #a3462c; }
+.parchment .rowOn { color: #a3462c; box-shadow: inset 3px 0 0 #a3462c; }
+.parchment .portrait { background: #eee0bd !important; border-color: #5a1a14 !important; }
+.portrait { image-rendering: pixelated; }
+.parchment .plateKin { box-shadow: none; background: transparent; }
+
+/* parchment: lighter title cartouche (thin ink border), small ink Key tab */
+.parchment header.cartouche {
+  border-width: 1px;
+  outline: 0;
+  box-shadow: 0 2px 0 rgba(90, 26, 20, 0.18);
+  background-color: rgba(246, 236, 210, 0.92);
+  padding: 10px 12px;
+}
+.parchment header.cartouche h1 { font-size: 20px; }
+.parchment header.cartouche p { font-size: 14px !important; }
+.keyTab { font-size: 14px; padding: 1px 10px 3px; }
+.parchment .keyTab { background: #f6ecd2; border-width: 1px; }
+
+/* readability on busy terrain: a solid 1–2 px parchment halo round every map name */
+.parchment .plate, .parchment .plateAtom {
+  text-shadow:
+    1px 0 0 #f6ecd2, -1px 0 0 #f6ecd2, 0 1px 0 #f6ecd2, 0 -1px 0 #f6ecd2,
+    1px 1px 0 #f6ecd2, -1px -1px 0 #f6ecd2, 1px -1px 0 #f6ecd2, -1px 1px 0 #f6ecd2,
+    2px 0 0 #f6ecd2, -2px 0 0 #f6ecd2, 0 2px 0 #f6ecd2, 0 -2px 0 #f6ecd2;
+}
+
+/* round 5 (final reference): names on small parchment plates with a thin ink border */
+.parchment .plate, .parchment .plateAtom {
+  color: #3b140e;
+  background: #f6ecd2;
+  border: 1px solid #7e2e22;
+  box-shadow: 0 2px 0 rgba(90, 26, 20, 0.35);
+  text-shadow: none;
+  padding: 0 5px;
+}
+.parchment .plateAtom { font-weight: 700; }
+.parchment .sign {
+  /* land names read as a different class from model plates: an ink banner with
+     parchment lettering (model plates are parchment with ink lettering) */
+  color: #f6ecd2;
+  background: #5a1a14;
+  border: 2px solid #3b140e;
+  box-shadow: inset 0 0 0 1px #8a3a2c, 0 2px 0 rgba(90, 26, 20, 0.35);
+  text-shadow: none;
+}

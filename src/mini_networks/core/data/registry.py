@@ -1,4 +1,12 @@
-"""Dataset registry with MNIST task modes + text loaders."""
+"""Dataset registry with MNIST task modes + text loaders.
+
+``get_dataset(name, ..., task=...)`` is the single factory every trainer goes
+through; ``get_dataloader`` wraps it with the tier's ``sample_limit`` (a seeded
+random subset) and shuffling for the train split. The MNIST family can be
+served in several task modes (classification, segmentation, detection,
+CLIP image-text pairs, contrastive pairs); the rest are text, audio, tabular,
+graph and synthetic datasets. Downloads land under ``data_root`` on first use.
+"""
 from __future__ import annotations
 
 import contextlib
@@ -40,12 +48,14 @@ _PREPARED_DATASETS: set[tuple[str, str]] = set()
 
 
 def _prepare_dataset_once(name: str, data_root: str) -> None:
+    """Log "Preparing <name>..." the first time a dataset/root pair is touched this process."""
     key = (name, os.path.abspath(data_root))
     if key not in _PREPARED_DATASETS:
         log.info(f"Preparing {name}...")
 
 
 def _mark_dataset_ready(name: str, data_root: str) -> None:
+    """Record a dataset/root pair as loaded so later calls stay quiet."""
     key = (name, os.path.abspath(data_root))
     if key not in _PREPARED_DATASETS:
         _PREPARED_DATASETS.add(key)
@@ -53,6 +63,7 @@ def _mark_dataset_ready(name: str, data_root: str) -> None:
 
 
 def _load_torchvision_dataset(dataset_cls, data_root: str, train: bool, transform, name: str | None = None):
+    """Instantiate a torchvision dataset (download=True) with its progress output silenced."""
     dataset_name = name or dataset_cls.__name__
     _prepare_dataset_once(dataset_name, data_root)
     with contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(io.StringIO()):
@@ -359,6 +370,7 @@ class TwoDigitSamDataset(Dataset):
         return self._limit
 
     def _place(self, img: torch.Tensor, g: torch.Generator) -> torch.Tensor:
+        """Paste a 28x28 digit at a random position on a blank CANVAS x CANVAS image."""
         c = self.CANVAS
         row = int(torch.randint(0, c - 28 + 1, (1,), generator=g))
         col = int(torch.randint(0, c - 28 + 1, (1,), generator=g))
@@ -530,6 +542,7 @@ _DIGIT_NAMES = [
 
 
 def _build_captions(label: int) -> list[str]:
+    """Caption templates for one digit (word and numeral forms) used by the CLIP dataset."""
     name = _DIGIT_NAMES[label]
     n = str(label)
     return [
@@ -552,6 +565,7 @@ DIGIT_CAPTIONS: dict[int, list[str]] = {i: _build_captions(i) for i in range(10)
 
 
 def _text_to_ids(text: str, seq_len: int, vocab_size: int) -> list[int]:
+    """Tokenizer-free char ids (``ord(c) % vocab_size``), zero-padded/truncated to ``seq_len``."""
     ids = [ord(c) % vocab_size for c in text]
     if len(ids) < seq_len:
         ids = ids + [0] * (seq_len - len(ids))
@@ -667,10 +681,12 @@ class BPETextFileDataset(Dataset):
 
     @property
     def tokenizer(self):
+        """The BPETokenizer trained on this file's text (needed to decode samples)."""
         return self._tokenizer
 
     @property
     def vocab_size(self) -> int:
+        """Size of the trained BPE vocabulary (may be below the requested size)."""
         return self._tokenizer.vocab_size
 
     def __len__(self) -> int:
@@ -693,8 +709,16 @@ def get_dataset(
     """
     Factory returning a Dataset for the given name and task mode.
 
-    Supported names: "mnist", "fashion_mnist", "text_file", "tiny_shakespeare",
-    "synthetic_audio_digits", "synthetic_tabular", "speech_digits", "iris"
+    Supported names: "mnist", "fashion_mnist", "kmnist", "tri_mnist"
+    (classification only; labels 0-29), "text_file", "tiny_shakespeare",
+    "synthetic_audio_digits", "synthetic_tabular", "speech_digits",
+    "modular_arithmetic", "sam_two_digit", "synthetic_graph", "iris".
+
+    ``task`` only applies to the MNIST family. ``fast_demo`` shrinks most
+    datasets (MNIST family classification -> a 256-item random subset).
+    Dataset-specific options (``seq_len``, ``tokenizer_type``, ``n_samples``,
+    ``seed``, ...) arrive via ``**kwargs`` with the defaults shown below.
+    Raises ValueError for an unknown name or unsupported task.
     """
     train = split == "train"
     os.makedirs(data_root, exist_ok=True)
@@ -867,11 +891,13 @@ def get_dataloader(
     sample_limit: int | None = None,
     **kwargs,
 ) -> DataLoader:
-    """DataLoader over `get_dataset(...)`, optionally truncated to `sample_limit`.
+    """Build a DataLoader over ``get_dataset(...)``.
 
-    Pass `config.effective_batch_size`, `config.effective_fast_demo` and
-    `config.dataset_sample_limit` so the tier budget is honored. Shuffles only
-    the train split; `num_workers=0` keeps it CPU/Colab friendly.
+    ``sample_limit`` (pass ``config.dataset_sample_limit``) wraps the dataset
+    in a seeded random subset; the train split is shuffled, val is not.
+    Pass ``config.effective_batch_size``, ``config.effective_fast_demo``
+    and ``config.dataset_sample_limit`` so the tier budget is honoured.
+    Single-process loading (``num_workers=0``), last partial batch kept.
     """
     ds = get_dataset(name, data_root, split=split, task=task, fast_demo=fast_demo, **kwargs)
     if sample_limit is not None:
@@ -893,6 +919,10 @@ def _ensure_tiny_shakespeare(data_root: str) -> str:
 
 
 def _ensure_fsdd(data_root: str, require_downloads: bool = True) -> list[str]:
+    """Download/extract the Free Spoken Digit Dataset if needed; return sorted wav paths.
+
+    Raises RuntimeError when the data is missing and ``require_downloads`` is False.
+    """
     import zipfile
 
     os.makedirs(data_root, exist_ok=True)
@@ -924,6 +954,7 @@ def _ensure_fsdd(data_root: str, require_downloads: bool = True) -> list[str]:
 
 
 def _read_wav_mono(path: str, sample_len: int) -> torch.Tensor:
+    """Read a 16-bit PCM wav as mono float in [-1, 1], padded/cropped to ``(1, sample_len)``."""
     with wave.open(path, "rb") as wf:
         n = wf.getnframes()
         raw = wf.readframes(n)
@@ -943,6 +974,7 @@ def _read_wav_mono(path: str, sample_len: int) -> torch.Tensor:
 
 
 def _ensure_iris(data_root: str, require_downloads: bool = True):
+    """Download ``iris.data`` if needed and parse it into ``(X: list[4 floats], y: list[int])``."""
     os.makedirs(data_root, exist_ok=True)
     path = os.path.join(data_root, "iris.data")
     _prepare_dataset_once("Iris", data_root)
@@ -1013,6 +1045,8 @@ class _Subset(Dataset):
         return self._dataset[self._indices[idx]]
 
     def __getattr__(self, name: str):
+        # Forward attribute lookups (e.g. ``tokenizer``, ``vocab_size``) to the
+        # wrapped dataset so trainers can treat the subset like the original.
         return getattr(self._dataset, name)
 
 

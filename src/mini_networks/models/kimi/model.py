@@ -32,7 +32,8 @@ throughput artifacts at 1T scale — seq_len≤128 here); plain MHA stands in fo
 gated MLA (latent-KV compression is DeepSeek's lesson — see models/deepseek);
 load balancing uses the classic sign-rule bias update (K3's Quantile
 Balancing needs a distributed histogram estimator over million-token batches);
-no Muon, no MTP, no vision pathway, no FP8.
+no Muon, no vision pathway, no FP8; MTP is a single t+2 layer whose CE
+rides the aux-loss channel during training only.
 """
 from __future__ import annotations
 
@@ -51,6 +52,9 @@ class _CausalShortConv(nn.Module):
         self.conv = nn.Conv1d(channels, channels, kernel, padding=kernel - 1, groups=channels)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Map [B,T,C] to [B,T,C]; output t sees inputs t-kernel+1..t only (left padding,
+        right trim).
+        """
         T = x.shape[1]
         return self.conv(x.transpose(1, 2))[:, :, :T].transpose(1, 2)
 
@@ -95,6 +99,13 @@ class KDALayer(nn.Module):
         return x.view(B, T, self.n_heads, self.d_head)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Map x [B,T,d_model] to [B,T,d_model] via the per-head delta-rule recurrence.
+
+        Each head keeps a [d_head, d_head] fast-weight state S: decay it by
+        alpha_t, write beta_t * (v_t - S^T k_t) along k_t, then read with q_t.
+        The read-out is RMSNorm'd per head and passed through the sigmoid
+        output gate.
+        """
         B, T, C = x.shape
         H, D = self.n_heads, self.d_head
 
@@ -138,6 +149,9 @@ class GatedAttention(nn.Module):
         self.w_o = nn.Linear(d_model, d_model)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Map x [B,T,d_model] to sigmoid(W_g x) * CausalMHA(x), then W_o; shape
+        [B,T,d_model]. No positional signal (NoPE).
+        """
         T = x.shape[1]
         mask = nn.Transformer.generate_square_subsequent_mask(T, device=x.device)
         o, _ = self.attn(x, x, x, attn_mask=mask, is_causal=True)
@@ -156,6 +170,9 @@ class SiTUGLU(nn.Module):
         self.beta2 = beta2
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Map x [..., dim] to [..., dim] through the softcapped gate x up product and the
+        down projection.
+        """
         g = self.w_g(x)
         gate = self.beta1 * torch.tanh(g / self.beta1) * torch.sigmoid(g)
         up = self.beta2 * torch.tanh(self.w_u(x) / self.beta2)
@@ -203,6 +220,15 @@ class StableLatentMoE(nn.Module):
         self.drop = nn.Dropout(dropout)
 
     def forward(self, x: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
+        """Map x [B,T,d_model] to (output [B,T,d_model], aux_loss = 0).
+
+        Top-k experts are chosen on sigmoid router scores plus ``route_bias``
+        but mixed with the raw normalised scores. Routed experts run (densely,
+        for every token) in the latent space, then the sum is RMSNorm'd and
+        projected up and added to the shared experts. In training mode the
+        bias is nudged by ``balance_gamma`` toward uniform load (sign rule),
+        in place of an auxiliary balance loss.
+        """
         B, T, C = x.shape
         xf = x.reshape(B * T, C)
 
@@ -245,6 +271,11 @@ class BlockAttnRes(nn.Module):
         self.key_norm = RMSNorm(d_model)
 
     def forward(self, slot: int, sources: list[torch.Tensor]) -> torch.Tensor:
+        """Mix depth sources with pseudo-query ``slot``: list of S tensors [B,T,d] -> [B,T,d].
+
+        Softmax weights are computed per token from RMSNorm'd sources; the
+        raw sources are averaged with those weights.
+        """
         stack = torch.stack(sources, dim=2)                    # [B, T, S, d]
         keys = self.key_norm(stack)
         logits = torch.einsum("btsd,d->bts", keys, self.queries[slot])
@@ -261,6 +292,7 @@ class _DenseFFN(nn.Module):
         self.drop = nn.Dropout(dropout)
 
     def forward(self, x: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
+        """Map x [B,T,d_model] to (dropout(SiTUGLU(x)), aux_loss = 0)."""
         return self.drop(self.net(x)), x.new_tensor(0.0)
 
 
@@ -284,6 +316,9 @@ class MTPModule(nn.Module):
         self.norm2 = nn.LayerNorm(d_model)
 
     def forward(self, h: torch.Tensor, next_emb: torch.Tensor) -> torch.Tensor:
+        """Map backbone states h [B,T',d] and next-token embeddings [B,T',d] to MTP hidden
+        states [B,T',d] (one gated-attention + SiTU-GLU layer).
+        """
         x = self.proj(torch.cat([self.norm_h(h), self.norm_e(next_emb)], dim=-1))
         x = self.norm1(x + self.attn(x))
         return self.norm2(x + self.ffn(x))
@@ -301,6 +336,9 @@ class _KimiSublayers(nn.Module):
         self.drop = nn.Dropout(dropout)
 
     def forward(self, x: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
+        """Post-LN sublayers: x = LN(x + attn(x)); x = LN(x + ffn(x)). Returns (x [B,T,d],
+        ffn aux loss).
+        """
         x = self.norm1(x + self.drop(self.attn(x)))
         ffn_out, aux = self.ffn(x)
         x = self.norm2(x + self.drop(ffn_out))
@@ -416,6 +454,12 @@ class KimiLM(nn.Module):
     def generate(
         self, prompt: torch.Tensor, max_new_tokens: int = 64, temperature: float = 1.0
     ) -> torch.Tensor:
+        """Sample ``max_new_tokens`` tokens autoregressively from ``prompt`` [B,T0].
+
+        Each step re-runs the full model on the last ``seq_len`` tokens (the
+        KDA states are not cached between steps). Returns [B, T0 +
+        max_new_tokens] ids, prompt included.
+        """
         self.eval()
         x = prompt
         for _ in range(max_new_tokens):

@@ -4,9 +4,10 @@ import { useState } from "react";
 import { AnimatePresence, motion } from "motion/react";
 import { infer } from "@/lib/api";
 import type { RunSummary, TaxonomyResponse } from "@/lib/types";
-import { ATOMS, STATUS_INK, symbolFor } from "@/lib/blueprint";
-import { iconFor } from "@/lib/icons";
+import { STATUS_INK, atomicNumbers, familyOf, symbolFor } from "@/lib/blueprint";
 import { NetworkFlow } from "@/components/network-flow";
+import { ElementTile } from "@/components/periodic/element-tile";
+import { tileSymbol } from "@/components/periodic/placed";
 import { schematicFor } from "@/lib/schematics";
 
 export function ElementSheet({
@@ -27,6 +28,10 @@ export function ElementSheet({
   const children = taxonomy?.models.filter((m) => name && m.builds_on.includes(name)) ?? [];
   const reactions = taxonomy?.compositions.filter((c) => name && c.composes.includes(name)) ?? [];
   const modelRuns = runs.filter((r) => r.model === name).slice(0, 6);
+  const rxIndex = taxonomy?.compositions.findIndex((c) => c.name === name) ?? -1;
+  // atoms 1-16, compounds by chart reading order, reactions ✻n — as on the table
+  const specimenNo = composition ? `✻${rxIndex + 1}` : (name && atomicNumbers()[name]) || "—";
+  const family = model && name ? familyOf(name) : undefined;
 
   const runInfer = async () => {
     if (!name) return;
@@ -47,37 +52,42 @@ export function ElementSheet({
       {name && (model || composition) && (
         <>
           <motion.div
-            className="absolute inset-0 z-20 bg-paper-deep/70"
+            className="pp-overlay absolute inset-0 z-20 bg-paper-deep/70"
             initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
             onClick={onClose}
           />
           <motion.aside
             initial={{ x: "100%" }} animate={{ x: 0 }} exit={{ x: "100%" }}
             transition={{ type: "tween", duration: 0.28, ease: "easeOut" }}
-            className="absolute inset-y-0 right-0 z-30 w-full max-w-lg overflow-y-auto border-l-[1.5px] border-line bg-paper px-6 py-6"
+            className="pp-drawer absolute inset-y-0 right-0 z-30 w-full max-w-lg overflow-y-auto border-l-[1.5px] border-line bg-paper px-6 py-6"
           >
-            <div className="flex items-start justify-between">
-              <div>
-                <div className="text-[10px] tracking-[0.3em] text-ink-dim">
-                  SPECIMEN Nº {ATOMS[name]?.z ?? "—"} · SPEC SHEET
+            <div className="pt-drawer-body">
+            {/* header: the specimen's own element tile, then its name and kind */}
+            <div className="flex items-start gap-4">
+              <ElementTile
+                name={name}
+                number={specimenNo}
+                symbol={tileSymbol(name, taxonomy)}
+                level={composition ? "reaction" : model?.level === "elementary" ? "atom" : "compound"}
+                size="spec"
+              />
+              <div className="min-w-0 flex-1 pt-0.5">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="text-[10px] tracking-[0.3em] text-ink-dim">SPEC SHEET</div>
+                  <button onClick={onClose} className="bp-title -mt-0.5 text-xs text-ink-dim hover:text-redline focus-visible:text-redline">
+                    close ✕
+                  </button>
                 </div>
-                <div className="flex items-baseline gap-3">
-                  <span className="bp-title text-6xl font-extrabold text-redline">{symbolFor(name)}</span>
-                  <h2 className="bp-title text-2xl font-bold text-ink">{name}</h2>
-                  {(() => { const Icon = iconFor(name); return Icon ? (
-                    <Icon size={30} strokeWidth={1.25} className="self-center text-line" />
-                  ) : null; })()}
+                <h2 className="bp-title mt-1 break-words text-2xl font-bold leading-tight text-ink">{name}</h2>
+                <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1">
+                  <span className="bp-stamp inline-block px-2 py-0.5 text-[9px]">
+                    {composition
+                      ? "reaction · composition"
+                      : model?.level === "elementary" ? "elementary · atom" : "derived · compound"}
+                  </span>
+                  {family && <span className="text-[10px] text-ink-dim">{family} family</span>}
                 </div>
               </div>
-              <button onClick={onClose} className="bp-title text-xs text-ink-dim hover:text-redline">
-                close ✕
-              </button>
-            </div>
-
-            <div className="bp-stamp mt-3 inline-block px-2 py-0.5 text-[9px]">
-              {composition
-                ? "reaction · composition"
-                : model?.level === "elementary" ? "elementary · atom" : "derived · compound"}
             </div>
 
             <div className="mt-4 border-[1.5px] border-line-faint bg-paper-deep/40 p-2">
@@ -87,7 +97,7 @@ export function ElementSheet({
               <NetworkFlow stages={schematicFor(name, composition?.composes)} />
             </div>
 
-            <p className="mt-4 text-[12px] leading-relaxed text-ink">
+            <p className="mt-4 text-[13px] leading-relaxed text-ink">
               {model?.description ?? composition?.description}
             </p>
             {model?.note && <p className="mt-1 text-[11px] italic text-ink-dim">“{model.note}”</p>}
@@ -120,9 +130,7 @@ export function ElementSheet({
             )}
             {reactions.length > 0 && (
               <Section title="Appears in reactions">
-                <div className="text-[11px] text-ink-dim">
-                  {reactions.map((r) => r.name).join(" · ")}
-                </div>
+                <Chips names={reactions.map((r) => r.name)} onSelect={onSelect} />
               </Section>
             )}
 
@@ -166,6 +174,7 @@ export function ElementSheet({
               )}
             </Section>
             )}
+            </div>
           </motion.aside>
         </>
       )}

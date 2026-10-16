@@ -15,6 +15,12 @@ from mini_networks.models.detection.model import DigitDetector, detection_loss
 
 
 class DetectionTrainer(DetectionTrainerBase):
+    """Train DigitDetector on (canvas, label, bbox) batches.
+
+    The DetectionTrainerBase loop is reused; `_loss` swaps in
+    `detection_loss` so `bbox_loss_weight` applies. Checkpoint: `model.pt`.
+    """
+
     def __init__(self):
         self.model: DigitDetector | None = None
 
@@ -43,6 +49,11 @@ class DetectionTrainer(DetectionTrainerBase):
         )
 
     def evaluate(self, config: BaseConfig, dataloader: DataLoader, logger: Logger) -> dict:
+        """Classification accuracy only -> {"eval_accuracy"}.
+
+        Box quality is not scored here; iterates the whole loader (not capped
+        by max_eval_batches).
+        """
         assert isinstance(config, DetectionConfig)
         if self.model is None:
             self.model = self._build(config)
@@ -60,6 +71,8 @@ class DetectionTrainer(DetectionTrainerBase):
         return {"eval_accuracy": correct / max(1, total)}
 
     def infer(self, config: BaseConfig, inputs: Any) -> Any:
+        """Canvases [B, 1, 56, 56] (bare tensor or {"images": ...}) ->
+        {"class_probs": [B, num_classes], "bboxes": [B, 4] normalised x1,y1,x2,y2} (CPU tensors)."""
         assert isinstance(config, DetectionConfig)
         if self.model is None:
             raise RuntimeError("Model not loaded.")
@@ -75,6 +88,11 @@ class DetectionTrainer(DetectionTrainerBase):
 
 
 def make_detection_dataloader(config: DetectionConfig, split: str = "train") -> DataLoader:
+    """(canvases [B, 1, S, S], labels [B], bboxes [B, 4]) with S = canvas_size.
+
+    Each 28x28 digit is pasted at a fresh random offset per access; the box is
+    the pasted 28x28 patch (not a tight fit to the ink), normalised by S.
+    """
     return get_dataloader(
         name=config.dataset,
         data_root=config.data_root,

@@ -27,6 +27,10 @@ BLOCK = re.compile(
 
 
 def latest_report(sweep_root: Path) -> dict | None:
+    """Load the newest `<sweep_root>/<ts>/report.json`, or None if there is none.
+
+    Sweep dirs are `%Y%m%d-%H%M%S` timestamps, so lexical order is time order.
+    """
     reports = sorted(sweep_root.glob("*/report.json"))
     if not reports:
         return None
@@ -34,6 +38,11 @@ def latest_report(sweep_root: Path) -> dict | None:
 
 
 def results_table(report: dict, items: list[str]) -> str:
+    """Markdown table of `items` (in the given order) from a sweep report.
+
+    Items missing from the report get a "_not in last sweep_" row rather than
+    being dropped, so a chapter's table keeps its shape.
+    """
     by_name = {r["name"]: r for r in report["results"]}
     meta = report.get("meta", {})
     lines = [
@@ -56,9 +65,15 @@ def results_table(report: dict, items: list[str]) -> str:
 
 
 def render_file(path: Path, report: dict) -> bool:
+    """Rewrite every results block in `path`; return True if the file changed.
+
+    The start/end markers are kept and only the body between them is replaced,
+    which is what makes repeated runs idempotent.
+    """
     text = path.read_text()
 
     def repl(match: re.Match) -> str:
+        """Rebuild one block: start marker + fresh table + end marker."""
         items = [i.strip() for i in match.group("items").split(",") if i.strip()]
         return f"{match.group(1)}\n{results_table(report, items)}\n{match.group(4)}"
 
@@ -70,6 +85,7 @@ def render_file(path: Path, report: dict) -> bool:
 
 
 def main() -> int:
+    """CLI entry: render the latest report into every docs/*.md; 1 if no report."""
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--sweep-root", default=str(ROOT / "runs" / "sweep"))
     parser.add_argument("--docs", default=str(ROOT / "docs"))

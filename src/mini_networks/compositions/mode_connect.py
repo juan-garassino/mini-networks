@@ -43,6 +43,11 @@ log = logging.getLogger(__name__)
 
 
 class ModeConnectConfig(BaseConfig):
+    """Knobs: ``seeds`` (the two independent vertices; different seeds ->
+    different modes), ``hidden_dim`` (SmallCNN width), ``n_grid`` (heatmap
+    resolution), ``n_ensemble`` (Dirichlet samples averaged). Epochs, batch
+    size and learning rate are shared by all three vertex trainings."""
+
     model_name: str = "mode_connect"
     dataset: str = "mnist"
     hidden_dim: int = 32
@@ -56,6 +61,8 @@ class ModeConnect:
     """Two frozen vertices + one learned vertex spanning a low-loss simplex."""
 
     def _clf_config(self, config: ModeConnectConfig) -> ClassifierConfig:
+        """Project this config onto a ClassifierConfig so the standard MNIST
+        classification dataloader (and its tier budgets) can be reused."""
         return ClassifierConfig(
             hidden_dim=config.hidden_dim,
             num_classes=config.num_classes,
@@ -71,6 +78,12 @@ class ModeConnect:
 
     @staticmethod
     def _merge(vertices: list[dict], weights) -> dict:
+        """Convex combination sum_i w_i * theta_i of state dicts.
+
+        Float tensors (weights, biases, BN running stats) are blended; integer
+        buffers are copied from the first vertex. Gradients flow through any
+        vertex whose tensors require grad (the learned third vertex).
+        """
         merged = {}
         for k in vertices[0]:
             if vertices[0][k].is_floating_point():
@@ -80,6 +93,7 @@ class ModeConnect:
         return merged
 
     def _train_vertex(self, model, dl, config, logger: Logger, key: str) -> None:
+        """Plain cross-entropy training of one vertex; logs ``key`` and ``loss``."""
         model.train()
         optimizer = torch.optim.Adam(model.parameters(), lr=config.learning_rate)
         for epoch in range(config.effective_epochs):
@@ -95,6 +109,7 @@ class ModeConnect:
 
     @torch.no_grad()
     def _accuracy(self, template, params: dict, dl, device, n_batches: int | None = None) -> float:
+        """Top-1 accuracy of ``template`` run with ``params`` (functional_call)."""
         correct = total = 0
         for i, (x, y) in enumerate(dl):
             if n_batches is not None and i >= n_batches:
@@ -105,6 +120,20 @@ class ModeConnect:
         return correct / max(1, total)
 
     def train_all(self, config: ModeConnectConfig, logger: Logger) -> dict:
+        """Train both vertices, learn the third, then evaluate and draw the surface.
+
+        Logs ``clf_a_loss`` / ``clf_b_loss`` (vertex training) and
+        ``simplex_loss`` (one Dirichlet(1,1,1) sample per batch). Writes
+        ``loss_surface.png`` (row i = weight on vertex a, column j = weight
+        on vertex b, the remainder on the learned vertex; the upper-left
+        triangle is the simplex) and ``simplex_vertices.pt``
+        (``vertex_a`` / ``vertex_b`` / ``vertex_c`` state dicts).
+
+        Returns:
+            dict with ``single_accuracy`` (vertex a on the full val loader),
+            ``ensemble_accuracy`` (``n_ensemble`` interior samples on the
+            first ``max_eval_batches`` (or 8) val batches) and ``run_dir``.
+        """
         device = config.device
         cfgc = self._clf_config(config)
         dl_train = make_classification_dataloader(cfgc, split="train")
@@ -134,6 +163,9 @@ class ModeConnect:
             theta3[k] = t
         trainable = [t for t in theta3.values() if t.requires_grad]
         optimizer = torch.optim.Adam(trainable, lr=config.learning_rate)
+        # Dirichlet(1,1,1) = uniform over the triangle: every interior point is
+        # trained as often as the corners, which is what makes the WHOLE
+        # simplex low-loss rather than just a path through it.
         dirichlet = torch.distributions.Dirichlet(torch.ones(3))
         for epoch in range(config.effective_epochs):
             total = 0.0

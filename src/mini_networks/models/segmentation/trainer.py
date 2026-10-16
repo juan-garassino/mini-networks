@@ -17,6 +17,12 @@ from mini_networks.models.segmentation.unet import SegUNet, dice_loss, multiclas
 
 
 class SegmentationTrainer(SegmentationTrainerBase):
+    """Train :class:`SegUNet` for binary or multiclass segmentation.
+
+    Loss: BCE + Dice (binary) or cross-entropy + mean per-class Dice
+    (multiclass). The training loop and the ``model.pt`` checkpoint come from
+    ``SegmentationTrainerBase``.
+    """
     def __init__(self):
         self.model: SegUNet | None = None
 
@@ -45,6 +51,11 @@ class SegmentationTrainer(SegmentationTrainerBase):
         )
 
     def evaluate(self, config: BaseConfig, dataloader: DataLoader, logger: Logger) -> dict:
+        """Return ``{"eval_iou"}``: mean per-batch IoU of the 0.5-thresholded mask.
+
+        IoU is only computed in binary mode; in multiclass mode the value
+        stays 0.0.
+        """
         assert isinstance(config, SegmentationConfig)
         if self.model is None:
             self.model = self._build(config)
@@ -66,6 +77,11 @@ class SegmentationTrainer(SegmentationTrainerBase):
         return {"eval_iou": total_iou / max(1, n)}
 
     def infer(self, config: BaseConfig, inputs: Any) -> Any:
+        """Segment an image tensor (or ``{"images": tensor}``) [B,1,28,28].
+
+        Returns ``{"masks": [B,out_channels,28,28]}`` on CPU: probabilities in
+        binary mode, class logits in multiclass mode.
+        """
         assert isinstance(config, SegmentationConfig)
         if self.model is None:
             raise RuntimeError("Model not loaded.")
@@ -77,6 +93,12 @@ class SegmentationTrainer(SegmentationTrainerBase):
 
 
 def make_segmentation_dataloader(config: SegmentationConfig, split: str = "train") -> DataLoader:
+    """Digit segmentation loader for ``config.dataset``.
+
+    Binary: (image [B,1,28,28], mask [B,28,28] long, 1 where pixel > 0).
+    Multiclass: (two-digit composite image [B,1,28,28], integer class mask
+    [B,28,28] with 12 classes) built by ``MulticlassSegmentationFromDigits``.
+    """
     task = "binary_segmentation" if config.task_mode == "binary" else "multiclass_segmentation"
     return get_dataloader(
         name=config.dataset,

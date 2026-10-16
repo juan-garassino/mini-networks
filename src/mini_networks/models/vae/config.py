@@ -1,8 +1,16 @@
+"""Config for the convolutional VAE: latent size and the KL weight ``beta``."""
 from __future__ import annotations
 from mini_networks.core.config import BaseConfig
 
 
 class VAEConfig(BaseConfig):
+    """Hyperparameters for :class:`~mini_networks.models.vae.model.ConvVAE`.
+
+    ``latent_dim`` is the size of z (default 32). ``beta`` weights the KL term
+    in :func:`vae_loss`; its small default is explained next to the field.
+    ``hidden_dim`` is passed to the model but the current ConvVAE does not use
+    it (the conv encoder width is fixed).
+    """
     model_name: str = "vae"
     latent_dim: int = 32
     hidden_dim: int = 128

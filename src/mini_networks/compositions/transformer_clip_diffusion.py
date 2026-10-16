@@ -18,6 +18,17 @@ Educational value
   - Shows how a generative language model can "steer" image generation.
   - Demonstrates cross-modal retrieval (text → class id via cosine similarity).
   - The three models are fully independent; only their outputs are chained.
+  - Averaging k candidate embeddings before matching is a cheap ensemble: it
+    smooths over the randomness of any single sampled continuation.
+
+Deliberately simplified: the LM (Tiny Shakespeare or ``text_file``) and the
+CLIP text tower (templated digit captions) never share a vocabulary of
+meaning, so unless the generated text happens to resemble a digit caption
+the chosen class reflects surface character statistics rather than
+semantics. CLIP reads only the first ``text_seq_len`` (32) characters of
+each candidate (seed + start of the continuation), character-tokenised as
+``ord(c) % vocab_size``. CLIP is a router to a class id, not a gradient
+guide (compare clip_guided_diffusion's notes).
 """
 from __future__ import annotations
 
@@ -46,6 +57,15 @@ log = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 
 class TransformerCLIPDiffusionConfig(BaseConfig):
+    """Knobs per stage. LM: ``lm_*`` sizes, ``lm_epochs`` (tier-scaled, M
+    caps at 2), ``text_file`` (empty = Tiny Shakespeare). CLIP: ``embed_dim``,
+    ``text_*`` sizes, ``clip_temperature``, ``clip_epochs`` (tier-scaled).
+    Diffusion: ``n_feat``, ``timesteps`` (tier-capped via
+    ``effective_timesteps``), ``drop_prob`` (CFG label dropout),
+    ``guide_weight`` w; trains for ``effective_epochs`` (``diff_epochs`` is
+    not read). Inference: ``k_prompts`` candidates of ``prompt_max_new``
+    tokens sampled at ``prompt_temperature``."""
+
     model_name: str = "transformer_clip_diffusion"
 
     # ── Transformer LM ────────────────────────────────────────────────
@@ -94,6 +114,7 @@ class TransformerCLIPDiffusion:
     """Three-stage composition: LM generates text → CLIP ranks → diffusion generates image."""
 
     def __init__(self):
+        """Start empty; ``train_all`` (or the stage trainers) fill the parts."""
         self.lm: TransformerLM | None = None
         self.tokenizer: CharTokenizer | None = None
         self.clip: CLIPModel | None = None
@@ -106,6 +127,7 @@ class TransformerCLIPDiffusion:
     # ------------------------------------------------------------------
 
     def _build_lm(self, config: TransformerCLIPDiffusionConfig, vocab_size: int) -> TransformerLM:
+        """Char-level decoder-only LM: tokens [B,T] -> logits [B,T,vocab_size]."""
         return TransformerLM(
             vocab_size=vocab_size,
             d_model=config.lm_d_model,
@@ -117,6 +139,7 @@ class TransformerCLIPDiffusion:
         ).to(config.device)
 
     def _build_clip(self, config: TransformerCLIPDiffusionConfig) -> CLIPModel:
+        """Image + text towers projecting into a shared ``embed_dim`` space."""
         return CLIPModel(
             embed_dim=config.embed_dim,
             vocab_size=config.vocab_size,
@@ -128,6 +151,7 @@ class TransformerCLIPDiffusion:
         ).to(config.device)
 
     def _build_unet(self, config: TransformerCLIPDiffusionConfig) -> ConditionedUNet:
+        """Class+time conditioned UNet on 1-channel 28x28 pixels."""
         return ConditionedUNet(
             in_channels=1,
             n_feat=config.n_feat,
@@ -137,6 +161,7 @@ class TransformerCLIPDiffusion:
         ).to(config.device)
 
     def _build_scheduler(self, config: TransformerCLIPDiffusionConfig) -> NoiseScheduler:
+        """Linear-beta DDPM schedule over the tier's ``effective_timesteps``."""
         return NoiseScheduler(
             timesteps=config.effective_timesteps,
             beta_start=config.beta_start,
@@ -148,7 +173,11 @@ class TransformerCLIPDiffusion:
     # ------------------------------------------------------------------
 
     def train_lm(self, config: TransformerCLIPDiffusionConfig, logger: Logger) -> None:
-        """Train a character-level LM on Tiny Shakespeare (or custom text_file)."""
+        """Train a character-level LM on Tiny Shakespeare (or custom text_file).
+
+        AdamW + grad-norm clip 1.0; logs ``lm_loss`` per epoch; saves
+        ``lm.pt`` and ``tokenizer.json``.
+        """
         import torch.nn.functional as F
         import torch.optim as optim
 
@@ -195,7 +224,11 @@ class TransformerCLIPDiffusion:
     # ------------------------------------------------------------------
 
     def train_clip(self, config: TransformerCLIPDiffusionConfig, logger: Logger) -> None:
-        """Train CLIP on MNIST image-text pairs."""
+        """Train CLIP on MNIST image-caption pairs, then cache class embeddings.
+
+        Symmetric contrastive loss; logs ``clip_loss`` per epoch; saves
+        ``clip.pt``.
+        """
         import torch.optim as optim
 
         clip = self._build_clip(config)
@@ -249,7 +282,12 @@ class TransformerCLIPDiffusion:
     # ------------------------------------------------------------------
 
     def train_diffusion(self, config: TransformerCLIPDiffusionConfig, logger: Logger) -> None:
-        """Train class-conditioned UNet with CFG."""
+        """Train the class-conditioned UNet for classifier-free guidance.
+
+        eps-prediction MSE with each label dropped with probability
+        ``drop_prob`` (mask 1 = unconditional). Logs ``diff_loss``; saves
+        ``unet.pt``.
+        """
         import torch.optim as optim
 
         unet = self._build_unet(config)
@@ -299,6 +337,10 @@ class TransformerCLIPDiffusion:
     # ------------------------------------------------------------------
 
     def train_all(self, config: TransformerCLIPDiffusionConfig, logger: Logger) -> None:
+        """Log the config, then train LM, CLIP and diffusion in that order.
+
+        Artifacts: ``lm.pt``, ``tokenizer.json``, ``clip.pt``, ``unet.pt``.
+        """
         logger.log_config(config.model_dump())
         self.train_lm(config, logger)
         self.train_clip(config, logger)
@@ -313,7 +355,12 @@ class TransformerCLIPDiffusion:
         seed: str,
         config: TransformerCLIPDiffusionConfig,
     ) -> list[str]:
-        """Use the LM to generate `k_prompts` candidate text continuations."""
+        """Use the LM to generate `k_prompts` candidate text continuations.
+
+        Each candidate is the decoded seed followed by ``prompt_max_new``
+        sampled characters (seed characters outside the LM vocabulary are
+        dropped).
+        """
         assert self.lm is not None and self.tokenizer is not None
         model = self.lm
         model.eval()
@@ -376,7 +423,10 @@ class TransformerCLIPDiffusion:
         config: TransformerCLIPDiffusionConfig,
         n_samples: int = 4,
     ) -> torch.Tensor:
-        """CFG sampling for a given class. Returns [n, 1, 28, 28] in [0, 1]."""
+        """CFG sampling for a given class. Returns [n, 1, 28, 28] in [0, 1].
+
+        eps = (1 + w) * eps_cond - w * eps_uncond with w = ``guide_weight``.
+        """
         assert self.unet is not None and self.scheduler is not None
         unet, scheduler = self.unet, self.scheduler
         unet.eval()

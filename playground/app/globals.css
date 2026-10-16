@@ -1,6 +1,8 @@
 @import "tailwindcss";
 
-/* ————— CYANOTYPE BLUEPRINT THEME ————— */
+/* App-wide: Tailwind + the colour tokens its @theme utilities resolve to.
+   Classic-shell styling (grid, grain, editions, bp-*) lives in
+   app/(classic)/blueprint.css so /lab pages start from a neutral body. */
 
 @theme inline {
   --color-paper: var(--paper);
@@ -22,124 +24,10 @@
   --line: #9fdcf5;         /* pen line-work */
   --line-faint: #1d4468;   /* construction lines / grid */
   --redline: #ffb454;      /* amber markup: live, hover, CTA */
+  --pen-3: #8be9c3;        /* observatory pen 3 */
+  --pen-4: #e0a8ff;        /* observatory pen 4 */
+  --pen-5: #ff7d6b;        /* observatory pen 5 */
+  --alert: #ff7d6b;        /* offline dot / failed status */
 }
 
 html, body { height: 100%; }
-
-body {
-  background-color: var(--paper);
-  color: var(--ink);
-  font-family: var(--font-draft), monospace;
-  /* drafting grid: fine + major lines, then a vignette toward the margins */
-  background-image:
-    radial-gradient(ellipse at 50% 40%, rgba(20, 60, 100, 0.35), rgba(4, 14, 26, 0.55)),
-    linear-gradient(var(--line-faint) 1px, transparent 1px),
-    linear-gradient(90deg, var(--line-faint) 1px, transparent 1px),
-    linear-gradient(rgba(29, 68, 104, 0.35) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(29, 68, 104, 0.35) 1px, transparent 1px);
-  background-size: 100% 100%, 96px 96px, 96px 96px, 24px 24px, 24px 24px;
-}
-
-/* photographic grain over everything */
-body::after {
-  content: "";
-  position: fixed;
-  inset: 0;
-  pointer-events: none;
-  z-index: 50;
-  opacity: 0.07;
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2'/%3E%3C/filter%3E%3Crect width='140' height='140' filter='url(%23n)' opacity='0.6'/%3E%3C/svg%3E");
-}
-
-::selection { background: var(--redline); color: var(--paper-deep); }
-
-/* thin blueprint scrollbars */
-* { scrollbar-width: thin; scrollbar-color: var(--line-faint) transparent; }
-
-/* ————— drafting primitives ————— */
-
-.bp-frame {
-  border: 1.5px solid var(--line);
-  box-shadow: 0 0 0 5px var(--paper), 0 0 0 6.5px var(--line-faint);
-}
-
-.bp-title {
-  font-family: var(--font-display), sans-serif;
-  text-transform: uppercase;
-  letter-spacing: 0.14em;
-}
-
-.bp-stamp {
-  font-family: var(--font-display), sans-serif;
-  text-transform: uppercase;
-  letter-spacing: 0.22em;
-  border: 1.5px solid var(--redline);
-  color: var(--redline);
-  transform: rotate(-2deg);
-}
-
-/* stroke draw-in for the load moment */
-@keyframes bp-draw { from { stroke-dashoffset: 1; } to { stroke-dashoffset: 0; } }
-.bp-draw { stroke-dasharray: 1; stroke-dashoffset: 1; animation: bp-draw 1.1s ease forwards; }
-
-@keyframes bp-blink { 0%, 100% { opacity: 1; } 50% { opacity: 0.25; } }
-.bp-live { animation: bp-blink 1.6s ease-in-out infinite; }
-
-/* ————— EDITIONS: token overrides per design ————— */
-
-/* 1 · vintage wall chart: parchment + oxblood ink */
-[data-edition="wallchart"] {
-  --paper: #efe3c8; --paper-deep: #e4d4b0;
-  --ink: #2b1d12; --ink-dim: #7a5c3e;
-  --line: #5b2320; --line-faint: #c9b58e;
-  --redline: #8a1f1c;
-}
-[data-edition="wallchart"] body, body[data-edition="wallchart"] {
-  background-image:
-    radial-gradient(ellipse at 50% 30%, rgba(255, 250, 230, 0.6), rgba(190, 165, 120, 0.5)),
-    repeating-linear-gradient(0deg, transparent 0 30px, rgba(120, 90, 50, 0.05) 30px 31px);
-}
-[data-edition="wallchart"] { --font-display: var(--font-instrument); }
-
-/* 2 · brutalist terminal: phosphor on black */
-[data-edition="terminal"] {
-  --paper: #050805; --paper-deep: #020302;
-  --ink: #7dff9a; --ink-dim: #2e7a44;
-  --line: #4ddc72; --line-faint: #123920;
-  --redline: #ffe14d;
-}
-[data-edition="terminal"] body, body[data-edition="terminal"] {
-  background-image: repeating-linear-gradient(0deg, rgba(0, 0, 0, 0.35) 0 2px, transparent 2px 4px);
-}
-[data-edition="terminal"] { --font-display: var(--font-vt); --font-draft: var(--font-vt); }
-[data-edition="terminal"] .bp-title { letter-spacing: 0.05em; }
-
-/* 3 · metro map: signage on warm off-white */
-[data-edition="metro"] {
-  --paper: #f4f1ea; --paper-deep: #e9e4d8;
-  --ink: #191919; --ink-dim: #6e6a60;
-  --line: #191919; --line-faint: #d4cec0;
-  --redline: #e0301e;
-}
-[data-edition="metro"] body, body[data-edition="metro"] { background-image: none; }
-[data-edition="metro"] { --font-display: var(--font-jost); --font-draft: var(--font-jost); }
-[data-edition="metro"] body::after { opacity: 0.03; }
-
-/* 4 · botanical atlas: sage + garamond */
-[data-edition="atlas"] {
-  --paper: #f2efe2; --paper-deep: #e7e3d0;
-  --ink: #23301f; --ink-dim: #6d7a5e;
-  --line: #3c5232; --line-faint: #cfd0b8;
-  --redline: #a4552a;
-}
-[data-edition="atlas"] body, body[data-edition="atlas"] {
-  background-image: radial-gradient(ellipse at 50% 20%, rgba(255, 255, 245, 0.7), rgba(205, 205, 175, 0.45));
-}
-[data-edition="atlas"] { --font-display: var(--font-cormorant); }
-[data-edition="atlas"] .bp-title { letter-spacing: 0.05em; text-transform: none; }
-
-/* ————— network anatomy flow ————— */
-@keyframes flowdash { to { stroke-dashoffset: -20; } }
-.flow-edge { stroke-dasharray: 3 7; animation: flowdash 1.1s linear infinite; }
-@keyframes nodepulse { 0%,100% { opacity: 0.75; } 50% { opacity: 1; } }
-.flow-node { animation: nodepulse 2.2s ease-in-out infinite; }

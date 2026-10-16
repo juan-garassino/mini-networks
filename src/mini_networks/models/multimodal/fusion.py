@@ -44,6 +44,9 @@ class CrossAttentionBlock(nn.Module):
         self.ln = nn.LayerNorm(d_model)
 
     def forward(self, query: torch.Tensor, context: torch.Tensor) -> torch.Tensor:
+        """Let ``query`` [B,Tq,D] attend to ``context`` [B,Tc,D]; returns updated query
+        tokens [B,Tq,D].
+        """
         attn_out, _ = self.attn(query, context, context, need_weights=False)
         x = self.ln(query + attn_out)
         return self.ffn(x) + x
@@ -57,6 +60,7 @@ class ConcatFusion(nn.Module):
         self.proj = nn.Linear(in_dim * 2, out_dim)
 
     def forward(self, a: torch.Tensor, b: torch.Tensor) -> torch.Tensor:
+        """Map pooled vectors a, b [B,in_dim] to Linear([a; b]) [B,out_dim]."""
         return self.proj(torch.cat([a, b], dim=-1))
 
 
@@ -68,6 +72,9 @@ class GatedFusion(nn.Module):
         self.gate = nn.Linear(dim * 2, dim)
 
     def forward(self, a: torch.Tensor, b: torch.Tensor) -> torch.Tensor:
+        """Blend pooled vectors a, b [B,D] as g*a + (1-g)*b with a learned per-dimension
+        gate g; returns [B,D].
+        """
         g = torch.sigmoid(self.gate(torch.cat([a, b], dim=-1)))
         return g * a + (1 - g) * b
 
@@ -81,6 +88,9 @@ class CrossAttentionFusion(nn.Module):
         self.pool = pool
 
     def forward(self, query: torch.Tensor, context: torch.Tensor) -> torch.Tensor:
+        """Cross-attend ``query`` [B,Tq,D] to ``context`` [B,Tc,D] and pool to [B,D] (mean
+        or first token).
+        """
         x = self.cross(query, context)
         if self.pool == "mean":
             return x.mean(dim=1)

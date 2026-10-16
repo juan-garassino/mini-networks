@@ -1,4 +1,25 @@
-"""RAG-guided generation composition: retrieve context, then generate."""
+"""RAG-guided generation: TF-IDF retrieval prepended to a char-level LM prompt.
+
+Composes the zoo's NanoRAG retriever with a TransformerLM:
+
+    train:    next-character LM on a text file (Tiny Shakespeare when
+              ``text_file`` is empty); then chunk the same corpus into
+              ``chunk_size``-char pieces and build a TF-IDF index over them
+    generate: top_k chunks by cosine(TF-IDF(query), TF-IDF(chunk))
+              -> prompt "[Context: c1 | c2 | c3] <query>"
+              -> LM samples ``max_new_tokens`` characters after it
+
+What it demonstrates: retrieval-augmented generation (Lewis et al., 2020) as
+pure prompting — the generator is never told it is being "augmented"; the
+retriever just puts relevant text in front of it.
+
+Deliberately simplified: lexical TF-IDF, not a learned dense retriever; the
+retriever and LM are trained independently and the LM is never trained to
+*use* context; the index is built from the LM's own training corpus. Note
+also that TransformerLM.generate conditions on only the last ``seq_len``
+(64) tokens, so of a ~600-character retrieved context the LM sees just the
+tail (mostly the query and the end of the last chunk).
+"""
 from __future__ import annotations
 
 import torch
@@ -13,6 +34,10 @@ from mini_networks.models.transformer.tokenizer import CharTokenizer
 
 
 class RAGGuidedGenerationConfig(BaseConfig):
+    """Knobs: retrieval (``top_k`` chunks, ``chunk_size`` chars per chunk),
+    LM size (``d_model``, ``n_layers``, ``n_heads``, ``d_ff``, ``seq_len`` =
+    context window), and ``text_file`` (corpus; empty = Tiny Shakespeare)."""
+
     model_name: str = "rag_guided_generation"
     d_model: int = 64
     n_layers: int = 2
@@ -27,12 +52,15 @@ class RAGGuidedGenerationConfig(BaseConfig):
 
 
 class RAGGuidedGeneration:
+    """Trains a char LM, indexes its corpus, and generates from retrieved prompts."""
+
     def __init__(self):
         self.model: TransformerLM | None = None
         self.tokenizer: CharTokenizer | None = None
         self.rag: NanoRAG | None = None
 
     def _build_lm(self, config: RAGGuidedGenerationConfig, vocab_size: int) -> TransformerLM:
+        """Decoder-only TransformerLM: tokens [B,T] -> logits [B,T,vocab_size]."""
         return TransformerLM(
             vocab_size=vocab_size,
             d_model=config.d_model,
@@ -44,6 +72,11 @@ class RAGGuidedGeneration:
         ).to(config.device)
 
     def train(self, config: RAGGuidedGenerationConfig, logger: Logger) -> None:
+        """Train the LM (AdamW, next-char CE), then build the TF-IDF index.
+
+        Logs ``loss`` per epoch; saves ``model.pt`` and ``tokenizer.json``.
+        The index lives in memory only (``self.rag``).
+        """
         dl = get_dataloader(
             name=config.dataset,
             data_root=config.data_root,
@@ -83,6 +116,13 @@ class RAGGuidedGeneration:
         self.rag.add_documents([corpus])
 
     def generate(self, config: RAGGuidedGenerationConfig, query: str, max_new_tokens: int = 64) -> str:
+        """Retrieve context for ``query`` and sample a continuation.
+
+        Returns the decoded full sequence: the augmented prompt
+        (``"[Context: ...] <query>"``) followed by the generated characters.
+        Prompt characters missing from the corpus vocabulary encode to PAD
+        and vanish on decode.
+        """
         if self.model is None or self.rag is None or self.tokenizer is None:
             raise RuntimeError("Train first.")
         prompt = self.rag.build_prompt(query)

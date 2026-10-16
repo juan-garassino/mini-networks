@@ -6,8 +6,9 @@ frozen copy of the pretrained LM (the reference policy) stops the policy from
 drifting into degenerate, reward-hacked text.
 
 This implementation is reward-model-free in practice: the trainer scores rollouts
-with shakespearean_score(text) — the fraction of words in a fixed archaic set
-(thou, thee, hath, ...), so no human preference data is needed. The learned
+with shakespearean_score(text) — a dense [0, 1] blend of real-word fraction,
+archaic-suffix fraction (-eth/-est/...) and exact archaic-word hits (thou,
+thee, hath, ...), so no human preference data is needed. The learned
 alternative, RewardModel, wraps a frozen TransformerLM, reads its last hidden
 state [:, -1, :] of size d_model, and maps it through Linear(d_model, 32) → Tanh
 → Linear(32, 1) to a scalar reward [B].
@@ -18,7 +19,7 @@ trainer.py optimises E[min(rho_t A, clip(rho_t, 1-eps, 1+eps) A)] - beta *
 KL(pi || pi_ref), with rho_t the per-token prob ratio vs the frozen reference.
 
 Deliberately simplified vs InstructGPT (Ouyang et al. 2022): the reward is a word-
-counting heuristic, not a model trained on human rankings; the episode's single
+list heuristic, not a model trained on human rankings; the episode's single
 scalar reward is spread uniformly over tokens (no value network or per-token
 credit assignment); and the reward head pools only the final position rather than
 all tokens.

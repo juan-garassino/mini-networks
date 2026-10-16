@@ -1,4 +1,25 @@
-"""Multitask vision head: classification + segmentation + detection."""
+"""Multitask vision: one shared CNN backbone, three task heads.
+
+Hard parameter sharing (Caruana, 1997): a single feature extractor is trained
+by the summed losses of three tasks on the same image — a 28x28 digit pasted
+at a random spot on a 56x56 black canvas:
+
+    canvas [B,1,56,56] -> backbone (2x conv+ReLU+maxpool) -> feat [B,2c,14,14]
+      cls_head: global avg pool -> Linear                  -> [B,10] logits
+      seg_head: conv -> conv 1x1 -> Sigmoid                -> [B,1,14,14] mask
+                (upsampled bilinearly to 56x56 for the loss)
+      det_head: global avg pool -> MLP -> Sigmoid          -> [B,4] box
+    loss = CE(cls) + BCE(seg, ink>0 mask) + MSE(box, [x1,y1,x2,y2]/56)
+
+What it demonstrates: the three classic vision outputs (what / which pixels
+/ where) can share one representation, and their losses simply add.
+
+Deliberately simplified: equal, unweighted loss terms (no uncertainty
+weighting or gradient balancing); the target box is the pasted 28x28 tile,
+not the tight box around the ink; the detection head works from globally
+average-pooled features, which discards most explicit location information
+(a real detector regresses from the spatial map); and one object per image.
+"""
 from __future__ import annotations
 
 import torch
@@ -16,6 +37,10 @@ from mini_networks.core.logging.logger import Logger
 
 
 class MultiTaskVisionConfig(BaseConfig):
+    """Knobs: ``base_channels`` (backbone width c), ``canvas_size`` (side of
+    the canvas the digit is pasted onto), ``dataset`` (``"mnist"``, anything
+    else loads FashionMNIST)."""
+
     model_name: str = "multitask_vision"
     base_channels: int = 32
     num_classes: int = 10
@@ -24,7 +49,12 @@ class MultiTaskVisionConfig(BaseConfig):
 
 
 class MultiTaskDataset(Dataset):
-    """Returns (canvas_image, class_label, seg_mask, bbox)."""
+    """Returns (canvas [1,S,S], class label, seg mask [S,S] long, bbox [4]).
+
+    The digit is placed at a fresh random position every time an item is
+    read (numpy global RNG), so positions differ across epochs. ``bbox`` is
+    ``[x1, y1, x2, y2]`` of the pasted tile, normalised by ``canvas_size``.
+    """
 
     def __init__(
         self,
@@ -35,6 +65,7 @@ class MultiTaskDataset(Dataset):
         dataset: str,
         sample_limit: int | None = None,
     ):
+        """Wrap MNIST (or FashionMNIST); 256 items under ``fast_demo``."""
         import torchvision
         import torchvision.transforms as T
 
@@ -53,9 +84,11 @@ class MultiTaskDataset(Dataset):
         self._limit = min(base_limit, sample_limit) if sample_limit is not None else base_limit
 
     def __len__(self) -> int:
+        """Number of items exposed (dataset size capped by fast_demo / sample_limit)."""
         return self._limit
 
     def __getitem__(self, idx: int):
+        """Paste item ``idx`` onto a canvas and derive its mask and box."""
         image, label = self._data[idx]
         canvas, bbox = place_on_canvas(image, self.canvas_size)
         mask = make_binary_mask(canvas, threshold=0.0)
@@ -64,6 +97,8 @@ class MultiTaskDataset(Dataset):
 
 
 class MultiTaskModel(nn.Module):
+    """Shared conv backbone with classification, segmentation and box heads."""
+
     def __init__(self, base_channels: int = 32, num_classes: int = 10):
         super().__init__()
         c = base_channels
@@ -94,6 +129,8 @@ class MultiTaskModel(nn.Module):
         )
 
     def forward(self, x: torch.Tensor):
+        """[B,1,H,W] -> (logits [B,num_classes], mask probs [B,1,H/4,W/4],
+        box [B,4] in [0,1])."""
         feat = self.backbone(x)
         logits = self.cls_head(feat)
         seg = self.seg_head(feat)
@@ -102,13 +139,21 @@ class MultiTaskModel(nn.Module):
 
 
 class MultiTaskVision:
+    """Trains a MultiTaskModel on random-placement canvases."""
+
     def __init__(self):
         self.model: MultiTaskModel | None = None
 
     def _build(self, config: MultiTaskVisionConfig) -> MultiTaskModel:
+        """The three-headed model on ``config.device``."""
         return MultiTaskModel(base_channels=config.base_channels, num_classes=config.num_classes).to(config.device)
 
     def train(self, config: MultiTaskVisionConfig, logger: Logger) -> None:
+        """Minimise cls + seg + det loss jointly.
+
+        Logs the summed ``loss`` per epoch (individual terms are not logged);
+        saves ``model.pt``.
+        """
         ds = MultiTaskDataset(
             data_root=config.data_root,
             train=True,

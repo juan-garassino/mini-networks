@@ -3,16 +3,36 @@
 
 Sub-commands
 ------------
+Local work:
   python main.py serve    [--host 0.0.0.0] [--port 8000] [--reload]
-  python main.py train    --model <name> [--fast_demo] [--epochs N] [--device cpu]
+      FastAPI on :8000 — playground SPA at /, API docs at /docs.
+  python main.py train    --model <name> [--fast_demo] [--training_tier S|M|L]
+                          [--epochs N] [--device cpu] [--dataset fashion_mnist|kmnist|tri_mnist]
+      One training run → runs/<run>/<ts>/{metrics.jsonl,config.yaml,artifacts/}.
+      --fast_demo forces tier S (the nano CPU run); the default tier is M.
   python main.py compose  --composition <name> [--fast_demo] [--device cpu]
-  python main.py evaluate --model <name> --checkpoint <dir>
+  python main.py evaluate --model <name> --checkpoint <artifacts dir>
   python main.py menu     # interactive rich TUI
-  python main.py list     # list all models and compositions
+  python main.py list     # models (atoms, then molecules) + compositions
+
+Quality gate:
+  python main.py sweep    [--check] [--training_tier S|M|L] [--models a,b|all]
+                          [--compositions a,b|all] [--skip-models] [--skip-compositions]
+      Without --check: train each item and probe inference. With --check: the
+      quality gate (EvalSpec thresholds, checkpoint round-trip, inference
+      probe) → runs/sweep/<ts>/report.{md,json}; non-zero exit on any non-pass.
+
+Cloud (GCP) helpers:
+  python main.py sweep-task      # gate ONE item (Cloud Run task, CLOUD_RUN_TASK_INDEX)
+  python main.py sweep-report    --sweep_id <id>   # merge GCS shards into a report
+  python main.py sweep-samples   --sweep_id <id>   # download per-item showcases
+  python main.py pull-champions  [--models a,b]    # Production mini-<model> ckpts
+  python main.py showcase        [--models a,b]    # re-render showcases locally
 
 Colab auto-detection
 --------------------
   When no sub-command is given and running in Colab, defaults to 'menu'.
+  Elsewhere it prints the help. Log level: MINI_NETWORKS_LOG_LEVEL (INFO).
 """
 from __future__ import annotations
 
@@ -31,6 +51,7 @@ if SRC_DIR not in sys.path:
 # ---------------------------------------------------------------------------
 
 def _in_colab() -> bool:
+    """True when running inside a Google Colab kernel."""
     return "google.colab" in sys.modules or bool(os.environ.get("COLAB_JUPYTER_TOKEN"))
 
 
@@ -60,7 +81,12 @@ def cmd_serve(args: argparse.Namespace) -> None:
 
 
 def cmd_train(args: argparse.Namespace) -> None:
-    """Train a single model."""
+    """Train a single model via colab.runners.run_model.
+
+    Only flags the user actually passed are forwarded as config overrides, so
+    each model's own config defaults stay in force otherwise. Resumes the latest
+    resumable run unless --no-resume is given.
+    """
     from mini_networks.colab.runners import run_model
     from rich.console import Console
 
@@ -111,7 +137,12 @@ def cmd_compose(args: argparse.Namespace) -> None:
         console.print("[green]Done.[/green]")
 
 def cmd_evaluate(args: argparse.Namespace) -> None:
-    """Evaluate a model from a checkpoint directory."""
+    """Evaluate a model from a checkpoint directory.
+
+    Loads the weights through the trainer's load_checkpoint, then runs its
+    evaluate() on the test split at tier S (fast_demo config, so only a small
+    eval batch). Metrics are printed; the throwaway Logger writes to a temp dir.
+    """
     from rich.console import Console
     from mini_networks.core.registry import get_model_registry
 
@@ -196,6 +227,10 @@ def cmd_list(args: argparse.Namespace) -> None:
 
 
 def _parse_targets(raw: str, available: list[str]) -> list[str]:
+    """Resolve a `--models`/`--compositions` value: "all" or a comma list.
+
+    Raises ValueError naming any entry not in `available`.
+    """
     if raw == "all":
         return available
     selected = [item.strip() for item in raw.split(",") if item.strip()]
@@ -206,7 +241,13 @@ def _parse_targets(raw: str, available: list[str]) -> list[str]:
 
 
 def cmd_sweep(args: argparse.Namespace) -> None:
-    """Run a sweep across models and/or compositions."""
+    """Run a sweep across models and/or compositions.
+
+    With --check this delegates to the quality gate (_run_checked_sweep).
+    Otherwise each item is trained and its inference validated; failures are
+    collected (or raised immediately with --fail-fast) and summarised in a
+    table, exiting 1 if any item failed.
+    """
     from rich.console import Console
     from rich.table import Table
     from mini_networks.colab.catalog import MODELS, COMPOSITIONS
@@ -398,6 +439,7 @@ def _run_checked_sweep(console, models: list[str], compositions: list[str],
 # ---------------------------------------------------------------------------
 
 def build_parser() -> argparse.ArgumentParser:
+    """Build the argparse CLI: one sub-parser per command handled in main()."""
     parser = argparse.ArgumentParser(
         prog="mini_networks",
         description="mini_networks — educational ML framework",
@@ -519,6 +561,7 @@ def build_parser() -> argparse.ArgumentParser:
 # ---------------------------------------------------------------------------
 
 def main() -> None:
+    """Configure stdlib logging, parse argv and dispatch to a cmd_* handler."""
     import logging
     logging.basicConfig(
         level=os.environ.get("MINI_NETWORKS_LOG_LEVEL", "INFO"),

@@ -1,1 +1,1 @@
-"""MobileNet-like model package."""
+"""MobileNet-like classifier package: TinyMobileNet (depthwise-separable convs), config, trainer."""

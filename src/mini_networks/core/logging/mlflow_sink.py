@@ -31,10 +31,12 @@ _PARAM_VALUE_MAX = 250  # conservative MLflow param-value length cap
 
 
 def is_mlflow_enabled() -> bool:
+    """True when ``MN_MLFLOW_TRACKING_URI`` is set to a non-empty value."""
     return bool(os.environ.get(TRACKING_URI_ENV))
 
 
 def _flatten(d: dict, prefix: str = "", out: dict | None = None) -> dict:
+    """Flatten nested dicts into dotted keys (``{"a": {"b": 1}}`` -> ``{"a.b": 1}``)."""
     out = {} if out is None else out
     for k, v in d.items():
         key = f"{prefix}{k}"
@@ -50,7 +52,13 @@ def _is_number(value: Any) -> bool:
 
 
 class MLflowSink:
-    """Mirrors Logger calls to an MLflow run via MlflowClient (no global run state)."""
+    """Mirrors Logger calls to an MLflow run via MlflowClient (no global run state).
+
+    The run is created in ``__init__`` (experiment from ``MN_MLFLOW_EXPERIMENT``,
+    tagged with ``run_dir``). If mlflow is missing or the tracker is
+    unreachable the sink stays inactive and every method is a no-op; tracker
+    errors after that are logged as warnings, never raised.
+    """
 
     def __init__(self, run_name: str, run_dir: Path, artifacts_dir: Path, tags: dict | None = None):
         self._active = False
@@ -79,9 +87,11 @@ class MLflowSink:
 
     @property
     def run_id(self) -> str | None:
+        """MLflow run id, or None when the sink never became active."""
         return self._run_id
 
     def _ensure_experiment(self, client) -> str:
+        """Return the experiment id, creating it (with ``MN_MLFLOW_ARTIFACT_ROOT`` if set) on first use."""
         name = os.environ.get(EXPERIMENT_ENV, DEFAULT_EXPERIMENT)
         exp = client.get_experiment_by_name(name)
         if exp is not None:
@@ -89,6 +99,7 @@ class MLflowSink:
         return client.create_experiment(name, artifact_location=os.environ.get(ARTIFACT_ROOT_ENV) or None)
 
     def log_params(self, config_dict: dict) -> None:
+        """Log a (possibly nested) config as dotted-key params, values truncated to 250 chars."""
         if not self._active:
             return
         try:
@@ -98,6 +109,7 @@ class MLflowSink:
             log.warning("MLflow log_params failed: %s", e)
 
     def log_metric(self, step: int, key: str, value: Any) -> None:
+        """Log one metric; non-numeric, bool and non-finite values are silently skipped."""
         if not self._active or not _is_number(value):
             return
         try:
@@ -106,6 +118,7 @@ class MLflowSink:
             log.warning("MLflow log_metric failed: %s", e)
 
     def set_tags(self, tags: dict) -> None:
+        """Set run tags, stringified and truncated to 250 chars."""
         if not self._active:
             return
         try:
@@ -115,12 +128,14 @@ class MLflowSink:
             log.warning("MLflow set_tags failed: %s", e)
 
     def log_final_metrics(self, metrics: dict) -> None:
+        """Log summary values as ``final_<key>`` metrics at step 0 (numbers only)."""
         if not self._active:
             return
         for k, v in metrics.items():
             self.log_metric(0, f"final_{k}", v)
 
     def _flush_artifacts(self) -> None:
+        """Upload the run's ``artifacts/`` directory to MLflow if it is non-empty."""
         if not self._active:
             return
         try:
@@ -131,6 +146,7 @@ class MLflowSink:
             log.warning("MLflow log_artifacts failed: %s", e)
 
     def close(self, status: str = "FINISHED") -> None:
+        """Upload artifacts, then terminate the run with ``status`` (idempotent)."""
         if not self._active or self._ended:
             return
         self._ended = True

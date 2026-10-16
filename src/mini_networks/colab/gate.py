@@ -28,6 +28,7 @@ JUDGED_MODELS = {"diffusion", "gan", "pixelcnn"}
 # ---------------------------------------------------------------------------
 
 def _series(metrics: list[dict], key: str) -> list[float]:
+    """Numeric values logged under ``key`` in metrics.jsonl order (non-numbers dropped)."""
     return [
         m["value"] for m in metrics
         if m.get("key") == key and isinstance(m.get("value"), (int, float))
@@ -85,6 +86,12 @@ class JudgeContext:
         self.run_dir: str | None = None
 
     def get(self):
+        """Return ``(trainer, config)`` for the judge classifier, cached after the first call.
+
+        Reuses the latest ``classifier`` run under ``args.checkpoint_root`` if it
+        has ``artifacts/model.pt``; otherwise trains one at the sweep's tier
+        (side effect: a new classifier run dir). Sets ``self.run_dir``.
+        """
         if self._trainer is not None:
             return self._trainer, self._config
         import torch  # noqa: F401
@@ -144,6 +151,8 @@ SCORE_FNS = {"judge_samples": judge_samples}
 # ---------------------------------------------------------------------------
 
 def _extract_metric(metric_key: str, eval_metrics: dict, jsonl_metrics: list[dict]) -> float | None:
+    """Gate value for ``metric_key``: the evaluate()/output dict first, else the
+    last value logged under that key in metrics.jsonl, else None."""
     value = eval_metrics.get(metric_key)
     if isinstance(value, (int, float)):
         return float(value)
@@ -152,6 +161,13 @@ def _extract_metric(metric_key: str, eval_metrics: dict, jsonl_metrics: list[dic
 
 
 def _decide(result: CheckResult, spec: EvalSpec, s_ok: bool, tier: str) -> None:
+    """Set ``result.status`` in place.
+
+    fail on a failed S-check or (when ``spec.roundtrip``) a failed round-trip;
+    then, if the tier has a threshold: error when the metric is missing, fail
+    when it misses the bar; otherwise pass. S has no thresholds, so S-tier
+    verdicts rest on the sanity checks alone.
+    """
     if not s_ok:
         result.status = "fail"
         return
@@ -174,6 +190,19 @@ def _decide(result: CheckResult, spec: EvalSpec, s_ok: bool, tier: str) -> None:
 
 
 def check_model(name: str, args, judge: JudgeContext) -> CheckResult:
+    """Train one model and run the full gate on it; never raises.
+
+    Steps: train via ``run_model`` (fresh run, no resume) -> S-checks on
+    metrics.jsonl -> ``load_checkpoint`` into a fresh trainer -> EvalSpec metric
+    on the loaded weights (``score_fn`` or ``evaluate()`` on the test split,
+    falling back to train) -> inference probe -> optional showcase under
+    ``args.showcase_dir`` -> verdict. Gate-passing M/L runs are offered to
+    the MLflow registry (``MN_MLFLOW_REGISTER``). Exceptions become
+    ``status="error"`` with the last 15 traceback lines.
+
+    ``args`` is the sweep's argparse namespace (epochs, batch_size, fast_demo,
+    training_tier, data_root, device, checkpoint_root, showcase_dir).
+    """
     from mini_networks.core.registry import get_model_registry
     from mini_networks.colab.runners import run_model
     from mini_networks.colab.probes import _run_model_inference_probe
@@ -261,6 +290,13 @@ def check_model(name: str, args, judge: JudgeContext) -> CheckResult:
 
 
 def check_composition(name: str, args) -> CheckResult:
+    """Run one composition and gate it; never raises.
+
+    Compositions have no checkpoint round-trip: the verdict comes from the
+    S-checks on the run's metrics.jsonl (if the runner returned a
+    ``run_dir``), the probe validation of the returned output, and the
+    EvalSpec metric read from that output dict or metrics.jsonl.
+    """
     from mini_networks.colab.runners import run_composition
     from mini_networks.colab.probes import _validate_probe_output
     from mini_networks.core.logging.logger import Logger
@@ -310,6 +346,14 @@ def check_composition(name: str, args) -> CheckResult:
 # ---------------------------------------------------------------------------
 
 def run_checked_sweep(models: list[str], compositions: list[str], args) -> tuple[list[CheckResult], dict]:
+    """Gate every model, then every composition; return ``(results, meta)``.
+
+    The classifier is moved to the front when judge-scored models are in the
+    sweep so they can reuse it. With ``args.fail_fast`` the sweep stops at
+    the first non-pass (and compositions are skipped if a model failed).
+    ``meta`` feeds the report header (tier, device, counts, judge run dir).
+    Writing the report is the caller's job (``core.sweep_report``).
+    """
     judge = JudgeContext(args)
 
     # Judge-scored models need the classifier trained first.

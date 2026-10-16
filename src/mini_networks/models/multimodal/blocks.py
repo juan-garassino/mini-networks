@@ -67,15 +67,25 @@ class MultiModalEncoder(nn.Module):
             raise ValueError(f"Unknown fusion: {fusion}")
 
     def encode_text(self, tokens: torch.Tensor) -> torch.Tensor:
+        """Map token ids [B,T] (T <= 64) to contextual text tokens [B,T,d_model]."""
         return self.text(tokens)
 
     def encode_image_tokens(self, images: torch.Tensor) -> torch.Tensor:
+        """Map images [B,1,28,28] to 49 patch tokens [B,49,d_model] (4x4 patches + learned
+        positions).
+        """
         return self.vision_tokens(images)
 
     def encode_image_pooled(self, images: torch.Tensor) -> torch.Tensor:
+        """Map images [B,1,28,28] to one CNN embedding [B,d_model] (used by concat/gated fusion)."""
         return self.vision_pool(images)
 
     def forward(self, images: torch.Tensor, tokens: torch.Tensor) -> torch.Tensor:
+        """Fuse images [B,1,28,28] with tokens [B,T] into one vector [B,d_model].
+
+        Cross-attention: text tokens query the image patch tokens, then pool.
+        Concat/gated: pool the text tokens and fuse with the CNN image vector.
+        """
         text_tokens = self.encode_text(tokens)
         image_tokens = self.encode_image_tokens(images)
 
@@ -126,6 +136,12 @@ class CrossModalEncoder(nn.Module):
             raise ValueError(f"Unknown fusion: {fusion}")
 
     def forward(self, modality_inputs: torch.Tensor, tokens: torch.Tensor) -> torch.Tensor:
+        """Fuse a second modality with tokens [B,T] into one vector [B,d_model].
+
+        ``modality_inputs``: images [B,1,28,28], waveforms [B,1,L] or features
+        [B,n_features], per ``modality``. For late fusion, vision uses the CNN
+        pooled vector and audio/tabular mean-pool their tokens.
+        """
         text_tokens = self.text(tokens)
         mod_tokens = self.mod_tokens(modality_inputs)
 

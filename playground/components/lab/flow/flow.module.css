@@ -1,0 +1,45 @@
+/* Skin D · Kawaii DFD. One family: M PLUS Rounded 1c (rounded, adult, legible at 13 px);
+   Mochiy Pop One only for the page title. Every value is a custom property set from
+   tokens.ts (FLOW_CSS_VARS on the board's root): this file holds no colours, sizes or timings. */
+.page { font-family: var(--flow-body), system-ui, sans-serif; color: var(--flow-ink); }
+.title { font-family: var(--flow-display), var(--flow-body), sans-serif; letter-spacing: 0.01em; }
+.name { font-family: var(--flow-body), sans-serif; font-weight: 700; }
+.addr { font-family: var(--flow-body), sans-serif; font-weight: 800; font-variant-numeric: tabular-nums; }
+.lane { font-family: var(--flow-body), sans-serif; font-weight: 800; }
+.count { font-weight: 500; }
+.head { font-family: var(--flow-body), sans-serif; font-weight: 700; }
+.label { font-family: var(--flow-body), sans-serif; font-weight: 700; }
+
+/* the type scale (TYPE in tokens.ts) */
+.tLabel { font-size: var(--flow-t-label); }
+.tSmall { font-size: var(--flow-t-small); }
+.tUi { font-size: var(--flow-t-ui); }
+.tProse { font-size: var(--flow-t-prose); }
+.tBody { font-size: var(--flow-t-body); }
+.tLede { font-size: var(--flow-t-lede); }
+.tTitle { font-size: var(--flow-t-title); }
+/* radii (RADIUS in tokens.ts) */
+.rUi { border-radius: var(--flow-r-ui); }
+.rChip { border-radius: var(--flow-r-chip); }
+.rSheetTop { border-radius: var(--flow-r-sheet) var(--flow-r-sheet) 0 0; }
+
+.box { cursor: pointer; outline: none; transition: opacity var(--flow-fade) ease; }
+.box:focus-visible > rect:first-of-type { outline: none; }
+.box:focus-visible { filter: drop-shadow(0 0 0.6px var(--flow-accent)) drop-shadow(0 0 2px var(--flow-accent)); }
+
+/* Konami forward pass: each generation lifts in turn */
+.hop { animation: hop var(--flow-hop) var(--flow-ease) both; animation-delay: var(--d); }
+@keyframes hop {
+  0% { transform: translateY(0); }
+  35% { transform: translateY(-5px); }
+  70% { transform: translateY(0); }
+}
+
+.btn { transition: background-color 120ms ease, color 120ms ease; }
+.btn:focus-visible { outline: 2px solid var(--flow-accent); outline-offset: 2px; }
+.row:hover { background: var(--flow-hover); }
+
+@media (prefers-reduced-motion: reduce) {
+  .hop { animation: none; }
+  .box { transition: none; }
+}

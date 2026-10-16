@@ -30,6 +30,7 @@ DEFAULT_PREFIX = "mini-networks"
 
 
 def default_items() -> list[str]:
+    """Canonical sweep order: every catalog model, then every composition."""
     from mini_networks.colab.catalog import COMPOSITIONS, MODELS
 
     return list(MODELS) + list(COMPOSITIONS)
@@ -49,17 +50,27 @@ def resolve_items(raw: str | None) -> list[str]:
 
 
 def _shards_prefix(prefix: str, sweep_id: str) -> str:
+    """GCS object prefix holding one sweep's shards: ``<prefix>/sweeps/<id>/shards``."""
     return f"{prefix}/sweeps/{sweep_id}/shards"
 
 
 def _upload(bucket_name: str, blob_path: str, local: Path) -> None:
+    """Upload ``local`` to ``gs://<bucket_name>/<blob_path>`` (ADC credentials)."""
     from google.cloud import storage
 
     storage.Client().bucket(bucket_name).blob(blob_path).upload_from_filename(str(local))
 
 
 def run_sweep_task(args: argparse.Namespace) -> int:
-    """Gate ONE item selected by CLOUD_RUN_TASK_INDEX; write its shard."""
+    """Gate ONE item selected by CLOUD_RUN_TASK_INDEX; write its shard.
+
+    ``args.index`` overrides the env index (local dry-runs); an index past the
+    end of ITEMS is a no-op success. Always gates at ``args.training_tier``
+    (never fast_demo). Writes the shard to
+    ``<checkpoint_root>/sweep-shards/<SWEEP_ID>/<item>.json`` and, when
+    ``MN_SWEEP_BUCKET`` is set, uploads it plus the item's showcase files.
+    Returns the process exit code: 0 on pass, 1 otherwise.
+    """
     from mini_networks.colab.catalog import MODELS
     from mini_networks.colab.gate import JudgeContext, check_composition, check_model
 
@@ -169,7 +180,12 @@ def download_sweep_samples(args: argparse.Namespace) -> int:
 
 
 def merge_sweep_report(args: argparse.Namespace) -> int:
-    """Download all shards of a sweep from GCS, merge, upload the report back."""
+    """Download all shards of a sweep from GCS, merge, upload the report back.
+
+    Writes ``<out_root>/sweep/<sweep_id>/report.{md,json}``, mirrors both to
+    ``gs://<bucket>/<prefix>/sweeps/<sweep_id>/`` and prints the markdown.
+    Returns 0 only when every expected item has a shard and passed.
+    """
     from google.cloud import storage
 
     expected = resolve_items(args.items)

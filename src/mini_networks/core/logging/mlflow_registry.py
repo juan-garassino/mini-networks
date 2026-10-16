@@ -24,6 +24,7 @@ MODEL_PREFIX = "mini-"
 
 
 def is_register_enabled() -> bool:
+    """True when ``MN_MLFLOW_REGISTER=1`` and ``MN_MLFLOW_TRACKING_URI`` is set."""
     return os.environ.get(REGISTER_ENV) == "1" and bool(os.environ.get(TRACKING_URI_ENV))
 
 
@@ -47,8 +48,16 @@ def register_and_promote(
 ) -> dict:
     """Register the run's checkpoint(s) as ``mini-<name>`` and promote if it wins.
 
+    Every ``*.pt`` under ``artifacts_dir`` is uploaded to the run's ``model/``
+    artifact path and a new version is created from it. The version is tagged
+    ``gate_metric`` / ``gate_value`` / ``tier`` and moved to Production
+    (archiving older versions) when ``value`` beats the champion's
+    ``gate_value`` by more than ``min_delta`` in the ``higher_is_better``
+    direction, or when there is no champion yet; otherwise to Staging.
+
     Returns {"tracked": bool, ...}; tracked=False (with a reason) when disabled,
     when the run has no MLflow id / metric / checkpoint, or on any tracker error.
+    On success also "model", "version", "stage" and "promoted".
     """
     if not is_register_enabled():
         return {"tracked": False, "reason": "disabled"}

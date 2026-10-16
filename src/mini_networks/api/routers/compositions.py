@@ -1,4 +1,10 @@
-"""Composition endpoints: train and inference for multi-model pipelines."""
+"""Composition endpoints: train and inference for multi-model pipelines.
+
+Serves the compositions listed in ``_composition_registry`` (a subset of the
+catalog in ``colab/catalog.py``). Training always runs in-process as a
+background task (no cloud backend here) under ``$MINI_NETWORKS_RUNS`` as read
+at import; jobs share the in-memory store with /train.
+"""
 from __future__ import annotations
 
 import os
@@ -95,6 +101,7 @@ from mini_networks.compositions.gan_ada import (
 )
 
 router = APIRouter()
+# Read once at import (the /train router reads it per request).
 RUNS_BASE = os.environ.get("MINI_NETWORKS_RUNS", "runs")
 
 
@@ -102,6 +109,12 @@ CompositionSpec = dict[str, Any]
 
 
 def _composition_registry() -> dict[str, CompositionSpec]:
+    """``name → {Config, Builder, train, infer}`` for every composition the API serves.
+
+    ``train(pipeline, cfg, logger)`` and ``infer(pipeline, cfg, inputs)`` adapt
+    each pipeline's own method names; several entries' infer just returns the
+    placeholder ``{"status": "trained"}``.
+    """
     return {
         "clip_guided_diffusion": {
             "Config": CLIPGuidedDiffusionConfig,
@@ -253,6 +266,7 @@ _loaded_pipelines: dict[str, Any] = {}
 
 
 def _run_composition_training(job_id: str, name: str, config, output_dir: str):
+    """Background task: build the pipeline, train it, mark the job done (or failed + traceback)."""
     try:
         update_job(job_id, status="running")
         logger = Logger(output_dir=output_dir, run_name=job_id)
@@ -273,6 +287,7 @@ def _run_composition_training(job_id: str, name: str, config, output_dir: str):
 
 
 def _resolve_images(cfg, inputs):
+    """``inputs["images"]`` as a float tensor, else a batch of 4 train images from ``cfg.dataset`` (default mnist)."""
     images = inputs.get("images") if isinstance(inputs, dict) else None
     if images is not None:
         import torch
@@ -291,6 +306,7 @@ def _resolve_images(cfg, inputs):
 
 @router.get("/", response_model=list[JobStatus])
 async def list_runs():
+    """Every in-memory job — composition and model training alike (the store is shared)."""
     return list_jobs()
 
 
@@ -300,6 +316,13 @@ async def start_composition_training(
     request: ComposeTrainRequest,
     background_tasks: BackgroundTasks,
 ):
+    """Start training a composition in a background task; returns the job id at once.
+
+    Request fields plus ``extra`` build the composition's config class. Poll
+    the job via ``GET /train/{job_id}/status``.
+
+    Errors: 403 when ``MN_DISABLE_TRAIN=1``; 404 for an unknown composition.
+    """
     # Same guard as /train — public showcases must not start trainings.
     if os.environ.get("MN_DISABLE_TRAIN") == "1":
         raise HTTPException(status_code=403, detail="training is disabled on this deployment")
@@ -331,6 +354,16 @@ async def start_composition_training(
 
 @router.post("/{composition_name}/infer", response_model=ComposeInferResponse)
 async def run_composition_infer(composition_name: str, request: ComposeInferRequest):
+    """Run a composition's inference with a ``fast_demo`` config; tensors come back as lists.
+
+    The pipeline object is built on first use and cached in-process per
+    ``(composition, checkpoint)``; ``checkpoint`` is only part of that cache
+    key — this route does not load it. Background trainings build their own
+    pipeline objects, not this cached one. Not guarded by ``MN_DISABLE_TRAIN``.
+
+    Errors: 404 for an unknown composition; 400 with the exception text when
+    inference raises.
+    """
     registry = _composition_registry()
     if composition_name not in registry:
         raise HTTPException(status_code=404, detail=f"Unknown composition: {composition_name}")

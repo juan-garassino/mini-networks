@@ -1,4 +1,23 @@
-"""Distill a diffusion teacher into a small student denoiser."""
+"""Diffusion distillation: compress a UNet noise-predictor into a tiny CNN.
+
+Knowledge distillation (Hinton et al., 2015) applied to a DDPM denoiser:
+
+    1. teacher: the zoo's diffusion UNet trained with the usual objective
+       MSE(eps_teacher(x_t, t), eps) on MNIST in [-1,1]
+    2. student: SmallDenoiser (three 3x3 convs, ~16 channels) trained to
+       regress the frozen teacher's output: MSE(eps_student(x_t), eps_teacher(x_t, t))
+
+The student learns from the teacher's *predictions* instead of the true
+noise, a smoother target that carries the teacher's averaging over
+possible clean images. Comparing ``teacher_loss`` and ``student_loss``
+shows how much of the denoising function a ~2.6k-parameter net can mimic.
+
+Deliberately simplified vs progressive distillation (Salimans & Ho, 2022)
+or consistency models: this distils the per-step eps function only — the
+student still needs the full chain of steps to sample, so it is faster per
+step, not fewer steps. The student also IGNORES t (no time embedding), so it
+must infer the noise level from x_t itself, and no sampler is provided.
+"""
 from __future__ import annotations
 
 import torch
@@ -13,6 +32,10 @@ from mini_networks.models.diffusion.scheduler import NoiseScheduler
 
 
 class DiffusionDistillationConfig(BaseConfig):
+    """Knobs: ``base_channels`` (teacher UNet width) vs ``student_channels``
+    (student width) set the compression ratio; ``timesteps``/``beta_*`` the
+    linear DDPM schedule (tier-capped via ``effective_timesteps``)."""
+
     model_name: str = "diffusion_distillation"
     timesteps: int = 200
     beta_start: float = 1e-4
@@ -23,6 +46,8 @@ class DiffusionDistillationConfig(BaseConfig):
 
 
 class SmallDenoiser(nn.Module):
+    """Three-conv student denoiser: [B,C,28,28] -> [B,C,28,28] eps estimate."""
+
     def __init__(self, in_channels: int = 1, hidden: int = 16):
         super().__init__()
         self.net = nn.Sequential(
@@ -34,16 +59,29 @@ class SmallDenoiser(nn.Module):
         )
 
     def forward(self, x: torch.Tensor, t: torch.Tensor) -> torch.Tensor:
+        """x_t [B,C,H,W] -> predicted noise [B,C,H,W].
+
+        ``t`` is accepted for API parity with the UNet but unused: the student
+        has no time conditioning.
+        """
         return self.net(x)
 
 
 class DiffusionDistillation:
+    """Teacher-then-student training of two eps-predictors on one schedule."""
+
     def __init__(self):
         self.teacher: UNet | None = None
         self.student: SmallDenoiser | None = None
         self.scheduler: NoiseScheduler | None = None
 
     def train(self, config: DiffusionDistillationConfig, logger: Logger) -> None:
+        """Train the teacher, then distil the student from the frozen teacher.
+
+        Both phases run ``effective_epochs`` over the same data and schedule.
+        Logs ``teacher_loss`` then ``student_loss`` per epoch; saves
+        ``teacher.pt`` and ``student.pt``.
+        """
         dl = get_dataloader(
             name=config.dataset,
             data_root=config.data_root,

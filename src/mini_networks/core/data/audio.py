@@ -29,7 +29,11 @@ def mel_filterbank(
     f_max: float = 8000.0,
     device: torch.device | None = None,
 ) -> torch.Tensor:
-    """Return mel filterbank matrix [M, F]."""
+    """Return a triangular mel filterbank matrix [M, F] with F = n_fft // 2 + 1.
+
+    Uses the HTK mel scale (2595 * log10(1 + hz/700)); filters whose edges
+    collapse onto the same FFT bin are left as all-zero rows.
+    """
     def hz_to_mel(hz):
         return 2595 * math.log10(1 + hz / 700.0)
 
