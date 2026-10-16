@@ -8,6 +8,13 @@ from pydantic import BaseModel, Field
 
 
 class BaseConfig(BaseModel):
+    """Fields every model/composition config shares, plus the tier budget.
+
+    Raw fields (`epochs`, `batch_size`, subclass `timesteps`) are the L-tier
+    values. Code paths must read the `effective_*` properties, which cap them
+    by the tier table in `core/tiers.py` (S = nano smoke, M = learns, L = as-is).
+    """
+
     model_name: str = "base"
     data_root: str = Field(default_factory=lambda: os.path.join(os.getcwd(), "data"))
     output_dir: str = Field(default_factory=lambda: os.path.join(os.getcwd(), "runs"))
@@ -27,10 +34,16 @@ class BaseConfig(BaseModel):
 
     @property
     def effective_tier(self) -> Literal["S", "M", "L"]:
+        """`fast_demo=True` forces S; otherwise `training_tier`."""
         return "S" if self.fast_demo else self.training_tier
 
     @property
     def effective_fast_demo(self) -> bool:
+        """True at S tier — set by `fast_demo` OR `training_tier=\"S\"`.
+
+        Branch on this, not raw `fast_demo`: `sweep --check --training_tier S`
+        leaves `fast_demo` False.
+        """
         return self.effective_tier == "S"
 
     def _budget(self, key: str) -> int | None:
@@ -39,19 +52,23 @@ class BaseConfig(BaseModel):
 
     @property
     def effective_epochs(self) -> int:
+        """`epochs` capped by the tier budget."""
         cap = self._budget("epochs")
         return self.epochs if cap is None else min(self.epochs, cap)
 
     @property
     def effective_batch_size(self) -> int:
+        """`batch_size` capped by the tier budget."""
         cap = self._budget("batch_cap")
         return self.batch_size if cap is None else min(self.batch_size, cap)
 
     @property
     def dataset_sample_limit(self) -> int | None:
+        """Max dataset items for this tier (None = whole dataset)."""
         return self._budget("sample_limit")
 
     def tier_epochs(self, full_epochs: int, medium_cap: int = 2) -> int:
+        """Epochs for a sub-stage with its own epoch field: S→1, M→≤medium_cap, L→full."""
         if self.effective_tier == "S":
             return 1
         if self.effective_tier == "M":
@@ -60,13 +77,16 @@ class BaseConfig(BaseModel):
 
     @property
     def max_train_batches(self) -> int | None:
+        """Train batches per epoch for this tier (None = no cap)."""
         return self._budget("train_batches")
 
     @property
     def max_eval_batches(self) -> int | None:
+        """Eval batches for this tier (None = no cap)."""
         return self._budget("eval_batches")
 
     def limit_steps(self, full_steps: int, s_cap: int, m_cap: int) -> int:
+        """Step-based budget for trainers that count steps, not epochs."""
         if self.effective_tier == "S":
             return min(full_steps, s_cap)
         if self.effective_tier == "M":

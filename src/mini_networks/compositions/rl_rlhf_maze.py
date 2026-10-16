@@ -129,9 +129,9 @@ class RLHFMazeConfig(BaseConfig):
 # ---------------------------------------------------------------------------
 
 def _make_maze(config: RLHFMazeConfig) -> MazeEnv:
-    w = 5 if config.fast_demo else config.maze_width
-    h = 5 if config.fast_demo else config.maze_height
-    steps = 30 if config.fast_demo else config.max_steps
+    w = 5 if config.effective_fast_demo else config.maze_width
+    h = 5 if config.effective_fast_demo else config.maze_height
+    steps = 30 if config.effective_fast_demo else config.max_steps
     return MazeEnv(width=w, height=h, density=config.maze_density, max_steps=steps)
 
 
@@ -239,7 +239,7 @@ class RLHFMazeComposition:
         state = env.reset()
         agent = _make_dqn(config, len(state))
 
-        n_ep = 30 if config.fast_demo else config.rl_episodes
+        n_ep = 30 if config.effective_fast_demo else config.rl_episodes
         successes = 0
         for ep in range(n_ep):
             actions, ep_reward = _run_episode(env, agent, train=True)
@@ -270,7 +270,7 @@ class RLHFMazeComposition:
         env = self.env or _make_maze(config)
 
         # Collect trajectories (mix of successes + failures)
-        n_collect = 50 if config.fast_demo else config.n_collect
+        n_collect = 50 if config.effective_fast_demo else config.n_collect
         saved_eps = agent.epsilon
         agent.epsilon = 0.2  # some exploration for diversity
         trajectories: list[str] = []
@@ -289,7 +289,7 @@ class RLHFMazeComposition:
 
         model = _build_lm(config)
         optimizer = optim.AdamW(model.parameters(), lr=1e-3)
-        epochs = 1 if config.fast_demo else config.lm_pretrain_epochs
+        epochs = 1 if config.effective_fast_demo else config.lm_pretrain_epochs
         seq_len = min(config.lm_seq_len, 32)
 
         for epoch in range(epochs):
@@ -342,8 +342,8 @@ class RLHFMazeComposition:
         self.ref_lm = ref
 
         optimizer = optim.AdamW(model.parameters(), lr=config.rlhf_lr)
-        n_rollouts = 4 if config.fast_demo else config.n_rollouts
-        ppo_epochs = 1 if config.fast_demo else config.ppo_epochs
+        n_rollouts = 4 if config.effective_fast_demo else config.n_rollouts
+        ppo_epochs = 1 if config.effective_fast_demo else config.ppo_epochs
         offset = config.rl_episodes + config.lm_pretrain_epochs
 
         # Start token id
@@ -353,7 +353,7 @@ class RLHFMazeComposition:
             # --- Collect rollout: sample from LM, execute in maze ---
             model.eval()
             rollouts: list[dict] = []
-            max_gen = min(config.rollout_max_steps, 30 if config.fast_demo else 50)
+            max_gen = min(config.rollout_max_steps, 30 if config.effective_fast_demo else 50)
 
             prompt = torch.tensor([[start_id]], dtype=torch.long, device=config.device)
             with torch.no_grad():
@@ -448,7 +448,7 @@ class RLHFMazeComposition:
             raise RuntimeError("Call train() first.")
 
         env = self.env or _make_maze(config)
-        n = n_eval or (5 if config.fast_demo else config.eval_episodes)
+        n = n_eval or (5 if config.effective_fast_demo else config.eval_episodes)
         start_id = _STOI.get("S", 1)
 
         # Evaluate DQN (greedy, epsilon=0)
@@ -469,7 +469,7 @@ class RLHFMazeComposition:
         lm_successes = 0
         lm_steps_total = 0
         sample_trajectories: list[str] = []
-        max_gen = min(config.rollout_max_steps, 30 if config.fast_demo else 50)
+        max_gen = min(config.rollout_max_steps, 30 if config.effective_fast_demo else 50)
 
         with torch.no_grad():
             for _ in range(n):

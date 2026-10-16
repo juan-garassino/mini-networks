@@ -16,6 +16,8 @@ from dataclasses import dataclass, field
 
 @dataclass(frozen=True)
 class EvalSpec:
+    """Quality-gate spec for one model/composition (see `colab/gate.py`)."""
+
     metric: str | None                      # key in evaluate() dict; None = S-style checks only
     thresholds: dict[str, float] = field(default_factory=dict)  # {"M": x, "L": y}
     higher_is_better: bool = True
@@ -239,6 +241,7 @@ EVAL_SPECS: dict[str, EvalSpec] = {
 
 
 def get_eval_spec(name: str) -> EvalSpec:
+    """Return the EvalSpec for `name`; KeyError names the missing entry."""
     try:
         return EVAL_SPECS[name]
     except KeyError:
@@ -249,4 +252,5 @@ def get_eval_spec(name: str) -> EvalSpec:
 
 
 def passes_threshold(value: float, threshold: float, higher_is_better: bool) -> bool:
+    """Inclusive comparison in the metric's direction."""
     return value >= threshold if higher_is_better else value <= threshold
