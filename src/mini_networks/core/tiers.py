@@ -55,7 +55,13 @@ MODEL_OVERRIDES: dict[str, dict[str, dict[str, int | None]]] = {
     "mamba": {"M": {"epochs": 15}},
     "kimi": {"M": {"epochs": 15}},
     "deepseek": {"M": {"epochs": 15}},
-    "text_diffusion": {"M": {"epochs": 15}},
+    # text_diffusion's loop runs the whole loader (no train_batches cap), so
+    # its step count is sample_limit/batch: 4096 -> ~960 steps, which left the
+    # masked-diffusion LM on the unigram plateau (eval 3.29-3.32 at lr
+    # 3e-4/1e-3/3e-3 and with pre-norm; unigram entropy ~3.3). 16384 samples
+    # (~3840 steps) -> 2.787 / 2.555 on two independent runs (bar 3.2);
+    # ~16 min on 4 CPU cores (self-improve loop 2026-10-16).
+    "text_diffusion": {"M": {"epochs": 15, "sample_limit": 16384}},
     # gnn: one epoch == ONE full-batch step on the length-1 graph dataset (the
     # M default of 5 epochs would be 5 gradient steps); each step is a sub-ms
     # 200x200 dense matmul, so 200 steps cost nothing
