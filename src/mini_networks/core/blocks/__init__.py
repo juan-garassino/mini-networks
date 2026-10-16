@@ -16,9 +16,6 @@ Inventory (consumers per block):
   attention.py  TransformerEncoderBlock   (no consumers — deletion candidate,
                                           kept pending an owner decision)
 
-Training-side building blocks live beside this package: core/optim.py
-(LR schedules: constant / warmup+cosine, chosen by config.lr_schedule).
-
 Same-mechanism, deliberately NOT unified (variants differ): dice_loss
 (segmentation vs sam reductions), InfoNCE (simclr vs clip), Fourier
 features (sam random-gaussian vs nerf geometric), SiTU-GLU (kimi-only).

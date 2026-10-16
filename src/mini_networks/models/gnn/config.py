@@ -26,5 +26,10 @@ class GNNConfig(BaseConfig):
     train_per_class: int = 5   # stratified train mask (20 labeled nodes total)
 
     hidden_dim: int = 32
+    # Kipf & Welling's 1e-2 (the 1e-3 BaseConfig default barely moves 200
+    # full-batch steps): gate graph (seed 42) 0.711 -> 0.756 at M. Other
+    # seeds draw harder graphs (0.57-0.72) — the provisional 0.75 bar sits on
+    # the seed-42 graph's ceiling; revisit it at the first M sweep.
+    learning_rate: float = 1e-2
     dropout: float = 0.5       # on the hidden layer (Kipf & Welling use 0.5 too)
     epochs: int = 400          # one epoch == ONE full-batch step (len-1 dataset)

@@ -18,7 +18,11 @@ class AlphaZeroConfig(BaseConfig):
 
     model_name: str = "alphazero"
 
-    hidden_dim: int = 64       # width of the 2-layer MLP trunk (18 -> h -> h)
+    # 128 + lr 3e-3: raw-policy win rate vs random at M went 0.80/0.79/0.82 ->
+    # 0.89/0.89/0.94 over seeds 1-3 (64 + base lr 1e-3 underfit the MCTS targets
+    # in 800 steps; self-improve loop 2026-10-16).
+    hidden_dim: int = 128      # width of the 2-layer MLP trunk (18 -> h -> h)
+    learning_rate: float = 3e-3
     n_games: int = 2000        # self-play games at L; limit_steps caps S 2 / M 200
     n_sims: int = 64           # MCTS simulations per move at L; capped S 8 / M 64
     c_puct: float = 1.5        # PUCT exploration weight on the prior term
