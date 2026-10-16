@@ -110,6 +110,15 @@ class MiniDINO(nn.Module):
 
         self.register_buffer("center", torch.zeros(1, out_dim))
 
+    def train(self, mode: bool = True) -> "MiniDINO":
+        """Train mode for the student only: the teacher is an EMA target, so it
+        always runs deterministically (no dropout). Sharing the student's
+        train mode made its targets noisy (MiniViT hard-codes dropout 0.1)."""
+        super().train(mode)
+        self.teacher_backbone.eval()
+        self.teacher_head.eval()
+        return self
+
     def _student_params(self):
         yield from self.student_backbone.parameters()
         yield from self.student_head.parameters()
