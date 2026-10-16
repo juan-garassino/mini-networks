@@ -30,8 +30,8 @@ def _run_base(checkpoint_root: str, name: str) -> str:
 
 def run_model(
     model: str,
-    epochs: int = 2,
-    batch_size: int = 32,
+    epochs: int | None = None,
+    batch_size: int | None = None,
     fast_demo: bool = True,
     training_tier: str = "M",
     data_root: str = "/tmp/mini_networks_data",
@@ -43,6 +43,9 @@ def run_model(
     **config_overrides,
 ) -> "Logger":  # noqa: F821
     """Train a single model and return the Logger instance.
+
+    ``epochs``/``batch_size`` = None lets the tier budget decide (see
+    ``core.config.budget_kwargs``); an explicit value wins.
 
     Extra kwargs become config-field overrides (flavor axis: dataset=,
     num_classes=, …) — validated by the model's Config class.
@@ -64,9 +67,11 @@ def run_model(
         raise ValueError(f"Unknown model: {model!r}. Available: {MODELS}")
 
     ConfigClass, TrainerClass, dataloader_fn = registry[model]
+    from mini_networks.core.config import budget_kwargs
+
+    tier = "S" if fast_demo else training_tier
     config = ConfigClass(
-        epochs=epochs,
-        batch_size=batch_size,
+        **budget_kwargs(ConfigClass, tier, epochs, batch_size),
         fast_demo=fast_demo,
         training_tier=training_tier,
         data_root=data_root,

@@ -495,8 +495,9 @@ def build_parser() -> argparse.ArgumentParser:
     p_sweep = sub.add_parser("sweep", help="Run many models/compositions in sequence")
     p_sweep.add_argument("--fast_demo", action="store_true", default=False)
     p_sweep.add_argument("--training_tier", choices=["S", "M", "L"], default="S")
-    p_sweep.add_argument("--epochs", type=int, default=2)
-    p_sweep.add_argument("--batch_size", type=int, default=32)
+    # None = each item's tier budget (core/tiers.py); a value overrides it
+    p_sweep.add_argument("--epochs", type=int, default=None)
+    p_sweep.add_argument("--batch_size", type=int, default=None)
     p_sweep.add_argument("--device", default="cpu")
     p_sweep.add_argument("--data_root", default=os.path.join(os.getcwd(), "data"))
     p_sweep.add_argument("--checkpoint_root", default=os.path.join(os.getcwd(), "runs"))
@@ -517,8 +518,11 @@ def build_parser() -> argparse.ArgumentParser:
                         help="Item index (default: CLOUD_RUN_TASK_INDEX env)")
     p_task.add_argument("--training_tier", choices=["S", "M", "L"],
                         default=os.environ.get("TRAINING_TIER", "M"))
-    p_task.add_argument("--epochs", type=int, default=int(os.environ.get("EPOCHS", "10")))
-    p_task.add_argument("--batch_size", type=int, default=int(os.environ.get("BATCH_SIZE", "64")))
+    # unset EPOCHS/BATCH_SIZE = each item's tier budget (core/tiers.py). The old
+    # fixed 10/64 silently clipped every per-model M override above them.
+    _env_int = lambda k: int(os.environ[k]) if os.environ.get(k) else None  # noqa: E731
+    p_task.add_argument("--epochs", type=int, default=_env_int("EPOCHS"))
+    p_task.add_argument("--batch_size", type=int, default=_env_int("BATCH_SIZE"))
     p_task.add_argument("--device", default=os.environ.get("DEVICE", "cpu"))
     p_task.add_argument("--data_root", default=os.path.join(os.getcwd(), "data"))
     p_task.add_argument("--checkpoint_root", default=os.path.join(os.getcwd(), "runs"))

@@ -28,6 +28,35 @@ class TestConfig:
         assert c.effective_batch_size <= 16
 
 
+class TestBudgetKwargs:
+    """None = the tier budget decides; per-model M overrides above the class
+    default must take effect (they were silently clipped at 10 epochs / 64)."""
+
+    def _cfg(self, name, tier, **kw):
+        from mini_networks.core.config import budget_kwargs
+        from mini_networks.core.registry import get_model_registry
+
+        cls = get_model_registry()[name][0]
+        return cls(**budget_kwargs(cls, tier, **kw), training_tier=tier,
+                   fast_demo=tier == "S")
+
+    def test_m_override_above_default_takes_effect(self):
+        from mini_networks.core.tiers import budget
+
+        assert self._cfg("gnn", "M").effective_epochs == budget("gnn", "M", "epochs")
+        assert self._cfg("gan", "M").effective_epochs == budget("gan", "M", "epochs")
+        assert self._cfg("grokking", "M").effective_batch_size == budget("grokking", "M", "batch_cap")
+
+    def test_default_models_keep_the_tier_cap(self):
+        from mini_networks.core.tiers import DEFAULTS
+
+        assert self._cfg("classifier", "M").effective_epochs == DEFAULTS["M"]["epochs"]
+
+    def test_explicit_value_wins(self):
+        assert self._cfg("gnn", "M", epochs=3).effective_epochs == 3
+        assert self._cfg("gan", "S").effective_epochs == 1
+
+
 class TestLogger:
     def test_log_and_read(self):
         with tempfile.TemporaryDirectory() as tmpdir:

@@ -15,6 +15,7 @@ import traceback
 from pathlib import Path
 from typing import Any
 
+from mini_networks.core.config import budget_kwargs
 from mini_networks.core.evalspec import EvalSpec, get_eval_spec, passes_threshold
 from mini_networks.core.sweep_report import CheckResult
 
@@ -103,7 +104,8 @@ class JudgeContext:
         ConfigClass, TrainerClass, _ = get_model_registry()["classifier"]
         tier = "S" if args.fast_demo else args.training_tier
         config = ConfigClass(
-            epochs=args.epochs, batch_size=args.batch_size, fast_demo=args.fast_demo,
+            **budget_kwargs(ConfigClass, tier, args.epochs, args.batch_size),
+            fast_demo=args.fast_demo,
             training_tier=tier, data_root=args.data_root, device=args.device,
             checkpoint_root=args.checkpoint_root, resume=False,
         )
@@ -223,7 +225,8 @@ def check_model(name: str, args, judge: JudgeContext) -> CheckResult:
 
         ConfigClass, TrainerClass, dataloader_fn = get_model_registry()[name]
         config = ConfigClass(
-            epochs=args.epochs, batch_size=args.batch_size, fast_demo=args.fast_demo,
+            **budget_kwargs(ConfigClass, tier, args.epochs, args.batch_size),
+            fast_demo=args.fast_demo,
             training_tier=tier, data_root=args.data_root, device=args.device,
             checkpoint_root=args.checkpoint_root, resume=False,
         ).model_copy(update={"run_name": logger.run_dir.name,

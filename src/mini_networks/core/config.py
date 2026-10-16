@@ -113,3 +113,34 @@ class BaseConfig(BaseModel):
         full = getattr(self, "timesteps", 0)
         cap = self._budget("timesteps")
         return full if cap is None else min(full, cap)
+
+
+def budget_kwargs(
+    config_cls: type[BaseConfig],
+    tier: str,
+    epochs: int | None = None,
+    batch_size: int | None = None,
+) -> dict[str, int]:
+    """Config kwargs for ``epochs``/``batch_size`` that let the tier budget decide.
+
+    An explicit value always wins (a user asking for 1 epoch gets 1). ``None``
+    means "the tier's budget": the config default is raised to the tier cap
+    when the cap is larger, so ``effective_*`` = ``min(value, cap)`` lands ON a
+    per-model M override in ``core/tiers.py`` (e.g. gnn's 200 epochs, grokking's
+    512 batch) instead of being clipped by the class default of 10/32.
+    ``tier`` is the effective tier ("S" when fast_demo).
+    """
+    from mini_networks.core.tiers import budget
+
+    fields = config_cls.model_fields
+    name = fields["model_name"].default
+    out: dict[str, int] = {}
+    for key, value, cap_key in (("epochs", epochs, "epochs"),
+                                ("batch_size", batch_size, "batch_cap")):
+        if value is not None:
+            out[key] = value
+            continue
+        cap = budget(name, tier, cap_key)
+        if cap is not None and cap > fields[key].default:
+            out[key] = cap
+    return out

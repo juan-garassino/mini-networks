@@ -133,7 +133,7 @@ def main() -> None:
     group.add_argument("--composition", choices=COMPOSITIONS, help="Multi-model composition to run")
     parser.add_argument("--interactive", action="store_true", help="Show interactive menu")
     parser.add_argument("--list",        action="store_true", help="List all models and compositions")
-    parser.add_argument("--epochs",    type=int,   default=2)
+    parser.add_argument("--epochs",    type=int,   default=None)  # None = tier budget
     parser.add_argument("--fast_demo", action="store_true", default=True)
     parser.add_argument("--no_fast",   action="store_true", help="Disable fast_demo")
     parser.add_argument("--training_tier", choices=["S", "M", "L"], default="M")
