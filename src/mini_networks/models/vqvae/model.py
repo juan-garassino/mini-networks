@@ -55,6 +55,14 @@ class VectorQuantizer(nn.Module):
         # Uniform init over 1/K keeps codes near the encoder's initial scale so
         # every code has a chance of being selected early (paper convention).
         self.codebook.weight.data.uniform_(-1.0 / num_embeddings, 1.0 / num_embeddings)
+        # Running per-code usage (EMA of each code's share of assignments) for
+        # dead-code restarts. Non-persistent: not part of checkpoints. Starting
+        # at 0 makes the first training step seed EVERY code from real encoder
+        # outputs (a data-dependent init); decay 0.95 notices a dead code in
+        # ~50 steps, well inside the M budget.
+        self.register_buffer("usage", torch.zeros(num_embeddings), persistent=False)
+        self.usage_decay = 0.95
+        self.dead_threshold = 1e-3  # restart a code whose usage share falls below this
 
     def forward(self, z_e: torch.Tensor):
         """z_e: [B, D, H, W] -> (z_q, vq_loss, indices, perplexity)."""
@@ -70,6 +78,15 @@ class VectorQuantizer(nn.Module):
             - 2 * flat @ self.codebook.weight.t()
         )
         indices = dist.argmin(dim=1)  # [B*H*W] — the discrete token per location
+        if self.training:
+            self._restart_dead_codes(flat.detach(), indices)
+            # restarted codes change the nearest-code assignment; recompute it
+            dist = (
+                flat.pow(2).sum(dim=1, keepdim=True)
+                + self.codebook.weight.pow(2).sum(dim=1)
+                - 2 * flat @ self.codebook.weight.t()
+            )
+            indices = dist.argmin(dim=1)
         z_q_flat = self.codebook(indices)  # [B*H*W, D]
 
         # Codebook loss: move the codes toward the encoder outputs assigned to
@@ -91,6 +108,29 @@ class VectorQuantizer(nn.Module):
         perplexity = torch.exp(-(avg_probs * (avg_probs + 1e-10).log()).sum())
 
         return z_q, vq_loss, indices.view(B, H, W), perplexity
+
+
+    @torch.no_grad()
+    def _restart_dead_codes(self, flat: torch.Tensor, indices: torch.Tensor) -> None:
+        """Dead-code restart: re-seed codes nobody picks with random encoder outputs.
+
+        The usual VQ failure is CODEBOOK COLLAPSE — a few codes win every argmin
+        early, the rest never receive gradient and stay dead (perplexity ~2 of
+        64 at M without this). Each training step updates an EMA of every
+        code's usage share; codes below ``dead_threshold`` are moved onto random
+        vectors from the current batch, where they can start winning (the
+        random-restart trick of Jukebox / SoundStream codebooks).
+        """
+        first_step = bool(self.usage.sum() == 0)  # untrained: seed every code
+        share = torch.bincount(indices, minlength=self.num_embeddings).float() / indices.numel()
+        self.usage.mul_(self.usage_decay).add_(share, alpha=1 - self.usage_decay)
+        dead = (torch.arange(self.num_embeddings, device=flat.device) if first_step
+                else (self.usage < self.dead_threshold).nonzero().flatten())
+        if dead.numel() == 0:
+            return
+        pick = torch.randint(0, flat.shape[0], (dead.numel(),), device=flat.device)
+        self.codebook.weight.data[dead] = flat[pick]
+        self.usage[dead] = 1.0 / self.num_embeddings
 
 
 class VQVAE(nn.Module):
