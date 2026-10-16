@@ -895,6 +895,8 @@ def get_dataloader(
 
     ``sample_limit`` (pass ``config.dataset_sample_limit``) wraps the dataset
     in a seeded random subset; the train split is shuffled, val is not.
+    Pass ``config.effective_batch_size``, ``config.effective_fast_demo``
+    and ``config.dataset_sample_limit`` so the tier budget is honoured.
     Single-process loading (``num_workers=0``), last partial batch kept.
     """
     ds = get_dataset(name, data_root, split=split, task=task, fast_demo=fast_demo, **kwargs)

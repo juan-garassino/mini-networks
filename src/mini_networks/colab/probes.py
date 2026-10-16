@@ -89,11 +89,16 @@ def _run_model_inference_probe(model: str, trainer: Any, config: Any, dataloader
         "vision_embed",
         "text_seq2seq",
         "text_token_classifier",
+        "vqvae",
+        "cyclegan",
+        "swin",
+        "convlstm",
+        "dcrnn",
     }
     if model in batch_models:
         batch = next(iter(dataloader))
 
-    if model in {"classifier", "resnet", "vit", "mobilenet", "convnext", "rpp_classifier"}:
+    if model in {"classifier", "resnet", "vit", "mobilenet", "convnext", "rpp_classifier", "swin"}:
         output = trainer.infer(config, batch[0][:1])
     elif model == "clip":
         output = trainer.infer(config, {"images": batch[0][:1]})
@@ -107,7 +112,7 @@ def _run_model_inference_probe(model: str, trainer: Any, config: Any, dataloader
         output = trainer.infer(config, batch[0][:1])
     elif model in {"simclr", "dino", "vision_embed"}:
         output = trainer.infer(config, {"images": batch[0][:1]})
-    elif model in {"diffusion", "gan", "pixelcnn", "tabular_diffusion"}:
+    elif model in {"diffusion", "gan", "wgan", "pixelcnn", "tabular_diffusion"}:
         output = trainer.infer(config, {"n_samples": 1})
     elif model in {"transformer", "moe", "mamba", "kimi", "deepseek", "text_diffusion", "rnn", "rlhf", "grpo", "dpo"}:
         output = trainer.infer(config, {"prompt": "To be", "max_new_tokens": 8})
@@ -133,6 +138,17 @@ def _run_model_inference_probe(model: str, trainer: Any, config: Any, dataloader
         output = trainer.infer(config, {"src": batch[0][0]})
     elif model == "text_token_classifier":
         output = trainer.infer(config, {"tokens": batch[0][0]})
+    elif model == "vqvae":
+        output = trainer.infer(config, {"images": batch[0][:1]})
+    elif model == "cyclegan":
+        # batch = (domain-A images, domain-B images); translate A -> B
+        output = trainer.infer(config, {"images": batch[0][:1], "direction": "ab"})
+    elif model == "convlstm":
+        # batch = clips [B, seq_len, 1, H, W]; condition on the first input_frames
+        output = trainer.infer(config, {"frames": batch[:1, :config.input_frames]})
+    elif model == "dcrnn":
+        # batch = (past [B, seq_len, N, 1], future)
+        output = trainer.infer(config, {"past": batch[0][:1]})
     else:
         raise RuntimeError(f"No inference probe implemented for model {model}.")
 

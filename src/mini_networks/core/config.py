@@ -18,6 +18,8 @@ class BaseConfig(BaseModel):
     properties (never the raw ``epochs``/``batch_size`` fields) so every code
     path honours the S/M/L caps in ``core/tiers.py``. ``fast_demo=True``
     forces tier S regardless of ``training_tier``.
+    Raw fields (``epochs``, ``batch_size``, subclass ``timesteps``) are the
+    L-tier values.
     """
 
     model_name: str = "base"  # also the key for per-model overrides in core/tiers.py
@@ -44,7 +46,11 @@ class BaseConfig(BaseModel):
 
     @property
     def effective_fast_demo(self) -> bool:
-        """True when running at tier S (via ``fast_demo`` or ``training_tier="S"``)."""
+        """True at S tier — set by `fast_demo` OR `training_tier=\"S\"`.
+
+        Branch on this, not raw `fast_demo`: `sweep --check --training_tier S`
+        leaves `fast_demo` False.
+        """
         return self.effective_tier == "S"
 
     def _budget(self, key: str) -> int | None:

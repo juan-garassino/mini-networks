@@ -3,44 +3,50 @@
 An educational ML playground that unifies vision, language, RL, and multimodal experiments into a single, Colab-friendly product. The focus is on consistency: one runtime contract, one data registry, one logging format, and clear compositions that show how models can interoperate.
 
 **Quick Start**
+
+Commands run through `uv run` so the project environment is used (bare
+`python main.py …` uses the system interpreter and fails on missing torch).
 1. Install dependencies.
 ```
-uv sync
+uv sync --dev
 ```
-2. List available models and compositions.
+2. List the 50 models and 23 compositions with their taxonomy.
 ```
-python main.py list
+uv run python main.py list
 ```
 3. Train a model (fast demo).
 ```
-python main.py train --model diffusion --fast_demo
+uv run python main.py train --model diffusion --fast_demo
 ```
 4. Evaluate from a checkpoint.
 ```
-python main.py evaluate --model diffusion --checkpoint runs/diffusion/<timestamp>/artifacts
+uv run python main.py evaluate --model diffusion --checkpoint runs/diffusion/<timestamp>/artifacts
 ```
 5. Run a composition.
 ```
-python main.py compose --composition clip_guided_diffusion --fast_demo
+uv run python main.py compose --composition clip_guided_diffusion --fast_demo
 ```
 6. Run the quality gate (trains everything, checks thresholds + checkpoints, writes a report).
 ```
-python main.py sweep --check --training_tier S --device cpu
+uv run python main.py sweep --check --training_tier S --device cpu
 ```
 
 **Training tiers** — every config honors `--training_tier`:
 - `S` — nano smoke run (1 epoch, 1 minibatch, 25 diffusion steps); what CI runs. `--fast_demo` forces S.
-- `M` — the "actually learns" bar (≤5 epochs, 100 batches, 4096 samples), run by the
-  parallel L4 cloud sweep; EvalSpec thresholds gate here. Don't run full M on a slow laptop.
+- `M` — the "actually learns" bar (≤5 epochs, ≤100 batches/epoch, batch ≤64); EvalSpec thresholds gate here. Runs on a GPU (the GCP L4 sweep job, or a Colab GPU kernel) — not meant for a laptop CPU.
 - `L` — full budget.
 
 The gate report lands in `runs/sweep/<timestamp>/report.{md,json}`. Per-model
 thresholds live in `src/mini_networks/core/evalspec.py`. Rerun one item:
 `python main.py sweep --check --models gan --skip-compositions`.
 
-**Colab workflow (optional)** — `colab/notebooks/00_sweep.ipynb` can run a sweep
-on a Colab GPU kernel; the other notebooks are per-family deep dives. The
-canonical M/L path is the GCP sweep job (see below).
+**Colab workflow** — the notebooks in `colab/notebooks/` are optional. Their
+first cell clones this repo into `/content/mini-networks` and `pip install -e`s
+it on Colab (or locates the repo root in a local checkout), so each notebook
+opens standalone. `00_sweep.ipynb` runs the quality gate (M on a GPU kernel,
+S on CPU); `01`–`04` train nano (S-tier) runs of vision, language, RL and
+composition models and plot/sample them (uses matplotlib, preinstalled on
+Colab). See `docs/TESTING.md` § Colab notebooks.
 
 **What’s Inside**
 - `src/mini_networks/` contains the unified runtime, data registry, and model implementations.
@@ -68,6 +74,7 @@ Vision:
 - `rpp_classifier` Residual Pathway Priors: conv + free pathways, equivariance as a soft prior.
 - `sam` Mini SAM: promptable segmentation — clicks choose which digit to mask.
 - `nerf` Mini NeRF: a voxel-digit scene as a continuous field, novel-view PSNR.
+- `convlstm` ConvLSTM next-frame prediction on Moving-MNIST.
 
 Generative vision:
 - `gan` small DCGAN baseline for MNIST.
@@ -91,18 +98,17 @@ Tabular:
 
 Language:
 - `transformer` Character-level TransformerLM on Tiny Shakespeare.
+- `moe` Mixture-of-Experts LM (router + top-1 experts + balance loss).
 - `mamba` NanoMamba state-space model.
+- `kimi` Mini Kimi K3 (KDA linear-attention hybrid + AttnRes + LatentMoE).
+- `deepseek` Mini DeepSeek V4 (compressed attention + mHC + MTP).
+- `text_diffusion` LLaDA-mini masked-diffusion char-LM.
 - `rnn` RNN / LSTM / GRU language model.
-- `convlstm` ConvLSTM: spatio-temporal next-frame prediction on Moving-MNIST.
 - `text_seq2seq` Transformer encoder-decoder.
 - `text_token_classifier` Token classifier (vowel vs other).
 - `rag` TF‑IDF retrieval + TransformerLM generation.
 - `rlhf` PPO fine‑tuning with heuristic Shakespearean reward.
-- `lora` LoRA adapter fine‑tuning.
-- `moe` Mixture-of-Experts LM: router + top-1 experts + balance loss.
-- `text_diffusion` LLaDA-mini: masked-diffusion char-LM, generation by iterative unmasking.
-- `kimi` Mini Kimi K3: KDA linear-attention hybrid + AttnRes + LatentMoE.
-- `deepseek` Mini DeepSeek V4: compressed attention + mHC + DeepSeekMoE + multi-token prediction.
+- `lora` LoRA adapter fine‑tuning (MNIST → FashionMNIST).
 - `grpo` GRPO: group-relative advantages, no value net.
 - `dpo` DPO: preference pairs, no RL — implicit KL via a reference model.
 
@@ -219,6 +225,8 @@ Run any mini, the smoke tests and the per-model gate table: `docs/TESTING.md`.
 ```
 make test                  # fast suite (slow marker deselected)
 uv run pytest tests/ -m slow   # full trainings through the API
-make validate-s            # full S-tier gate sweep (what CI runs)
+make validate-s DEVICE=cpu     # full S-tier gate sweep (what CI runs)
 ```
-Smoke tests are in `tests/test_smoke_models.py` and `tests/test_smoke_registry.py`.
+Smoke tests are in `tests/test_smoke_models.py` and `tests/test_smoke_registry.py`;
+`tests/test_colab_notebooks.py` statically checks the Colab notebooks against
+the current API.
