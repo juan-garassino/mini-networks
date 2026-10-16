@@ -28,6 +28,13 @@ MODEL_OVERRIDES: dict[str, dict[str, dict[str, int | None]]] = {
     # chase artifacts (judge 0.14 with textured-noise samples, m-vision-10);
     # step count is still bounded by train_batches, this only adds variety.
     "gan": {"M": {"epochs": 80, "sample_limit": None}},
+    # wgan spends its first 25 generator steps in a 20-critic-step warm-up, so
+    # the 5-epoch default (500 critic batches) was ALL warm-up: ~25 G steps,
+    # an EMA generator still ~97% at init, one-class samples (judge 0.0998,
+    # seeded). Seeded judge @40 epochs 0.233/0.157, @80 0.202/0.147 (seeds
+    # 42/43; self-improve loop 2026-10-16) — 40 is as good at half the cost.
+    # Seed 43 sits near the 0.15 bar: the margin is thin.
+    "wgan": {"M": {"epochs": 40}},
     # Guided-diffusion compositions match base diffusion's 10 epochs: at the
     # 5-epoch default their CFG UNets stay noisy and guide_weight=2 AMPLIFIES
     # the error (eps_c + w*(eps_c - eps_u)) — samples were noise while base
