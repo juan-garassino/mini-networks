@@ -74,28 +74,10 @@ class AudioSpecCNN(nn.Module):
         return self.head(h)
 
 
-class AudioMelSpecCNN(nn.Module):
-    """2D CNN on a mel spectrogram — same layers as AudioSpecCNN, different input."""
-
-    def __init__(self, n_classes: int = 10):
-        super().__init__()
-        self.net = nn.Sequential(
-            nn.Conv2d(1, 16, 3, padding=1),
-            nn.ReLU(),
-            nn.MaxPool2d(2),
-            nn.Conv2d(16, 32, 3, padding=1),
-            nn.ReLU(),
-            nn.MaxPool2d(2),
-            nn.Conv2d(32, 64, 3, padding=1),
-            nn.ReLU(),
-            nn.AdaptiveAvgPool2d((1, 1)),
-        )
-        self.head = nn.Linear(64, n_classes)
-
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
-        """Spectrogram image [B, 1, freq, frames] -> class logits [B, n_classes]."""
-        h = self.net(x).view(x.size(0), -1)
-        return self.head(h)
+class AudioMelSpecCNN(AudioSpecCNN):
+    """2D CNN on a mel spectrogram — the same layers (and checkpoint keys) as
+    AudioSpecCNN; only the input features differ (mel vs linear STFT bins).
+    Subclassed rather than copied so the two can't drift apart."""
 
 
 class AudioTransformer(nn.Module):

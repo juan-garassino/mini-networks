@@ -116,12 +116,17 @@ class TestMambaFFN:
         assert out.shape == (2, 8, 32)
         assert aux.item() == 0.0
 
-    def test_residual_connection(self):
-        """MambaFFN applies residual internally — output ≠ 0 even with zeroed params."""
+    def test_returns_update_without_residual(self):
+        """The host TransformerBlock adds the residual, so MambaFFN must return
+        the update alone: shared MambaBlock(x) == x + MambaFFN(x) (same weights)."""
+        from mini_networks.core.blocks.ssm import MambaBlock
+
         mamba = self._make()
+        block = MambaBlock(d_model=32, d_state=8, d_conv=4, dropout=0.0)
+        block.load_state_dict(mamba.state_dict())  # same parameter names
         x = torch.randn(2, 4, 32)
         out, _ = mamba(x)
-        assert not torch.allclose(out, torch.zeros_like(out))
+        assert torch.allclose(block(x), x + out, atol=1e-6)
 
     def test_no_nan(self):
         mamba = self._make()

@@ -29,6 +29,8 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
+from mini_networks.core.blocks.ssm import MambaBlock
+
 
 # ---------------------------------------------------------------------------
 # FFN blocks — each forward() returns (output, aux_loss)
@@ -170,62 +172,17 @@ class MoEFFN(nn.Module):
         return y, aux
 
 
-class MambaFFN(nn.Module):
-    """
-    Dependency-free SSM-style block:
-      - depthwise Conv1d for local mixing
-      - gated exponential decay scan (simplified Mamba selective state space)
+class MambaFFN(MambaBlock):
+    """The shared gated-SSM block (core/blocks/ssm.py) used as a transformer FFN.
 
-    Residual connection is applied internally.
-    forward() returns (output, aux_loss=0.0).
+    Returns ``(update, aux_loss=0.0)`` — the update WITHOUT a residual, because
+    TransformerBlock adds its own (``LN(x + Drop(FFN(x)))``). An earlier copy
+    returned ``x + update`` here, counting the input twice.
     """
-
-    def __init__(
-        self,
-        d_model: int,
-        d_state: int = 16,
-        d_conv: int = 4,
-        dropout: float = 0.1,
-    ):
-        super().__init__()
-        self.norm = nn.LayerNorm(d_model)
-        self.proj_in = nn.Linear(d_model, 2 * d_model)
-        self.dwconv = nn.Conv1d(
-            2 * d_model, 2 * d_model,
-            kernel_size=d_conv, padding=d_conv - 1,
-            groups=2 * d_model,
-        )
-        self.act = nn.SiLU()
-        self.a = nn.Parameter(torch.zeros(d_model))  # decay log-rate
-        self.b = nn.Parameter(torch.zeros(d_model))  # input projection
-        self.proj_out = nn.Linear(d_model, d_model)
-        self.drop = nn.Dropout(dropout)
 
     def forward(self, x: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
-        """x: [B, T, C]. Returns (output [B, T, C], aux_loss=0.0)."""
-        B, T, C = x.shape
-        h = self.norm(x)
-        h = self.proj_in(h)               # [B, T, 2C]
-        h = h.transpose(1, 2)             # [B, 2C, T]
-        h = self.dwconv(h)[:, :, :T]      # causal trim → [B, 2C, T]
-        h = h.transpose(1, 2)             # [B, T, 2C]
-
-        u, g = h.chunk(2, dim=-1)         # each [B, T, C]
-        g = torch.sigmoid(g)
-        u = self.act(u)
-
-        # Gated exponential decay SSM scan
-        a = torch.exp(-F.softplus(self.a))   # [C], decay ∈ (0, 1)
-        b = self.b                            # [C], input scale
-        ys = []
-        s = torch.zeros(B, C, device=x.device)
-        for t in range(T):
-            s = a * s + b * u[:, t, :]
-            ys.append(s)
-        y = torch.stack(ys, dim=1)       # [B, T, C]
-        y = g * y
-        y = self.drop(self.proj_out(y))
-        return x + y, torch.tensor(0.0, device=x.device)
+        """x: [B, T, C] -> (update [B, T, C], 0.0)."""
+        return self.mix(x), torch.tensor(0.0, device=x.device)
 
 
 # ---------------------------------------------------------------------------
@@ -265,9 +222,8 @@ def _make_ffn(block_type: str, d_model: int, d_ff: int, dropout: float, **kwargs
 class TransformerBlock(nn.Module):
     """Post-LN decoder block: causal multi-head self-attention, then the chosen FFN.
 
-    x = LN(x + Drop(Attn(x))); x = LN(x + Drop(FFN(x))). Note MambaFFN
-    already returns its input plus the update, so with ``block_type="mamba"``
-    the input is added twice on the FFN residual.
+    x = LN(x + Drop(Attn(x))); x = LN(x + Drop(FFN(x))). Every FFN variant
+    returns its update only (no internal residual), so the input is added once.
     """
     def __init__(
         self,
