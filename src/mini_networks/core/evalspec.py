@@ -104,10 +104,15 @@ EVAL_SPECS: dict[str, EvalSpec] = {
     # should not cost accuracy on clean MNIST. Finalize from the first M sweep.
     "rpp_classifier":        _acc(0.80, 0.93, provisional=True),
     # PROVISIONAL: features are deliberately weak (feature-only MLP baseline is
-    # logged as mlp_baseline_accuracy every eval — the bar must sit well above
-    # it so the gate provably measures message passing). Finalize both numbers
-    # from the first M sweep.
-    "gnn":                   _acc(0.75, 0.90, provisional=True),
+    # logged as mlp_baseline_accuracy every eval, ~0.25 = chance for 4
+    # communities — the bar must sit well above it so the gate provably
+    # measures message passing). M 0.75 -> 0.5 (2026-10-16, owner-approved):
+    # with the M budget actually running (200 full-batch steps), a 2-layer GCN
+    # on 20 labels scores mean 0.58 over 5 graphs x 2 runs (per graph
+    # 0.44-0.81); the seed-42 gate graph ~0.69. 0.75 was above what the model
+    # reaches on most graphs, and lr/hop-count tuning only overfit one graph.
+    # 0.5 is 2x the feature-only baseline. L 0.90 untouched (no L evidence).
+    "gnn":                   _acc(0.50, 0.90, provisional=True),
     # PROVISIONAL: harder than plain segmentation (0.55) — the composite
     # two-digit task makes the click causally necessary. evaluate() also logs
     # wrong_prompt_iou (same mask scored vs the OTHER digit); the gap is the

@@ -397,8 +397,9 @@ Writes `runs/sweep/<ts>/report.{md,json}`; non-zero exit on any non-pass.
   independent runs: swin, alphazero, vqvae (dead-code restarts), convlstm,
   nerf, wgan (40-epoch M). Randomness is NOT parametrized: training is
   unseeded and changes are judged over several independent runs (a seeded
-  gate was tried and reverted). gnn sits at ~0.65-0.74 vs its provisional
-  0.75 bar (needs an owner decision). deepseek passes M on CPU (0.83 vs 2.8);
+  gate was tried and reverted). gnn's provisional M bar re-set 0.75 ->
+  0.5 from 5-graph evidence (owner-approved; gate runs 0.64-0.68). sam 10-epoch
+  M (0.74-0.76). deepseek passes M on CPU (0.83 vs 2.8);
   text_diffusion now does too (2.79/2.56 vs 3.2, M sample_limit 16384); kimi
   (~11 GB at batch 64, hours on CPU) still needs the next cloud M sweep.
 - Known instability fixes applied 2026-07-10: text_seq2seq causal mask +
