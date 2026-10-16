@@ -70,6 +70,7 @@ class NerfTrainer(BaseTrainer):
                 loss = F.mse_loss(rgb, batch[:, 6:])
                 optimizer.zero_grad()
                 loss.backward()
+                self._clip_grads(model, config)   # no-op unless config.max_grad_norm
                 optimizer.step()
                 total += loss.item()
                 n_batches += 1
