@@ -28,7 +28,9 @@ import torch.nn as nn
 
 
 class Seq2SeqTransformer(nn.Module):
-    """Source/target embeddings + shared learned positions around ``nn.Transformer`` + a vocab head."""
+    """Source/target embeddings + shared learned positions around ``nn.Transformer`` + a
+    vocab head.
+    """
     def __init__(self, vocab_size: int, d_model: int, n_heads: int, n_layers: int, d_ff: int, seq_len: int):
         super().__init__()
         self.src_embed = nn.Embedding(vocab_size, d_model)

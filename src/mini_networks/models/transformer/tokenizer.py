@@ -84,7 +84,9 @@ class BPETokenizer:
         return ids
 
     def decode(self, ids: list[int]) -> str:
-        """Concatenate the byte strings of ``ids`` (skipping PAD = 0) and decode as UTF-8, replacing invalid sequences."""
+        """Concatenate the byte strings of ``ids`` (skipping PAD = 0) and decode as UTF-8,
+        replacing invalid sequences.
+        """
         raw = b"".join(self.vocab.get(i, b"") for i in ids if i != self.PAD)
         return raw.decode("utf-8", errors="replace")
 
@@ -98,7 +100,9 @@ class BPETokenizer:
     # ------------------------------------------------------------------
 
     def save(self, path: str) -> None:
-        """Write the merge list as JSON ``{"merges": [[[a, b], id], ...]}``; the vocab is rebuilt from it on load."""
+        """Write the merge list as JSON ``{"merges": [[[a, b], id], ...]}``; the vocab is
+        rebuilt from it on load.
+        """
         data = {
             "merges": [[[a, b], merged_id] for (a, b), merged_id in self.merges],
         }

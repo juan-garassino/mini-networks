@@ -43,7 +43,9 @@ class RPPBlock(nn.Module):
         self.bn = nn.BatchNorm2d(out_ch)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        """Map [B,in_ch,S,S] to ReLU(BN(conv(x) + free(x))) of shape [B,out_ch,S,S] (S = ``spatial``)."""
+        """Map [B,in_ch,S,S] to ReLU(BN(conv(x) + free(x))) of shape [B,out_ch,S,S] (S =
+        ``spatial``).
+        """
         B = x.shape[0]
         c = self.conv(x)
         f = self.free(x.flatten(1)).view(B, self.out_ch, self.spatial, self.spatial)

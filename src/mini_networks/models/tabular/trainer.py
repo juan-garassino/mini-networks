@@ -1,4 +1,4 @@
-"""Tabular classifier trainer."""
+"""Tabular classifier trainer: SupervisedTrainer over the linear / MLP / Transformer ladder."""
 from __future__ import annotations
 
 from typing import Any
@@ -66,7 +66,9 @@ class TabularClassifierTrainer(SupervisedTrainer):
 
 
 def make_tabular_dataloader(config: TabularClassifierConfig, split: str = "train") -> DataLoader:
-    """Tabular loader for ``config.dataset`` (Iris by default): batches of (features [B,n_features] float, labels [B])."""
+    """Tabular loader for ``config.dataset`` (Iris by default): batches of (features
+    [B,n_features] float, labels [B]).
+    """
     return get_dataloader(
         name=config.dataset,
         data_root=config.data_root,

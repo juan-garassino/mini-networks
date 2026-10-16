@@ -85,7 +85,9 @@ class MambaTrainer(BaseTrainer):
             self.tokenizer.save(str(logger.artifact_path("tokenizer.json")))
 
     def evaluate(self, config: BaseConfig, dataloader: DataLoader, logger: Logger) -> dict:
-        """Return ``{"eval_loss"}``: mean next-token cross-entropy (nats per token) over the loader."""
+        """Return ``{"eval_loss"}``: mean next-token cross-entropy (nats per token) over
+        the loader.
+        """
         assert isinstance(config, MambaConfig)
         ds = dataloader.dataset
         actual_vocab_size = ds.vocab_size if hasattr(ds, "vocab_size") else config.vocab_size
@@ -147,7 +149,9 @@ class MambaTrainer(BaseTrainer):
 
 
 def make_mamba_dataloader(config: MambaConfig, split: str = "train") -> DataLoader:
-    """Text loader (``text_file`` / ``tiny_shakespeare``): batches of (x [B,seq_len], y [B,seq_len]) long ids.
+    """Text loader (``text_file`` / ``tiny_shakespeare``) of next-token windows.
+
+    Batches are (x [B,seq_len], y [B,seq_len]) long ids.
 
     y is x shifted left by one token (next-token targets). The dataset also
     exposes ``tokenizer`` and ``vocab_size``, which the trainer reads.

@@ -17,6 +17,20 @@ gate metric, held-out MNIST test images) AND `blind_accuracy` — the same
 eval with the image zeroed. The language prior alone gets ~1/2 on even/odd
 and ~1/10 on digit naming; the gap proves the answers come THROUGH the
 image prefix, not from text statistics.
+
+Shapes (defaults):
+
+    image [B,1,28,28] -> VisionPatchEncoder (4x4 patches) -> [B,49,128]
+      -> Linear connector -> 49 prefix tokens
+    text  "Q: <question> A: <answer>." -> char ids [B,40] -> token embeddings
+    [prefix ; text] + learned positions -> 4 causal Transformer blocks
+      -> logits for the 40 TEXT positions [B,40,V]
+
+Deliberately simplified vs LLaVA: both halves are trained from scratch
+jointly (LLaVA freezes a pretrained CLIP-ViT and LLM and first trains only
+the connector), the connector is one Linear rather than an MLP, the
+"language model" only ever sees three question templates, and answering is
+greedy decoding up to the first '.'.
 """
 from __future__ import annotations
 
@@ -47,6 +61,11 @@ QA_TEMPLATES = (
 
 
 class VLMConfig(BaseConfig):
+    """Knobs: ``d_model`` / ``n_heads`` / ``n_layers`` (the shared causal
+    stack), ``patch_size`` (prefix length = (28/patch_size)^2),
+    ``max_text_len`` (text positions incl. padding), ``eval_samples``
+    (held-out images; each is asked all three questions)."""
+
     model_name: str = "vlm"
     dataset: str = "mnist"
     d_model: int = 128
@@ -58,6 +77,7 @@ class VLMConfig(BaseConfig):
 
 
 def _corpus() -> str:
+    """Every character the QA format can produce (prompt scaffold + questions + answers)."""
     parts = ["Q: A: ."]
     for q, a_fn in QA_TEMPLATES:
         parts.append(q)
@@ -66,6 +86,7 @@ def _corpus() -> str:
 
 
 def build_tokenizer() -> CharTokenizer:
+    """Char tokenizer over ``_corpus()`` (ids 1..N in sorted-character order)."""
     return CharTokenizer.from_text(_corpus())
 
 
@@ -75,6 +96,11 @@ class _QADataset(Dataset):
 
     def __init__(self, base: Dataset, tokenizer: CharTokenizer, max_len: int,
                  pad_id: int, seed: int = 5, limit: int | None = None):
+        """Wrap an (image, label) dataset; ``limit`` caps its length.
+
+        The question asked of item ``idx`` is drawn from a generator seeded
+        by ``(seed, idx)``, so it is fixed per item across epochs.
+        """
         self._base = base
         self._tok = tokenizer
         self._max_len = max_len
@@ -83,6 +109,7 @@ class _QADataset(Dataset):
         self._limit = min(limit, len(base)) if limit else len(base)
 
     def __len__(self) -> int:
+        """Number of items exposed (base length capped by ``limit``)."""
         return self._limit
 
     def encode_qa(self, question: str, answer: str | None):
@@ -101,6 +128,7 @@ class _QADataset(Dataset):
         return tokens, labels
 
     def __getitem__(self, idx: int):
+        """-> (image [1,28,28], tokens [max_len], labels [max_len-1], digit int)."""
         image, y = self._base[idx]
         g = torch.Generator().manual_seed(self._seed * 100_003 + idx)
         q, a_fn = QA_TEMPLATES[int(torch.randint(0, len(QA_TEMPLATES), (1,), generator=g))]
@@ -113,6 +141,8 @@ class VLMNet(nn.Module):
 
     def __init__(self, vocab_size: int, d_model: int = 128, n_heads: int = 4,
                  n_layers: int = 4, patch_size: int = 4, max_text_len: int = 40):
+        """Id ``vocab_size`` is reserved as PAD (an extra embedding row; the
+        output head never predicts it)."""
         super().__init__()
         self.vision = VisionPatchEncoder(patch_size=patch_size, d_model=d_model)
         self.proj = nn.Linear(d_model, d_model)  # the "connector" (LLaVA's MLP)
@@ -129,7 +159,13 @@ class VLMNet(nn.Module):
         self.head = nn.Linear(d_model, vocab_size)
 
     def forward(self, images: torch.Tensor, tokens: torch.Tensor) -> torch.Tensor:
-        """-> logits over TEXT positions [B, T_text, V]."""
+        """(images [B,1,28,28], tokens [B,T]) -> logits over TEXT positions [B,T,V].
+
+        One causal mask covers the whole stream, so image tokens attend only
+        to earlier image tokens, while every text token sees the full image
+        prefix plus the text before it. Prefix positions are dropped from
+        the output.
+        """
         prefix = self.proj(self.vision(images))               # [B, P, D]
         text = self.tok_embed(tokens)                         # [B, T, D]
         x = torch.cat([prefix, text], dim=1)
@@ -165,11 +201,23 @@ class VLMNet(nn.Module):
 
 
 class VLM:
+    """Train/evaluate driver for VLMNet on templated MNIST QA."""
+
     def __init__(self):
         self.model: VLMNet | None = None
         self.tokenizer: CharTokenizer | None = None
 
     def _loaders(self, config: VLMConfig):
+        """Tokenizer + (train, held-out test) QA loaders.
+
+        PAD id = ``len(tok.stoi)``; train is capped by ``dataset_sample_limit``,
+        test by ``eval_samples``, and the two use different question seeds.
+
+        NOTE: ``CharTokenizer.from_text`` numbers characters 1..N, so this PAD
+        id equals the id of the last sorted character ('z', from "zero"):
+        'z' is embedded as PAD and is outside the N-way output head, so an
+        answer-span target of 'z' is out of range for the cross-entropy.
+        """
         tok = build_tokenizer()
         pad = len(tok.stoi)
         limit = config.dataset_sample_limit
@@ -185,6 +233,15 @@ class VLM:
         )
 
     def train_all(self, config: VLMConfig, logger: Logger) -> dict:
+        """Train with answer-span cross-entropy, then evaluate.
+
+        AdamW, up to ``max_train_batches`` per epoch. Logs ``loss`` per epoch;
+        saves ``model.pt``; writes a summary with ``answer_accuracy`` and
+        ``blind_accuracy``.
+
+        Returns:
+            the two accuracies plus ``run_dir``.
+        """
         tok, (dl_train, dl_test) = self._loaders(config)
         self.tokenizer = tok
         model = VLMNet(

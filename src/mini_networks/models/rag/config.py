@@ -1,4 +1,6 @@
-"""Config for NanoRAG: retrieval (top_k, chunk size) and the size of the underlying TransformerLM."""
+"""Config for NanoRAG: retrieval (top_k, chunk size) and the size of the underlying
+TransformerLM.
+"""
 from __future__ import annotations
 from mini_networks.core.config import BaseConfig
 

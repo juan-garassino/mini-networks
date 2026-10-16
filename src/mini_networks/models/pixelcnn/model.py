@@ -13,7 +13,8 @@ Mask "A" (first layer) also hides the centre pixel itself — otherwise the
 model could copy its input; mask "B" (later layers) allows the centre,
 because by then that position holds features of preceding pixels only.
 
-This implementation (n_filters=32, n_layers=4):
+This implementation (class defaults n_filters=32, n_layers=4; PixelCNNConfig
+trains 64 filters x 8 layers for a larger receptive field):
 
     [B,1,28,28] -> MaskedConv "A" 3x3 (1->32) -> ReLU
                 -> 3 x [MaskedConv "B" 3x3 (32->32) -> ReLU]
@@ -77,5 +78,7 @@ class PixelCNN(nn.Module):
         self.net = nn.Sequential(*layers)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        """Map binarised images [B,1,28,28] to per-pixel Bernoulli logits [B,1,28,28], logit i conditioned only on pixels before i."""
+        """Map binarised images [B,1,28,28] to per-pixel Bernoulli logits [B,1,28,28],
+        logit i conditioned only on pixels before i.
+        """
         return self.net(x)

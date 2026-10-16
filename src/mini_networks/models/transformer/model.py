@@ -97,7 +97,8 @@ class MoEFFN(nn.Module):
     """
     Mixture-of-Experts FFN with:
       - shared bottom/top projection (scaled by a learnable shared_scale)
-      - N expert up/down projections (only top-k active per token)
+      - N expert up/down projections (all computed densely; only the top-k
+        get non-zero mixture weight per token)
       - Gumbel-softmax TopK router
       - balance loss (KL-to-uniform) + entropy bonus
 

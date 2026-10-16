@@ -54,7 +54,9 @@ class TextTokenClassifierTrainer(BaseTrainer):
         ).to(config.device)
 
     def train(self, config: BaseConfig, dataloader: DataLoader, logger: Logger) -> None:
-        """Wrap the loader's dataset in :class:`TokenLabelDataset`, fit with AdamW, and save ``model.pt``."""
+        """Wrap the loader's dataset in :class:`TokenLabelDataset`, fit with AdamW, and
+        save ``model.pt``.
+        """
         assert isinstance(config, TextTokenClassifierConfig)
         base_ds = dataloader.dataset
         vocab_size = base_ds.vocab_size if hasattr(base_ds, "vocab_size") else config.vocab_size
@@ -115,7 +117,9 @@ class TextTokenClassifierTrainer(BaseTrainer):
         return {"eval_loss": total / max(1, len(dataloader))}
 
     def infer(self, config: BaseConfig, inputs: Any) -> Any:
-        """Tag one sequence: ``{"tokens": [ids]}`` or a bare id list -> ``{"predictions": [[0/1 per token]]}``."""
+        """Tag one sequence: ``{"tokens": [ids]}`` or a bare id list -> ``{"predictions":
+        [[0/1 per token]]}``.
+        """
         assert isinstance(config, TextTokenClassifierConfig)
         if self.model is None:
             raise RuntimeError("Model not loaded.")

@@ -36,6 +36,23 @@ Three-phase pipeline
   Phase 3 — RLHF: for each rollout sample an action sequence from the LM,
              execute in MazeEnv, get binary reward (1=goal, 0=other),
              apply PPO with KL penalty vs frozen reference model.
+  compare() then scores greedy DQN vs sampled-LM success rate on the maze.
+
+Deliberately simplified vs RLHF as used for chat models (InstructGPT):
+  - The reward is the environment's own goal signal, not a learned reward
+    model trained on human preferences — so this is "RL fine-tuning of an
+    LM", the mechanical core of RLHF without the human-feedback half.
+  - All phases use ONE maze (generated once with the env and reused; no
+    ``random_reset``), so the LM learns a path for that layout, not maze
+    solving in general.
+  - The PPO step is minimal: one rollout per iteration, the importance ratio
+    is taken against the frozen *reference* model rather than the rollout
+    policy, the advantage is ``reward - 0.5`` (a constant baseline, no value
+    head / GAE), and every generated token — including any after the
+    terminating G/X — shares that one advantage.
+  - Trajectories are joined with "\n", which is outside the vocab and so
+    encodes to PAD (0); the LM learns PAD as the separator and _decode
+    drops it.
 """
 from __future__ import annotations
 
@@ -71,10 +88,12 @@ VOCAB_SIZE = len(_STOI) + 1   # 8
 
 
 def _encode(trajectory: str) -> list[int]:
+    """Map trajectory chars to ids 1..7; anything else (e.g. "\n") -> PAD 0."""
     return [_STOI.get(c, 0) for c in trajectory]
 
 
 def _decode(ids: list[int]) -> str:
+    """Inverse of _encode, dropping PAD (0)."""
     return "".join(_ITOS.get(i, "") for i in ids if i != 0)
 
 
@@ -83,6 +102,20 @@ def _decode(ids: list[int]) -> str:
 # ---------------------------------------------------------------------------
 
 class RLHFMazeConfig(BaseConfig):
+    """Knobs per phase. Maze: size, ``maze_density`` (hole fraction),
+    ``max_steps``. DQN: ``rl_episodes`` and the epsilon-greedy schedule.
+    Corpus: ``n_collect`` episodes (rolled out at epsilon 0.2). LM: the
+    ``lm_*`` sizes (pretraining windows are min(lm_seq_len, 32) tokens).
+    PPO: ``n_rollouts`` iterations, ``ppo_epochs``, ``rlhf_lr``,
+    ``clip_eps`` (ratio clip), ``kl_coef`` (pull toward the reference LM).
+
+    The ``# fast_demo:`` notes give the hard-coded values used when
+    ``fast_demo`` is set (5x5 maze, 30 steps, 30 DQN episodes, 50 collected,
+    1 LM epoch, 4 rollouts, 1 PPO epoch, 5 eval episodes). These budgets key
+    off ``fast_demo`` directly, not the training tier. ``rl_agent_type`` is
+    informational: the pipeline always builds a DQNAgent.
+    """
+
     model_name: str = "rl_rlhf_maze"
 
     # Maze
@@ -129,6 +162,7 @@ class RLHFMazeConfig(BaseConfig):
 # ---------------------------------------------------------------------------
 
 def _make_maze(config: RLHFMazeConfig) -> MazeEnv:
+    """Build the MazeEnv (5x5, 30 steps under fast_demo; config sizes otherwise)."""
     w = 5 if config.fast_demo else config.maze_width
     h = 5 if config.fast_demo else config.maze_height
     steps = 30 if config.fast_demo else config.max_steps
@@ -136,6 +170,7 @@ def _make_maze(config: RLHFMazeConfig) -> MazeEnv:
 
 
 def _make_dqn(config: RLHFMazeConfig, state_size: int) -> DQNAgent:
+    """DQN with a 1000-transition replay buffer, batch 32, target-network sync every 50 (target_update_every)."""
     return DQNAgent(
         state_size=state_size,
         hidden=config.dqn_hidden,
@@ -152,6 +187,7 @@ def _make_dqn(config: RLHFMazeConfig, state_size: int) -> DQNAgent:
 
 
 def _build_lm(config: RLHFMazeConfig) -> TransformerLM:
+    """TransformerLM over the 8-token trajectory vocab (PAD + "SUDLRXG")."""
     return TransformerLM(
         vocab_size=VOCAB_SIZE,
         d_model=config.lm_d_model,
@@ -220,6 +256,7 @@ class RLHFMazeComposition:
     """
 
     def __init__(self):
+        """Start empty; ``train`` sets the env, DQN agent, LM and reference LM."""
         self.dqn_agent: DQNAgent | None = None
         self.env: MazeEnv | None = None
         self.lm: TransformerLM | None = None
@@ -234,6 +271,7 @@ class RLHFMazeComposition:
         config: RLHFMazeConfig,
         logger: Logger,
     ) -> DQNAgent:
+        """Train the DQN agent online; logs per-episode reward, success, epsilon."""
         env = _make_maze(config)
         self.env = env
         state = env.reset()
@@ -267,6 +305,13 @@ class RLHFMazeComposition:
         agent: DQNAgent,
         logger: Logger,
     ) -> TransformerLM:
+        """Roll out the trained DQN (epsilon 0.2) into a char corpus and pretrain the LM.
+
+        Successes and failures both go in the corpus (behaviour cloning of
+        whatever the agent did). Training uses non-overlapping windows, one
+        sequence per step, AdamW lr 1e-3 with grad-norm clip 1.0; logs
+        ``pretrain_loss`` per epoch.
+        """
         env = self.env or _make_maze(config)
 
         # Collect trajectories (mix of successes + failures)
@@ -332,6 +377,14 @@ class RLHFMazeComposition:
         model: TransformerLM,
         logger: Logger,
     ) -> None:
+        """PPO-style fine-tuning of ``model`` on maze success (in place).
+
+        Each iteration samples one action string from "S", executes it until
+        G/X or episode end, scores it 1.0 (goal) / 0.0, and takes
+        ``ppo_epochs`` clipped-ratio steps with a ``kl_coef`` penalty toward
+        the frozen copy made at the start. Logs ``ppo_loss`` and
+        ``avg_reward`` per iteration.
+        """
         env = self.env or _make_maze(config)
 
         # Freeze reference policy
@@ -392,10 +445,14 @@ class RLHFMazeComposition:
                     with torch.no_grad():
                         ref_lp = _log_probs_of_tokens(ref, tokens)
 
+                    # Sample-based KL(ref || cur) estimate on the generated
+                    # tokens; keeps the policy near what pretraining learned.
                     kl = (ref_lp - cur_lp).mean()
                     r_t = torch.tensor(rb["reward"], dtype=torch.float32, device=config.device)
                     advantage = r_t - 0.5  # centre
 
+                    # Ratio vs the frozen reference (not the rollout policy
+                    # as in textbook PPO), clipped to [1-eps, 1+eps].
                     ratio = torch.exp(cur_lp - ref_lp.detach())
                     clipped = torch.clamp(ratio, 1 - config.clip_eps, 1 + config.clip_eps)
                     policy_loss = -torch.min(ratio * advantage, clipped * advantage).mean()
@@ -421,7 +478,12 @@ class RLHFMazeComposition:
     # ------------------------------------------------------------------
 
     def train(self, config: RLHFMazeConfig, logger: Logger) -> None:
-        """Run all three phases."""
+        """Run all three phases: DQN, LM pretraining, PPO fine-tuning.
+
+        Logs the config, then phase-tagged metrics (``phase`` = 1/2/3) on one
+        step axis. Nothing is written to artifacts; the trained agent and LM
+        live on the instance for ``compare``.
+        """
         logger.log_config(config.model_dump())
         log.info("[RLHFMaze] Phase 1: training DQN agent")
         agent = self._phase1_train_dqn(config, logger)
@@ -433,6 +495,10 @@ class RLHFMazeComposition:
 
     def compare(self, config: RLHFMazeConfig, n_eval: int | None = None) -> dict:
         """Evaluate DQN agent vs fine-tuned LM on the maze.
+
+        DQN runs greedily (epsilon 0); the LM samples at temperature 0.8 from
+        "S" and its characters are executed until G/X or episode end.
+        ``n_eval`` defaults to ``eval_episodes`` (5 under fast_demo).
 
         Returns::
 
@@ -508,7 +574,11 @@ class RLHFMazeComposition:
 # ---------------------------------------------------------------------------
 
 def run(config: RLHFMazeConfig | None = None, logger: Logger | None = None) -> dict:
-    """Train the composition and return compare() results."""
+    """Train the composition and return compare() results.
+
+    Defaults to a fast_demo config and a Logger under
+    ``<output_dir>/rl_rlhf_maze/<timestamp>``.
+    """
     import os
     import time
     if config is None:

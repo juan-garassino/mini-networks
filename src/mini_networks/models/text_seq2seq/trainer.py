@@ -1,4 +1,4 @@
-"""Seq2seq trainer."""
+"""Seq2seq trainer: split text windows into (src, tgt) halves, shifted teacher forcing."""
 from __future__ import annotations
 
 from typing import Any
@@ -32,7 +32,7 @@ class Seq2SeqDataset(Dataset):
 
 
 class TextSeq2SeqTrainer(BaseTrainer):
-    """Train :class:`Seq2SeqTransformer` to continue the first half of a text window with its second half.
+    """Train :class:`Seq2SeqTransformer` to map a text window's first half to its second.
 
     Loss: shifted teacher-forcing cross-entropy (decoder reads tgt[:-1],
     predicts tgt[1:]). Checkpoint: ``model.pt`` (no tokenizer is saved; the
@@ -52,7 +52,9 @@ class TextSeq2SeqTrainer(BaseTrainer):
         ).to(config.device)
 
     def train(self, config: BaseConfig, dataloader: DataLoader, logger: Logger) -> None:
-        """Wrap the loader's dataset in :class:`Seq2SeqDataset`, fit with AdamW, and save ``model.pt``."""
+        """Wrap the loader's dataset in :class:`Seq2SeqDataset`, fit with AdamW, and save
+        ``model.pt``.
+        """
         assert isinstance(config, TextSeq2SeqConfig)
         base_ds = dataloader.dataset
         vocab_size = base_ds.vocab_size if hasattr(base_ds, "vocab_size") else config.vocab_size
@@ -82,7 +84,9 @@ class TextSeq2SeqTrainer(BaseTrainer):
         torch.save(model.state_dict(), logger.artifact_path("model.pt"))
 
     def evaluate(self, config: BaseConfig, dataloader: DataLoader, logger: Logger) -> dict:
-        """Return ``{"eval_loss"}``: mean teacher-forced cross-entropy over batches of 4 (src, tgt) pairs."""
+        """Return ``{"eval_loss"}``: mean teacher-forced cross-entropy over batches of 4
+        (src, tgt) pairs.
+        """
         assert isinstance(config, TextSeq2SeqConfig)
         if self.model is None:
             base_ds = dataloader.dataset

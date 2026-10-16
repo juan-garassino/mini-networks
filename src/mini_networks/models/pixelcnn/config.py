@@ -4,7 +4,9 @@ from mini_networks.core.config import BaseConfig
 
 
 class PixelCNNConfig(BaseConfig):
-    """Hyperparameters for :class:`PixelCNN`; the depth/width defaults (8 x 64) are explained next to the fields."""
+    """Hyperparameters for :class:`PixelCNN`; the depth/width defaults (8 x 64) are
+    explained next to the fields.
+    """
     model_name: str = "pixelcnn"
     # 8 layers / 64 filters (was 4/32): the receptive field of 4 stacked 3x3
     # masked convs (~9px) physically cannot coordinate a 28px digit — samples

@@ -42,7 +42,9 @@ class VisionEmbedTrainer(ContrastiveTrainer):
         return F.cross_entropy(logits, targets)
 
     def infer(self, config: BaseConfig, inputs: Any) -> Any:
-        """Embed an image tensor (or ``{"images": tensor}``) [B,1,28,28]; returns ``{"embeddings": [B,embed_dim]}`` (unit norm, CPU)."""
+        """Embed an image tensor (or ``{"images": tensor}``) [B,1,28,28]; returns
+        ``{"embeddings": [B,embed_dim]}`` (unit norm, CPU).
+        """
         assert isinstance(config, VisionEmbedConfig)
         if self.model is None:
             raise RuntimeError("Model not loaded.")
@@ -56,7 +58,9 @@ class VisionEmbedTrainer(ContrastiveTrainer):
 
 
 def make_vision_embed_dataloader(config: VisionEmbedConfig, split: str = "train") -> DataLoader:
-    """Contrastive loader: batches of (view1 [B,1,28,28], view2 [B,1,28,28], label); the two views are augmentations of the same digit."""
+    """Contrastive loader: batches of (view1 [B,1,28,28], view2 [B,1,28,28], label); the
+    two views are augmentations of the same digit.
+    """
     return get_dataloader(
         name=config.dataset,
         data_root=config.data_root,

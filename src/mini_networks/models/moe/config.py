@@ -1,4 +1,6 @@
-"""Config for the MoE LM: TransformerConfig with ``block_type`` defaulting to ``"moe"`` (router/expert knobs are the ``moe_*`` fields)."""
+"""Config for the MoE LM: TransformerConfig with ``block_type`` defaulting to ``"moe"``
+(router/expert knobs are the ``moe_*`` fields).
+"""
 from __future__ import annotations
 
 from typing import Literal

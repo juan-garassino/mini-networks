@@ -46,8 +46,9 @@ class RAGTrainer(BaseTrainer):
         ).to(config.device)
 
     def train(self, config: BaseConfig, dataloader: DataLoader, logger: Logger) -> None:
-        """Fit the LM (AdamW, grad-clip 1.0), save ``model.pt``/``tokenizer.json``, then index the corpus.
+        """Fit the LM, save ``model.pt``/``tokenizer.json``, then index the corpus.
 
+        The LM uses AdamW with grad-norm clipping at 1.0.
         The raw corpus comes from the dataset's ``text`` attribute and is cut
         into ``chunk_size``-character chunks.
         """
@@ -96,7 +97,9 @@ class RAGTrainer(BaseTrainer):
         self.rag.add_documents([corpus])
 
     def evaluate(self, config: BaseConfig, dataloader: DataLoader, logger: Logger) -> dict:
-        """Return ``{"eval_loss"}``: the LM's mean next-token cross-entropy; retrieval is not scored."""
+        """Return ``{"eval_loss"}``: the LM's mean next-token cross-entropy; retrieval is
+        not scored.
+        """
         assert isinstance(config, RAGConfig)
         ds = dataloader.dataset
         vocab_size = ds.vocab_size if hasattr(ds, "vocab_size") else config.vocab_size
@@ -164,7 +167,9 @@ class RAGTrainer(BaseTrainer):
 
 
 def make_rag_dataloader(config: RAGConfig, split: str = "train") -> DataLoader:
-    """Text loader for ``config.dataset``: batches of (x [B,seq_len], y [B,seq_len]) next-token pairs.
+    """Text loader for ``config.dataset`` of next-token windows.
+
+    Batches are (x [B,seq_len], y [B,seq_len]) long ids.
 
     The dataset also exposes ``text`` (raw corpus, used for indexing),
     ``tokenizer`` and ``vocab_size``.

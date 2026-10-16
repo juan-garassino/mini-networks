@@ -1,4 +1,4 @@
-"""Tabular diffusion trainer."""
+"""Tabular diffusion trainer: linear-beta DDPM schedule + noise-prediction MSE on feature rows."""
 from __future__ import annotations
 
 from typing import Any
@@ -33,7 +33,9 @@ class TabularNoiseScheduler:
         self.alphas_cumprod = torch.cumprod(alphas, dim=0)
 
     def add_noise(self, x0: torch.Tensor, noise: torch.Tensor, t: torch.Tensor) -> torch.Tensor:
-        """Forward process: x_t = sqrt(abar_t) x0 + sqrt(1 - abar_t) noise, with t [B] per-row timesteps."""
+        """Forward process: x_t = sqrt(abar_t) x0 + sqrt(1 - abar_t) noise, with t [B]
+        per-row timesteps.
+        """
         # alphas_cumprod lives on CPU; move it to x0's device BEFORE indexing —
         # t arrives on cuda during GPU training and cuda-indexing a CPU tensor throws.
         ac = self.alphas_cumprod.to(x0.device)
@@ -43,7 +45,9 @@ class TabularNoiseScheduler:
 
     @torch.no_grad()
     def step(self, model_out: torch.Tensor, t: int, x_t: torch.Tensor) -> torch.Tensor:
-        """One reverse (ancestral) DDPM step from x_t to x_{t-1} given the predicted noise; no noise is added at t == 0."""
+        """One reverse (ancestral) DDPM step from x_t to x_{t-1} given the predicted noise;
+        no noise is added at t == 0.
+        """
         # Real DDPM ancestral step (the old `x - 0.5*eps` shortcut ignored the
         # schedule entirely — samples collapsed to near-identical rows, audit
         # 2026-07-11): mean = 1/sqrt(a_t) (x_t - beta_t/sqrt(1-abar_t) eps).
@@ -71,7 +75,9 @@ class TabularDiffusionTrainer(BaseTrainer):
         return TabularDenoiser(n_features=config.n_features, hidden_dim=config.hidden_dim).to(config.device)
 
     def train(self, config: BaseConfig, dataloader: DataLoader, logger: Logger) -> None:
-        """Fit a fresh denoiser on (features, label) batches (labels ignored) and save ``model.pt``."""
+        """Fit a fresh denoiser on (features, label) batches (labels ignored) and save
+        ``model.pt``.
+        """
         assert isinstance(config, TabularDiffusionConfig)
         model = self._build(config)
         self.model = model
@@ -135,7 +141,9 @@ class TabularDiffusionTrainer(BaseTrainer):
         return {"eval_loss": total / max(1, len(dataloader))}
 
     def infer(self, config: BaseConfig, inputs: Any) -> Any:
-        """Sample synthetic rows: ``{"n_samples": n}`` (default 4) -> ``{"samples": [n,n_features]}`` in the standardized feature space."""
+        """Sample synthetic rows: ``{"n_samples": n}`` (default 4) -> ``{"samples":
+        [n,n_features]}`` in the standardized feature space.
+        """
         assert isinstance(config, TabularDiffusionConfig)
         if self.model is None or self.scheduler is None:
             raise RuntimeError("Train first.")
@@ -151,7 +159,9 @@ class TabularDiffusionTrainer(BaseTrainer):
 
 
 def make_tabular_diffusion_dataloader(config: TabularDiffusionConfig, split: str = "train") -> DataLoader:
-    """Tabular loader for ``config.dataset`` (Iris by default): batches of (features [B,n_features], labels [B]); labels are unused."""
+    """Tabular loader for ``config.dataset`` (Iris by default): batches of (features
+    [B,n_features], labels [B]); labels are unused.
+    """
     return get_dataloader(
         name=config.dataset,
         data_root=config.data_root,

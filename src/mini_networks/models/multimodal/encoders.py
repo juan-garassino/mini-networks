@@ -24,7 +24,9 @@ class VisionCNNEncoder(nn.Module):
         self.proj = nn.Linear(64 * 7 * 7, out_dim)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        """Map images [B,1,28,28] to embeddings [B,out_dim] (two conv+pool stages, linear projection)."""
+        """Map images [B,1,28,28] to embeddings [B,out_dim] (two conv+pool stages, linear
+        projection).
+        """
         h = self.features(x).flatten(1)
         return self.proj(h)
 
@@ -42,7 +44,9 @@ class VisionPatchEncoder(nn.Module):
         nn.init.normal_(self.pos, std=0.02)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        """Map images [B,1,H,W] to patch tokens [B,(H/p)*(W/p),d_model] with learned positions added."""
+        """Map images [B,1,H,W] to patch tokens [B,(H/p)*(W/p),d_model] with learned
+        positions added.
+        """
         x = self.proj(x)  # [B, D, H', W']
         x = x.flatten(2).transpose(1, 2)  # [B, N, D]
         return x + self.pos
@@ -116,7 +120,9 @@ class TabularFeatureEncoder(nn.Module):
         self.n_features = n_features
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        """Map features [B,F] to one token per feature [B,F,d_model] via a shared Linear(1, d_model)."""
+        """Map features [B,F] to one token per feature [B,F,d_model] via a shared Linear(1,
+        d_model).
+        """
         # x: [B, F] -> tokens [B, F, D]
         x = x.unsqueeze(-1)
         return self.proj(x)

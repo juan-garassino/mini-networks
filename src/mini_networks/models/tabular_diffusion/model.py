@@ -10,7 +10,8 @@ convolutional UNet is replaced by a plain MLP.
 This implementation: TabularDenoiser maps a noisy row through Linear(n_features=4
 → hidden_dim=128) → ReLU → Linear(128 → 128) → ReLU → Linear(128 → 4), predicting
 the noise vector at the input's own shape. Sampling reuses the shared
-NoiseScheduler to walk the reverse chain over rows instead of pixels.
+core.diffusion sample_loop with a row-shaped TabularNoiseScheduler (trainer.py)
+to walk the reverse chain over rows instead of pixels.
 
 Deliberately simplified — and worth noticing: the timestep t is accepted but
 ignored (no time embedding), so the network cannot tell how noisy its input is
@@ -28,7 +29,9 @@ import torch.nn.functional as F
 
 
 class TabularDenoiser(nn.Module):
-    """Three-layer MLP that predicts the noise added to a row (time-unconditional; see module docstring)."""
+    """Three-layer MLP that predicts the noise added to a row (time-unconditional; see
+    module docstring).
+    """
     def __init__(self, n_features: int = 4, hidden_dim: int = 128):
         super().__init__()
         self.net = nn.Sequential(
@@ -40,6 +43,8 @@ class TabularDenoiser(nn.Module):
         )
 
     def forward(self, x: torch.Tensor, t: torch.Tensor) -> torch.Tensor:
-        """Map noisy rows x_t [B,n_features] (and ignored timesteps t [B]) to predicted noise [B,n_features]."""
+        """Map noisy rows x_t [B,n_features] (and ignored timesteps t [B]) to predicted
+        noise [B,n_features].
+        """
         # t is ignored in this minimal model (can be added via embedding later)
         return self.net(x)

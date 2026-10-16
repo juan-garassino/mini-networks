@@ -22,7 +22,7 @@ log = logging.getLogger(__name__)
 
 
 class LoRATrainer(BaseTrainer):
-    """Two-stage LoRA demo: full pretraining on MNIST, then adapter-only fine-tuning on FashionMNIST.
+    """Two-stage LoRA demo: full MNIST pretraining, then adapter-only FashionMNIST tuning.
 
     ``train`` ignores the dataloader it is given and builds both loaders
     itself. Logs ``pretrain_loss`` (stage 1) and ``finetune_loss`` (stage 2,
@@ -150,7 +150,9 @@ def make_lora_dataloader(
     dataset: str = "mnist",
     split: str = "train",
 ) -> DataLoader:
-    """Image-classification loader for ``dataset`` (default ``mnist``): batches of (images [B,1,28,28] in [0,1], labels [B])."""
+    """Image-classification loader for ``dataset`` (default ``mnist``): batches of (images
+    [B,1,28,28] in [0,1], labels [B]).
+    """
     return get_dataloader(
         name=dataset,
         data_root=config.data_root,

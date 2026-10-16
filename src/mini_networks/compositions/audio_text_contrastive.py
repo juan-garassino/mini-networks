@@ -63,6 +63,7 @@ class AudioTextContrastive(ContrastiveCompositionBase):
         ).to(config.device)
 
     def _build_modules(self, config: AudioTextContrastiveConfig) -> dict[str, torch.nn.Module]:
+        """A single ``"model"`` module, so the base saves it as ``model.pt``."""
         return {"model": self._build(config)}
 
     def _get_dataloader(self, config: AudioTextContrastiveConfig):

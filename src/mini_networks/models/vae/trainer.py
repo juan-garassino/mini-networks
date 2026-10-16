@@ -1,4 +1,4 @@
-"""VAE trainer."""
+"""VAE trainer: MSE reconstruction + beta-weighted KL, prior sampling at inference."""
 from __future__ import annotations
 
 from typing import Any
@@ -101,7 +101,9 @@ class VAETrainer(BaseTrainer):
 
 
 def make_vae_dataloader(config: VAEConfig, split: str = "train") -> DataLoader:
-    """Image-classification loader for ``config.dataset``: batches of (images [B,1,28,28] in [0,1], labels [B])."""
+    """Image-classification loader for ``config.dataset``: batches of (images [B,1,28,28]
+    in [0,1], labels [B]).
+    """
     return get_dataloader(
         name=config.dataset,
         data_root=config.data_root,

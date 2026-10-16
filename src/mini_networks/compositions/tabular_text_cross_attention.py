@@ -61,6 +61,7 @@ class TabularTextCrossAttention(ContrastiveCompositionBase):
         ).to(config.device)
 
     def _build_modules(self, config: TabularTextCrossAttentionConfig) -> dict[str, torch.nn.Module]:
+        """A single ``"model"`` module, so the base saves it as ``model.pt``."""
         return {"model": self._build(config)}
 
     def _get_dataloader(self, config: TabularTextCrossAttentionConfig):

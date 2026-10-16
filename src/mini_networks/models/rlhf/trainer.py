@@ -274,7 +274,9 @@ class RLHFTrainer(BaseTrainer):
             self.tokenizer.save(str(logger.artifact_path("tokenizer.json")))
 
     def evaluate(self, config: BaseConfig, dataloader: DataLoader, logger: Logger) -> dict:
-        """Return ``{"eval_loss"}``: the policy's mean next-token cross-entropy on the corpus (fluency check; reward is not scored here)."""
+        """Return ``{"eval_loss"}``: the policy's mean next-token cross-entropy on the
+        corpus (fluency check; reward is not scored here).
+        """
         assert isinstance(config, RLHFConfig)
         ds = dataloader.dataset
         vocab_size = ds.vocab_size if hasattr(ds, "vocab_size") else config.vocab_size
@@ -337,7 +339,9 @@ class RLHFTrainer(BaseTrainer):
 
 
 def make_rlhf_dataloader(config: RLHFConfig, split: str = "train") -> DataLoader:
-    """Text loader for ``config.dataset``: batches of (x [B,seq_len], y [B,seq_len]) next-token pairs.
+    """Text loader for ``config.dataset`` of next-token windows.
+
+    Batches are (x [B,seq_len], y [B,seq_len]) long ids.
 
     The dataset also exposes ``text`` (raw corpus for the prompt bank),
     ``tokenizer`` and ``vocab_size``.

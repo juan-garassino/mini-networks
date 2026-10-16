@@ -1,1 +1,4 @@
-"""GAN package: mini-DCGAN generator/discriminator for MNIST; exports nothing (import from config/model/trainer)."""
+"""GAN package: mini-DCGAN generator/discriminator for MNIST.
+
+Exports nothing (import from config/model/trainer).
+"""

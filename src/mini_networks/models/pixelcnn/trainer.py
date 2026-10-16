@@ -1,4 +1,4 @@
-"""PixelCNN trainer."""
+"""PixelCNN trainer: per-pixel BCE on binarised MNIST, raster-scan sampling."""
 from __future__ import annotations
 
 from typing import Any
@@ -98,7 +98,9 @@ class PixelCNNTrainer(BaseTrainer):
 
 
 def make_pixelcnn_dataloader(config: PixelCNNConfig, split: str = "train") -> DataLoader:
-    """Image-classification loader for ``config.dataset``: (images [B,1,28,28] in [0,1], labels [B]); the trainer binarises and ignores labels."""
+    """Image-classification loader for ``config.dataset``: (images [B,1,28,28] in [0,1],
+    labels [B]); the trainer binarises and ignores labels.
+    """
     return get_dataloader(
         name=config.dataset,
         data_root=config.data_root,

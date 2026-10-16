@@ -1,4 +1,4 @@
-"""Vit trainer."""
+"""ViT trainer: MiniViT on the shared image-classification loader."""
 from __future__ import annotations
 
 from mini_networks.core.data.registry import make_classification_dataloader

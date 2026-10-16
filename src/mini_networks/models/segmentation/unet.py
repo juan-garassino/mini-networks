@@ -52,7 +52,8 @@ class ConvBlock(nn.Module):
 class SegUNet(nn.Module):
     """
     Lightweight UNet for 28x28 inputs.
-    out_channels=1 → binary (sigmoid), >1 → multiclass (softmax).
+    out_channels=1 → binary (sigmoid probabilities), >1 → multiclass (raw
+    logits; softmax is applied inside the loss).
     """
 
     def __init__(self, in_channels: int = 1, out_channels: int = 1, base_channels: int = 32):

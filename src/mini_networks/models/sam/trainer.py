@@ -108,6 +108,8 @@ class SAMTrainer(BaseTrainer):
                     coords_list.append(c)
                     types_list.append(ty)
                     targets.append(t)
+                # Pad prompt lists to a common length P. There is no prompt mask:
+                # padded slots are type-0 (positive) points at (0, 0).
                 P = max(c.shape[0] for c in coords_list)
                 coords = torch.zeros(B, P, 2)
                 types = torch.zeros(B, P, dtype=torch.long)
@@ -214,7 +216,9 @@ class SAMTrainer(BaseTrainer):
         }
 
     def load_checkpoint(self, config: BaseConfig, artifacts_dir) -> None:
-        """Build a fresh MiniSAM from the config and load ``model.pt`` (incl. the frozen Fourier frequencies buffer)."""
+        """Build a fresh MiniSAM from the config and load ``model.pt`` (incl. the frozen
+        Fourier frequencies buffer).
+        """
         assert isinstance(config, SAMConfig)
         state = torch.load(
             Path(artifacts_dir) / "model.pt", map_location=config.device, weights_only=True
@@ -225,7 +229,9 @@ class SAMTrainer(BaseTrainer):
 
 
 def make_sam_dataloader(config: SAMConfig, split: str = "train") -> DataLoader:
-    """Two-digit loader (``sam_two_digit``): batches of (image [B,1,56,56], mask_a [B,56,56], mask_b [B,56,56]).
+    """Two-digit loader (``sam_two_digit``) for promptable segmentation.
+
+    Batches are (image [B,1,56,56], mask_a [B,56,56], mask_b [B,56,56]).
 
     Digit placement is seeded per index from ``config.seed``, so items are
     deterministic.

@@ -1,4 +1,4 @@
-"""UNet autoencoder trainer."""
+"""UNet autoencoder trainer: MSE reconstruction of the input image."""
 from __future__ import annotations
 
 from typing import Any
@@ -28,7 +28,9 @@ class UNetAETrainer(BaseTrainer):
         return UNetAutoencoder(base_channels=config.base_channels).to(config.device)
 
     def train(self, config: BaseConfig, dataloader: DataLoader, logger: Logger) -> None:
-        """Fit a fresh model on (image, label) batches (labels ignored; target = input) and save ``model.pt``."""
+        """Fit a fresh model on (image, label) batches (labels ignored; target = input) and
+        save ``model.pt``.
+        """
         assert isinstance(config, UNetAEConfig)
         model = self._build(config)
         self.model = model
@@ -69,7 +71,9 @@ class UNetAETrainer(BaseTrainer):
         return {"eval_loss": total_loss / max(1, len(dataloader))}
 
     def infer(self, config: BaseConfig, inputs: Any) -> Any:
-        """Reconstruct an image tensor (or ``{"images": tensor}``) [B,1,28,28]; returns ``{"recon": [B,1,28,28]}`` on CPU."""
+        """Reconstruct an image tensor (or ``{"images": tensor}``) [B,1,28,28]; returns
+        ``{"recon": [B,1,28,28]}`` on CPU.
+        """
         assert isinstance(config, UNetAEConfig)
         if self.model is None:
             raise RuntimeError("Model not loaded.")
@@ -83,7 +87,9 @@ class UNetAETrainer(BaseTrainer):
 
 
 def make_unet_ae_dataloader(config: UNetAEConfig, split: str = "train") -> DataLoader:
-    """Image-classification loader for ``config.dataset``: batches of (images [B,1,28,28] in [0,1], labels [B]); labels are unused."""
+    """Image-classification loader for ``config.dataset``: batches of (images [B,1,28,28]
+    in [0,1], labels [B]); labels are unused.
+    """
     return get_dataloader(
         name=config.dataset,
         data_root=config.data_root,

@@ -121,7 +121,9 @@ class MazeEnv:
         return 25 + 2  # 5×5 neighbourhood + (row, col)
 
     def reset(self) -> np.ndarray:
-        """Put the agent back on START (regenerating the maze if ``random_reset``) and return the initial state."""
+        """Put the agent back on START (regenerating the maze if ``random_reset``) and
+        return the initial state.
+        """
         if self.random_reset:
             self._generate()
         self.agent_pos = self.start_pos

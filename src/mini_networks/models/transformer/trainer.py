@@ -1,4 +1,4 @@
-"""TransformerLM trainer."""
+"""TransformerLM trainer: next-token CE (+ MoE aux loss) on a text file, text generation."""
 from __future__ import annotations
 
 from typing import Any
@@ -184,7 +184,9 @@ class TransformerTrainer(BaseTrainer):
 def make_transformer_dataloader(
     config: TransformerConfig, split: str = "train"
 ) -> DataLoader:
-    """Text loader (``text_file`` / ``tiny_shakespeare``): batches of (x [B,seq_len], y [B,seq_len]) long ids.
+    """Text loader (``text_file`` / ``tiny_shakespeare``) of next-token windows.
+
+    Batches are (x [B,seq_len], y [B,seq_len]) long ids.
 
     y is x shifted left by one token (next-token targets). The dataset also
     exposes ``tokenizer`` and ``vocab_size``, which the trainer reads.

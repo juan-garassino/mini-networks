@@ -71,7 +71,9 @@ class MultiModalEncoder(nn.Module):
         return self.text(tokens)
 
     def encode_image_tokens(self, images: torch.Tensor) -> torch.Tensor:
-        """Map images [B,1,28,28] to 49 patch tokens [B,49,d_model] (4x4 patches + learned positions)."""
+        """Map images [B,1,28,28] to 49 patch tokens [B,49,d_model] (4x4 patches + learned
+        positions).
+        """
         return self.vision_tokens(images)
 
     def encode_image_pooled(self, images: torch.Tensor) -> torch.Tensor:

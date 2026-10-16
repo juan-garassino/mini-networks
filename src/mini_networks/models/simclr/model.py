@@ -36,7 +36,9 @@ import torch.nn.functional as F
 
 
 class SimCLREncoder(nn.Module):
-    """Two-conv encoder (h, 128-d) followed by an MLP projection head that outputs L2-normalised z."""
+    """Two-conv encoder (h, 128-d) followed by an MLP projection head that outputs
+    L2-normalised z.
+    """
     def __init__(self, proj_dim: int = 64):
         super().__init__()
         self.encoder = nn.Sequential(

@@ -1,4 +1,6 @@
-"""Config for the RL maze: maze shape, which agent (q / dqn / ppo) and each agent's hyperparameters."""
+"""Config for the RL maze: maze shape, which agent (q / dqn / ppo) and each agent's
+hyperparameters.
+"""
 from __future__ import annotations
 from typing import Literal
 from mini_networks.core.config import BaseConfig
@@ -25,10 +27,10 @@ class RLMazeConfig(BaseConfig):
 
     # Shared RL hyperparameters
     gamma: float = 0.99           # discount factor
-    epsilon: float = 1.0          # initial exploration rate
+    epsilon: float = 1.0          # initial exploration rate (Q/DQN; decayed every update step)
     epsilon_decay: float = 0.995
     epsilon_min: float = 0.01
-    rl_lr: float = 1e-3           # learning rate for neural agents
+    rl_lr: float = 1e-3           # Adam lr for DQN/PPO; also the Q-table step size (agent "q")
 
     # DQN
     dqn_hidden: int = 64

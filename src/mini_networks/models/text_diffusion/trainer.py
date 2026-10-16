@@ -47,8 +47,9 @@ class TextDiffusionTrainer(BaseTrainer):
         ).to(config.device)
 
     def train(self, config: BaseConfig, dataloader: DataLoader, logger: Logger) -> None:
-        """Fit a fresh model with AdamW + grad-clip 1.0 on ``masked_loss`` and save ``model.pt``/``tokenizer.json``.
+        """Fit a fresh model on ``masked_loss``; save ``model.pt`` and ``tokenizer.json``.
 
+        Optimiser: AdamW with grad-norm clipping at 1.0.
         The vocab size comes from the dataset tokenizer when available.
         """
         assert isinstance(config, TextDiffusionConfig)

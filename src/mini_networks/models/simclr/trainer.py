@@ -1,4 +1,4 @@
-"""SimCLR trainer."""
+"""SimCLR trainer: ContrastiveTrainer loop with the 2B-way InfoNCE loss on augmented views."""
 from __future__ import annotations
 
 from typing import Any
@@ -37,7 +37,9 @@ class SimCLRTrainer(ContrastiveTrainer):
         return info_nce_loss(emb_a, emb_b, temperature=temperature)
 
     def infer(self, config: BaseConfig, inputs: Any) -> Any:
-        """Embed an image tensor (or ``{"images": tensor}``) [B,1,28,28]; returns ``{"embeddings": [B,proj_dim]}`` (unit norm, CPU)."""
+        """Embed an image tensor (or ``{"images": tensor}``) [B,1,28,28]; returns
+        ``{"embeddings": [B,proj_dim]}`` (unit norm, CPU).
+        """
         assert isinstance(config, SimCLRConfig)
         if self.model is None:
             raise RuntimeError("Model not loaded.")

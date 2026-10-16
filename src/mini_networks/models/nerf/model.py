@@ -53,7 +53,9 @@ class MiniNeRF(nn.Module):
         self.head = nn.Linear(hidden_dim, 4)  # sigma + rgb
 
     def encode(self, pts: torch.Tensor) -> torch.Tensor:
-        """Positional encoding: points [..., 3] -> [..., 3 * 2 * pe_freqs] of sin/cos(2^k * pi * p), k = 0..pe_freqs-1."""
+        """Positional encoding: points [..., 3] -> [..., 3 * 2 * pe_freqs] of sin/cos(2^k *
+        pi * p), k = 0..pe_freqs-1.
+        """
         freqs = 2.0 ** torch.arange(self.pe_freqs, device=pts.device) * torch.pi
         ang = pts.unsqueeze(-1) * freqs                     # [..., 3, L]
         return torch.cat([ang.sin(), ang.cos()], dim=-1).flatten(-2)

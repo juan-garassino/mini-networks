@@ -214,7 +214,9 @@ class DQNAgent:
         return loss.item()
 
     def end_episode(self, trajectory) -> None:
-        """Count the episode and copy online -> target weights every ``target_update_every`` episodes."""
+        """Count the episode and copy online -> target weights every
+        ``target_update_every`` episodes.
+        """
         self._episodes += 1
         if self._episodes % self.target_update_every == 0:
             self.target.load_state_dict(self.online.state_dict())
@@ -281,7 +283,9 @@ class PPOAgent:
         self.optimizer = optim.Adam(self.ac.parameters(), lr=lr)
 
     def act(self, state: np.ndarray) -> int:
-        """Sample an action from the current policy (no epsilon; exploration comes from the softmax)."""
+        """Sample an action from the current policy (no epsilon; exploration comes from the
+        softmax).
+        """
         with torch.no_grad():
             s = torch.tensor(state, dtype=torch.float32, device=self.device).unsqueeze(0)
             probs, _ = self.ac(s)

@@ -76,8 +76,9 @@ class TwoWayBlock(nn.Module):
         )
 
     def forward(self, tokens: torch.Tensor, image: torch.Tensor):
-        """One decoder round: tokens [B,N,C] attend to image tokens [B,HW,C], then image attends back.
+        """One decoder round: tokens attend to the image, then the image attends back.
 
+        tokens [B,N,C], image tokens [B,HW,C].
         Returns the updated (tokens, image) pair with unchanged shapes.
         """
         a, _ = self.t2i(tokens, image, image)

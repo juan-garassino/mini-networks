@@ -166,7 +166,10 @@ class GANTrainer(BaseTrainer):
 
 
 def make_gan_dataloader(config: GANConfig, split: str = "train") -> DataLoader:
-    """Classification loader: (images [B, 1, 28, 28] in [0, 1], labels [B]); the trainer uses images only."""
+    """Classification loader: (images [B, 1, 28, 28] in [0, 1], labels [B]).
+
+    The trainer uses the images only (rescaled to [-1, 1] to match G's Tanh).
+    """
     return get_dataloader(
         name=config.dataset,
         data_root=config.data_root,
