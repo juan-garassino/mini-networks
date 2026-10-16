@@ -109,6 +109,11 @@ MODEL_OVERRIDES: dict[str, dict[str, dict[str, int | None]]] = {
     # (old config there: 0.549/0.533). Self-improve loop 2026-10-16; ~30 s/5
     # epochs on CPU.
     "swin": {"M": {"epochs": 10}},
+    # sam was underfit at 5 epochs: eval_iou 0.493/0.493/0.492 over three gate
+    # runs (bar 0.45) with train loss still falling; 10 epochs -> 0.741/0.762
+    # on two independent runs, wrong_prompt_iou 0.187 (the click still decides
+    # the mask). lr 3e-3 did not help (0.459). Self-improve loop 2026-10-16.
+    "sam": {"M": {"epochs": 10}},
     # 0.55 accuracy @ 5 epochs on a tiny tabular set where epochs cost
     # milliseconds — let it actually converge.
     "tabular_classifier": {"M": {"epochs": 40}},
