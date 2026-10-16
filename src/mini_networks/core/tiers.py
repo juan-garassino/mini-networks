@@ -63,7 +63,9 @@ MODEL_OVERRIDES: dict[str, dict[str, dict[str, int | None]]] = {
     # nerf: M default (5 epochs x 100 batches x 64-ray cap) is ~2 passes over
     # the ~30k-ray pool; 30 epochs x 1024-ray batches ~= 3M ray evals, minutes
     # on the L4 (rays_per_batch is a NerfConfig field, not batch_size)
-    "nerf": {"M": {"epochs": 30}},
+    # 64 samples/ray at M (L keeps the config's 200): a 2/28-unit voxel still
+    # spans ~1.5 samples, and each step is ~3x cheaper; see NerfConfig.
+    "nerf": {"M": {"epochs": 30, "timesteps": 64}},
     # grokking is step-based (limit_steps in its trainer); it needs the full
     # ~9.3k-pair dataset and near-full batches for the phase transition
     "grokking": {"M": {"sample_limit": None, "batch_cap": 512}},

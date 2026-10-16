@@ -31,4 +31,11 @@ class NerfConfig(BaseConfig):
     hidden_dim: int = 128
     n_layers: int = 5
     timesteps: int = 200       # samples per ray at L; tiers cap via effective_timesteps
-    rays_per_batch: int = 1024  # ray minibatch (NOT batch_size — its M cap of 64 would starve training)
+    # 256 rays/step (was 1024): the ~30k-ray pool gave only 30 steps/epoch, so
+    # the M run was ~900 optimizer steps; 256 gives 4x the steps for the same
+    # ray compute. With lr 5e-3 and 64 samples/ray at M (core/tiers.py), held-
+    # out PSNR at M went 14.5 -> 24.2/24.5/24.4/24.8 over 4 runs (bar 20, worst
+    # view >= 22.1). Self-improve loop 2026-10-16. lr is sensitive: 1e-3 15.2,
+    # 1e-2 15.8 (10-epoch probes) and one 30-epoch 3e-3 run collapsed to 6.5.
+    rays_per_batch: int = 256  # ray minibatch (NOT batch_size — its M cap of 64 would starve training)
+    learning_rate: float = 5e-3
