@@ -30,16 +30,17 @@ python main.py sweep --check --training_tier S --device cpu
 
 **Training tiers** — every config honors `--training_tier`:
 - `S` — nano smoke run (1 epoch, 1 minibatch, 25 diffusion steps); what CI runs. `--fast_demo` forces S.
-- `M` — the "actually learns" bar, meant for a Colab GPU; EvalSpec thresholds gate here.
+- `M` — the "actually learns" bar (≤5 epochs, 100 batches, 4096 samples), run by the
+  parallel L4 cloud sweep; EvalSpec thresholds gate here. Don't run full M on a slow laptop.
 - `L` — full budget.
 
 The gate report lands in `runs/sweep/<timestamp>/report.{md,json}`. Per-model
 thresholds live in `src/mini_networks/core/evalspec.py`. Rerun one item:
 `python main.py sweep --check --models gan --skip-compositions`.
 
-**Colab workflow** — open `colab/notebooks/00_sweep.ipynb` from VSCode connected
-to a Colab GPU kernel to run M-tier sweeps; the other notebooks are per-family
-deep dives.
+**Colab workflow (optional)** — `colab/notebooks/00_sweep.ipynb` can run a sweep
+on a Colab GPU kernel; the other notebooks are per-family deep dives. The
+canonical M/L path is the GCP sweep job (see below).
 
 **What’s Inside**
 - `src/mini_networks/` contains the unified runtime, data registry, and model implementations.
@@ -62,6 +63,10 @@ Vision:
 - `detection` YOLO-style digit localization on 56×56 canvas.
 - `vision_embed` Contrastive vision embedding encoder.
 - `simclr` SimCLR-lite self-supervised pretraining.
+- `dino` DINO self-distillation ViT (EMA teacher, no labels).
+- `rpp_classifier` Residual Pathway Priors: conv + free pathways, equivariance as a soft prior.
+- `sam` Mini SAM: promptable segmentation — clicks choose which digit to mask.
+- `nerf` Mini NeRF: a voxel-digit scene as a continuous field, novel-view PSNR.
 
 Generative vision:
 - `gan` MLP GAN baseline for MNIST.
@@ -89,6 +94,12 @@ Language:
 - `rag` TF‑IDF retrieval + TransformerLM generation.
 - `rlhf` PPO fine‑tuning with heuristic Shakespearean reward.
 - `lora` LoRA adapter fine‑tuning.
+- `moe` Mixture-of-Experts LM: router + top-1 experts + balance loss.
+- `text_diffusion` LLaDA-mini: masked-diffusion char-LM, generation by iterative unmasking.
+- `kimi` Mini Kimi K3: KDA linear-attention hybrid + AttnRes + LatentMoE.
+- `deepseek` Mini DeepSeek V4: compressed attention + mHC + DeepSeekMoE + multi-token prediction.
+- `grpo` GRPO: group-relative advantages, no value net.
+- `dpo` DPO: preference pairs, no RL — implicit KL via a reference model.
 
 Multimodal:
 - `clip` Contrastive image–text matching on MNIST.
@@ -96,6 +107,11 @@ Multimodal:
 Reinforcement learning:
 - `rl_maze` Q / DQN / PPO agents on a procedural maze.
 - `reinforce` REINFORCE policy gradient on a procedural maze.
+- `alphazero` Mini AlphaZero: MCTS self-play on tic-tac-toe distilled into a policy net.
+
+Studies & structure:
+- `grokking` Delayed generalization on modular division (a/b mod 97).
+- `gnn` Graph convolutional network: transductive node classification on an SBM.
 
 **Compositions**
 - `clip_guided_diffusion` CLIP similarity guides diffusion sampling.
@@ -117,12 +133,20 @@ Reinforcement learning:
 - `image_captioning` image captioning from MNIST digits.
 - `multimodal_fusion_baseline` image+text fusion baseline.
 - `latent_diffusion` latent diffusion (VAE + UNet).
+- `mode_connect` loss-surface simplex between two classifiers + cheap simplex ensemble.
+- `double_descent` width sweep on label-noised MNIST: test error falls, rises, falls again.
+- `vlm` mini VLM: vision patch prefix + causal LM answering templated MNIST questions.
+
+`python main.py list` prints the full zoo grouped as atoms → molecules →
+compositions (the taxonomy DAG in `core/taxonomy.py`, see docs chapter 14).
 
 **Data Registry**
 The shared registry lives in `src/mini_networks/core/data/registry.py`.
-- Vision datasets: `mnist`, `fashion_mnist`.
+- Vision datasets: `mnist`, `fashion_mnist`, `kmnist`, `tri_mnist` (all three, 30 classes).
 - Vision task modes: `classification`, `binary_segmentation`, `multiclass_segmentation`, `detection`, `clip`, `contrastive`.
 - Text datasets: `text_file`, `tiny_shakespeare`.
+- Audio / tabular: `speech_digits`, `synthetic_audio_digits`, `iris`, `synthetic_tabular`.
+- How to add one: `docs/adding_datasets.md`.
 
 **Logging and Outputs**
 Every run writes to:
@@ -141,9 +165,12 @@ interactive_menu()
 ```
 python main.py serve --host 0.0.0.0 --port 8000
 ```
-- **Playground (Observatory)** at `/` — a no-build SPA that reads the run
-  contract live: pick a run, watch its loss curve animate, see sample artifacts
-  and config/summary. It's a pure reader; training is unchanged.
+- **Playground** at `/` — a Next.js app (`playground/`, built to
+  `playground/out` with `make playground`) presenting the zoo as a "Periodic
+  Table of Neural Networks" plus map editions and per-model "how it works"
+  diagrams. It is a pure reader of the run contract (`/web`, `/train`,
+  `/infer`); training code is unchanged. For UI work: `make playground-dev`
+  and read `playground/AGENTS.md` first.
 - API docs at `/docs`. Read-layer endpoints under `/web` (`/web/runs`,
   `/web/runs/{id}/metrics`, `/web/models`, …).
 
@@ -172,16 +199,16 @@ make -C infra/gcp dry-run-sweep  # one sweep-task shard, local only
 Provisioning + the env-var contract are documented in `infra/gcp/README.md`.
 
 **Docs**
-Start here:
-- `docs/README.md`
-- `docs/datasets.md`
-- `docs/multimodal_blocks.md`
-- `docs/models.md`
-- `docs/compositions.md`
-- `docs/runs_and_logging.md`
+Start at `docs/README.md` — an ordered curriculum (chapters 00–14: data,
+classifiers, autoencoders, GANs, diffusion, sequence models, LoRA, RAG, CLIP,
+RL/RLHF, compositions, generalization, foundation minis, the taxonomy).
+Every `src/mini_networks/models/<name>/model.py` opens with a docstring on the
+key idea, tensor shapes, equations and deliberate simplifications.
 
 **Tests**
 ```
-pytest
+make test                  # fast suite (slow marker deselected)
+uv run pytest tests/ -m slow   # full trainings through the API
+make validate-s            # full S-tier gate sweep (what CI runs)
 ```
 Smoke tests are in `tests/test_smoke_models.py` and `tests/test_smoke_registry.py`.

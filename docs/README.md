@@ -18,6 +18,9 @@ fed from the latest quality-gate sweep (`uv run python scripts/render_results.py
 | 09 | [CLIP & multimodal](09-clip-multimodal.md) | contrastive dual encoders, fusion blocks |
 | 10 | [RL & RLHF](10-rl-rlhf.md) | Q/DQN/PPO maze agents, REINFORCE, PPO-with-KL |
 | 11 | [Compositions](11-compositions.md) | multi-model pipelines and the runner contract |
+| 12 | [Generalization & geometry](12-generalization-and-geometry.md) | grokking, double descent, mode connectivity, equivariance priors |
+| 13 | [Foundation minis](13-foundation-minis.md) | prompts (SAM), fields (NeRF), search (AlphaZero), graphs (GNN) |
+| 14 | [Atoms & molecules](14-atoms-and-molecules.md) | the zoo's family tree: `core/taxonomy.py`, `main.py list` |
 
 How-to guides:
 - [Adding a dataset](adding_datasets.md)
