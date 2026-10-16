@@ -1,4 +1,25 @@
-"""LoRA fine-tuning for TransformerLM (output head adapter)."""
+"""LoRA on the zoo's TransformerLM: train a low-rank adapter, freeze the rest.
+
+LoRA (Hu et al., 2021) adapts a frozen weight W by adding a trainable
+low-rank update:
+
+    y = W x + (alpha / r) * B(A(x)),   A: d_in -> r,  B: r -> d_out,  B init 0
+
+Because B starts at zero the adapted model is exactly the base model at step
+0, and only r * (d_in + d_out) numbers train instead of d_in * d_out.
+
+Pipeline here: build a char-level TransformerLM, wrap its ``lm_head`` in a
+LoRALinear (rank 4, alpha 8), freeze every other parameter, and train only
+A and B with next-character cross-entropy on a text file (Tiny Shakespeare
+when ``text_file`` is empty). ``generate`` samples from the adapted model.
+
+Deliberately simplified — and important to read correctly: the base LM is
+freshly *randomly initialised*, not pretrained, so this shows the LoRA
+mechanics (zero-init update, frozen base, tiny trainable set) rather than
+real fine-tuning of learned knowledge. Only the output head is adapted (LoRA
+usually targets the attention q/v projections), and the adapter is not
+merged into W after training.
+"""
 from __future__ import annotations
 
 import torch
@@ -13,6 +34,12 @@ from mini_networks.models.transformer.tokenizer import CharTokenizer
 
 
 class LoRALMConfig(BaseConfig):
+    """Knobs: ``rank`` r (adapter bottleneck; trainable params scale with it),
+    ``alpha`` (update scale is alpha / r, so changing r alone keeps the update
+    magnitude comparable), the TransformerLM sizes (``d_model``, ``n_layers``,
+    ``n_heads``, ``d_ff``, ``seq_len``), and ``text_file`` (corpus path; empty
+    = Tiny Shakespeare)."""
+
     model_name: str = "lora_lm"
     d_model: int = 64
     n_layers: int = 2
@@ -27,6 +54,13 @@ class LoRALMConfig(BaseConfig):
 
 
 class LoRALinear(nn.Module):
+    """Wrap an nn.Linear with a zero-initialised low-rank residual update.
+
+    Computes ``base(x) + (alpha / rank) * B(A(x))``; A gets PyTorch's default
+    init, B is zeroed so the wrapper starts as an exact copy of ``base``.
+    Freezing ``base`` is the caller's job (see ``LoRALM.train``).
+    """
+
     def __init__(self, base: nn.Linear, rank: int = 4, alpha: float = 8.0):
         super().__init__()
         self.base = base
@@ -37,19 +71,24 @@ class LoRALinear(nn.Module):
         nn.init.zeros_(self.B.weight)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """[..., in_features] -> [..., out_features]."""
         return self.base(x) + self.B(self.A(x)) * (self.alpha / self.rank)
 
     @property
     def lora_params(self):
+        """The trainable adapter parameters (A and B weights only)."""
         return list(self.A.parameters()) + list(self.B.parameters())
 
 
 class LoRALM:
+    """Builds a TransformerLM, swaps in a LoRA head, trains only the adapter."""
+
     def __init__(self):
         self.model: TransformerLM | None = None
         self.tokenizer: CharTokenizer | None = None
 
     def _build(self, config: LoRALMConfig, vocab_size: int) -> TransformerLM:
+        """A fresh (random-init) TransformerLM sized by the config."""
         return TransformerLM(
             vocab_size=vocab_size,
             d_model=config.d_model,
@@ -61,6 +100,12 @@ class LoRALM:
         ).to(config.device)
 
     def train(self, config: LoRALMConfig, logger: Logger) -> None:
+        """Train the LoRA adapter on next-character prediction.
+
+        Logs ``loss`` per epoch; saves ``model.pt`` (full state dict,
+        including ``lm_head.base`` / ``lm_head.A`` / ``lm_head.B``) and
+        ``tokenizer.json``.
+        """
         dl = get_dataloader(
             name=config.dataset,
             data_root=config.data_root,
@@ -107,6 +152,10 @@ class LoRALM:
         self.tokenizer.save(str(logger.artifact_path("tokenizer.json")))
 
     def generate(self, config: LoRALMConfig, prompt: str, max_new_tokens: int = 64) -> str:
+        """Sample ``max_new_tokens`` characters after ``prompt``; returns prompt + continuation.
+
+        Uses TransformerLM.generate (multinomial sampling, temperature 1).
+        """
         if self.model is None or self.tokenizer is None:
             raise RuntimeError("Train first.")
         ids = self.tokenizer.encode(prompt)

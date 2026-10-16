@@ -1,8 +1,16 @@
+"""Config for NanoRAG: retrieval (top_k, chunk size) and the size of the underlying TransformerLM."""
 from __future__ import annotations
 from mini_networks.core.config import BaseConfig
 
 
 class RAGConfig(BaseConfig):
+    """Hyperparameters for :class:`NanoRAG` and its generator LM.
+
+    The LM fields mirror ``TransformerConfig`` at a smaller default size;
+    ``vocab_size`` is a fallback replaced by the dataset tokenizer's size.
+    The TF-IDF index is built from the same ``text_file`` corpus the LM is
+    trained on (Tiny Shakespeare when empty).
+    """
     model_name: str = "rag"
 
     # Retrieval

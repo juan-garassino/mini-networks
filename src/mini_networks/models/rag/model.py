@@ -58,6 +58,10 @@ class TFIDFIndex:
     # ------------------------------------------------------------------
 
     def build(self, documents: list[str]) -> None:
+        """Index ``documents``: build the word vocabulary, then the [n_docs, V] TF-IDF matrix.
+
+        Replaces any previous index.
+        """
         self.documents = list(documents)
         n = len(documents)
 

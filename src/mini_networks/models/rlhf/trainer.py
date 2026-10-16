@@ -67,6 +67,13 @@ def _log_probs_of_tokens(
 # ---------------------------------------------------------------------------
 
 class RLHFTrainer(BaseTrainer):
+    """Two-stage RLHF on a text corpus: LM pretraining, then PPO against a heuristic reward.
+
+    Logs ``pretrain_loss`` (stage 1) and ``ppo_loss`` / ``avg_reward``
+    (stage 2, epochs offset after stage 1). Checkpoint: ``model.pt`` (the
+    fine-tuned policy) + ``tokenizer.json``; the frozen reference copy is
+    not saved.
+    """
     def __init__(self):
         self.model: TransformerLM | None = None
         self.ref_model: TransformerLM | None = None
@@ -199,6 +206,15 @@ class RLHFTrainer(BaseTrainer):
     # ------------------------------------------------------------------
 
     def train(self, config: BaseConfig, dataloader: DataLoader, logger: Logger) -> None:
+        """Pretrain the LM, freeze a reference copy, then run the PPO loop and save.
+
+        Prompts are consecutive ``min(16, seq_len // 4)``-token slices of the
+        tokenized corpus (the dataset's ``text`` attribute). Each PPO
+        iteration samples rollouts, scores them with
+        ``shakespearean_score``, and updates the policy with the clipped
+        surrogate (advantage = reward - 0.5) plus ``kl_coef`` * KL to the
+        reference.
+        """
         assert isinstance(config, RLHFConfig)
 
         ds = dataloader.dataset
@@ -258,6 +274,7 @@ class RLHFTrainer(BaseTrainer):
             self.tokenizer.save(str(logger.artifact_path("tokenizer.json")))
 
     def evaluate(self, config: BaseConfig, dataloader: DataLoader, logger: Logger) -> dict:
+        """Return ``{"eval_loss"}``: the policy's mean next-token cross-entropy on the corpus (fluency check; reward is not scored here)."""
         assert isinstance(config, RLHFConfig)
         ds = dataloader.dataset
         vocab_size = ds.vocab_size if hasattr(ds, "vocab_size") else config.vocab_size
@@ -274,6 +291,13 @@ class RLHFTrainer(BaseTrainer):
         return {"eval_loss": total_loss / max(1, len(dataloader))}
 
     def infer(self, config: BaseConfig, inputs: Any) -> Any:
+        """Generate from a prompt and score it.
+
+        ``inputs``: ``{"prompt": str, "max_new_tokens": int (32),
+        "temperature": float (1.0)}`` or a bare string. Returns
+        ``{"generated": str, "reward": float}`` where reward is
+        ``shakespearean_score`` of the full decoded text (prompt included).
+        """
         assert isinstance(config, RLHFConfig)
         if self.model is None:
             raise RuntimeError("Model not loaded.")
@@ -313,6 +337,11 @@ class RLHFTrainer(BaseTrainer):
 
 
 def make_rlhf_dataloader(config: RLHFConfig, split: str = "train") -> DataLoader:
+    """Text loader for ``config.dataset``: batches of (x [B,seq_len], y [B,seq_len]) next-token pairs.
+
+    The dataset also exposes ``text`` (raw corpus for the prompt bank),
+    ``tokenizer`` and ``vocab_size``.
+    """
     return get_dataloader(
         name=config.dataset,
         data_root=config.data_root,

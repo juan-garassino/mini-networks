@@ -10,6 +10,13 @@ from mini_networks.models.rpp_classifier.model import RPPClassifier
 
 
 class RPPClassifierTrainer(SupervisedTrainer):
+    """Cross-entropy training for :class:`RPPClassifier` plus the per-pathway prior penalty.
+
+    The penalty ``prior_conv * ||W_conv||^2 + prior_mlp * ||W_free||^2`` is
+    added only in training mode, so ``eval_loss`` stays plain CE. Loops,
+    ``evaluate`` (``eval_loss`` + ``accuracy``) and the ``model.pt``
+    checkpoint come from ``SupervisedTrainer``.
+    """
     def __init__(self):
         self.model: RPPClassifier | None = None
         self._config: RPPClassifierConfig | None = None

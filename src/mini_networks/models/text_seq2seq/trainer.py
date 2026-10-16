@@ -32,6 +32,12 @@ class Seq2SeqDataset(Dataset):
 
 
 class TextSeq2SeqTrainer(BaseTrainer):
+    """Train :class:`Seq2SeqTransformer` to continue the first half of a text window with its second half.
+
+    Loss: shifted teacher-forcing cross-entropy (decoder reads tgt[:-1],
+    predicts tgt[1:]). Checkpoint: ``model.pt`` (no tokenizer is saved; the
+    API works in token ids).
+    """
     def __init__(self):
         self.model: Seq2SeqTransformer | None = None
 
@@ -46,6 +52,7 @@ class TextSeq2SeqTrainer(BaseTrainer):
         ).to(config.device)
 
     def train(self, config: BaseConfig, dataloader: DataLoader, logger: Logger) -> None:
+        """Wrap the loader's dataset in :class:`Seq2SeqDataset`, fit with AdamW, and save ``model.pt``."""
         assert isinstance(config, TextSeq2SeqConfig)
         base_ds = dataloader.dataset
         vocab_size = base_ds.vocab_size if hasattr(base_ds, "vocab_size") else config.vocab_size
@@ -75,6 +82,7 @@ class TextSeq2SeqTrainer(BaseTrainer):
         torch.save(model.state_dict(), logger.artifact_path("model.pt"))
 
     def evaluate(self, config: BaseConfig, dataloader: DataLoader, logger: Logger) -> dict:
+        """Return ``{"eval_loss"}``: mean teacher-forced cross-entropy over batches of 4 (src, tgt) pairs."""
         assert isinstance(config, TextSeq2SeqConfig)
         if self.model is None:
             base_ds = dataloader.dataset
@@ -95,6 +103,7 @@ class TextSeq2SeqTrainer(BaseTrainer):
         return {"eval_loss": total / max(1, n_batches)}
 
     def load_checkpoint(self, config: BaseConfig, artifacts_dir) -> None:
+        """Load ``model.pt``, reading the vocab size from the source embedding."""
         from pathlib import Path
         assert isinstance(config, TextSeq2SeqConfig)
         state = torch.load(Path(artifacts_dir) / "model.pt",
@@ -105,6 +114,13 @@ class TextSeq2SeqTrainer(BaseTrainer):
         self.model.eval()
 
     def infer(self, config: BaseConfig, inputs: Any) -> Any:
+        """Continue a source sequence of token ids.
+
+        ``inputs``: ``{"src": [ids], "temperature": float (0.8)}`` or a bare id
+        list. Decoding is seeded with the last source token and samples
+        min(len(src), 32) tokens. Returns ``{"predictions": [[ids]]}`` (seed
+        token excluded).
+        """
         assert isinstance(config, TextSeq2SeqConfig)
         if self.model is None:
             raise RuntimeError("Model not loaded.")
@@ -126,6 +142,11 @@ class TextSeq2SeqTrainer(BaseTrainer):
 
 
 def make_text_seq2seq_dataloader(config: TextSeq2SeqConfig, split: str = "train") -> DataLoader:
+    """Text loader for ``config.dataset``: batches of (x [B,seq_len], y [B,seq_len]) char ids.
+
+    The trainer re-wraps ``dataloader.dataset`` into (src, tgt) halves, so only the dataset
+    (and its ``vocab_size``) is used from this loader.
+    """
     return get_dataloader(
         name=config.dataset,
         data_root=config.data_root,

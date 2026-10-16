@@ -28,6 +28,7 @@ import torch.nn.functional as F
 
 
 class PolicyNet(nn.Module):
+    """Two-layer MLP policy pi(a|s) over the 4 maze moves."""
     def __init__(self, state_size: int, hidden_dim: int = 64, n_actions: int = 4):
         super().__init__()
         self.net = nn.Sequential(
@@ -37,5 +38,6 @@ class PolicyNet(nn.Module):
         )
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Map states [B,state_size] to action log-probabilities [B,n_actions]."""
         logits = self.net(x)
         return F.log_softmax(logits, dim=-1)

@@ -1,4 +1,24 @@
-"""Image captioning: image encoder + text decoder with cross-attention."""
+"""Image captioning: a patch encoder feeding a causal Transformer decoder.
+
+The encoder-decoder pattern of Show-Attend-Tell / the original Transformer,
+applied to MNIST digits and templated captions of their label:
+
+    image  [B,1,28,28] -> VisionPatchEncoder (4x4 patches) -> memory [B,49,D]
+    tokens [B,T] -> token + learned position embeddings -> causal
+        TransformerDecoder (self-attn over the caption so far, cross-attn
+        into the 49 patch tokens) -> Linear -> next-char logits [B,T,vocab]
+
+Training is teacher forcing: the decoder reads ``[BOS, c_0 .. c_{T-2}]``
+and must predict ``[c_0 .. c_{T-1}]``; ``Captioner.generate`` decodes
+greedily from BOS. What it demonstrates: cross-attention is how a language
+decoder "looks at" another modality at every step.
+
+Deliberately simplified: captions are templates of the class label (so the
+task is "classify, then spell it out"), character-level tokens
+(``ord(c) % vocab_size``) with 0 doubling as BOS and PAD, padding positions
+are NOT masked out of the loss (the model also learns to emit trailing 0s),
+and decoding is greedy with no beam search or EOS stop.
+"""
 from __future__ import annotations
 
 import torch
@@ -13,6 +33,10 @@ from mini_networks.models.multimodal.encoders import VisionPatchEncoder
 
 
 class ImageCaptioningConfig(BaseConfig):
+    """Knobs: ``d_model`` / ``n_heads`` / ``n_layers`` (decoder size),
+    ``text_seq_len`` (caption length incl. padding), ``vocab_size``
+    (character ids modulo this)."""
+
     model_name: str = "image_captioning"
     d_model: int = 64
     n_heads: int = 2
@@ -23,6 +47,8 @@ class ImageCaptioningConfig(BaseConfig):
 
 
 class Captioner(nn.Module):
+    """Patch-token image encoder + causal Transformer decoder over characters."""
+
     def __init__(self, d_model: int, n_heads: int, n_layers: int, vocab_size: int, seq_len: int):
         super().__init__()
         self.vision = VisionPatchEncoder(d_model=d_model)
@@ -39,6 +65,10 @@ class Captioner(nn.Module):
         self.head = nn.Linear(d_model, vocab_size)
 
     def forward(self, images: torch.Tensor, tokens: torch.Tensor) -> torch.Tensor:
+        """(images [B,1,28,28], tokens [B,T]) -> next-token logits [B,T,vocab_size].
+
+        ``T`` must be <= ``seq_len`` (the size of the position table).
+        """
         mem = self.vision(images)
         B, T = tokens.shape
         pos = torch.arange(T, device=tokens.device).unsqueeze(0)
@@ -63,10 +93,18 @@ class Captioner(nn.Module):
 
 
 class ImageCaptioning:
+    """Trains a Captioner on (MNIST image, label caption) pairs."""
+
     def __init__(self):
         self.model: Captioner | None = None
 
     def train(self, config: ImageCaptioningConfig, logger: Logger) -> None:
+        """Teacher-forced next-character cross-entropy over whole captions.
+
+        Logs ``loss`` per epoch; saves ``model.pt``. Batch size is the raw
+        ``batch_size`` (capped at 16 under ``fast_demo``), not the tier's
+        ``effective_batch_size``.
+        """
         dl = get_dataloader(
             name=config.dataset,
             data_root=config.data_root,

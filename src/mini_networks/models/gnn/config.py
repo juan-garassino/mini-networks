@@ -26,5 +26,5 @@ class GNNConfig(BaseConfig):
     train_per_class: int = 5   # stratified train mask (20 labeled nodes total)
 
     hidden_dim: int = 32
-    dropout: float = 0.5
+    dropout: float = 0.5       # on the hidden layer (Kipf & Welling use 0.5 too)
     epochs: int = 400          # one epoch == ONE full-batch step (len-1 dataset)

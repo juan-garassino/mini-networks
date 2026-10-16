@@ -91,6 +91,13 @@ class RLMazeTrainer(BaseTrainer):
         self.env: MazeEnv | None = None
 
     def train(self, config: BaseConfig, dataloader: DataLoader, logger: Logger) -> None:
+        """Run ``n_episodes`` (tier-capped) on the fixed, seeded maze and save the agent.
+
+        Each step calls ``agent.update``; each episode ends with
+        ``agent.end_episode(trajectory)``. Logs ``episode_reward``,
+        ``success`` and ``epsilon``. Artifacts: ``agent_q.json`` (Q-table),
+        ``agent_dqn.pt`` (online net) or ``agent_ppo.pt`` (actor-critic).
+        """
         assert isinstance(config, RLMazeConfig)
         env = _make_env(config)
         self.env = env
@@ -129,6 +136,11 @@ class RLMazeTrainer(BaseTrainer):
         _save_agent(config, agent, logger)
 
     def evaluate(self, config: BaseConfig, dataloader: DataLoader, logger: Logger) -> dict:
+        """Return ``{"eval_reward", "success_rate"}`` over evaluation episodes.
+
+        Epsilon is forced to 0 (greedy) for Q/DQN; PPO still samples from its
+        policy. Success means total episode reward > 0.
+        """
         assert isinstance(config, RLMazeConfig)
         if self.agent is None or self.env is None:
             env = _make_env(config)

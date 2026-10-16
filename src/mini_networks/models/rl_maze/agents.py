@@ -71,6 +71,7 @@ class QAgent:
         return tuple(np.round(state, 1).tolist())
 
     def act(self, state: np.ndarray) -> int:
+        """Epsilon-greedy action from the Q-table for ``state`` (27-dim vector)."""
         if random.random() < self.epsilon:
             return random.randint(0, self.n_actions - 1)
         k = self._key(state)
@@ -85,6 +86,10 @@ class QAgent:
         next_state: np.ndarray,
         done: bool,
     ) -> float:
+        """One online Q-learning step on (s, a, r, s', done); also decays epsilon.
+
+        Returns |TD error| before the update.
+        """
         k = self._key(state)
         nk = self._key(next_state)
         current_q = self.Q[(k, action)]
@@ -98,6 +103,7 @@ class QAgent:
         return abs(target - current_q)
 
     def end_episode(self, trajectory) -> None:
+        """No-op: the Q-table is updated online in :meth:`update`."""
         pass  # Q-table updates online; nothing to do
 
 
@@ -115,6 +121,7 @@ class _QNetwork(nn.Module):
         )
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Map states [B,state_size] to Q-values [B,n_actions]."""
         return self.net(x)
 
 
@@ -161,6 +168,7 @@ class DQNAgent:
         self.buffer: deque = deque(maxlen=replay_capacity)
 
     def act(self, state: np.ndarray) -> int:
+        """Epsilon-greedy action from the online Q-network."""
         if random.random() < self.epsilon:
             return random.randint(0, self.n_actions - 1)
         with torch.no_grad():
@@ -175,6 +183,11 @@ class DQNAgent:
         next_state: np.ndarray,
         done: bool,
     ) -> float:
+        """Store the transition, decay epsilon, then train on one random replay batch.
+
+        Returns the batch MSE loss, or 0.0 while the buffer holds fewer than
+        ``batch_size`` transitions.
+        """
         self.buffer.append((state, action, reward, next_state, float(done)))
         self.epsilon = max(self.epsilon_min, self.epsilon * self.epsilon_decay)
         if len(self.buffer) < self.batch_size:
@@ -201,6 +214,7 @@ class DQNAgent:
         return loss.item()
 
     def end_episode(self, trajectory) -> None:
+        """Count the episode and copy online -> target weights every ``target_update_every`` episodes."""
         self._episodes += 1
         if self._episodes % self.target_update_every == 0:
             self.target.load_state_dict(self.online.state_dict())
@@ -225,6 +239,7 @@ class _ActorCritic(nn.Module):
         )
 
     def forward(self, x: torch.Tensor):
+        """Map states [B,state_size] to (action probabilities [B,n_actions], state values [B])."""
         return F.softmax(self.actor(x), dim=-1), self.critic(x).squeeze(-1)
 
 
@@ -266,12 +281,14 @@ class PPOAgent:
         self.optimizer = optim.Adam(self.ac.parameters(), lr=lr)
 
     def act(self, state: np.ndarray) -> int:
+        """Sample an action from the current policy (no epsilon; exploration comes from the softmax)."""
         with torch.no_grad():
             s = torch.tensor(state, dtype=torch.float32, device=self.device).unsqueeze(0)
             probs, _ = self.ac(s)
             return int(Categorical(probs).sample().item())
 
     def update(self, state, action, reward, next_state, done) -> float:
+        """No-op returning 0.0: PPO learns from whole episodes in :meth:`end_episode`."""
         # PPO updates in end_episode; online update is no-op
         return 0.0
 

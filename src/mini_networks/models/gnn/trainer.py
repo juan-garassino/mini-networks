@@ -27,6 +27,15 @@ def _unpack(batch, device):
 
 
 class GNNTrainer(BaseTrainer):
+    """Full-batch, transductive GCN training on one stochastic-block-model graph.
+
+    Every step sees the whole graph; cross-entropy uses only the
+    `train_per_class` labelled nodes per community (Adam, weight decay 5e-4).
+    Logs loss + train_accuracy every 20 steps. Checkpoint: `model.pt`.
+    evaluate() -> {"accuracy" (GCN on the unlabelled test nodes),
+    "mlp_baseline_accuracy" (feature-only probe, the honesty evidence)}.
+    """
+
     def __init__(self):
         self.model: GCN | None = None
 
@@ -39,6 +48,7 @@ class GNNTrainer(BaseTrainer):
         ).to(config.device)
 
     def train(self, config: BaseConfig, dataloader: DataLoader, logger: Logger) -> None:
+        """effective_epochs full-batch steps on the single graph item; saves `model.pt`."""
         assert isinstance(config, GNNConfig)
         model = self._build(config)
         self.model = model
@@ -78,6 +88,11 @@ class GNNTrainer(BaseTrainer):
             return (probe(x[test_mask]).argmax(-1) == y[test_mask]).float().mean().item()
 
     def evaluate(self, config: BaseConfig, dataloader: DataLoader, logger: Logger) -> dict:
+        """Test-node accuracy of the GCN next to a feature-only linear probe's.
+
+        A large gap is the evidence that the score comes from message passing
+        over the adjacency, not from the (deliberately weak) node features.
+        """
         assert isinstance(config, GNNConfig)
         if self.model is None:
             self.model = self._build(config)
@@ -92,6 +107,12 @@ class GNNTrainer(BaseTrainer):
         }
 
     def infer(self, config: BaseConfig, inputs: Any) -> Any:
+        """Classify one node of the config's (seeded, rebuilt) graph.
+
+        inputs: {"node_id": int} (taken modulo n_nodes; default 0). Returns
+        {"node_id", "predicted", "true", "n_neighbors"} — the whole graph is
+        run, then the requested node's prediction is read off.
+        """
         assert isinstance(config, GNNConfig)
         if self.model is None:
             raise RuntimeError("Model not loaded.")
@@ -111,6 +132,7 @@ class GNNTrainer(BaseTrainer):
         }
 
     def load_checkpoint(self, config: BaseConfig, artifacts_dir) -> None:
+        """Load `model.pt` into a freshly built GCN (graph is rebuilt from the config seed)."""
         assert isinstance(config, GNNConfig)
         state = torch.load(
             Path(artifacts_dir) / "model.pt", map_location=config.device, weights_only=True
@@ -121,6 +143,7 @@ class GNNTrainer(BaseTrainer):
 
 
 def _graph_dataset(config: GNNConfig):
+    # Same seed -> the identical graph and masks in train, eval and infer.
     return get_dataset(
         config.dataset,
         config.data_root,
@@ -137,6 +160,12 @@ def _graph_dataset(config: GNNConfig):
 
 
 def make_gnn_dataloader(config: GNNConfig, split: str = "train") -> DataLoader:
+    """One-item loader over the SBM graph.
+
+    Its single batch is (x [1, N, F], a_norm [1, N, N], y [1, N],
+    train_mask [1, N], test_mask [1, N]); `split` is ignored because the
+    train/test split lives in the masks.
+    """
     # batch_size hardcoded to 1 and no sample_limit: the dataset IS one graph;
     # tier budgets act through epochs (1 epoch = 1 full-batch step)
     return DataLoader(_graph_dataset(config), batch_size=1, shuffle=False)

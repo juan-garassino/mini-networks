@@ -117,9 +117,11 @@ class MazeEnv:
 
     @property
     def state_size(self) -> int:
+        """Length of the state vector: 25 neighbourhood cells + (row, col) = 27."""
         return 25 + 2  # 5×5 neighbourhood + (row, col)
 
     def reset(self) -> np.ndarray:
+        """Put the agent back on START (regenerating the maze if ``random_reset``) and return the initial state."""
         if self.random_reset:
             self._generate()
         self.agent_pos = self.start_pos
@@ -130,6 +132,12 @@ class MazeEnv:
         return abs(pos[0] - self.goal_pos[0]) + abs(pos[1] - self.goal_pos[1])
 
     def step(self, action: int) -> tuple[np.ndarray, float, bool, dict]:
+        """Apply ``action`` and return (state, reward, done, info).
+
+        Moves into the outer wall are clamped (the agent stays put). The
+        episode ends on GOAL, on a hole, or after ``max_steps``; ``info``
+        holds the entered ``cell`` code and the step count.
+        """
         dy, dx = ACTIONS[action]
         r, c = self.agent_pos
         nr, nc = r + dy, c + dx

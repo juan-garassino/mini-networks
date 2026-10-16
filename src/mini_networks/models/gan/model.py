@@ -1,25 +1,27 @@
-"""Vanilla GAN for MNIST: an MLP Generator and MLP Discriminator in a minimax game.
+"""GAN for MNIST: a mini-DCGAN Generator and Discriminator in a minimax game.
 
 Key idea: two networks trained adversarially. The discriminator D learns to tell
 real images from generated ones; the generator G learns to fool it. The original
 objective is min_G max_D  E_x[log D(x)] + E_z[log(1 - D(G(z)))] — at equilibrium
 G's distribution matches the data and D outputs 1/2 everywhere.
 
-This implementation: Generator maps noise z [B, 100] through Linear layers
-100 → 256 → 512 → 1024 → 784 (LeakyReLU 0.2 between, Tanh out, so pixels live in
-[-1, 1]) and reshapes to [B, 1, 28, 28]. Discriminator flattens the image and maps
-784 → 1024 → 512 → 256 → 1 with LeakyReLU + Dropout 0.3 and a final Sigmoid
-probability. Both losses are written in BCE form: gan_d_loss = BCE(D(real), 1) +
-BCE(D(fake.detach()), 0) — note the detach so D's step does not touch G — and
+This implementation (DCGAN-style, Radford et al. 2015): the Generator projects
+noise z [B, 100] with a Linear layer to a 256x7x7 map, then BatchNorm+ReLU and two
+stride-2 ConvTranspose2d layers (7 → 14 → 28) with a Tanh output, so pixels live in
+[-1, 1] (the trainer rescales real images to match). The Discriminator mirrors it:
+two stride-2 Conv2d layers (28 → 14 → 7, LeakyReLU 0.2, BatchNorm on the second),
+then Linear(6272 → 1) + Sigmoid probability. Both losses are written in BCE form:
+gan_d_loss = BCE(D(real), 0.9) + BCE(D(fake.detach()), 0) — one-sided label
+smoothing on the reals, and the detach so D's step does not touch G — and
 gan_g_loss = BCE(D(fake), 1), i.e. the non-saturating heuristic -log D(G(z))
 recommended in the original paper, which keeps gradients alive early when D wins.
-The trainer alternates one Adam step for D, then one for G, each batch.
+The trainer alternates one Adam step for D, then one for G, each batch, and keeps
+an EMA of G whose weights are what gets saved.
 
-Deliberately simplified vs Goodfellow 2014 / DCGAN: fully-connected nets instead
-of transposed/strided convolutions, no BatchNorm, Sigmoid + BCELoss rather than
-the numerically safer BCEWithLogits, and none of the usual stabilisers (label
-smoothing, spectral norm, feature matching) — mode collapse is left observable
-on purpose.
+Deliberately simplified vs Goodfellow 2014 / DCGAN: only two conv stages each way,
+Sigmoid + BCELoss rather than the numerically safer BCEWithLogits, and no
+spectral norm, feature matching or gradient penalty — mode collapse stays
+observable (the quality gate scores samples with a trained MNIST judge).
 """
 from __future__ import annotations
 
@@ -59,6 +61,8 @@ class Discriminator(nn.Module):
     """Mini-DCGAN discriminator: two stride-2 convs → probability [B, 1]."""
 
     def __init__(self, image_size: int = 28, in_channels: int = 1, dropout: float = 0.3):
+        # `dropout` is accepted for config compatibility but no longer used
+        # (see the no-Dropout2d note below).
         super().__init__()
         assert image_size == 28, "mini-DCGAN discriminator is wired for 28x28"
         self.net = nn.Sequential(

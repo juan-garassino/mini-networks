@@ -1,14 +1,17 @@
+"""Config for the mini-DCGAN on MNIST (28x28 only; latent z ~ N(0, I) of 100 dims)."""
 from __future__ import annotations
 from mini_networks.core.config import BaseConfig
 
 
 class GANConfig(BaseConfig):
+    """Generator/Discriminator sizes, the GAN's own Adam lr, and generator EMA."""
+
     model_name: str = "gan"
     latent_dim: int = 100
-    image_size: int = 28
+    image_size: int = 28       # the conv nets assert 28
     in_channels: int = 1
-    disc_dropout: float = 0.3
-    lr: float = 0.0002
+    disc_dropout: float = 0.3  # passed to Discriminator but currently unused there
+    lr: float = 0.0002         # DCGAN's 2e-4 with betas (0.5, 0.999); learning_rate is ignored
     # EMA over the generator (0 disables). GAN sample quality is non-monotone
     # in steps (judge 0.139 @ 2k -> 0.049 @ 3.5k, m-triage-4); the saved
     # checkpoint holds the EMA weights so eval sees the smoothed generator.

@@ -17,6 +17,11 @@ from mini_networks.models.text_token_classifier.model import TokenClassifier
 
 
 class TokenLabelDataset(Dataset):
+    """Wrap a char-text dataset as (x [T], labels [T]) with label 1 for vowels, else 0.
+
+    Labels are derived from the base dataset's ``itos``; the base targets
+    are discarded.
+    """
     def __init__(self, base_ds):
         self.base = base_ds
 
@@ -31,6 +36,11 @@ class TokenLabelDataset(Dataset):
 
 
 class TextTokenClassifierTrainer(BaseTrainer):
+    """Train :class:`TokenClassifier` to tag each character as vowel (1) or other (0).
+
+    Loss: per-token cross-entropy. Checkpoint: ``model.pt`` (vocab size is
+    read back from the token embedding on load).
+    """
     def __init__(self):
         self.model: TokenClassifier | None = None
 
@@ -44,6 +54,7 @@ class TextTokenClassifierTrainer(BaseTrainer):
         ).to(config.device)
 
     def train(self, config: BaseConfig, dataloader: DataLoader, logger: Logger) -> None:
+        """Wrap the loader's dataset in :class:`TokenLabelDataset`, fit with AdamW, and save ``model.pt``."""
         assert isinstance(config, TextTokenClassifierConfig)
         base_ds = dataloader.dataset
         vocab_size = base_ds.vocab_size if hasattr(base_ds, "vocab_size") else config.vocab_size
@@ -71,6 +82,7 @@ class TextTokenClassifierTrainer(BaseTrainer):
         torch.save(model.state_dict(), logger.artifact_path("model.pt"))
 
     def load_checkpoint(self, config: BaseConfig, artifacts_dir) -> None:
+        """Load ``model.pt``, reading the vocab size from the token embedding."""
         from pathlib import Path
         assert isinstance(config, TextTokenClassifierConfig)
         state = torch.load(Path(artifacts_dir) / "model.pt",
@@ -81,6 +93,12 @@ class TextTokenClassifierTrainer(BaseTrainer):
         self.model.eval()
 
     def evaluate(self, config: BaseConfig, dataloader: DataLoader, logger: Logger) -> dict:
+        """Return ``{"eval_loss"}``: per-token cross-entropy on the vowel labels.
+
+        Note: the loss is summed over an internal batch-4 loader but divided
+        by ``len(dataloader)`` (the caller's batches), so the value is scaled
+        by roughly batch_size / 4 relative to a true per-batch mean.
+        """
         assert isinstance(config, TextTokenClassifierConfig)
         if self.model is None:
             base_ds = dataloader.dataset
@@ -97,6 +115,7 @@ class TextTokenClassifierTrainer(BaseTrainer):
         return {"eval_loss": total / max(1, len(dataloader))}
 
     def infer(self, config: BaseConfig, inputs: Any) -> Any:
+        """Tag one sequence: ``{"tokens": [ids]}`` or a bare id list -> ``{"predictions": [[0/1 per token]]}``."""
         assert isinstance(config, TextTokenClassifierConfig)
         if self.model is None:
             raise RuntimeError("Model not loaded.")
@@ -109,6 +128,11 @@ class TextTokenClassifierTrainer(BaseTrainer):
 
 
 def make_text_token_classifier_dataloader(config: TextTokenClassifierConfig, split: str = "train") -> DataLoader:
+    """Text loader for ``config.dataset``: batches of (x [B,seq_len], y [B,seq_len]) char ids.
+
+    The trainer re-wraps ``dataloader.dataset`` with vowel labels, so only the dataset
+    (and its ``vocab_size`` and ``itos``) is used from this loader.
+    """
     return get_dataloader(
         name=config.dataset,
         data_root=config.data_root,

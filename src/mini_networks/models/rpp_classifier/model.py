@@ -43,6 +43,7 @@ class RPPBlock(nn.Module):
         self.bn = nn.BatchNorm2d(out_ch)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Map [B,in_ch,S,S] to ReLU(BN(conv(x) + free(x))) of shape [B,out_ch,S,S] (S = ``spatial``)."""
         B = x.shape[0]
         c = self.conv(x)
         f = self.free(x.flatten(1)).view(B, self.out_ch, self.spatial, self.spatial)
@@ -50,6 +51,11 @@ class RPPBlock(nn.Module):
 
 
 class RPPClassifier(nn.Module):
+    """Two RPP blocks on 2x-average-pooled MNIST (14x14, then 7x7) plus a global-pool linear head.
+
+    Block widths are ``hidden_dim // 2`` and ``hidden_dim``. Input must be
+    28x28 because the free paths' dense matrices are sized for it.
+    """
     def __init__(self, hidden_dim: int = 16, num_classes: int = 10):
         super().__init__()
         self.pool_in = nn.AvgPool2d(2)                     # 28 -> 14
@@ -59,6 +65,7 @@ class RPPClassifier(nn.Module):
         self.head = nn.Linear(hidden_dim, num_classes)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Map images [B,1,28,28] to class logits [B,num_classes]."""
         x = self.pool_in(x)
         x = self.block1(x)
         x = self.pool_mid(x)

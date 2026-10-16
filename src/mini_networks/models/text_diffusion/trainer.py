@@ -26,6 +26,11 @@ make_text_diffusion_dataloader = make_transformer_dataloader
 
 
 class TextDiffusionTrainer(BaseTrainer):
+    """Train :class:`TextDiffusionLM` with the LLaDA masked-token objective on a text file.
+
+    Reuses the transformer text loader (only x is used; the target is the
+    sequence itself). Checkpoint: ``model.pt`` + ``tokenizer.json``.
+    """
     def __init__(self):
         self.model: TextDiffusionLM | None = None
         self.tokenizer: CharTokenizer | None = None
@@ -42,6 +47,10 @@ class TextDiffusionTrainer(BaseTrainer):
         ).to(config.device)
 
     def train(self, config: BaseConfig, dataloader: DataLoader, logger: Logger) -> None:
+        """Fit a fresh model with AdamW + grad-clip 1.0 on ``masked_loss`` and save ``model.pt``/``tokenizer.json``.
+
+        The vocab size comes from the dataset tokenizer when available.
+        """
         assert isinstance(config, TextDiffusionConfig)
         ds = dataloader.dataset
         if hasattr(ds, "tokenizer"):
@@ -102,6 +111,14 @@ class TextDiffusionTrainer(BaseTrainer):
         return {"eval_loss": total_loss / max(1, n_batches)}
 
     def infer(self, config: BaseConfig, inputs: Any) -> Any:
+        """Generate text by iterative parallel unmasking after a prompt.
+
+        ``inputs``: ``{"prompt": str, "max_new_tokens": int (64),
+        "temperature": float (1.0)}``; the number of unmask rounds is
+        ``config.effective_timesteps`` and the total length is capped at
+        ``seq_len``. Returns ``{"generated": str}`` with a tokenizer, else
+        ``{"tokens": [[ids]]}``.
+        """
         assert isinstance(config, TextDiffusionConfig)
         if self.model is None:
             raise RuntimeError("Model not loaded.")
@@ -124,6 +141,10 @@ class TextDiffusionTrainer(BaseTrainer):
         return {"tokens": output.cpu().tolist()}
 
     def load_checkpoint(self, config: BaseConfig, artifacts_dir) -> None:
+        """Load ``model.pt`` (vocab = embedding rows minus the MASK row) and ``tokenizer.json``.
+
+        The tokenizer type (char or BPE) is detected from the JSON.
+        """
         assert isinstance(config, TextDiffusionConfig)
         path = Path(artifacts_dir)
         state = torch.load(path / "model.pt", map_location=config.device, weights_only=True)
