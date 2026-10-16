@@ -48,7 +48,13 @@ def _make_client():
 
 def pull_champions(models: list[str] | None = None, checkpoint_root: str | Path = "runs") -> dict[str, str]:
     """Download each model's Production champion. Returns {model: status} where
-    status is 'vN' (pulled), 'no champion', or 'error: …' — never raises."""
+    status is 'vN' (pulled), 'no champion', or 'error: …' — never raises.
+
+    ``models=None`` means every registry model. For each champion the run's
+    ``model/*.pt`` artifacts are copied into ``champion_artifacts_dir`` and a
+    ``VERSION`` file (``mini-<model> vN run <run_id>``) is written beside it.
+    Reads ``MN_MLFLOW_TRACKING_URI``.
+    """
     from mini_networks.core.registry import MODEL_NAMES
 
     if not os.environ.get(TRACKING_URI_ENV):

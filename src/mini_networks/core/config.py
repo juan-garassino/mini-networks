@@ -1,4 +1,8 @@
-"""Shared base configuration using Pydantic v2."""
+"""Shared base configuration using Pydantic v2.
+
+Every model's Config subclasses BaseConfig; the tier-aware ``effective_*``
+properties resolve budgets from ``core/tiers.py``.
+"""
 from __future__ import annotations
 
 import os

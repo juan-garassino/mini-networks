@@ -11,7 +11,7 @@ def split_seq_halves(x: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
 
 
 def vowel_labels(tokens: torch.Tensor, itos: dict[int, str]) -> torch.Tensor:
-    """Binary labels: vowel vs other."""
+    """Per-token binary labels: 1 where ``itos[token]`` is a vowel (aeiouAEIOU), else 0."""
     vowels = set("aeiouAEIOU")
     labels = torch.zeros_like(tokens)
     for i, t in enumerate(tokens.tolist()):
