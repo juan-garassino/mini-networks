@@ -144,3 +144,21 @@ def budget_kwargs(
         if cap is not None and cap > fields[key].default:
             out[key] = cap
     return out
+
+
+def seed_everything(seed: int) -> None:
+    """Seed Python's ``random``, NumPy and torch (CPU + all CUDA devices).
+
+    Called by ``run_model`` / ``run_composition`` with the config's ``seed``
+    before anything is built, so a training run — and the gate verdict on it —
+    is reproducible for that seed (up to GPU kernel nondeterminism). Without
+    it, init, shuffling and noise were fresh draws on every run.
+    """
+    import random
+
+    import numpy as np
+    import torch
+
+    random.seed(seed)
+    np.random.seed(seed % 2**32)
+    torch.manual_seed(seed)

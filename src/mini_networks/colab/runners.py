@@ -67,7 +67,7 @@ def run_model(
         raise ValueError(f"Unknown model: {model!r}. Available: {MODELS}")
 
     ConfigClass, TrainerClass, dataloader_fn = registry[model]
-    from mini_networks.core.config import budget_kwargs
+    from mini_networks.core.config import budget_kwargs, seed_everything
 
     tier = "S" if fast_demo else training_tier
     config = ConfigClass(
@@ -80,6 +80,7 @@ def run_model(
         resume=resume,
         **config_overrides,
     )
+    seed_everything(config.seed)
     model_root = _run_base(checkpoint_root, model)
     resumable_run = find_resumable_run(model_root) if resume else None
     if resumable_run is not None:
@@ -190,6 +191,11 @@ def run_composition(
         transient=True,
     ) as progress:
         progress.add_task(f"Running {composition}…", total=None)
+        # composition configs are built inside each runner; all keep the
+        # BaseConfig default seed, so seed with it here
+        from mini_networks.core.config import BaseConfig, seed_everything
+
+        seed_everything(BaseConfig.model_fields["seed"].default)
         result = runner(fast_demo, training_tier, data_root, device, checkpoint_root)
 
     if validate_inference:
