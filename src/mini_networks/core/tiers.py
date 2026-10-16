@@ -30,10 +30,11 @@ MODEL_OVERRIDES: dict[str, dict[str, dict[str, int | None]]] = {
     "gan": {"M": {"epochs": 80, "sample_limit": None}},
     # wgan spends its first 25 generator steps in a 20-critic-step warm-up, so
     # the 5-epoch default (500 critic batches) was ALL warm-up: ~25 G steps,
-    # an EMA generator still ~97% at init, one-class samples (judge 0.0998,
-    # seeded). Seeded judge @40 epochs 0.233/0.157, @80 0.202/0.147 (seeds
-    # 42/43; self-improve loop 2026-10-16) — 40 is as good at half the cost.
-    # Seed 43 sits near the 0.15 bar: the margin is thin.
+    # an EMA generator still ~97% at init, mostly one-class samples (judge
+    # over five 5-epoch runs: 0.175/0.151/0.099/0.0998/0.0999 — the ~0.1 runs
+    # are single-digit collapse). Two independent runs each: 40 epochs
+    # 0.233/0.157, 80 epochs 0.202/0.147 (self-improve loop 2026-10-16) — 40 is
+    # as good at half the cost. One 40-epoch run sat near the 0.15 bar: thin.
     "wgan": {"M": {"epochs": 40}},
     # Guided-diffusion compositions match base diffusion's 10 epochs: at the
     # 5-epoch default their CFG UNets stay noisy and guide_weight=2 AMPLIFIES
@@ -96,7 +97,9 @@ MODEL_OVERRIDES: dict[str, dict[str, dict[str, int | None]]] = {
     "mobilenet": {"M": {"epochs": 10}},
     # swin was underfit at 5 epochs (loss still falling; accuracy 0.58, and
     # 0.73-0.79 even at lr 5e-3); 10 epochs at lr 5e-3 reach
-    # 0.867/0.877/0.898 (seeds 42/1/2, self-improve loop 2026-10-16). ~30 s/5 epochs on CPU.
+    # 0.867/0.877/0.898 over 3 runs, and 0.879/0.879 on 2 later held-out runs
+    # (old config there: 0.549/0.533). Self-improve loop 2026-10-16; ~30 s/5
+    # epochs on CPU.
     "swin": {"M": {"epochs": 10}},
     # 0.55 accuracy @ 5 epochs on a tiny tabular set where epochs cost
     # milliseconds — let it actually converge.

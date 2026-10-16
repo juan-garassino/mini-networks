@@ -28,7 +28,7 @@ class GNNConfig(BaseConfig):
     hidden_dim: int = 32
     # learning_rate stays at the 1e-3 BaseConfig default. Tried 1e-2 (Kipf &
     # Welling's value): it passed the seed-42 gate graph (0.711 -> 0.756) but
-    # did NOT generalize to fresh graphs (seeds 100/200: 0.650/0.744 at 1e-3
+    # did NOT generalize to fresh graphs (two others: 0.650/0.744 at 1e-3
     # vs 0.644/0.711 at 1e-2) — tuning to one graph. With the M budget fixed
     # (200 steps), accuracy sits at ~0.65-0.74 across graphs, under the
     # provisional 0.75 bar; that bar needs re-deciding, not more tuning.
