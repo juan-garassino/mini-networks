@@ -16,7 +16,7 @@ class ConvLSTMConfig(BaseConfig):
     canvas_size: int = 32
     seq_len: int = 10            # total frames per clip
     input_frames: int = 5        # frames given as context; predict the rest
-    hidden_dim: int = 16         # ConvLSTM hidden channels (small/CPU)
+    hidden_dim: int = 32         # ConvLSTM hidden channels (16 plateaued at ~0.07 MSE)
     kernel_size: int = 3
     n_layers: int = 1
     # scheduled_sampling_prob: probability of feeding the model its OWN previous
@@ -25,5 +25,10 @@ class ConvLSTMConfig(BaseConfig):
     # 0 = always teacher-forced; 1 = fully autoregressive. Val is always
     # open-loop (predictions fed back), so this only shapes the training signal.
     scheduled_sampling_prob: float = 0.5
-    n_clips: int = 512           # synthetic clips per split
+    # 2048 clips at batch 16 (vs 512 at the M cap of 64 = 40 optimizer steps):
+    # M eval_loss 0.078 -> 0.0397/0.0396 (seeds 42/1, bar 0.05; with hidden 32).
+    # Width alone at batch 64 stayed at 0.070, a 2nd layer or 5x5 kernel didn't
+    # help — the model was starved of steps and capacity together.
+    n_clips: int = 2048          # synthetic clips per split
+    batch_size: int = 16
     dataset: str = "mnist"
